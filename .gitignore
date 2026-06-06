@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment Files
+.env
+.env.local
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# Coverage
+.coverage
+htmlcov/
+
+# Pytest
+.pytest_cache/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Build
+build/
+dist/
+
+# Node
+node_modules/
+
+# Next
+.next/
+
+# Android
+android/.gradle/
+
+# iOS
+ios/Pods/
+
+# Backups
+database/backups/

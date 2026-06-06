@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:16
+
+    container_name: gasflow-postgres
+
+    environment:
+      POSTGRES_DB: gasflow
+      POSTGRES_USER: gasflow
+      POSTGRES_PASSWORD: gasflow
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
