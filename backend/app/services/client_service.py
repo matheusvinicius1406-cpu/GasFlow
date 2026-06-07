@@ -1,21 +1,28 @@
 from datetime import datetime
-
+from sqlalchemy.orm import Session
 from app.models.client import Client
-
-clients_db = []
 
 
 class ClientService:
 
     @staticmethod
-    def generate_code() -> str:
-        next_id = len(clients_db) + 1
+    def generate_code(db: Session) -> str:
+        last_client = (
+            db.query(Client)
+            .order_by(Client.id.desc())
+            .first()
+        )
+
+        if not last_client:
+            return "000001"
+
+        next_id = int(last_client.codigo) + 1
         return f"{next_id:06d}"
 
     @staticmethod
-    def create(data):
+    def create(db: Session, data):
 
-        codigo = ClientService.generate_code()
+        codigo = ClientService.generate_code(db)
 
         client = Client(
             codigo=codigo,
@@ -33,20 +40,51 @@ class ClientService:
             updated_at=datetime.utcnow(),
         )
 
-        clients_db.append(client)
+        db.add(client)
+        db.commit()
+        db.refresh(client)
 
         return client
 
     @staticmethod
-    def get_all():
-        return clients_db
+    def get_all(db: Session):
+        return db.query(Client).all()
 
     @staticmethod
-    def get_by_code(codigo: str):
+    def get_by_code(db: Session, codigo: str):
+        return db.query(Client).filter(Client.codigo == codigo).first()
 
-        for client in clients_db:
+    @staticmethod
+    def update(db: Session, codigo: str, data):
 
-            if client.codigo == codigo:
-                return client
+        client = db.query(Client).filter(Client.codigo == codigo).first()
 
-        return None
+        if not client:
+            return None
+
+        client.nome = data.nome
+        client.telefone = data.telefone
+        client.telefone_secundario = data.telefone_secundario
+
+        client.rua = data.rua
+        client.numero = data.numero
+        client.complemento = data.complemento
+        client.referencia = data.referencia
+        client.bairro = data.bairro
+
+        client.observacoes = data.observacoes
+        client.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(client)
+
+        return client
+
+    @staticmethod
+    def get_by_phone(db: Session, telefone: str):
+
+        return db.query(Client).filter(Client.telefone == telefone).first()
+
+    @staticmethod
+    def format_crm_name(client: Client) -> str:
+        return f"{client.codigo}= {client.rua} Nº{client.numero} ({client.referencia or ''}) ({client.nome})"

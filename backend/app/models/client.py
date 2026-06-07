@@ -1,12 +1,6 @@
-from datetime import datetime
-
-from sqlalchemy import Boolean
-from sqlalchemy import Column
-from sqlalchemy import DateTime
-from sqlalchemy import Integer
-from sqlalchemy import String
-
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from app.database.base import Base
+from datetime import datetime
 
 
 class Client(Base):
@@ -17,8 +11,8 @@ class Client(Base):
     codigo = Column(String, unique=True, index=True)
 
     nome = Column(String, nullable=False)
-
     telefone = Column(String, nullable=False)
+
     telefone_secundario = Column(String, nullable=True)
 
     rua = Column(String, nullable=False)
@@ -33,10 +27,5 @@ class Client(Base):
 
     ativo = Column(Boolean, default=True)
 
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    updated_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
-    )

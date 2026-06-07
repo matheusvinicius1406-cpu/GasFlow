@@ -4,7 +4,7 @@ from app.database.init_db import init_db
 from app.api.health import router as health_router
 from app.api.clients import router as client_router
 from app.core.config import settings
-
+from app.api.orders import router as orders_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -24,3 +24,4 @@ def root():
 
 app.include_router(health_router)
 app.include_router(client_router)
+app.include_router(orders_router)
