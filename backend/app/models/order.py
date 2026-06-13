@@ -35,4 +35,6 @@ class Order(Base):
 
     payment_method = Column(String, nullable=True)
 
+    delivery_driver_codigo = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
