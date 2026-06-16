@@ -48,7 +48,7 @@ class ClientService:
 
     @staticmethod
     def get_all(db: Session):
-        return db.query(Client).all()
+        return db.query(Client).filter(Client.ativo == True).all()
 
     @staticmethod
     def get_by_code(db: Session, codigo: str):
@@ -81,8 +81,22 @@ class ClientService:
         return client
 
     @staticmethod
-    def get_by_phone(db: Session, telefone: str):
+    def disable(db: Session, codigo: str):
+        client = db.query(Client).filter(Client.codigo == codigo).first()
 
+        if not client:
+            return None
+
+        client.ativo = False
+        client.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(client)
+
+        return client
+
+    @staticmethod
+    def get_by_phone(db: Session, telefone: str):
         return db.query(Client).filter(Client.telefone == telefone).first()
 
     @staticmethod

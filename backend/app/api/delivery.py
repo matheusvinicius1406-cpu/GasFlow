@@ -32,3 +32,16 @@ def get_driver(codigo: str, db: Session = Depends(get_db)):
         )
 
     return driver
+
+
+@router.patch("/{codigo}/disable", response_model=DeliveryDriverResponse)
+def disable_driver(codigo: str, db: Session = Depends(get_db)):
+    driver = DeliveryDriverService.disable(db, codigo)
+
+    if not driver:
+        raise HTTPException(
+            status_code=404,
+            detail="Entregador não encontrado"
+        )
+
+    return driver

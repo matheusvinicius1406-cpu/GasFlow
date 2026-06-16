@@ -41,3 +41,17 @@ class DeliveryDriverService:
     @staticmethod
     def get_by_code(db: Session, codigo: str):
         return db.query(DeliveryDriver).filter(DeliveryDriver.codigo == codigo).first()
+
+    @staticmethod
+    def disable(db: Session, codigo: str):
+        driver = db.query(DeliveryDriver).filter(DeliveryDriver.codigo == codigo).first()
+
+        if not driver:
+            return None
+
+        driver.ativo = False
+
+        db.commit()
+        db.refresh(driver)
+
+        return driver

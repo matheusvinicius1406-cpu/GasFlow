@@ -68,3 +68,18 @@ class ProductService:
         db.refresh(product)
 
         return product
+
+    @staticmethod
+    def disable(db: Session, codigo: str):
+        product = db.query(Product).filter(Product.codigo == codigo).first()
+
+        if not product:
+            return None
+
+        product.ativo = False
+        product.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(product)
+
+        return product

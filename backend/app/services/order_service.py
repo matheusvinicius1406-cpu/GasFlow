@@ -1,7 +1,11 @@
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy.orm import Session
 
 from app.models.order import Order
 from app.models.client import Client
+from app.models.product import Product
 from app.models.delivery_driver import DeliveryDriver
 from app.services.pricing_service import PricingService
 
@@ -9,7 +13,7 @@ from app.services.pricing_service import PricingService
 class OrderService:
 
     @staticmethod
-    def generate_code(db) -> str:
+    def generate_code(db: Session) -> str:
         last = db.query(Order).order_by(Order.id.desc()).first()
 
         if not last:
@@ -18,18 +22,30 @@ class OrderService:
         return f"{int(last.codigo) + 1:06d}"
 
     @staticmethod
-    def create(db, data):
+    def create(db: Session, data):
 
         client = db.query(Client).filter(Client.codigo == data.client_codigo).first()
 
         if not client:
             raise Exception("Cliente não encontrado")
 
+        product = db.query(Product).filter(Product.codigo == data.product).first()
+
+        if not product:
+            raise Exception("Produto não encontrado")
+
+        if product.estoque < data.quantity:
+            raise Exception(
+                f"Estoque insuficiente. Disponível: {product.estoque}, solicitado: {data.quantity}"
+            )
+
         code = OrderService.generate_code(db)
 
         address = f"{client.rua}, {client.numero} - {client.bairro}"
 
         value = PricingService.calculate(db, data.product, data.quantity)
+
+        product.estoque -= data.quantity
 
         order = Order(
             codigo=code,
@@ -50,15 +66,20 @@ class OrderService:
         return order
 
     @staticmethod
-    def get_all(db):
-        return db.query(Order).all()
+    def get_all(db: Session, status: Optional[str] = None):
+        query = db.query(Order)
+
+        if status:
+            query = query.filter(Order.status == status)
+
+        return query.all()
 
     @staticmethod
-    def get_by_code(db, codigo: str):
+    def get_by_code(db: Session, codigo: str):
         return db.query(Order).filter(Order.codigo == codigo).first()
 
     @staticmethod
-    def update_status(db, codigo: str, status: str):
+    def update_status(db: Session, codigo: str, status: str):
         order = db.query(Order).filter(Order.codigo == codigo).first()
 
         if not order:
@@ -71,7 +92,7 @@ class OrderService:
         return order
 
     @staticmethod
-    def assign_driver(db, codigo: str, driver_codigo: str):
+    def assign_driver(db: Session, codigo: str, driver_codigo: str):
         order = db.query(Order).filter(Order.codigo == codigo).first()
 
         if not order:

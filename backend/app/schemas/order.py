@@ -1,5 +1,15 @@
+from datetime import datetime
+from typing import Optional, Literal
 from pydantic import BaseModel
-from typing import Optional
+
+OrderStatus = Literal[
+    "PENDING",
+    "CONFIRMED",
+    "PREPARING",
+    "DELIVERING",
+    "DELIVERED",
+    "CANCELLED",
+]
 
 
 class OrderCreate(BaseModel):
@@ -10,7 +20,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: str
+    status: OrderStatus
 
 
 class AssignDriverRequest(BaseModel):
@@ -18,6 +28,8 @@ class AssignDriverRequest(BaseModel):
 
 
 class OrderResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     codigo: str
     client_codigo: str
     product: str
@@ -27,3 +39,4 @@ class OrderResponse(BaseModel):
     status: str
     payment_method: Optional[str] = None
     delivery_driver_codigo: Optional[str] = None
+    created_at: datetime

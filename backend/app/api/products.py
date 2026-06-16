@@ -45,3 +45,16 @@ def update_product(codigo: str, data: ProductUpdate, db: Session = Depends(get_d
         )
 
     return product
+
+
+@router.patch("/{codigo}/disable", response_model=ProductResponse)
+def disable_product(codigo: str, db: Session = Depends(get_db)):
+    product = ProductService.disable(db, codigo)
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Produto não encontrado"
+        )
+
+    return product
