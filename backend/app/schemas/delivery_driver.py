@@ -1,12 +1,12 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class DeliveryDriverCreate(BaseModel):
     nome: str
     telefone: str
-    placa: Optional[str] = None
+    placa: str | None = None
 
 
 class DeliveryDriverResponse(BaseModel):
@@ -15,6 +15,6 @@ class DeliveryDriverResponse(BaseModel):
     codigo: str
     nome: str
     telefone: str
-    placa: Optional[str] = None
+    placa: str | None = None
     ativo: bool
     created_at: datetime

@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal
+
 from pydantic import BaseModel
 
 OrderStatus = Literal[
@@ -16,7 +17,7 @@ class OrderCreate(BaseModel):
     client_codigo: str
     product: str
     quantity: int = 1
-    payment_method: Optional[str] = None
+    payment_method: str | None = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -37,6 +38,6 @@ class OrderResponse(BaseModel):
     value: float
     address_snapshot: str
     status: str
-    payment_method: Optional[str] = None
-    delivery_driver_codigo: Optional[str] = None
+    payment_method: str | None = None
+    delivery_driver_codigo: str | None = None
     created_at: datetime

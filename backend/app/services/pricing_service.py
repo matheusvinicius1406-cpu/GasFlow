@@ -1,14 +1,15 @@
 from sqlalchemy.orm import Session
-from app.models.product import Product
+
+from app.core.exceptions import NotFoundError
+from app.repositories.product_repository import ProductRepository
 
 
 class PricingService:
+    """Ponto único de precificação. Estender aqui para descontos/promoções."""
 
     @staticmethod
     def calculate(db: Session, product_codigo: str, quantity: int) -> float:
-        product = db.query(Product).filter(Product.codigo == product_codigo).first()
-
+        product = ProductRepository(db).get_by_code(product_codigo)
         if not product:
-            raise Exception(f"Produto {product_codigo} não encontrado")
-
+            raise NotFoundError(f"Produto {product_codigo} não encontrado")
         return product.preco * quantity

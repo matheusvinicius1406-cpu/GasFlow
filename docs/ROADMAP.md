@@ -1,5 +1,19 @@
 # Roadmap
 
+> Plano completo de escalabilidade em `docs/SCALABILITY_PLAN.md`.
+
+## Fase 0 — Fundação técnica ✅
+
+* Config via `.env` (pydantic-settings)
+* Conexão SQLite/PostgreSQL com pool
+* Migrations com Alembic
+* Chaves estrangeiras reais + timestamps com timezone
+* Camada de repositories + paginação
+* Exceções de domínio + handler global
+* Logging estruturado (structlog) + request-id
+* Estoque atômico com lock de linha nos pedidos
+* Testes (pytest) + lint (ruff) + CI + Docker/compose
+
 ## Fase 1
 
 * Estrutura do projeto

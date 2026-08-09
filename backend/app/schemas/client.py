@@ -1,34 +1,34 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class ClientCreate(BaseModel):
     nome: str
     telefone: str
-    telefone_secundario: Optional[str] = None
+    telefone_secundario: str | None = None
 
     rua: str
     numero: str
-    complemento: Optional[str] = None
-    referencia: Optional[str] = None
+    complemento: str | None = None
+    referencia: str | None = None
     bairro: str
 
-    observacoes: Optional[str] = None
+    observacoes: str | None = None
 
 
 class ClientUpdate(BaseModel):
     nome: str
     telefone: str
-    telefone_secundario: Optional[str] = None
+    telefone_secundario: str | None = None
 
     rua: str
     numero: str
-    complemento: Optional[str] = None
-    referencia: Optional[str] = None
+    complemento: str | None = None
+    referencia: str | None = None
     bairro: str
 
-    observacoes: Optional[str] = None
+    observacoes: str | None = None
 
 
 class ClientResponse(BaseModel):
@@ -38,15 +38,15 @@ class ClientResponse(BaseModel):
 
     nome: str
     telefone: str
-    telefone_secundario: Optional[str] = None
+    telefone_secundario: str | None = None
 
     rua: str
     numero: str
-    complemento: Optional[str] = None
-    referencia: Optional[str] = None
+    complemento: str | None = None
+    referencia: str | None = None
     bairro: str
 
-    observacoes: Optional[str] = None
+    observacoes: str | None = None
 
     ativo: bool
     created_at: datetime

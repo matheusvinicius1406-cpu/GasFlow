@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
-from datetime import datetime
+import enum
+
+from sqlalchemy import Column, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 
 from app.database.base import Base
-import enum
+from app.models.mixins import TimestampMixin
 
 
 class OrderStatus(str, enum.Enum):
@@ -14,27 +16,33 @@ class OrderStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
-class Order(Base):
+class Order(Base, TimestampMixin):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
 
     codigo = Column(String, unique=True, index=True)
 
+    # Chaves estrangeiras reais (integridade referencial).
+    client_id = Column(ForeignKey("clients.id"), index=True, nullable=True)
+    product_id = Column(ForeignKey("products.id"), index=True, nullable=True)
+    delivery_driver_id = Column(ForeignKey("delivery_drivers.id"), index=True, nullable=True)
+
+    # Códigos de negócio (legíveis / estáveis) mantidos para a API.
     client_codigo = Column(String, index=True)
+    product = Column(String)  # código do produto
+    delivery_driver_codigo = Column(String, nullable=True)
 
-    product = Column(String)  # GAS / WATER
-    quantity = Column(Integer, default=1)
-
-    value = Column(Float, default=0.0)
+    quantity = Column(Integer, default=1, nullable=False)
+    value = Column(Float, default=0.0, nullable=False)
 
     address_snapshot = Column(String)
 
-    #  IMPORTANTE: string simples (mais estável)
-    status = Column(String, default=OrderStatus.PENDING.value)
+    # String simples (mais estável que Enum nativo entre bancos).
+    status = Column(String, default=OrderStatus.PENDING.value, nullable=False, index=True)
 
     payment_method = Column(String, nullable=True)
 
-    delivery_driver_codigo = Column(String, nullable=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
+    client = relationship("Client", back_populates="orders")
+    product_ref = relationship("Product")
+    driver = relationship("DeliveryDriver")

@@ -1,12 +1,12 @@
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.order import Order
-from app.models.client import Client
-from app.models.product import Product
-from app.models.delivery_driver import DeliveryDriver
+from app.core.exceptions import InsufficientStockError, NotFoundError, ValidationError
+from app.models.order import Order, OrderStatus
+from app.repositories.client_repository import ClientRepository
+from app.repositories.delivery_driver_repository import DeliveryDriverRepository
+from app.repositories.order_repository import OrderRepository
+from app.repositories.product_repository import ProductRepository
 from app.services.pricing_service import PricingService
 
 
@@ -14,100 +14,94 @@ class OrderService:
 
     @staticmethod
     def generate_code(db: Session) -> str:
-        last = db.query(Order).order_by(Order.id.desc()).first()
-
+        last = OrderRepository(db).last()
         if not last:
             return "000001"
-
         return f"{int(last.codigo) + 1:06d}"
 
     @staticmethod
-    def create(db: Session, data):
+    def create(db: Session, data) -> Order:
+        clients = ClientRepository(db)
+        products = ProductRepository(db)
+        orders = OrderRepository(db)
 
-        client = db.query(Client).filter(Client.codigo == data.client_codigo).first()
-
+        client = clients.get_by_code(data.client_codigo)
         if not client:
-            raise Exception("Cliente não encontrado")
+            raise NotFoundError("Cliente não encontrado")
 
-        product = db.query(Product).filter(Product.codigo == data.product).first()
-
+        # Lock de linha do produto: impede venda concorrente de estoque inexistente.
+        product = products.get_for_update(data.product)
         if not product:
-            raise Exception("Produto não encontrado")
+            raise NotFoundError("Produto não encontrado")
+
+        if data.quantity <= 0:
+            raise ValidationError("Quantidade deve ser maior que zero")
 
         if product.estoque < data.quantity:
-            raise Exception(
-                f"Estoque insuficiente. Disponível: {product.estoque}, solicitado: {data.quantity}"
+            raise InsufficientStockError(
+                f"Estoque insuficiente. Disponível: {product.estoque}, "
+                f"solicitado: {data.quantity}"
             )
 
         code = OrderService.generate_code(db)
-
         address = f"{client.rua}, {client.numero} - {client.bairro}"
-
         value = PricingService.calculate(db, data.product, data.quantity)
 
         product.estoque -= data.quantity
 
         order = Order(
             codigo=code,
+            client_id=client.id,
+            product_id=product.id,
             client_codigo=client.codigo,
             product=data.product,
             quantity=data.quantity,
             value=value,
             address_snapshot=address,
-            status="PENDING",
+            status=OrderStatus.PENDING.value,
             payment_method=data.payment_method,
-            created_at=datetime.utcnow()
         )
 
-        db.add(order)
-        db.commit()
-        db.refresh(order)
-
-        return order
+        orders.add(order)
+        return orders.commit_refresh(order)
 
     @staticmethod
-    def get_all(db: Session, status: Optional[str] = None):
-        query = db.query(Order)
-
-        if status:
-            query = query.filter(Order.status == status)
-
-        return query.all()
-
-    @staticmethod
-    def get_by_code(db: Session, codigo: str):
-        return db.query(Order).filter(Order.codigo == codigo).first()
+    def get_all(
+        db: Session,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Order], int]:
+        filters = {"status": status} if status else {}
+        return OrderRepository(db).list(limit=limit, offset=offset, **filters)
 
     @staticmethod
-    def update_status(db: Session, codigo: str, status: str):
-        order = db.query(Order).filter(Order.codigo == codigo).first()
+    def get_by_code(db: Session, codigo: str) -> Order | None:
+        return OrderRepository(db).get_by_code(codigo)
 
+    @staticmethod
+    def update_status(db: Session, codigo: str, status: str) -> Order | None:
+        orders = OrderRepository(db)
+        order = orders.get_by_code(codigo)
         if not order:
             return None
 
         order.status = status
-        db.commit()
-        db.refresh(order)
-
-        return order
+        return orders.commit_refresh(order)
 
     @staticmethod
-    def assign_driver(db: Session, codigo: str, driver_codigo: str):
-        order = db.query(Order).filter(Order.codigo == codigo).first()
+    def assign_driver(db: Session, codigo: str, driver_codigo: str) -> Order | None:
+        orders = OrderRepository(db)
+        drivers = DeliveryDriverRepository(db)
 
+        order = orders.get_by_code(codigo)
         if not order:
             return None
 
-        driver = db.query(DeliveryDriver).filter(
-            DeliveryDriver.codigo == driver_codigo,
-            DeliveryDriver.ativo == True
-        ).first()
-
+        driver = drivers.get_by(codigo=driver_codigo, ativo=True)
         if not driver:
-            raise Exception("Entregador não encontrado ou inativo")
+            raise ValidationError("Entregador não encontrado ou inativo")
 
+        order.delivery_driver_id = driver.id
         order.delivery_driver_codigo = driver_codigo
-        db.commit()
-        db.refresh(order)
-
-        return order
+        return orders.commit_refresh(order)

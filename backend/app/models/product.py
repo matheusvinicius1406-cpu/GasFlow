@@ -1,10 +1,10 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
-from datetime import datetime
+from sqlalchemy import Boolean, Column, Float, Integer, String
 
 from app.database.base import Base
+from app.models.mixins import TimestampMixin
 
 
-class Product(Base):
+class Product(Base, TimestampMixin):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -15,9 +15,6 @@ class Product(Base):
     tipo = Column(String, nullable=False)
 
     preco = Column(Float, nullable=False)
-    estoque = Column(Integer, default=0)
+    estoque = Column(Integer, default=0, nullable=False)
 
-    ativo = Column(Boolean, default=True)
-
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    ativo = Column(Boolean, default=True, nullable=False)

@@ -1,22 +1,46 @@
 version: "3.9"
 
 services:
-
   postgres:
     image: postgres:16
-
     container_name: gasflow-postgres
-
     environment:
       POSTGRES_DB: gasflow
       POSTGRES_USER: gasflow
       POSTGRES_PASSWORD: gasflow
-
     ports:
       - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gasflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: gasflow-redis
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./backend
+    container_name: gasflow-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://gasflow:gasflow@postgres:5432/gasflow
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production
+      DEBUG: "False"
+    ports:
+      - "8000:8000"
+    # Aplica as migrations antes de subir a API.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 volumes:
   postgres_data:

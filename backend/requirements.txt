@@ -3,6 +3,19 @@ uvicorn[standard]
 
 sqlalchemy
 psycopg2-binary
+alembic
 
 pydantic
+pydantic-settings
 python-dotenv
+
+structlog
+
+# Auth (Fase 2)
+passlib[bcrypt]
+python-jose[cryptography]
+
+# Dev / tests
+pytest
+httpx
+ruff

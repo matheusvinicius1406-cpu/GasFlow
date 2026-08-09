@@ -1,9 +1,11 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy.orm import relationship
+
 from app.database.base import Base
-from datetime import datetime
+from app.models.mixins import TimestampMixin
 
 
-class Client(Base):
+class Client(Base, TimestampMixin):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -11,7 +13,7 @@ class Client(Base):
     codigo = Column(String, unique=True, index=True)
 
     nome = Column(String, nullable=False)
-    telefone = Column(String, nullable=False)
+    telefone = Column(String, nullable=False, index=True)
 
     telefone_secundario = Column(String, nullable=True)
 
@@ -25,7 +27,6 @@ class Client(Base):
 
     observacoes = Column(String, nullable=True)
 
-    ativo = Column(Boolean, default=True)
+    ativo = Column(Boolean, default=True, nullable=False)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    orders = relationship("Order", back_populates="client")

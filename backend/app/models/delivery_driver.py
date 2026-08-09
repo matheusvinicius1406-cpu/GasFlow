@@ -1,10 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from datetime import datetime
+from sqlalchemy import Boolean, Column, Integer, String
 
 from app.database.base import Base
+from app.models.mixins import TimestampMixin
 
 
-class DeliveryDriver(Base):
+class DeliveryDriver(Base, TimestampMixin):
     __tablename__ = "delivery_drivers"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -15,6 +15,4 @@ class DeliveryDriver(Base):
     telefone = Column(String, nullable=False)
     placa = Column(String, nullable=True)
 
-    ativo = Column(Boolean, default=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
+    ativo = Column(Boolean, default=True, nullable=False)

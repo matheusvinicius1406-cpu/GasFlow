@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -11,11 +11,11 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
-    nome: Optional[str] = None
-    tipo: Optional[str] = None
-    preco: Optional[float] = None
-    estoque: Optional[int] = None
-    ativo: Optional[bool] = None
+    nome: str | None = None
+    tipo: str | None = None
+    preco: float | None = None
+    estoque: int | None = None
+    ativo: bool | None = None
 
 
 class ProductResponse(BaseModel):
