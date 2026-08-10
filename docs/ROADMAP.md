@@ -16,12 +16,21 @@
 
 ## Fase 1 — Multiempresa (multi-tenant) ✅
 
-* Modelo `Company` (depósito) + CRUD `/companies`
+* Modelo `Company` (depósito)
 * `company_id` em clientes, pedidos, produtos e entregadores
 * Código único por empresa (numeração reinicia por depósito)
-* Resolução de tenant via header `X-Company-Id` (empresa padrão sem header)
 * Isolamento automático nas queries (repositories escopados)
 * Testes de isolamento entre empresas
+
+## Fase 2 — Autenticação e RBAC ✅
+
+* Modelo `User` vinculado à empresa; senha com bcrypt
+* JWT access + refresh (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me`)
+* Cadastro self-serve: `register` cria empresa + usuário OWNER
+* Tenant derivado do token (substitui o header da Fase 1)
+* Papéis OWNER > ADMIN > ATTENDANT > DRIVER com `require_role`
+* Gestão de usuários (`/users`, ADMIN+) e `/companies/me`
+* Testes de auth + permissões por papel
 
 ## Fase 1 (legado) — Estrutura inicial
 

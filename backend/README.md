@@ -45,17 +45,35 @@ docker-compose up --build
 Sobe `postgres` + `redis` + `api`. A API aplica as migrations
 (`alembic upgrade head`) antes de iniciar.
 
-## Multiempresa (multi-tenant)
+## Autenticação e multiempresa
 
-Todo dado de negócio pertence a uma empresa (`company_id`). A empresa da
-requisição é resolvida assim:
+Todo dado de negócio pertence a uma empresa (`company_id`), e o acesso é
+autenticado por JWT. A empresa (tenant) é derivada do usuário do token.
 
-- Com o header `X-Company-Id: <codigo-da-empresa>` → opera naquela empresa.
-- Sem o header → usa a **empresa padrão** (`000001`), criada automaticamente
-  (conveniência para uso single-tenant / desenvolvimento).
+Fluxo:
 
-Gerencie empresas em `/companies`. Na Fase 2 (auth), a empresa passará a vir do
-usuário autenticado — bastará alterar `app/api/dependencies.py::get_current_company`.
+```bash
+# 1. Cadastro self-serve: cria a empresa (depósito) + usuário OWNER
+curl -X POST localhost:8000/auth/register -H 'Content-Type: application/json' \
+  -d '{"empresa_nome":"Gás Sul","nome":"Ana","email":"ana@sul.com","senha":"senha123"}'
+# -> { "access_token": "...", "refresh_token": "..." }
+
+# 2. Use o token nas demais chamadas
+curl localhost:8000/clients/ -H 'Authorization: Bearer <access_token>'
+```
+
+Endpoints de auth: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me`.
+
+### Papéis (RBAC)
+
+Hierarquia `OWNER > ADMIN > ATTENDANT > DRIVER`:
+
+- **ADMIN+**: produtos/estoque, entregadores, gestão de usuários (`/users`)
+- **ATTENDANT+**: clientes e pedidos
+- **Qualquer autenticado**: leituras (GET)
+
+Toda a autenticação passa por `app/api/dependencies.py`
+(`get_current_user`, `get_current_company_id`, `require_role`).
 
 ## Migrations (Alembic)
 

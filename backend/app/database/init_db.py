@@ -15,6 +15,7 @@ from app.models.company import Company  # noqa: F401
 from app.models.delivery_driver import DeliveryDriver  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.product import Product  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 
 def init_db() -> None:

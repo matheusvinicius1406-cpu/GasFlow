@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_role
 from app.database.dependencies import get_db
+from app.models.user import UserRole
 from app.schemas.delivery_driver import DeliveryDriverCreate, DeliveryDriverResponse
 from app.schemas.pagination import Page
 from app.services.delivery_driver_service import DeliveryDriverService
@@ -12,8 +13,11 @@ router = APIRouter(
     tags=["Delivery Drivers"],
 )
 
+# Cadastro de entregadores exige ADMIN ou superior.
+_admin = Depends(require_role(UserRole.ADMIN))
 
-@router.post("/", response_model=DeliveryDriverResponse)
+
+@router.post("/", response_model=DeliveryDriverResponse, dependencies=[_admin])
 def create_driver(
     driver: DeliveryDriverCreate,
     db: Session = Depends(get_db),
@@ -45,7 +49,7 @@ def get_driver(
     return driver
 
 
-@router.patch("/{codigo}/disable", response_model=DeliveryDriverResponse)
+@router.patch("/{codigo}/disable", response_model=DeliveryDriverResponse, dependencies=[_admin])
 def disable_driver(
     codigo: str,
     db: Session = Depends(get_db),

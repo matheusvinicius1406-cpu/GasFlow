@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_role
 from app.database.dependencies import get_db
+from app.models.user import UserRole
 from app.schemas.client import ClientCreate, ClientResponse, ClientUpdate
 from app.schemas.pagination import Page
 from app.services.client_service import ClientService
@@ -12,8 +13,11 @@ router = APIRouter(
     tags=["Clients"],
 )
 
+# Escrita de clientes exige ATTENDANT ou superior.
+_attendant = Depends(require_role(UserRole.ATTENDANT))
 
-@router.post("/", response_model=ClientResponse)
+
+@router.post("/", response_model=ClientResponse, dependencies=[_attendant])
 def create_client(
     client: ClientCreate,
     db: Session = Depends(get_db),
@@ -45,7 +49,7 @@ def get_client(
     return client
 
 
-@router.put("/{codigo}", response_model=ClientResponse)
+@router.put("/{codigo}", response_model=ClientResponse, dependencies=[_attendant])
 def update_client(
     codigo: str,
     data: ClientUpdate,
@@ -58,7 +62,7 @@ def update_client(
     return client
 
 
-@router.patch("/{codigo}/disable", response_model=ClientResponse)
+@router.patch("/{codigo}/disable", response_model=ClientResponse, dependencies=[_attendant])
 def disable_client(
     codigo: str,
     db: Session = Depends(get_db),

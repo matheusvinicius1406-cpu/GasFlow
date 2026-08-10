@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_role
 from app.database.dependencies import get_db
+from app.models.user import UserRole
 from app.schemas.pagination import Page
 from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from app.services.product_service import ProductService
@@ -12,8 +13,11 @@ router = APIRouter(
     tags=["Products"],
 )
 
+# Gestão de catálogo/estoque exige ADMIN ou superior.
+_admin = Depends(require_role(UserRole.ADMIN))
 
-@router.post("/", response_model=ProductResponse)
+
+@router.post("/", response_model=ProductResponse, dependencies=[_admin])
 def create_product(
     product: ProductCreate,
     db: Session = Depends(get_db),
@@ -45,7 +49,7 @@ def get_product(
     return product
 
 
-@router.put("/{codigo}", response_model=ProductResponse)
+@router.put("/{codigo}", response_model=ProductResponse, dependencies=[_admin])
 def update_product(
     codigo: str,
     data: ProductUpdate,
@@ -58,7 +62,7 @@ def update_product(
     return product
 
 
-@router.patch("/{codigo}/disable", response_model=ProductResponse)
+@router.patch("/{codigo}/disable", response_model=ProductResponse, dependencies=[_admin])
 def disable_product(
     codigo: str,
     db: Session = Depends(get_db),

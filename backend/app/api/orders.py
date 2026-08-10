@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_role
 from app.database.dependencies import get_db
+from app.models.user import UserRole
 from app.schemas.order import (
     AssignDriverRequest,
     OrderCreate,
@@ -17,8 +18,11 @@ router = APIRouter(
     tags=["Orders"],
 )
 
+# Operação de pedidos exige ATTENDANT ou superior.
+_attendant = Depends(require_role(UserRole.ATTENDANT))
 
-@router.post("/", response_model=OrderResponse)
+
+@router.post("/", response_model=OrderResponse, dependencies=[_attendant])
 def create_order(
     order: OrderCreate,
     db: Session = Depends(get_db),
@@ -54,7 +58,7 @@ def get_order(
     return order
 
 
-@router.patch("/{codigo}/status", response_model=OrderResponse)
+@router.patch("/{codigo}/status", response_model=OrderResponse, dependencies=[_attendant])
 def update_order_status(
     codigo: str,
     data: OrderStatusUpdate,
@@ -67,7 +71,7 @@ def update_order_status(
     return order
 
 
-@router.patch("/{codigo}/assign-driver", response_model=OrderResponse)
+@router.patch("/{codigo}/assign-driver", response_model=OrderResponse, dependencies=[_attendant])
 def assign_driver(
     codigo: str,
     data: AssignDriverRequest,

@@ -5,11 +5,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Importa os modelos para registrar as tabelas no metadata.
+# (antes de `from app.main import app`, para não rebindar o nome `app`.)
 import app.models.client  # noqa: F401
 import app.models.company  # noqa: F401
 import app.models.delivery_driver  # noqa: F401
 import app.models.order  # noqa: F401
 import app.models.product  # noqa: F401
+import app.models.user  # noqa: F401
 from app.database.base import Base
 from app.database.dependencies import get_db
 from app.main import app
@@ -35,19 +37,38 @@ def db_session():
 
 
 @pytest.fixture
-def client(db_session):
-    """TestClient com o get_db sobrescrito para o banco de teste."""
+def raw_client(db_session):
+    """TestClient SEM autenticação (para testar /auth e respostas 401)."""
 
     def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+def register_company(test_client, empresa_nome, email, senha="senha123", nome="Owner"):
+    """Registra empresa + OWNER e devolve o token de acesso."""
+    resp = test_client.post(
+        "/auth/register",
+        json={"empresa_nome": empresa_nome, "nome": nome, "email": email, "senha": senha},
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
+def bearer(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def client(raw_client):
+    """TestClient autenticado como OWNER de uma empresa de teste."""
+    token = register_company(raw_client, "Depósito Teste", "owner@test.com")
+    raw_client.headers["Authorization"] = f"Bearer {token}"
+    return raw_client
 
 
 @pytest.fixture

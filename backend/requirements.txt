@@ -12,8 +12,9 @@ python-dotenv
 structlog
 
 # Auth (Fase 2)
-passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
+email-validator
 
 # Dev / tests
 pytest

@@ -2,12 +2,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.auth import router as auth_router
 from app.api.clients import router as client_router
 from app.api.companies import router as companies_router
 from app.api.delivery import router as delivery_router
 from app.api.health import router as health_router
 from app.api.orders import router as orders_router
 from app.api.products import router as products_router
+from app.api.users import router as users_router
 from app.core.config import settings
 from app.core.exceptions import DomainError
 from app.core.logging import configure_logging, get_logger
@@ -54,6 +56,8 @@ def root():
 
 
 app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(companies_router)
 app.include_router(client_router)
 app.include_router(orders_router)

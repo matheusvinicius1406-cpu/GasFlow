@@ -8,6 +8,7 @@ import app.models.company  # noqa: F401
 import app.models.delivery_driver  # noqa: F401
 import app.models.order  # noqa: F401
 import app.models.product  # noqa: F401
+import app.models.user  # noqa: F401
 from alembic import context
 from app.core.config import settings
 from app.database.base import Base

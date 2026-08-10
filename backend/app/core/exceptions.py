@@ -27,6 +27,18 @@ class ConflictError(DomainError):
     status_code = 409
 
 
+class UnauthorizedError(DomainError):
+    """Falha de autenticação (token ausente/inválido). Mapeado para HTTP 401."""
+
+    status_code = 401
+
+
+class ForbiddenError(DomainError):
+    """Sem permissão para a operação (papel insuficiente). Mapeado para HTTP 403."""
+
+    status_code = 403
+
+
 class ValidationError(DomainError):
     """Violação de regra de negócio. Mapeado para HTTP 422."""
 
