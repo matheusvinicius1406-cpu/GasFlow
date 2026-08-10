@@ -9,22 +9,41 @@ ModelType = TypeVar("ModelType", bound=Base)
 
 
 class BaseRepository(Generic[ModelType]):
-    """Acesso a dados genérico com CRUD e paginação.
+    """Acesso a dados genérico com CRUD, paginação e escopo multi-tenant.
 
     Serviços usam repositórios em vez de montar queries diretamente, mantendo
     a lógica de acesso a dados em um único lugar e facilitando testes.
+
+    Quando `company_id` é informado e o modelo possui a coluna `company_id`,
+    todas as leituras (`get_by`, `get_by_code`, `list`) são automaticamente
+    filtradas pela empresa — garantindo o isolamento entre depósitos.
     """
 
     model: type[ModelType]
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int | None = None):
         self.db = db
+        self.company_id = company_id
+
+    def _scoped(self, filters: dict) -> dict:
+        if self.company_id is not None and hasattr(self.model, "company_id"):
+            return {"company_id": self.company_id, **filters}
+        return filters
 
     def get(self, id_: int) -> ModelType | None:
-        return self.db.get(self.model, id_)
+        entity = self.db.get(self.model, id_)
+        if entity is None:
+            return None
+        if (
+            self.company_id is not None
+            and hasattr(self.model, "company_id")
+            and entity.company_id != self.company_id
+        ):
+            return None
+        return entity
 
     def get_by(self, **filters) -> ModelType | None:
-        stmt = select(self.model).filter_by(**filters)
+        stmt = select(self.model).filter_by(**self._scoped(filters))
         return self.db.execute(stmt).scalar_one_or_none()
 
     def get_by_code(self, codigo: str) -> ModelType | None:
@@ -40,7 +59,7 @@ class BaseRepository(Generic[ModelType]):
     ) -> tuple[list[ModelType], int]:
         """Retorna (itens da página, total de itens que casam os filtros)."""
 
-        base = select(self.model).filter_by(**filters)
+        base = select(self.model).filter_by(**self._scoped(filters))
 
         total = self.db.execute(
             select(func.count()).select_from(base.subquery())

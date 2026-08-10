@@ -45,6 +45,18 @@ docker-compose up --build
 Sobe `postgres` + `redis` + `api`. A API aplica as migrations
 (`alembic upgrade head`) antes de iniciar.
 
+## Multiempresa (multi-tenant)
+
+Todo dado de negócio pertence a uma empresa (`company_id`). A empresa da
+requisição é resolvida assim:
+
+- Com o header `X-Company-Id: <codigo-da-empresa>` → opera naquela empresa.
+- Sem o header → usa a **empresa padrão** (`000001`), criada automaticamente
+  (conveniência para uso single-tenant / desenvolvimento).
+
+Gerencie empresas em `/companies`. Na Fase 2 (auth), a empresa passará a vir do
+usuário autenticado — bastará alterar `app/api/dependencies.py::get_current_company`.
+
 ## Migrations (Alembic)
 
 ```bash

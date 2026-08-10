@@ -1,4 +1,3 @@
-
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import InsufficientStockError, NotFoundError, ValidationError
@@ -13,17 +12,17 @@ from app.services.pricing_service import PricingService
 class OrderService:
 
     @staticmethod
-    def generate_code(db: Session) -> str:
-        last = OrderRepository(db).last()
+    def generate_code(db: Session, company_id: int) -> str:
+        last = OrderRepository(db, company_id).last()
         if not last:
             return "000001"
         return f"{int(last.codigo) + 1:06d}"
 
     @staticmethod
-    def create(db: Session, data) -> Order:
-        clients = ClientRepository(db)
-        products = ProductRepository(db)
-        orders = OrderRepository(db)
+    def create(db: Session, company_id: int, data) -> Order:
+        clients = ClientRepository(db, company_id)
+        products = ProductRepository(db, company_id)
+        orders = OrderRepository(db, company_id)
 
         client = clients.get_by_code(data.client_codigo)
         if not client:
@@ -43,13 +42,14 @@ class OrderService:
                 f"solicitado: {data.quantity}"
             )
 
-        code = OrderService.generate_code(db)
+        code = OrderService.generate_code(db, company_id)
         address = f"{client.rua}, {client.numero} - {client.bairro}"
-        value = PricingService.calculate(db, data.product, data.quantity)
+        value = PricingService.calculate(db, company_id, data.product, data.quantity)
 
         product.estoque -= data.quantity
 
         order = Order(
+            company_id=company_id,
             codigo=code,
             client_id=client.id,
             product_id=product.id,
@@ -68,20 +68,21 @@ class OrderService:
     @staticmethod
     def get_all(
         db: Session,
+        company_id: int,
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[Order], int]:
         filters = {"status": status} if status else {}
-        return OrderRepository(db).list(limit=limit, offset=offset, **filters)
+        return OrderRepository(db, company_id).list(limit=limit, offset=offset, **filters)
 
     @staticmethod
-    def get_by_code(db: Session, codigo: str) -> Order | None:
-        return OrderRepository(db).get_by_code(codigo)
+    def get_by_code(db: Session, company_id: int, codigo: str) -> Order | None:
+        return OrderRepository(db, company_id).get_by_code(codigo)
 
     @staticmethod
-    def update_status(db: Session, codigo: str, status: str) -> Order | None:
-        orders = OrderRepository(db)
+    def update_status(db: Session, company_id: int, codigo: str, status: str) -> Order | None:
+        orders = OrderRepository(db, company_id)
         order = orders.get_by_code(codigo)
         if not order:
             return None
@@ -90,9 +91,11 @@ class OrderService:
         return orders.commit_refresh(order)
 
     @staticmethod
-    def assign_driver(db: Session, codigo: str, driver_codigo: str) -> Order | None:
-        orders = OrderRepository(db)
-        drivers = DeliveryDriverRepository(db)
+    def assign_driver(
+        db: Session, company_id: int, codigo: str, driver_codigo: str
+    ) -> Order | None:
+        orders = OrderRepository(db, company_id)
+        drivers = DeliveryDriverRepository(db, company_id)
 
         order = orders.get_by_code(codigo)
         if not order:

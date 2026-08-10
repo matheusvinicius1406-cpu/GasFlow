@@ -14,7 +14,16 @@
 * Estoque atômico com lock de linha nos pedidos
 * Testes (pytest) + lint (ruff) + CI + Docker/compose
 
-## Fase 1
+## Fase 1 — Multiempresa (multi-tenant) ✅
+
+* Modelo `Company` (depósito) + CRUD `/companies`
+* `company_id` em clientes, pedidos, produtos e entregadores
+* Código único por empresa (numeração reinicia por depósito)
+* Resolução de tenant via header `X-Company-Id` (empresa padrão sem header)
+* Isolamento automático nas queries (repositories escopados)
+* Testes de isolamento entre empresas
+
+## Fase 1 (legado) — Estrutura inicial
 
 * Estrutura do projeto
 * API

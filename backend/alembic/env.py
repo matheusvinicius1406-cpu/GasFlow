@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 # Importa os modelos para que fiquem registrados no metadata.
 import app.models.client  # noqa: F401
+import app.models.company  # noqa: F401
 import app.models.delivery_driver  # noqa: F401
 import app.models.order  # noqa: F401
 import app.models.product  # noqa: F401

@@ -1,4 +1,3 @@
-
 from sqlalchemy.orm import Session
 
 from app.models.delivery_driver import DeliveryDriver
@@ -8,18 +7,19 @@ from app.repositories.delivery_driver_repository import DeliveryDriverRepository
 class DeliveryDriverService:
 
     @staticmethod
-    def generate_code(db: Session) -> str:
-        last = DeliveryDriverRepository(db).last()
+    def generate_code(db: Session, company_id: int) -> str:
+        last = DeliveryDriverRepository(db, company_id).last()
         if not last:
             return "000001"
         return f"{int(last.codigo) + 1:06d}"
 
     @staticmethod
-    def create(db: Session, data) -> DeliveryDriver:
-        repo = DeliveryDriverRepository(db)
-        codigo = DeliveryDriverService.generate_code(db)
+    def create(db: Session, company_id: int, data) -> DeliveryDriver:
+        repo = DeliveryDriverRepository(db, company_id)
+        codigo = DeliveryDriverService.generate_code(db, company_id)
 
         driver = DeliveryDriver(
+            company_id=company_id,
             codigo=codigo,
             nome=data.nome,
             telefone=data.telefone,
@@ -32,17 +32,19 @@ class DeliveryDriverService:
 
     @staticmethod
     def get_all(
-        db: Session, limit: int = 50, offset: int = 0
+        db: Session, company_id: int, limit: int = 50, offset: int = 0
     ) -> tuple[list[DeliveryDriver], int]:
-        return DeliveryDriverRepository(db).list(limit=limit, offset=offset, ativo=True)
+        return DeliveryDriverRepository(db, company_id).list(
+            limit=limit, offset=offset, ativo=True
+        )
 
     @staticmethod
-    def get_by_code(db: Session, codigo: str) -> DeliveryDriver | None:
-        return DeliveryDriverRepository(db).get_by_code(codigo)
+    def get_by_code(db: Session, company_id: int, codigo: str) -> DeliveryDriver | None:
+        return DeliveryDriverRepository(db, company_id).get_by_code(codigo)
 
     @staticmethod
-    def disable(db: Session, codigo: str) -> DeliveryDriver | None:
-        repo = DeliveryDriverRepository(db)
+    def disable(db: Session, company_id: int, codigo: str) -> DeliveryDriver | None:
+        repo = DeliveryDriverRepository(db, company_id)
         driver = repo.get_by_code(codigo)
         if not driver:
             return None

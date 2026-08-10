@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 # Importa os modelos para registrar as tabelas no metadata.
 import app.models.client  # noqa: F401
+import app.models.company  # noqa: F401
 import app.models.delivery_driver  # noqa: F401
 import app.models.order  # noqa: F401
 import app.models.product  # noqa: F401

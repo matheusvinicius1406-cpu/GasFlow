@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database.base import Base
@@ -18,10 +18,13 @@ class OrderStatus(str, enum.Enum):
 
 class Order(Base, TimestampMixin):
     __tablename__ = "orders"
+    __table_args__ = (UniqueConstraint("company_id", "codigo", name="uq_orders_company_codigo"),)
 
     id = Column(Integer, primary_key=True, index=True)
 
-    codigo = Column(String, unique=True, index=True)
+    company_id = Column(ForeignKey("companies.id"), index=True, nullable=False)
+
+    codigo = Column(String, index=True)
 
     # Chaves estrangeiras reais (integridade referencial).
     client_id = Column(ForeignKey("clients.id"), index=True, nullable=True)

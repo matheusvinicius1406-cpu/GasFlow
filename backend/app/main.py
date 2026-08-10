@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.clients import router as client_router
+from app.api.companies import router as companies_router
 from app.api.delivery import router as delivery_router
 from app.api.health import router as health_router
 from app.api.orders import router as orders_router
@@ -53,6 +54,7 @@ def root():
 
 
 app.include_router(health_router)
+app.include_router(companies_router)
 app.include_router(client_router)
 app.include_router(orders_router)
 app.include_router(products_router)
