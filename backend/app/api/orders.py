@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_company_id, require_role
+from app.api.dependencies import get_current_company_id, get_current_user, require_role
 from app.database.dependencies import get_db
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.order import (
     AssignDriverRequest,
     OrderCreate,
     OrderResponse,
+    OrderStatusHistoryResponse,
     OrderStatusUpdate,
 )
 from app.schemas.pagination import Page
@@ -27,9 +28,10 @@ def create_order(
     order: OrderCreate,
     db: Session = Depends(get_db),
     company_id: int = Depends(get_current_company_id),
+    user: User = Depends(get_current_user),
 ):
     # Erros de domínio são tratados pelo handler global (ver app.main).
-    return OrderService.create(db, company_id, order)
+    return OrderService.create(db, company_id, order, user_id=user.id)
 
 
 @router.get("/", response_model=Page[OrderResponse])
@@ -58,14 +60,27 @@ def get_order(
     return order
 
 
+@router.get("/{codigo}/history", response_model=list[OrderStatusHistoryResponse])
+def order_history(
+    codigo: str,
+    db: Session = Depends(get_db),
+    company_id: int = Depends(get_current_company_id),
+):
+    history = OrderService.get_history(db, company_id, codigo)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    return history
+
+
 @router.patch("/{codigo}/status", response_model=OrderResponse, dependencies=[_attendant])
 def update_order_status(
     codigo: str,
     data: OrderStatusUpdate,
     db: Session = Depends(get_db),
     company_id: int = Depends(get_current_company_id),
+    user: User = Depends(get_current_user),
 ):
-    order = OrderService.update_status(db, company_id, codigo, data.status)
+    order = OrderService.update_status(db, company_id, codigo, data.status, user_id=user.id)
     if not order:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
     return order

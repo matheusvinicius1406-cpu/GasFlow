@@ -10,7 +10,10 @@ import app.models.client  # noqa: F401
 import app.models.company  # noqa: F401
 import app.models.delivery_driver  # noqa: F401
 import app.models.order  # noqa: F401
+import app.models.order_item  # noqa: F401
+import app.models.order_status_history  # noqa: F401
 import app.models.product  # noqa: F401
+import app.models.stock_movement  # noqa: F401
 import app.models.user  # noqa: F401
 from app.database.base import Base
 from app.database.dependencies import get_db

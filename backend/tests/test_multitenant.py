@@ -65,7 +65,10 @@ def test_order_cannot_use_other_company_product(raw_client):
     resp = raw_client.post(
         "/orders/",
         headers=bearer(token_b),
-        json={"client_codigo": cli_b["codigo"], "product": prod_a["codigo"], "quantity": 1},
+        json={
+            "client_codigo": cli_b["codigo"],
+            "items": [{"product": prod_a["codigo"], "quantity": 1}],
+        },
     )
     assert resp.status_code == 404
 

@@ -32,6 +32,14 @@
 * Gestão de usuários (`/users`, ADMIN+) e `/companies/me`
 * Testes de auth + permissões por papel
 
+## Fase 3 — Pedidos completos ✅
+
+* Pedido com múltiplos produtos (`OrderItem`); cabeçalho + itens
+* Máquina de estados com transições válidas (bloqueia pulos, ex.: PENDING→DELIVERED)
+* Histórico de status (`order_status_history`) + endpoint `/orders/{codigo}/history`
+* Estoque auditado (`stock_movements`): venda deduz, cancelamento devolve
+* Lock de estoque por item (ordem estável de códigos evita deadlock)
+
 ## Fase 1 (legado) — Estrutura inicial
 
 * Estrutura do projeto

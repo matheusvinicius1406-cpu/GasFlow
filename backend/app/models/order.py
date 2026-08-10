@@ -17,6 +17,8 @@ class OrderStatus(str, enum.Enum):
 
 
 class Order(Base, TimestampMixin):
+    """Cabeçalho do pedido. Os produtos ficam em `OrderItem` (1..N)."""
+
     __tablename__ = "orders"
     __table_args__ = (UniqueConstraint("company_id", "codigo", name="uq_orders_company_codigo"),)
 
@@ -26,17 +28,13 @@ class Order(Base, TimestampMixin):
 
     codigo = Column(String, index=True)
 
-    # Chaves estrangeiras reais (integridade referencial).
     client_id = Column(ForeignKey("clients.id"), index=True, nullable=True)
-    product_id = Column(ForeignKey("products.id"), index=True, nullable=True)
-    delivery_driver_id = Column(ForeignKey("delivery_drivers.id"), index=True, nullable=True)
-
-    # Códigos de negócio (legíveis / estáveis) mantidos para a API.
     client_codigo = Column(String, index=True)
-    product = Column(String)  # código do produto
+
+    delivery_driver_id = Column(ForeignKey("delivery_drivers.id"), index=True, nullable=True)
     delivery_driver_codigo = Column(String, nullable=True)
 
-    quantity = Column(Integer, default=1, nullable=False)
+    # Valor total do pedido (soma dos itens).
     value = Column(Float, default=0.0, nullable=False)
 
     address_snapshot = Column(String)
@@ -47,5 +45,16 @@ class Order(Base, TimestampMixin):
     payment_method = Column(String, nullable=True)
 
     client = relationship("Client", back_populates="orders")
-    product_ref = relationship("Product")
     driver = relationship("DeliveryDriver")
+    items = relationship(
+        "OrderItem",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderItem.id",
+    )
+    status_history = relationship(
+        "OrderStatusHistory",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderStatusHistory.id",
+    )
