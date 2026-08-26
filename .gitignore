@@ -33,11 +33,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Flutter
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-
 # Build
 build/
 dist/
@@ -45,14 +40,12 @@ dist/
 # Node
 node_modules/
 
-# Next
-.next/
+# Frontend
+frontend/dist/
+frontend/.vite/
 
-# Android
-android/.gradle/
-
-# iOS
-ios/Pods/
-
-# Backups
-database/backups/
+# WhatsApp Service
+whatsapp/data/
+whatsapp/wwebjs_auth/
+whatsapp/.wwebjs_cache/
+whatsapp/export/

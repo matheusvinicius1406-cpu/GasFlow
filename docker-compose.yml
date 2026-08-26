@@ -2,21 +2,82 @@ version: "3.9"
 
 services:
 
+  # ── Banco de Dados ──────────────────────────────────────
   postgres:
     image: postgres:16
-
     container_name: gasflow-postgres
-
     environment:
       POSTGRES_DB: gasflow
       POSTGRES_USER: gasflow
       POSTGRES_PASSWORD: gasflow
-
     ports:
       - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gasflow -d gasflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (FastAPI) ───────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gasflow-backend
+    environment:
+      - DATABASE_URL=postgresql://gasflow:gasflow@postgres:5432/gasflow
+      - WHATSAPP_SERVICE_URL=http://whatsapp:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Frontend (React/Vite) ──────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gasflow-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  # ── WhatsApp Service (whatsapp-web.js) ──────────────────
+  whatsapp:
+    build:
+      context: ./whatsapp
+      dockerfile: Dockerfile
+    container_name: gasflow-whatsapp
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - WA_PRIMARY_NAME=${WA_PRIMARY_NAME:-Marcos Gás}
+      - WA_SECONDARY_NAME=${WA_SECONDARY_NAME:-Marcos Gás 2}
+      - WA_PRIMARY_SESSION=/app/wwebjs_auth/primary
+      - WA_SECONDARY_SESSION=/app/wwebjs_auth/secondary
+      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./whatsapp/src:/app/src
+      - whatsapp_data:/app/data
+      - whatsapp_auth:/app/wwebjs_auth
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  whatsapp_data:
+  whatsapp_auth:

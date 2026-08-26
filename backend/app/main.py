@@ -1,17 +1,29 @@
+"""
+GasFlow — Sistema operacional para depósitos de gás e água.
+
+Arquitetura: Domain-Driven Design (DDD)
+- Domain: Entidades e interfaces de repositório
+- Application: Casos de uso (Use Cases)
+- Infrastructure: Implementações SQLAlchemy
+- Presentation: API Routes e Schemas
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database.init_db import init_db
-from app.api.health import router as health_router
-from app.api.clients import router as client_router
-from app.api.orders import router as orders_router
-from app.api.products import router as products_router
-from app.api.delivery import router as delivery_router
+from app.infrastructure.database.init_db import init_db
+from app.presentation.api.health import router as health_router
+from app.presentation.api.clients import router as client_router
+from app.presentation.api.orders import router as orders_router
+from app.presentation.api.products import router as products_router
+from app.presentation.api.delivery import router as delivery_router
+from app.presentation.api.whatsapp import router as whatsapp_router
 from app.core.config import settings
 
 app = FastAPI(
     title=settings.app_name,
-    version=settings.app_version
+    version=settings.app_version,
+    description="Sistema operacional para depósitos de gás e água — API + WhatsApp Automation"
 )
 
 app.add_middleware(
@@ -19,10 +31,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost",
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
         "http://localhost:8080",
         "http://127.0.0.1",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
     ],
@@ -38,7 +52,15 @@ init_db()
 def root():
     return {
         "name": settings.app_name,
-        "status": "online"
+        "version": settings.app_version,
+        "status": "online",
+        "architecture": "Domain-Driven Design (DDD)",
+        "services": {
+            "api": "http://localhost:8000",
+            "whatsapp": "http://localhost:3001",
+            "docs": "http://localhost:8000/docs",
+            "whatsapp_connect": "http://localhost:3001/connect"
+        }
     }
 
 
@@ -47,3 +69,4 @@ app.include_router(client_router)
 app.include_router(orders_router)
 app.include_router(products_router)
 app.include_router(delivery_router)
+app.include_router(whatsapp_router)

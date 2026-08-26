@@ -1,0 +1,67 @@
+"""
+Delivery API Routes — Endpoints REST para entregadores.
+"""
+
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+from app.infrastructure.database.dependencies import get_db
+from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+from app.application.delivery.use_cases import (
+    CreateDriverUseCase,
+    GetDriverUseCase,
+    ListDriversUseCase,
+    DisableDriverUseCase,
+)
+from app.presentation.schemas.delivery import DeliveryDriverCreate, DeliveryDriverResponse
+
+
+router = APIRouter(
+    prefix="/delivery-drivers",
+    tags=["Delivery Drivers"]
+)
+
+
+def _get_repository(db: Session = Depends(get_db)):
+    return SQLAlchemyDeliveryDriverRepository(db)
+
+
+@router.post("/", response_model=DeliveryDriverResponse)
+def create_driver(
+    driver: DeliveryDriverCreate,
+    repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository)
+):
+    use_case = CreateDriverUseCase(repository)
+    return use_case.execute(driver.model_dump())
+
+
+@router.get("/", response_model=list[DeliveryDriverResponse])
+def list_drivers(
+    repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository)
+):
+    use_case = ListDriversUseCase(repository)
+    return use_case.execute()
+
+
+@router.get("/{codigo}", response_model=DeliveryDriverResponse)
+def get_driver(
+    codigo: str,
+    repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository)
+):
+    use_case = GetDriverUseCase(repository)
+    driver = use_case.execute(codigo)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Entregador não encontrado")
+    return driver
+
+
+@router.patch("/{codigo}/disable", response_model=DeliveryDriverResponse)
+def disable_driver(
+    codigo: str,
+    repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository)
+):
+    use_case = DisableDriverUseCase(repository)
+    driver = use_case.execute(codigo)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Entregador não encontrado")
+    return driver
