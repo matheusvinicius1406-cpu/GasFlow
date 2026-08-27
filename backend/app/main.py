@@ -26,6 +26,7 @@ from app.presentation.api.audio import router as audio_router
 from app.presentation.api.automation import router as automation_router
 from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
+from app.presentation.api.driver_api import router as driver_api_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -86,3 +87,4 @@ app.include_router(audio_router)
 app.include_router(automation_router)
 app.include_router(auth_router)
 app.include_router(delivery_ops_router)
+app.include_router(driver_api_router)

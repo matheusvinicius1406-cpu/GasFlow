@@ -628,7 +628,10 @@ class TestAdversarial:
     def test_41_driver_escalation(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
         perms = ROLE_PERMISSIONS.get(SystemRole.DRIVER, [])
-        assert len(perms) <= 3  # Minimal permissions
+        assert len(perms) <= 12  # Delivery-scoped, no admin/tool/workflow perms
+        assert not any("admin" in p for p in perms)
+        assert not any("finance" in p for p in perms)
+        assert not any("workflow" in p for p in perms)
 
     """42. Customer privilege escalation?"""
     def test_42_customer_escalation(self):

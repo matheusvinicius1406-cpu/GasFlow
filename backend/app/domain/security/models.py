@@ -247,6 +247,9 @@ ROLE_PERMISSIONS = {
     ],
     SystemRole.DRIVER: [
         "customer.read", "order.read",
+        "delivery.read.assigned", "delivery.accept", "delivery.start",
+        "delivery.arrive", "delivery.complete", "delivery.fail",
+        "route.read.assigned", "location.write.self", "proof.write.assigned",
     ],
     SystemRole.CUSTOMER: [
         "order.read", "product.read",
