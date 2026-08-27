@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
+import { api } from '@/lib/api/client'
 import type { User } from '@/types'
 
 export interface AuthContextType {
@@ -18,38 +19,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem('gasflow_token'))
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    // Check if token exists and validate
-    if (token) {
-      // For now, create a mock user if token exists
-      // In production, this would call /api/auth/me
+  const fetchMe = useCallback(async () => {
+    try {
+      const res = await api.auth.me()
+      const data = res.data
       setUser({
-        id: '1',
-        email: 'admin@gasflow.com',
-        name: 'Administrador',
-        role: 'ADMIN',
+        id: data.id,
+        email: data.email || data.username,
+        name: data.display_name || data.username,
+        role: data.role || 'OPERATOR',
       })
+    } catch {
+      // Token invalid — clear
+      localStorage.removeItem('gasflow_token')
+      setToken(null)
+      setUser(null)
     }
-    setIsLoading(false)
-  }, [token])
+  }, [])
 
-  const login = async (email: string, _password: string) => {
-    // TODO: Replace with actual API call
-    // const response = await api.auth.login(email, password)
-    const mockUser: User = {
-      id: '1',
-      email,
-      name: 'Administrador',
-      role: 'ADMIN',
+  useEffect(() => {
+    if (token) {
+      fetchMe().finally(() => setIsLoading(false))
+    } else {
+      setIsLoading(false)
     }
-    const mockToken = 'mock-jwt-token'
+  }, [token, fetchMe])
 
-    localStorage.setItem('gasflow_token', mockToken)
-    setToken(mockToken)
-    setUser(mockUser)
+  const login = async (email: string, password: string) => {
+    let data
+    try {
+      const res = await api.auth.login(email, password)
+      data = res.data
+    } catch (err: unknown) {
+      // Axios error from 401 response
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      throw new Error(msg || 'Credenciais inválidas')
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || 'Credenciais inválidas')
+    }
+
+    localStorage.setItem('gasflow_token', data.token)
+    setToken(data.token)
+    setUser({
+      id: data.user?.id || '',
+      email: data.user?.email || email,
+      name: data.user?.display_name || data.user?.username || email,
+      role: (data.role as User['role']) || 'OPERATOR',
+    })
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.auth.logout()
+    } catch {
+      // Ignore — local logout still happens
+    }
     localStorage.removeItem('gasflow_token')
     setToken(null)
     setUser(null)

@@ -27,8 +27,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('gasflow_token')
-      window.location.href = '/login'
+      // Don't redirect on login endpoint (let caller handle it)
+      const url = error.config?.url || ''
+      if (!url.includes('/auth/login')) {
+        localStorage.removeItem('gasflow_token')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
@@ -38,6 +42,18 @@ apiClient.interceptors.response.use(
 export const api = {
   // Health
   health: () => apiClient.get('/health'),
+
+  // Auth — FASE 13
+  auth: {
+    login: (username: string, password: string) =>
+      apiClient.post('/auth/login', { username, password }),
+    logout: () => apiClient.post('/auth/logout'),
+    me: () => apiClient.get('/auth/me'),
+    users: () => apiClient.get('/auth/users'),
+    createUser: (data: unknown) => apiClient.post('/auth/users', data),
+    roles: () => apiClient.get('/auth/roles'),
+    audit: (limit?: number) => apiClient.get('/auth/audit', { params: { limit } }),
+  },
 
   // Clients — FASE 6: search, pagination, 360
   clients: {

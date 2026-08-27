@@ -47,15 +47,16 @@ export function LoginPage() {
 
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium text-foreground">
-              Email
+              Usuário
             </label>
             <Input
               id="email"
-              type="email"
-              placeholder="admin@gasflow.com"
+              type="text"
+              placeholder="admin"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="username"
             />
           </div>
 
