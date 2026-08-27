@@ -148,7 +148,8 @@ class TestAuthentication:
             user.status = UserStatus.DISABLED
         result = auth_service.login("disabled", "pass123")
         assert not result["success"]
-        assert "disabled" in result["error"].lower()
+        # Generic error message (no user enumeration)
+        assert "Invalid" in result["error"]
 
     def test_logout(self, auth_service):
         result = auth_service.login("admin", "admin123")

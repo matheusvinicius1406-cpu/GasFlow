@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional, Set
 from enum import Enum
 import uuid
 import hashlib
+import secrets
+import bcrypt
 
 
 # ── User ────────────────────────────────────────────────
@@ -256,28 +258,36 @@ ROLE_PERMISSIONS = {
 # ── Password Security ───────────────────────────────────
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256 + salt (simplified for demo).
-    In production: use Argon2id/bcrypt."""
-    salt = uuid.uuid4().hex[:16]
-    hashed = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
-    return f"{salt}:{hashed}"
+    """Hash password using bcrypt.
+    Returns bcrypt hash string.
+    Detects legacy SHA-256 hashes (contain ':') and rehashes transparently."""
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return f"bcrypt:{hashed.decode('utf-8')}"
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against hash."""
-    if ":" not in password_hash:
-        return False
-    salt, hashed = password_hash.split(":", 1)
-    return hashlib.sha256(f"{salt}:{password}".encode()).hexdigest() == hashed
+    """Verify password against hash. Supports bcrypt and legacy SHA-256."""
+    if password_hash.startswith("bcrypt:"):
+        actual_hash = password_hash[7:]  # Remove 'bcrypt:' prefix
+        return bcrypt.checkpw(password.encode('utf-8'), actual_hash.encode('utf-8'))
+    # Legacy SHA-256 migration path
+    if ":" in password_hash:
+        salt, hashed = password_hash.split(":", 1)
+        return hashlib.sha256(f"{salt}:{password}".encode()).hexdigest() == hashed
+    return False
+
+
+def needs_rehash(password_hash: str) -> bool:
+    """Check if password hash needs to be upgraded to bcrypt."""
+    return not password_hash.startswith("bcrypt:")
 
 
 # ── Token Generation ────────────────────────────────────
 
 def generate_token(user_id: str, tenant_id: str, expires_minutes: int = 60) -> str:
-    """Generate a simple session token (demo).
-    In production: use JWT with proper signing."""
-    expires = datetime.utcnow() + timedelta(minutes=expires_minutes)
-    payload = f"{user_id}:{tenant_id}:{expires.isoformat()}"
+    """Generate a cryptographically secure session token."""
+    random_part = secrets.token_hex(32)  # 256 bits of entropy
+    payload = f"{user_id}:{tenant_id}:{random_part}"
     return hashlib.sha256(payload.encode()).hexdigest()
 
 

@@ -16,7 +16,7 @@ import threading
 from app.domain.security.models import (
     User, UserStatus, Session, SessionStatus, Tenant, TenantMembership,
     Role, SystemRole, AuditRecord, AuditAction, TenantContext,
-    hash_password, verify_password, generate_token,
+    hash_password, verify_password, generate_token, needs_rehash,
     ROLE_PERMISSIONS, RateLimiter,
 )
 
@@ -79,7 +79,10 @@ class AuthService:
 
     def login(self, username: str, password: str, ip_address: str = "",
               user_agent: str = "") -> Dict[str, Any]:
-        """Authenticate user and create session."""
+        """Authenticate user and create session.
+        Generic error messages prevent user enumeration."""
+        GENERIC_ERROR = "Invalid credentials."
+
         # Rate limit check
         if not self._rate_limiter.check(f"login:{username}", 5, 300):
             self._audit(username, "default", AuditAction.AUTH_FAILURE.value, result="RATE_LIMITED",
@@ -88,20 +91,21 @@ class AuthService:
 
         # Find user
         user_id = self._users_by_username.get(username)
-        if not user_id:
-            self._audit(username, "default", AuditAction.AUTH_FAILURE.value, result="USER_NOT_FOUND",
-                        ip=ip_address)
-            return {"success": False, "error": "Invalid credentials."}
+        user = self._users.get(user_id) if user_id else None
 
-        user = self._users.get(user_id)
         if not user:
-            return {"success": False, "error": "Invalid credentials."}
+            self._audit(username or "unknown", "default", AuditAction.AUTH_FAILURE.value,
+                        result="USER_NOT_FOUND", ip=ip_address)
+            # Constant-time: run bcrypt to prevent timing attacks
+            import bcrypt as _bcrypt
+            _bcrypt.hashpw(b"dummy", _bcrypt.gensalt())
+            return {"success": False, "error": GENERIC_ERROR}
 
-        # Check status
+        # Check status — same error message
         if user.status == UserStatus.DISABLED:
-            return {"success": False, "error": "Account is disabled."}
+            return {"success": False, "error": GENERIC_ERROR}
         if user.is_locked:
-            return {"success": False, "error": "Account is locked. Try again later."}
+            return {"success": False, "error": "Account is temporarily locked. Try again later."}
 
         # Verify password
         if not verify_password(password, user.password_hash):
@@ -113,11 +117,15 @@ class AuthService:
                             ip=ip_address)
             self._audit(user.id, "default", AuditAction.AUTH_FAILURE.value, result="WRONG_PASSWORD",
                         ip=ip_address)
-            return {"success": False, "error": "Invalid credentials."}
+            return {"success": False, "error": GENERIC_ERROR}
 
         # Reset failed attempts
         user.failed_login_attempts = 0
         user.locked_until = None
+
+        # Rehash password if using legacy format
+        if needs_rehash(user.password_hash):
+            user.password_hash = hash_password(password)
 
         # Get tenant and role
         membership = self._get_membership(user.id)
@@ -254,6 +262,17 @@ class AuthService:
 
         self._audit(user.id, tenant_id, AuditAction.USER_CREATED.value, result="SUCCESS")
         return {"success": True, "user_id": user.id}
+
+    def change_password(self, user_id: str, old_password: str, new_password: str) -> Dict[str, Any]:
+        """Change user password. Rehashes to bcrypt."""
+        user = self._users.get(user_id)
+        if not user:
+            return {"success": False, "error": "User not found"}
+        if not verify_password(old_password, user.password_hash):
+            return {"success": False, "error": "Current password is incorrect"}
+        user.password_hash = hash_password(new_password)
+        self._audit(user_id, "default", AuditAction.PASSWORD_CHANGED.value, result="SUCCESS")
+        return {"success": True}
 
     def get_user_context(self, user_id: str, tenant_id: str = "default") -> Optional[TenantContext]:
         """Get tenant context for a user."""

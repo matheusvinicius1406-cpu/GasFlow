@@ -1,0 +1,420 @@
+"""
+Delivery Operations API — FASE 14
+
+Endpoints for deliveries, drivers, vehicles, routes, dispatch.
+"""
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+router = APIRouter(prefix="/delivery", tags=["delivery-ops"])
+
+
+# ── Schemas ─────────────────────────────────────────────
+
+class AddressSchema(BaseModel):
+    street: str = ""
+    number: str = ""
+    complement: str = ""
+    neighborhood: str = ""
+    city: str = ""
+    state: str = ""
+    zip_code: str = ""
+    reference: str = ""
+
+class CreateDeliveryRequest(BaseModel):
+    order_id: str
+    customer_codigo: str
+    customer_name: str
+    address: Optional[AddressSchema] = None
+    scheduled_at: Optional[str] = None
+    notes: str = ""
+
+class AssignRequest(BaseModel):
+    driver_id: str
+    vehicle_id: Optional[str] = None
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+    failure_reason: Optional[str] = None
+    failure_notes: str = ""
+    proof_type: Optional[str] = None
+
+class CreateRouteRequest(BaseModel):
+    driver_id: str
+    vehicle_id: Optional[str] = None
+    stops: Optional[List[dict]] = None
+
+class CreateDriverRequest(BaseModel):
+    name: str
+    phone: str
+    license_number: Optional[str] = None
+    vehicle_id: Optional[str] = None
+
+class CreateVehicleRequest(BaseModel):
+    plate: str
+    model: str
+    capacity: int = 0
+    capacity_unit: str = "CYLINDERS"
+
+class LocationUpdateRequest(BaseModel):
+    lat: float
+    lng: float
+    accuracy: Optional[float] = None
+
+
+# ── In-memory repos (singleton) ─────────────────────────
+
+_in_memory_store = {}
+
+
+def _get_store():
+    return _in_memory_store
+
+
+# ── Delivery Endpoints ──────────────────────────────────
+
+@router.post("/deliveries")
+async def create_delivery(req: CreateDeliveryRequest):
+    from app.domain.delivery.delivery import Delivery, AddressSnapshot
+    from app.domain.delivery.driver import Driver, DriverStatus
+    store = _get_store()
+    tenant_id = "default"
+
+    # Check duplicate order
+    for d in store.get("deliveries", {}).values():
+        if d.order_id == req.order_id and d.tenant_id == tenant_id:
+            raise HTTPException(400, "Delivery already exists for this order")
+
+    addr = AddressSnapshot(**(req.address.model_dump() if req.address else {}))
+    delivery = Delivery(
+        order_id=req.order_id,
+        tenant_id=tenant_id,
+        customer_codigo=req.customer_codigo,
+        customer_name=req.customer_name,
+        address=addr,
+        notes=req.notes,
+    )
+    if "deliveries" not in store:
+        store["deliveries"] = {}
+    store["deliveries"][delivery.id] = delivery
+    return {"success": True, "delivery": delivery.to_dict()}
+
+
+@router.get("/deliveries")
+async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None):
+    store = _get_store()
+    tenant_id = "default"
+    deliveries = list(store.get("deliveries", {}).values())
+    deliveries = [d for d in deliveries if d.tenant_id == tenant_id]
+    if status:
+        from app.domain.delivery.delivery import DeliveryStatus
+        try:
+            deliveries = [d for d in deliveries if d.status.value == status]
+        except ValueError:
+            pass
+    if driver_id:
+        deliveries = [d for d in deliveries if d.driver_id == driver_id]
+    return {"deliveries": [d.to_dict() for d in deliveries], "count": len(deliveries)}
+
+
+@router.get("/deliveries/{delivery_id}")
+async def get_delivery(delivery_id: str):
+    store = _get_store()
+    delivery = store.get("deliveries", {}).get(delivery_id)
+    if not delivery:
+        raise HTTPException(404, "Delivery not found")
+    return {"delivery": delivery.to_dict()}
+
+
+@router.patch("/deliveries/{delivery_id}/assign")
+async def assign_delivery(delivery_id: str, req: AssignRequest):
+    from app.domain.delivery.delivery import DeliveryStatus
+    from app.domain.delivery.driver import DriverStatus
+    store = _get_store()
+    tenant_id = "default"
+    delivery = store.get("deliveries", {}).get(delivery_id)
+    if not delivery:
+        raise HTTPException(404, "Delivery not found")
+    driver = store.get("drivers", {}).get(req.driver_id)
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    if not driver.is_available:
+        raise HTTPException(400, f"Driver is {driver.status.value}")
+    if not delivery.assign(req.driver_id, req.vehicle_id):
+        raise HTTPException(400, f"Cannot assign in status {delivery.status.value}")
+    driver.set_busy()
+    return {"success": True, "delivery": delivery.to_dict()}
+
+
+@router.patch("/deliveries/{delivery_id}/status")
+async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest):
+    from app.domain.delivery.delivery import DeliveryStatus, DeliveryFailureReason, DeliveryProof, ProofType
+    store = _get_store()
+    tenant_id = "default"
+    delivery = store.get("deliveries", {}).get(delivery_id)
+    if not delivery:
+        raise HTTPException(404, "Delivery not found")
+
+    if req.status == "EN_ROUTE":
+        ok = delivery.start_route()
+    elif req.status == "ARRIVED":
+        ok = delivery.arrive()
+    elif req.status == "DELIVERED":
+        proof = None
+        if req.proof_type:
+            proof = DeliveryProof(delivery_id=delivery_id, proof_type=ProofType(req.proof_type))
+        ok = delivery.complete(proof)
+    elif req.status == "FAILED":
+        reason = DeliveryFailureReason.OTHER
+        if req.failure_reason:
+            try:
+                reason = DeliveryFailureReason(req.failure_reason)
+            except ValueError:
+                pass
+        ok = delivery.fail(reason, req.failure_notes)
+    elif req.status == "CANCELLED":
+        ok = delivery.cancel()
+    else:
+        raise HTTPException(400, f"Unknown status: {req.status}")
+
+    if not ok:
+        raise HTTPException(400, f"Cannot transition to {req.status}")
+
+    # Release driver on terminal state
+    if delivery.status in {DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED, DeliveryStatus.FAILED}:
+        if delivery.driver_id:
+            driver = store.get("drivers", {}).get(delivery.driver_id)
+            if driver:
+                driver.set_available()
+
+    return {"success": True, "delivery": delivery.to_dict()}
+
+
+# ── Driver Endpoints ────────────────────────────────────
+
+@router.post("/drivers")
+async def create_driver(req: CreateDriverRequest):
+    from app.domain.delivery.driver import Driver
+    store = _get_store()
+    if "drivers" not in store:
+        store["drivers"] = {}
+    driver = Driver(
+        tenant_id="default",
+        name=req.name,
+        phone=req.phone,
+        license_number=req.license_number,
+        vehicle_id=req.vehicle_id,
+    )
+    store["drivers"][driver.id] = driver
+    return {"success": True, "driver": driver.to_dict()}
+
+
+@router.get("/drivers")
+async def list_drivers(status: Optional[str] = None):
+    store = _get_store()
+    drivers = list(store.get("drivers", {}).values())
+    drivers = [d for d in drivers if d.tenant_id == "default"]
+    if status:
+        drivers = [d for d in drivers if d.status.value == status]
+    return {"drivers": [d.to_dict() for d in drivers], "count": len(drivers)}
+
+
+@router.get("/drivers/{driver_id}")
+async def get_driver(driver_id: str):
+    store = _get_store()
+    driver = store.get("drivers", {}).get(driver_id)
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    return {"driver": driver.to_dict()}
+
+
+@router.patch("/drivers/{driver_id}/location")
+async def update_driver_location(driver_id: str, req: LocationUpdateRequest):
+    store = _get_store()
+    driver = store.get("drivers", {}).get(driver_id)
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    driver.update_location(req.lat, req.lng, req.accuracy)
+    return {"success": True}
+
+
+@router.patch("/drivers/{driver_id}/status")
+async def update_driver_status(driver_id: str, status: str):
+    from app.domain.delivery.driver import DriverStatus
+    store = _get_store()
+    driver = store.get("drivers", {}).get(driver_id)
+    if not driver:
+        raise HTTPException(404, "Driver not found")
+    try:
+        new_status = DriverStatus(status)
+    except ValueError:
+        raise HTTPException(400, f"Invalid status: {status}")
+    if new_status == DriverStatus.AVAILABLE:
+        driver.set_available()
+    elif new_status == DriverStatus.OFFLINE:
+        driver.go_offline()
+    elif new_status == DriverStatus.INACTIVE:
+        driver.deactivate()
+    else:
+        driver.status = new_status
+    return {"success": True, "driver": driver.to_dict()}
+
+
+# ── Vehicle Endpoints ───────────────────────────────────
+
+@router.post("/vehicles")
+async def create_vehicle(req: CreateVehicleRequest):
+    from app.domain.delivery.vehicle import Vehicle
+    store = _get_store()
+    if "vehicles" not in store:
+        store["vehicles"] = {}
+    vehicle = Vehicle(
+        tenant_id="default",
+        plate=req.plate,
+        model=req.model,
+        capacity=req.capacity,
+        capacity_unit=req.capacity_unit,
+    )
+    store["vehicles"][vehicle.id] = vehicle
+    return {"success": True, "vehicle": vehicle.to_dict()}
+
+
+@router.get("/vehicles")
+async def list_vehicles(status: Optional[str] = None):
+    store = _get_store()
+    vehicles = list(store.get("vehicles", {}).values())
+    vehicles = [v for v in vehicles if v.tenant_id == "default"]
+    if status:
+        vehicles = [v for v in vehicles if v.status.value == status]
+    return {"vehicles": [v.to_dict() for v in vehicles], "count": len(vehicles)}
+
+
+# ── Route Endpoints ─────────────────────────────────────
+
+@router.post("/routes")
+async def create_route(req: CreateRouteRequest):
+    from app.domain.delivery.route import Route
+    store = _get_store()
+    if "routes" not in store:
+        store["routes"] = {}
+    route = Route(
+        tenant_id="default",
+        driver_id=req.driver_id,
+        vehicle_id=req.vehicle_id,
+    )
+    if req.stops:
+        for i, stop_data in enumerate(req.stops):
+            delivery_id = stop_data.get("delivery_id", "")
+            delivery = store.get("deliveries", {}).get(delivery_id)
+            addr = ""
+            if delivery:
+                addr = delivery.address.full_address()
+            route.add_stop(
+                delivery_id=delivery_id,
+                sequence=stop_data.get("sequence", i + 1),
+                customer_name=stop_data.get("customer_name", delivery.customer_name if delivery else ""),
+                address_snapshot=addr or stop_data.get("address", ""),
+            )
+    store["routes"][route.id] = route
+    return {"success": True, "route": route.to_dict()}
+
+
+@router.get("/routes")
+async def list_routes(status: Optional[str] = None):
+    store = _get_store()
+    routes = list(store.get("routes", {}).values())
+    routes = [r for r in routes if r.tenant_id == "default"]
+    if status:
+        routes = [r for r in routes if r.status.value == status]
+    return {"routes": [r.to_dict() for r in routes], "count": len(routes)}
+
+
+@router.get("/routes/{route_id}")
+async def get_route(route_id: str):
+    store = _get_store()
+    route = store.get("routes", {}).get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+    return {"route": route.to_dict()}
+
+
+@router.post("/routes/{route_id}/dispatch")
+async def dispatch_route(route_id: str):
+    store = _get_store()
+    route = store.get("routes", {}).get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+    if not route.dispatch():
+        raise HTTPException(400, f"Cannot dispatch route in status {route.status.value}")
+    return {"success": True, "route": route.to_dict()}
+
+
+@router.post("/routes/{route_id}/stops/{stop_id}/arrive")
+async def arrive_stop(route_id: str, stop_id: str):
+    store = _get_store()
+    route = store.get("routes", {}).get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+    for stop in route.stops:
+        if stop.id == stop_id:
+            if not stop.arrive():
+                raise HTTPException(400, "Cannot arrive at this stop")
+            if route.status.value == "DISPATCHED":
+                route.start()
+            return {"success": True}
+    raise HTTPException(404, "Stop not found")
+
+
+@router.post("/routes/{route_id}/stops/{stop_id}/complete")
+async def complete_stop(route_id: str, stop_id: str):
+    store = _get_store()
+    route = store.get("routes", {}).get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+    for stop in route.stops:
+        if stop.id == stop_id:
+            if not stop.complete():
+                raise HTTPException(400, "Cannot complete this stop")
+            # Check if all stops completed
+            if all(s.is_terminal for s in route.stops):
+                route.complete_route()
+            return {"success": True}
+    raise HTTPException(404, "Stop not found")
+
+
+@router.post("/routes/{route_id}/stops/{stop_id}/fail")
+async def fail_stop(route_id: str, stop_id: str, reason: str = ""):
+    store = _get_store()
+    route = store.get("routes", {}).get(route_id)
+    if not route:
+        raise HTTPException(404, "Route not found")
+    for stop in route.stops:
+        if stop.id == stop_id:
+            if not stop.fail(reason):
+                raise HTTPException(400, "Cannot fail this stop")
+            return {"success": True}
+    raise HTTPException(404, "Stop not found")
+
+
+# ── Dispatch Dashboard ──────────────────────────────────
+
+@router.get("/dispatch/summary")
+async def dispatch_summary():
+    store = _get_store()
+    tenant_id = "default"
+    deliveries = [d for d in store.get("deliveries", {}).values() if d.tenant_id == tenant_id]
+    drivers = [d for d in store.get("drivers", {}).values() if d.tenant_id == tenant_id]
+    statuses = {}
+    for d in deliveries:
+        s = d.status.value
+        statuses[s] = statuses.get(s, 0) + 1
+    return {
+        "deliveries": {"total": len(deliveries), "by_status": statuses},
+        "drivers": {
+            "total": len(drivers),
+            "available": sum(1 for d in drivers if d.is_available),
+        },
+    }
