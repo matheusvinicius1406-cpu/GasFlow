@@ -49,3 +49,6 @@ whatsapp/data/
 whatsapp/wwebjs_auth/
 whatsapp/.wwebjs_cache/
 whatsapp/export/
+*.db-shm
+*.db-wal
+*.db
