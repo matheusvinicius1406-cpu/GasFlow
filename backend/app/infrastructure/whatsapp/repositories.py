@@ -146,7 +146,10 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         if model.draft_json:
             try:
                 draft_data = json.loads(model.draft_json)
-                draft = ConversationDraft(**draft_data)
+                # Filter out computed properties from to_dict() that aren't valid constructor args
+                valid_keys = {"customer_codigo", "customer_name", "items", "delivery_fee", "discount", "notes"}
+                filtered = {k: v for k, v in draft_data.items() if k in valid_keys}
+                draft = ConversationDraft(**filtered)
             except (json.JSONDecodeError, TypeError):
                 pass
         try:

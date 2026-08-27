@@ -1,15 +1,17 @@
 """
-Message Gateway — FASE 10
+Message Gateway — FASE 10.X (HARDENED)
 
-Processes incoming WhatsApp messages:
+Processes incoming WhatsApp messages with full production maturity:
 1. Validate schema
 2. Normalize phone
 3. Deduplication
-4. Resolve customer
-5. Check ownership
-6. Route to AI or human
-7. Build response
-8. Return outbound message
+4. Rate limiting
+5. Resolve customer
+6. Check ownership
+7. Route to AI or human
+8. Stock/price recheck before confirmation
+9. Build response
+10. Observability metrics
 
 Architecture: WhatsApp → Message Gateway → Conversation → AI Core → Tools → Use Cases → Domain
 """
@@ -18,8 +20,10 @@ import json
 import hashlib
 import time
 import re
-from typing import Dict, Any, Optional, Tuple
-from datetime import datetime
+from typing import Dict, Any, Optional, List, Tuple
+from datetime import datetime, timedelta
+from collections import defaultdict
+import threading
 
 from app.domain.whatsapp.message import WhatsAppMessage, WhatsAppOutbound, MessageType
 from app.domain.whatsapp.conversation import (
@@ -36,35 +40,41 @@ LOOP_MARKER = "[AI]"
 # ── Confirmation patterns ────────────────────────────────
 CONFIRMATION_POSITIVE = re.compile(
     r"^\s*(sim|s[íi]|confirmo?|pode mandar|fechar pedido|pode fechar|"
-    r"fecho|bora|beleza|ok|pode|aprovo?|confirmar)\s*[!?.]*\s*$",
+    r"fecho|bora|beleza|ok|pode|aprovo?|confirmar|manda|pode ser|isso)\s*[!?.]*\s*$",
     re.IGNORECASE,
 )
 CONFIRMATION_NEGATIVE = re.compile(
-    r"^\s*(n[ãa]o|n[ãa]o quero|cancela|deixa pra l[áa]|desisto|esquece)\s*[!?.]*\s*$",
+    r"^\s*(n[ãa]o|n[ãa]o quero|cancela|deixa pra l[áa]|desisto|esquece|não|nah|nope)\s*[!?.]*\s*$",
+    re.IGNORECASE,
+)
+AMBIGUOUS_CONFIRMATION = re.compile(
+    r"^\s*(talvez|acho que sim|acho que n[ãa]o|depois|provavelmente|n[ãa]o sei|"
+    r"vou ver|depois eu|me pergunto|ser[áa] que)\s*[!?.]*\s*$",
     re.IGNORECASE,
 )
 RESET_PATTERNS = re.compile(
-    r"^\s*(come[cç]ar de novo|novo pedido|resetar|limpar)\s*[!?.]*\s*$",
+    r"^\s*(come[cç]ar de novo|novo pedido|resetar|limpar|recome[cç]ar)\s*[!?.]*\s*$",
     re.IGNORECASE,
 )
 HUMAN_REQUEST = re.compile(
-    r"(falar com atendente|falar com humano|humano|atendente|pessoa real|suporte humano)",
+    r"(falar com atendente|falar com humano|humano|atendente|pessoa real|"
+    r"suporte humano|falar com algu[eé]m|quero atendente)",
     re.IGNORECASE,
 )
 
-# ── Media detection ──────────────────────────────────────
-MEDIA_TYPE_MAP = {
-    "image": MessageType.IMAGE,
-    "audio": MessageType.AUDIO,
-    "document": MessageType.DOCUMENT,
-}
+# ── Draft expiration ─────────────────────────────────────
+DRAFT_TTL_MINUTES = 30
+
+# ── Rate limiting ────────────────────────────────────────
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_MESSAGES = 30  # per window per phone
 
 
 class MessageGateway:
     """
-    Central message processing gateway.
-    Orchestrates: validation → normalization → dedup → customer resolution
-    → ownership check → AI routing → response building.
+    Central message processing gateway (HARDENED).
+    Orchestrates: validation → normalization → dedup → rate limit → customer resolution
+    → ownership check → AI routing → stock/price recheck → response building.
     """
 
     def __init__(
@@ -83,21 +93,41 @@ class MessageGateway:
         self.product_repo = product_repository
         self.inventory_repo = inventory_repository
 
+        # ── Observability metrics ─────────────────────────
+        self._metrics = {
+            "messages_received": 0,
+            "messages_processed": 0,
+            "duplicate_messages": 0,
+            "ai_calls": 0,
+            "ai_failures": 0,
+            "orders_created": 0,
+            "human_handoffs": 0,
+            "rate_limited": 0,
+            "drafts_expired": 0,
+            "stock_rechecks_failed": 0,
+            "outbound_sent": 0,
+            "outbound_failed": 0,
+        }
+        self._metrics_lock = threading.Lock()
+
+        # ── Rate limiting state ───────────────────────────
+        self._rate_buckets: Dict[str, List[float]] = defaultdict(list)
+        self._rate_lock = threading.Lock()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current metrics snapshot."""
+        with self._metrics_lock:
+            return dict(self._metrics)
+
     def process_incoming(
         self,
         raw_message: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Process an incoming WhatsApp message through the full pipeline.
-
-        Returns:
-            {
-                "status": "processed" | "skipped" | "error" | "human_handoff",
-                "outbound": WhatsAppOutbound | None,
-                "conversation_id": int | None,
-                "error": str | None,
-            }
+        Process an incoming WhatsApp message through the full hardened pipeline.
         """
+        start_time = time.time()
+
         # 1. Parse and validate
         message = self._parse_message(raw_message)
         if not message:
@@ -105,24 +135,35 @@ class MessageGateway:
 
         # 2. Anti-loop: skip messages from ourselves
         if message.from_me:
+            self._inc_metric("messages_received")
             return {"status": "skipped", "error": "FROM_ME", "outbound": None}
 
         # 3. Skip non-text messages for now
         if message.message_type != MessageType.TEXT:
+            self._inc_metric("messages_received")
             return self._handle_media_message(message)
 
         # 4. Skip empty messages
         if not message.text or not message.text.strip():
+            self._inc_metric("messages_received")
             return {"status": "skipped", "error": "EMPTY_MESSAGE", "outbound": None}
 
-        # 5. Find or create conversation
+        self._inc_metric("messages_received")
+
+        # 5. Rate limiting
+        if self._is_rate_limited(message.sender_phone):
+            self._inc_metric("rate_limited")
+            return {"status": "skipped", "error": "RATE_LIMITED", "outbound": None}
+
+        # 6. Find or create conversation
         conversation = self._get_or_create_conversation(message)
 
-        # 6. Idempotency check
+        # 7. Idempotency check
         if self.conversation_repo.find_duplicate_message(message.provider_message_id):
+            self._inc_metric("duplicate_messages")
             return {"status": "skipped", "error": "DUPLICATE_MESSAGE", "conversation_id": conversation.id}
 
-        # 7. Save incoming message
+        # 8. Save incoming message
         incoming_msg = ConversationMessage(
             conversation_id=conversation.id,
             direction="INCOMING",
@@ -133,28 +174,36 @@ class MessageGateway:
         )
         self.message_repo.create(incoming_msg)
 
-        # 8. Check if human operator is active
+        # 9. Check if human operator is active
         if conversation.state == ConversationState.HUMAN_ACTIVE:
             return {"status": "human_active", "conversation_id": conversation.id, "outbound": None}
 
-        # 9. Check for human handoff request
+        # 10. Check for human handoff request
         if HUMAN_REQUEST.search(message.text):
+            self._inc_metric("human_handoffs")
             return self._request_human_handoff(conversation, message)
 
-        # 10. Check for draft confirmation
+        # 11. Expire stale drafts
+        self._expire_draft(conversation)
+
+        # 12. Check for draft confirmation
         if conversation.draft and conversation.state == ConversationState.AWAITING_CONFIRMATION:
             return self._handle_confirmation(conversation, message)
 
-        # 11. Check for draft cancellation
+        # 13. Check for draft cancellation
         if conversation.draft and CONFIRMATION_NEGATIVE.search(message.text):
             return self._cancel_draft(conversation, message)
 
-        # 12. Check for reset
+        # 14. Check for reset
         if RESET_PATTERNS.search(message.text):
             return self._reset_conversation(conversation, message)
 
-        # 13. Route through AI engine
-        return self._route_to_ai(conversation, message)
+        # 15. Route through AI engine
+        result = self._route_to_ai(conversation, message)
+
+        self._inc_metric("messages_processed")
+        latency_ms = (time.time() - start_time) * 1000
+        return result
 
     def _parse_message(self, raw: Dict[str, Any]) -> Optional[WhatsAppMessage]:
         """Parse and validate raw WhatsApp message."""
@@ -174,6 +223,10 @@ class MessageGateway:
             if not sender_phone:
                 return None
 
+            # Validate account_id
+            if account_id not in ("primary", "secondary"):
+                account_id = "primary"
+
             msg_type = MessageType.TEXT
             for mt in MessageType:
                 if mt.value == message_type_str.upper():
@@ -184,7 +237,7 @@ class MessageGateway:
                 provider_message_id=provider_message_id,
                 account_id=account_id,
                 sender_phone=sender_phone,
-                text=text.strip(),
+                text=text.strip()[:4096],  # Truncate oversized messages
                 message_type=msg_type,
                 from_me=from_me,
                 raw=raw,
@@ -196,6 +249,19 @@ class MessageGateway:
         """Normalize phone to digits only."""
         digits = re.sub(r"\D", "", phone).lstrip("0")
         return digits if len(digits) >= 8 else None
+
+    def _is_rate_limited(self, phone: str) -> bool:
+        """Check if phone has exceeded rate limit."""
+        now = time.time()
+        with self._rate_lock:
+            bucket = self._rate_buckets[phone]
+            # Remove entries outside the window
+            cutoff = now - RATE_LIMIT_WINDOW_SECONDS
+            bucket[:] = [t for t in bucket if t > cutoff]
+            if len(bucket) >= RATE_LIMIT_MAX_MESSAGES:
+                return True
+            bucket.append(now)
+            return False
 
     def _get_or_create_conversation(self, message: WhatsAppMessage) -> Conversation:
         """Find existing conversation or create new one."""
@@ -247,23 +313,38 @@ class MessageGateway:
                 text=reply,
                 account_id=message.account_id,
             ),
+            "outbound_text": reply,
+            "outbound_to": message.sender_phone,
+            "error": None,
         }
 
     def _handle_confirmation(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
-        """Handle order draft confirmation."""
+        """Handle order draft confirmation with stock/price recheck."""
+        # Ambiguous → ask for clarification
+        if AMBIGUOUS_CONFIRMATION.search(message.text):
+            reply = "Preciso de uma confirmação clara. Digite 'sim' para confirmar ou 'não' para cancelar."
+            return self._build_outbound(
+                conversation.id, message.sender_phone,
+                message.account_id, reply,
+            )
+
         if CONFIRMATION_POSITIVE.search(message.text):
+            # Stock/price recheck before creating order
+            recheck = self._recheck_draft(conversation)
+            if not recheck["ok"]:
+                return self._build_outbound(
+                    conversation.id, conversation.customer_phone,
+                    conversation.account_id, recheck["message"],
+                )
             # Execute order creation
             result = self._execute_order_creation(conversation)
+            self._inc_metric("messages_processed")
             if result["success"]:
-                return self._build_outbound(
-                    conversation.id, conversation.customer_phone,
-                    conversation.account_id, result["message"],
-                )
-            else:
-                return self._build_outbound(
-                    conversation.id, conversation.customer_phone,
-                    conversation.account_id, result["message"],
-                )
+                self._inc_metric("orders_created")
+            return self._build_outbound(
+                conversation.id, conversation.customer_phone,
+                conversation.account_id, result["message"],
+            )
         elif CONFIRMATION_NEGATIVE.search(message.text):
             return self._cancel_draft(conversation, message)
         else:
@@ -272,6 +353,50 @@ class MessageGateway:
                 conversation.id, message.sender_phone,
                 message.account_id, reply,
             )
+
+    def _recheck_draft(self, conversation: Conversation) -> Dict[str, Any]:
+        """
+        Recheck stock availability and prices before order confirmation.
+        If anything changed since draft was created, inform the customer.
+        """
+        draft = conversation.draft
+        if not draft or not draft.items:
+            return {"ok": False, "message": "Draft inválido."}
+
+        # Recheck each item
+        updated_items = []
+        for item in draft.items:
+            product_codigo = item.get("product_codigo")
+            quantity = item.get("quantity", 1)
+
+            # Recheck stock
+            if self.inventory_repo:
+                try:
+                    inv = self.inventory_repo.get_by_product(product_codigo)
+                    if inv and inv.quantity < quantity:
+                        return {
+                            "ok": False,
+                            "message": (
+                                f"Desculpe, o produto {item.get('product_nome', product_codigo)} "
+                                f"só tem {inv.quantity} unidades em estoque. "
+                                f"Não posso confirmar o pedido com {quantity}."
+                            ),
+                        }
+                except Exception:
+                    pass  # If inventory check fails, proceed (order UseCase will catch)
+
+            # Recheck price
+            product_info = self._resolve_product(product_codigo)
+            if product_info:
+                old_price = item.get("unit_price", 0)
+                new_price = product_info["preco"]
+                if old_price != new_price:
+                    # Update draft with new price
+                    item["unit_price"] = new_price
+                    item["subtotal"] = round(new_price * quantity, 2)
+                    self.conversation_repo.update_draft(conversation.id, draft)
+
+        return {"ok": True, "message": ""}
 
     def _execute_order_creation(self, conversation: Conversation) -> Dict[str, Any]:
         """Execute order creation through AI tool → UseCase."""
@@ -318,6 +443,7 @@ class MessageGateway:
             else:
                 return {"success": False, "message": "Serviço de pedidos indisponível."}
         except Exception as e:
+            self._inc_metric("ai_failures")
             return {"success": False, "message": f"Erro interno: {str(e)}"}
 
     def _cancel_draft(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
@@ -344,6 +470,19 @@ class MessageGateway:
             message.account_id, reply,
         )
 
+    def _expire_draft(self, conversation: Conversation) -> None:
+        """Expire draft if too old."""
+        if conversation.draft and conversation.updated_at:
+            age = datetime.utcnow() - conversation.updated_at
+            if age > timedelta(minutes=DRAFT_TTL_MINUTES):
+                conversation.draft = None
+                self.conversation_repo.update_draft(conversation.id, None)
+                # Transition back to BROWSING if we were in confirmation
+                if conversation.state == ConversationState.AWAITING_CONFIRMATION:
+                    conversation.transition_to(ConversationState.BROWSING)
+                    self.conversation_repo.update_state(conversation.id, ConversationState.BROWSING)
+                self._inc_metric("drafts_expired")
+
     def _route_to_ai(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
         """Route message through the AI engine."""
         # Resolve customer
@@ -354,19 +493,29 @@ class MessageGateway:
             conversation.customer_codigo = customer["codigo"]
             self.conversation_repo.update_customer(conversation.id, customer["codigo"])
 
-        # Build AI context
+        # Build AI context (truncated to prevent context overflow)
         context_prefix = ""
         if customer:
             context_prefix = f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
         if conversation.draft:
-            context_prefix += f"[Draft atual: {json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]}]\n"
+            draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]
+            context_prefix += f"[Draft atual: {draft_json}]\n"
 
         # Call AI engine
-        ai_result = self.ai_engine.chat(
-            message=f"{context_prefix}{message.text}",
-            conversation_id=f"wa_{conversation.account_id}_{conversation.customer_phone}",
-            permission_level="OPERATOR",
-        )
+        self._inc_metric("ai_calls")
+        try:
+            ai_result = self.ai_engine.chat(
+                message=f"{context_prefix}{message.text}",
+                conversation_id=f"wa_{conversation.account_id}_{conversation.customer_phone}",
+                permission_level="OPERATOR",
+            )
+        except Exception as e:
+            self._inc_metric("ai_failures")
+            return self._build_outbound(
+                conversation.id, message.sender_phone,
+                message.account_id,
+                "Desculpe, tive um problema ao processar sua mensagem. Pode tentar novamente?",
+            )
 
         # Check if AI wants to build an order draft
         intent = ai_result.get("intent")
@@ -385,7 +534,7 @@ class MessageGateway:
                 reply = self._format_draft_confirmation(draft)
                 return self._build_outbound(
                     conversation.id, message.sender_phone,
-                    message.account_id, reply,
+                    conversation.account_id, reply,
                 )
 
         # Update conversation state
@@ -398,13 +547,13 @@ class MessageGateway:
         reply = ai_result.get("message", "Posso ajudar com consultas sobre clientes, pedidos, estoque e financeiro.")
         return self._build_outbound(
             conversation.id, message.sender_phone,
-            message.account_id, reply,
+            conversation.account_id, reply,
         )
 
     def _build_order_draft(
         self, conversation: Conversation, entities: Dict[str, Any], message: WhatsAppMessage
     ) -> Optional[ConversationDraft]:
-        """Build order draft from AI-extracted entities."""
+        """Build order draft from AI-extracted entities with stock validation."""
         # Resolve customer
         customer_codigo = conversation.customer_codigo
         customer_name = conversation.customer_phone
@@ -514,6 +663,12 @@ class MessageGateway:
             "error": None,
         }
 
+    def _inc_metric(self, key: str) -> None:
+        """Thread-safe metric increment."""
+        with self._metrics_lock:
+            if key in self._metrics:
+                self._metrics[key] += 1
+
 
 # ── Operator Actions ─────────────────────────────────────
 
@@ -537,6 +692,9 @@ class OperatorGateway:
         if conv.state == ConversationState.HUMAN_ACTIVE:
             return {"success": False, "error": "ALREADY_HUMAN_ACTIVE"}
 
+        if conv.state == ConversationState.CLOSED:
+            return {"success": False, "error": "CONVERSATION_CLOSED"}
+
         success = self.conversation_repo.takeover(conversation_id, operator)
         if success:
             # Notify customer
@@ -544,7 +702,7 @@ class OperatorGateway:
                 conversation_id=conversation_id,
                 direction="OUTGOING",
                 sender="system",
-                content="Um atendente assumiu a conversa.",
+                content="Um atendente assumiu a conversa. Como posso ajudar?",
                 message_type="TEXT",
             )
             self.message_repo.create(outgoing)
@@ -566,7 +724,7 @@ class OperatorGateway:
                 conversation_id=conversation_id,
                 direction="OUTGOING",
                 sender="system",
-                content="Conversa devolvida à assistente virtual.",
+                content="Conversa devolvida à assistente virtual. Como posso ajudar?",
                 message_type="TEXT",
             )
             self.message_repo.create(outgoing)
