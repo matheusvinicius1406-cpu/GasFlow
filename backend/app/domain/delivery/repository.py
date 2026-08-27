@@ -10,6 +10,7 @@ from app.domain.delivery.delivery import Delivery, DeliveryStatus
 from app.domain.delivery.driver import Driver, DriverStatus
 from app.domain.delivery.vehicle import Vehicle, VehicleStatus
 from app.domain.delivery.route import Route, RouteStatus
+from app.domain.delivery.entity import DeliveryDriver
 
 
 class DeliveryRepository(ABC):
@@ -62,3 +63,18 @@ class RouteRepository(ABC):
                        limit: int = 50) -> List[Route]: ...
     @abstractmethod
     def list_by_driver(self, driver_id: str, tenant_id: str) -> List[Route]: ...
+
+
+# Legacy interface — used by orders/assign driver flow
+class DeliveryDriverRepository(ABC):
+    """Legacy interface for DeliveryDriver (entregador) management."""
+    @abstractmethod
+    def criar(self, driver: DeliveryDriver) -> DeliveryDriver: ...
+    @abstractmethod
+    def buscar_por_codigo(self, codigo: str) -> Optional[DeliveryDriver]: ...
+    @abstractmethod
+    def listar_todos(self) -> List[DeliveryDriver]: ...
+    @abstractmethod
+    def desativar(self, codigo: str) -> Optional[DeliveryDriver]: ...
+    @abstractmethod
+    def proximo_codigo(self) -> str: ...

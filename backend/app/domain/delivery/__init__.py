@@ -13,6 +13,7 @@ from app.domain.delivery.routing import (
 )
 from app.domain.delivery.repository import (
     DeliveryRepository, DriverRepository, VehicleRepository, RouteRepository,
+    DeliveryDriverRepository,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "Route", "RouteStatus", "RouteStop", "StopStatus",
     "RoutingProvider", "MockRoutingProvider", "GeoPoint", "RouteInfo",
     "DeliveryRepository", "DriverRepository", "VehicleRepository", "RouteRepository",
+    "DeliveryDriverRepository",
 ]

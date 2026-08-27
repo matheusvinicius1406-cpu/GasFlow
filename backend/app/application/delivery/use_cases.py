@@ -260,3 +260,48 @@ class ListDeliveriesUseCase:
             "deliveries": [d.to_dict() for d in deliveries],
             "count": len(deliveries),
         }
+
+
+# ── Legacy Use Cases (Phase 5/6 backward compat) ───────
+
+class CreateDriverUseCase:
+    """Legacy: Create a new DeliveryDriver (entregador)."""
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, data: dict):
+        from app.domain.delivery.entity import DeliveryDriver
+        from datetime import datetime
+        codigo = self.repository.proximo_codigo()
+        driver = DeliveryDriver(
+            codigo=codigo, nome=data["nome"], telefone=data["telefone"],
+            placa=data.get("placa"), ativo=True, created_at=datetime.utcnow(),
+        )
+        return self.repository.criar(driver)
+
+
+class GetDriverUseCase:
+    """Legacy: Get DeliveryDriver by codigo."""
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, codigo: str):
+        return self.repository.buscar_por_codigo(codigo)
+
+
+class ListDriversUseCase:
+    """Legacy: List all active DeliveryDrivers."""
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self):
+        return self.repository.listar_todos()
+
+
+class DisableDriverUseCase:
+    """Legacy: Disable a DeliveryDriver."""
+    def __init__(self, repository):
+        self.repository = repository
+
+    def execute(self, codigo: str):
+        return self.repository.desativar(codigo)
