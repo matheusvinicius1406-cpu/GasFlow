@@ -97,3 +97,8 @@ class Customer360Response(BaseModel):
     last_order_at: Optional[datetime] = None
     days_since_last_order: Optional[int] = None
     favorite_product: Optional[str] = None
+
+    # FASE 8: Financial metrics (derived from Payment/Receivable)
+    paid_amount: float = 0.0
+    outstanding_balance: float = 0.0
+    pending_amount: float = 0.0

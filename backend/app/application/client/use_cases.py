@@ -131,14 +131,22 @@ class DisableClientUseCase:
 
 
 class Customer360UseCase:
-    """Caso de uso: Customer 360 — visão consolidada do cliente com métricas."""
+    """Caso de uso: Customer 360 — visão consolidada do cliente com métricas.
 
-    def __init__(self, client_repository: ClientRepository, order_repository=None):
+    FASE 8: Added financial metrics (outstanding_balance, pending_amount)
+    derived from Payment + Receivable.
+    """
+
+    def __init__(self, client_repository: ClientRepository, order_repository=None,
+                 payment_repository=None, receivable_repository=None):
         self.client_repository = client_repository
         self.order_repository = order_repository
+        self.payment_repository = payment_repository
+        self.receivable_repository = receivable_repository
 
     def execute(self, codigo: str) -> Optional[Dict[str, Any]]:
         """Retorna visão 360 do cliente com métricas derivadas dos pedidos."""
+        from decimal import Decimal
         client = self.client_repository.buscar_por_codigo(codigo)
         if not client:
             return None
@@ -160,7 +168,7 @@ class Customer360UseCase:
             "observacoes": client.observacoes,
             "created_at": client.created_at,
             "updated_at": client.updated_at,
-            # CRM metrics (defaults — will be populated if order_repository exists)
+            # CRM metrics (defaults)
             "total_orders": 0,
             "total_spent": 0.0,
             "average_ticket": 0.0,
@@ -168,11 +176,28 @@ class Customer360UseCase:
             "last_order_at": None,
             "days_since_last_order": None,
             "favorite_product": None,
+            # FASE 8: Financial metrics (derived from Payment/Receivable)
+            "paid_amount": 0.0,
+            "outstanding_balance": 0.0,
+            "pending_amount": 0.0,
         }
 
-        # Calculate metrics from orders if repository available
+        # Calculate CRM metrics from orders if repository available
         if self.order_repository:
             metrics = self.order_repository.get_customer_metrics(codigo)
             result.update(metrics)
+
+        # FASE 8: Calculate financial metrics (derived, not persisted)
+        # Use receivable for outstanding (single query, no N+1)
+        if self.receivable_repository:
+            outstanding = self.receivable_repository.total_outstanding_for_customer(codigo)
+            result["outstanding_balance"] = float(outstanding)
+            result["pending_amount"] = float(outstanding)
+
+        # paid_amount = total_spent - outstanding_balance
+        # (derived from existing CRM total_spent + financial outstanding)
+        total_spent = result.get("total_spent", 0.0)
+        outstanding = result.get("outstanding_balance", 0.0)
+        result["paid_amount"] = round(total_spent - outstanding, 2) if total_spent >= outstanding else 0.0
 
         return result
