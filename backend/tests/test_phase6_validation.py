@@ -348,14 +348,62 @@ def test_customer360_nonexistent():
 # 14. FAVORITE PRODUCT
 # ═══════════════════════════════════════════════════════════
 
-def test_favorite_product_not_implemented():
-    """favorite_product returns None — NOT IMPLEMENTED."""
+def test_favorite_product_implemented():
+    """favorite_product is now calculated from order items — FASE 6 FIX."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.infrastructure.database.base import Base
+    from app.infrastructure.repositories.client_model import ClientModel
+    from app.infrastructure.repositories.product_model import ProductModel
+    from app.infrastructure.repositories.order_model import OrderModel
+    from app.infrastructure.repositories.order_item_model import OrderItemModel
     from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
+    from datetime import datetime
 
-    # The get_customer_metrics method returns favorite_product=None
-    # because it's not actually calculated from order items
-    # This is a known gap — classify as NOT_IMPLEMENTED
-    assert True  # Documented: favorite_product is always None
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    # Seed customer
+    db.add(ClientModel(codigo="C001", nome="João", telefone="11988887777",
+                       rua="Rua B", numero="42", bairro="Vila"))
+    db.add(ProductModel(codigo="GAS13", nome="GLP P13", tipo="GAS", preco=120.0, estoque=0))
+    db.add(ProductModel(codigo="AGUA20", nome="Água 20L", tipo="WATER", preco=10.0, estoque=0))
+
+    # Order 1: GLP P13 x 5
+    db.add(OrderModel(codigo="O001", client_codigo="C001",
+                      subtotal=600.0, delivery_fee=0, discount=0, total=600.0,
+                      payment_method="CASH", payment_status="PAID", status="DELIVERED",
+                      source="MANUAL", address_snapshot="Rua B",
+                      created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+    db.commit()
+    db.add(OrderItemModel(order_codigo="O001", product_codigo="GAS13",
+                         product_nome="GLP P13", quantity=5, unit_price=120.0, subtotal=600.0))
+
+    # Order 2: GLP P13 x 2 + Água 20L x 10
+    db.add(OrderModel(codigo="O002", client_codigo="C001",
+                      subtotal=340.0, delivery_fee=0, discount=0, total=340.0,
+                      payment_method="PIX", payment_status="PAID", status="DELIVERED",
+                      source="MANUAL", address_snapshot="Rua B",
+                      created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+    db.commit()
+    db.add(OrderItemModel(order_codigo="O002", product_codigo="GAS13",
+                         product_nome="GLP P13", quantity=2, unit_price=120.0, subtotal=240.0))
+    db.add(OrderItemModel(order_codigo="O002", product_codigo="AGUA20",
+                         product_nome="Água 20L", quantity=10, unit_price=10.0, subtotal=100.0))
+    db.commit()
+
+    repo = SQLAlchemyOrderRepository(db)
+    metrics = repo.get_customer_metrics("C001")
+
+    # GLP P13: 5+2=7 units, Água 20L: 10 units → favorite = Água 20L
+    assert metrics["favorite_product"] == "Água 20L"
+    assert metrics["total_orders"] == 2
+    assert metrics["total_spent"] == 940.0
+
+    db.close()
+    engine.dispose()
 
 
 # ═══════════════════════════════════════════════════════════

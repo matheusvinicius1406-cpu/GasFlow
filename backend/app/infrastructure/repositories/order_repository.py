@@ -115,8 +115,12 @@ class SQLAlchemyOrderRepository(OrderRepository):
         return f"{int(last.codigo) + 1:06d}"
 
     def get_customer_metrics(self, client_codigo: str) -> dict:
-        """Retorna métricas CRM derivadas dos pedidos do cliente."""
+        """Retorna métricas CRM derivadas dos pedidos do cliente.
+
+        FASE 6 FIX: favorite_product now calculated from order items.
+        """
         from sqlalchemy import func
+        from app.infrastructure.repositories.order_item_model import OrderItemModel
 
         models = (
             self.db.query(OrderModel)
@@ -148,6 +152,23 @@ class SQLAlchemyOrderRepository(OrderRepository):
             delta = datetime.utcnow() - last_order_at
             days_since_last_order = delta.days
 
+        # FASE 6: Calculate favorite_product from order items
+        favorite_product = None
+        order_codes = [m.codigo for m in models]
+        if order_codes:
+            top_product = (
+                self.db.query(
+                    OrderItemModel.product_nome,
+                    func.sum(OrderItemModel.quantity).label("total_qty")
+                )
+                .filter(OrderItemModel.order_codigo.in_(order_codes))
+                .group_by(OrderItemModel.product_nome)
+                .order_by(func.sum(OrderItemModel.quantity).desc())
+                .first()
+            )
+            if top_product:
+                favorite_product = top_product[0]
+
         return {
             "total_orders": total_orders,
             "total_spent": round(total_spent, 2),
@@ -155,7 +176,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             "first_order_at": first_order_at,
             "last_order_at": last_order_at,
             "days_since_last_order": days_since_last_order,
-            "favorite_product": None,
+            "favorite_product": favorite_product,
         }
 
     def get_customer_orders(self, client_codigo: str) -> list:
