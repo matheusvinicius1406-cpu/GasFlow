@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
+import { ConversationsPage } from './ConversationsPage'
 
 interface WhatsAppAccount {
   id: string
@@ -224,7 +226,7 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
   )
 }
 
-export function WhatsAppPage() {
+function WhatsAppAccountsView() {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -358,3 +360,26 @@ export function WhatsAppPage() {
     </div>
   )
 }
+
+// ── Main Export with Tabs ──────────────────────────────
+
+export function WhatsAppPage() {
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
+      <Tabs defaultValue="accounts">
+        <TabsList>
+          <TabsTrigger value="accounts">Contas</TabsTrigger>
+          <TabsTrigger value="conversations">Conversas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="accounts">
+          <WhatsAppAccountsView />
+        </TabsContent>
+        <TabsContent value="conversations">
+          <ConversationsPage />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
