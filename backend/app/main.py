@@ -23,6 +23,7 @@ from app.presentation.api.finance import router as finance_router
 from app.presentation.api.ai import router as ai_router
 from app.presentation.api.whatsapp_gateway import router as whatsapp_gateway_router
 from app.presentation.api.audio import router as audio_router
+from app.presentation.api.automation import router as automation_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -80,3 +81,4 @@ app.include_router(finance_router)
 app.include_router(ai_router)
 app.include_router(whatsapp_gateway_router)
 app.include_router(audio_router)
+app.include_router(automation_router)
