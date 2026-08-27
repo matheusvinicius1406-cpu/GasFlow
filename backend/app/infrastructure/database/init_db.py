@@ -13,6 +13,7 @@ from app.infrastructure.repositories.financial_models import (
     PaymentModel, ReceivableModel, ExpenseModel,
     CashMovementModel, FinancialLedgerModel
 )
+from app.infrastructure.ai.models import ConversationModel, AIMessageModel, AIAuditLogModel
 
 
 def init_db():

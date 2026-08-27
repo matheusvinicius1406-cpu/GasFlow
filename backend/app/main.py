@@ -20,6 +20,7 @@ from app.presentation.api.delivery import router as delivery_router
 from app.presentation.api.whatsapp import router as whatsapp_router
 from app.presentation.api.inventory import router as inventory_router
 from app.presentation.api.finance import router as finance_router
+from app.presentation.api.ai import router as ai_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -74,3 +75,4 @@ app.include_router(delivery_router)
 app.include_router(whatsapp_router)
 app.include_router(inventory_router)
 app.include_router(finance_router)
+app.include_router(ai_router)
