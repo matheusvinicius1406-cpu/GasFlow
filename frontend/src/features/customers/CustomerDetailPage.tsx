@@ -96,9 +96,7 @@ export function CustomerDetailPage() {
             Desativar
           </Button>
         </div>
-      </div>
-
-      {/* CRM Metrics */}
+      </div>      {/* CRM Metrics */}
       {customer.total_orders > 0 && (
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard title="Total de Pedidos" value={String(customer.total_orders)} icon={ShoppingCart} />
@@ -109,6 +107,21 @@ export function CustomerDetailPage() {
             value={customer.days_since_last_order !== null ? `${customer.days_since_last_order}d atrás` : '—'}
             icon={Calendar}
           />
+        </div>
+      )}
+
+      {/* FASE 6+8: Favorite Product + Financial Metrics */}
+      {customer.total_orders > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {customer.favorite_product && (
+            <StatCard title="Produto Favorito" value={customer.favorite_product} icon={ShoppingBag} />
+          )}
+          {(customer.outstanding_balance ?? 0) > 0 && (
+            <StatCard title="Saldo Pendente" value={formatCurrency(customer.outstanding_balance ?? 0)} icon={DollarSign} />
+          )}
+          {(customer.paid_amount ?? 0) > 0 && (
+            <StatCard title="Total Pago" value={formatCurrency(customer.paid_amount ?? 0)} icon={DollarSign} />
+          )}
         </div>
       )}
 

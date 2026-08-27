@@ -129,6 +129,10 @@ export function OrderDetailPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-sm font-bold text-foreground">R$ {(order.total ?? 0).toFixed(2).replace('.', ',')}</span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
               <Badge
                 variant={

@@ -31,6 +31,10 @@ export interface Customer360 extends Client {
   last_order_at?: string
   days_since_last_order?: number
   favorite_product?: string
+  // FASE 8: Financial metrics
+  paid_amount?: number
+  outstanding_balance?: number
+  pending_amount?: number
 }
 
 export interface PaginatedResponse<T> {

@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Edit, Trash2, Boxes } from 'lucide-react'
-import { useProduct, useDisableProduct } from '@/lib/api/hooks'
+import { useProduct, useDisableProduct, useInventoryItem } from '@/lib/api/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -12,6 +12,7 @@ export function ProductDetailPage() {
   const { codigo } = useParams<{ codigo: string }>()
   const navigate = useNavigate()
   const { data: product, isLoading, error, refetch } = useProduct(codigo ?? '')
+  const { data: inventory } = useInventoryItem(codigo ?? '')
   const disableProduct = useDisableProduct()
 
   const handleDisable = async () => {
@@ -108,10 +109,15 @@ export function ProductDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Stock Info */}
+        {/* Stock Info — FASE 7: uses Inventory as source of truth */}
         <Card>
           <CardHeader>
-            <CardTitle>Estoque</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Estoque</CardTitle>
+              <Link to={`/inventory/${codigo}`}>
+                <Button variant="ghost" size="sm">Ver Inventário →</Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
@@ -119,15 +125,17 @@ export function ProductDetailPage() {
                 <Boxes className="h-8 w-8 text-primary" />
               </div>
               <div>
-                <p className="text-3xl font-bold text-foreground">{product.estoque}</p>
+                <p className="text-3xl font-bold text-foreground">
+                  {inventory ? inventory.quantity : product.estoque}
+                </p>
                 <p className="text-sm text-muted-foreground">unidades em estoque</p>
               </div>
             </div>
 
-            {product.estoque <= 5 && (
+            {inventory && inventory.minimum_quantity > 0 && inventory.quantity <= inventory.minimum_quantity && (
               <div className="rounded-md bg-warning/10 p-3">
                 <p className="text-sm text-warning">
-                  Estoque baixo! Considere repor o estoque.
+                  Estoque baixo! Mínimo: {inventory.minimum_quantity}. Considere repor o estoque.
                 </p>
               </div>
             )}
