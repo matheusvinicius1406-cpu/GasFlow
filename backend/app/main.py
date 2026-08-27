@@ -18,6 +18,7 @@ from app.presentation.api.orders import router as orders_router
 from app.presentation.api.products import router as products_router
 from app.presentation.api.delivery import router as delivery_router
 from app.presentation.api.whatsapp import router as whatsapp_router
+from app.presentation.api.inventory import router as inventory_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -70,3 +71,4 @@ app.include_router(orders_router)
 app.include_router(products_router)
 app.include_router(delivery_router)
 app.include_router(whatsapp_router)
+app.include_router(inventory_router)

@@ -1,5 +1,7 @@
 """
-Order API Routes — Endpoints REST para pedidos.
+Order API Routes — FASE 7.1
+
+Passes inventory_repo to use cases for atomic stock operations.
 """
 
 from typing import Optional
@@ -13,6 +15,7 @@ from app.infrastructure.repositories.order_item_repository import SQLAlchemyOrde
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
 from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 from app.application.order.use_cases import (
     CreateOrderUseCase,
     GetOrderUseCase,
@@ -42,6 +45,7 @@ def _get_repositories(db: Session = Depends(get_db)):
         "client": SQLAlchemyClientRepository(db),
         "product": SQLAlchemyProductRepository(db),
         "delivery": SQLAlchemyDeliveryDriverRepository(db),
+        "inventory": SQLAlchemyInventoryRepository(db),
     }
 
 
@@ -56,6 +60,7 @@ def create_order(
             order_item_repo=repos["order_item"],
             client_repo=repos["client"],
             product_repo=repos["product"],
+            inventory_repo=repos["inventory"],
         )
         return use_case.execute(order.model_dump())
     except Exception as e:
@@ -93,7 +98,11 @@ def update_order_status(
     repos: dict = Depends(_get_repositories)
 ):
     try:
-        use_case = UpdateOrderStatusUseCase(repos["order"])
+        use_case = UpdateOrderStatusUseCase(
+            repository=repos["order"],
+            inventory_repo=repos["inventory"],
+            order_item_repo=repos["order_item"],
+        )
         order = use_case.execute(codigo, data.status)
         if not order:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")

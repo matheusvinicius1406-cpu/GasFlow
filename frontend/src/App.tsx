@@ -8,7 +8,7 @@ import { WhatsAppPage } from '@/features/whatsapp'
 import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
-import { InventoryPage } from '@/features/inventory'
+import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
 import { ReportsPage } from '@/features/reports'
 import { IntelligencePage } from '@/features/intelligence'
@@ -51,6 +51,7 @@ export function App() {
         <Route path="deliveries" element={<DeliveriesPage />} />
         <Route path="drivers" element={<DriversPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="intelligence" element={<IntelligencePage />} />

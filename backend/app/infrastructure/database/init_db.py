@@ -8,6 +8,7 @@ from app.infrastructure.repositories.order_item_model import OrderItemModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
 from app.infrastructure.repositories.whatsapp_model import WhatsAppConversationModel, WhatsAppMessageModel
+from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
 
 
 def init_db():

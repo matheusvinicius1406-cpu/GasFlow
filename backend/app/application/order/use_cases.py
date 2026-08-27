@@ -1,17 +1,11 @@
 """
-Order Use Cases — Casos de uso do Pedido.
+Order Use Cases — FASE 7.1
 
-FASE 3.2 — SECURITY + FINANCIAL HARDENING:
-- Backend é ÚNICA autoridade de preço
-- Desconto validado (>= 0 AND <= subtotal)
-- Total validado (>= 0)
-- Frontend unit_price é completamente ignorado
-- Estoque validado antes de criar
-
-Regras:
-- Preço congelado no momento da criação
-- Total = subtotal + delivery_fee - discount
-- Nenhum campo financeiro é aceito diretamente do frontend
+CRITICAL CHANGE: Stock operations use Inventory (single source of truth).
+- Stock validated against Inventory.quantity (not Product.estoque)
+- Stock deducted when order CONFIRMED (not at creation)
+- Stock returned when order CANCELLED
+- All inventory operations are atomic (single transaction)
 """
 
 from datetime import datetime
@@ -22,14 +16,14 @@ from app.domain.order_item.entity import OrderItem
 from app.domain.order_item.repository import OrderItemRepository
 from app.domain.client.repository import ClientRepository
 from app.domain.product.repository import ProductRepository
+from app.domain.inventory.repository import InventoryRepository
 
 
 class CreateOrderUseCase:
-    """Caso de uso: Criar um novo pedido com múltiplos itens.
+    """Create a new order with multiple items.
 
-    SEGURANÇA: Este é o ÚNICO lugar onde preços são calculados.
-    O frontend envia APENAS product_codigo e quantity.
-    O preço é buscado do Product oficial.
+    Stock is validated against Inventory but NOT deducted at creation.
+    Deduction happens when order is CONFIRMED.
     """
 
     def __init__(
@@ -38,46 +32,38 @@ class CreateOrderUseCase:
         order_item_repo: OrderItemRepository,
         client_repo: ClientRepository,
         product_repo: ProductRepository,
+        inventory_repo: Optional[InventoryRepository] = None,
     ):
         self.order_repo = order_repo
         self.order_item_repo = order_item_repo
         self.client_repo = client_repo
         self.product_repo = product_repo
+        self.inventory_repo = inventory_repo
 
     def execute(self, data: dict) -> Order:
-        # ═══════════════════════════════════════════════════════
-        # 1. VALIDAÇÃO DO CLIENTE
-        # ═══════════════════════════════════════════════════════
+        # 1. Validate client
         client = self.client_repo.buscar_por_codigo(data["client_codigo"])
         if not client:
             raise ValueError("Cliente não encontrado")
         if not client.ativo:
             raise ValueError("Cliente está desativado")
 
-        # ═══════════════════════════════════════════════════════
-        # 2. VALIDAÇÃO DOS ITENS
-        # ═══════════════════════════════════════════════════════
+        # 2. Validate items
         items_data = data.get("items", [])
         if not items_data:
             raise ValueError("Pedido deve ter pelo menos um item")
 
-        # ═══════════════════════════════════════════════════════
-        # 3. GERAÇÃO DO CÓDIGO
-        # ═══════════════════════════════════════════════════════
+        # 3. Generate code
         codigo = self.order_repo.proximo_codigo()
 
-        # ═══════════════════════════════════════════════════════
-        # 4. SNAPSHOT DO ENDEREÇO
-        # ═══════════════════════════════════════════════════════
+        # 4. Address snapshot
         address = data.get("address_snapshot") or f"{client.rua}, {client.numero} - {client.bairro}"
         if client.complemento:
             address += f" ({client.complemento})"
         if client.referencia:
             address += f" - Ref: {client.referencia}"
 
-        # ═══════════════════════════════════════════════════════
-        # 5. CRIAÇÃO DOS ITENS COM PREÇO CONGELADO
-        # ═══════════════════════════════════════════════════════
+        # 5. Create items with frozen price
         order_items = []
         subtotal = 0.0
 
@@ -93,16 +79,21 @@ class CreateOrderUseCase:
             if quantity <= 0:
                 raise ValueError(f"Quantidade inválida para {product.nome}")
 
-            if product.estoque < quantity:
+            # FASE 7.1: Validate stock against Inventory (not Product.estoque)
+            if self.inventory_repo:
+                inv = self.inventory_repo.get_by_product(product.codigo)
+                available = inv.quantity if inv else 0
+            else:
+                # Backward compatibility: fallback to Product.estoque
+                available = product.estoque
+
+            if available < quantity:
                 raise ValueError(
                     f"Estoque insuficiente para {product.nome}. "
-                    f"Disponível: {product.estoque}, solicitado: {quantity}"
+                    f"Disponível: {available}, solicitado: {quantity}"
                 )
 
-            # ═══════════════════════════════════════════════════
-            # PREÇO CONGELADO — backend é autoridade
-            # unit_price do frontend é COMPLETAMENTE IGNORADO
-            # ═══════════════════════════════════════════════════
+            # Frozen price — backend is authority
             unit_price = product.preco
             item_subtotal = unit_price * quantity
 
@@ -117,13 +108,7 @@ class CreateOrderUseCase:
             order_items.append(order_item)
             subtotal += item_subtotal
 
-            # Baixa estoque
-            product.baixar_estoque(quantity)
-            self.product_repo.atualizar(product)
-
-        # ═══════════════════════════════════════════════════════
-        # 6. CÁLCULO FINANCEIRO — backend é autoridade
-        # ═══════════════════════════════════════════════════════
+        # 6. Financial calculation
         delivery_fee = data.get("delivery_fee", 0.0)
         if delivery_fee < 0:
             delivery_fee = 0.0
@@ -132,23 +117,16 @@ class CreateOrderUseCase:
         if discount < 0:
             discount = 0.0
 
-        # Desconto não pode exceder subtotal
         if discount > subtotal:
             raise ValueError(
                 f"Desconto (R$ {discount:.2f}) não pode exceder subtotal (R$ {subtotal:.2f})"
             )
 
         total = subtotal + delivery_fee - discount
-
-        # Total não pode ser negativo (defensivo)
         if total < 0:
-            raise ValueError(
-                f"Total (R$ {total:.2f}) não pode ser negativo"
-            )
+            raise ValueError(f"Total (R$ {total:.2f}) não pode ser negativo")
 
-        # ═══════════════════════════════════════════════════════
-        # 7. CRIAÇÃO DO PEDIDO
-        # ═══════════════════════════════════════════════════════
+        # 7. Create order
         order = Order(
             codigo=codigo,
             client_codigo=client.codigo,
@@ -168,7 +146,7 @@ class CreateOrderUseCase:
 
         order = self.order_repo.criar(order)
 
-        # Salva itens
+        # Save items
         for item in order_items:
             self.order_item_repo.criar(item)
 
@@ -176,8 +154,6 @@ class CreateOrderUseCase:
 
 
 class GetOrderUseCase:
-    """Caso de uso: Buscar pedido por código."""
-
     def __init__(self, order_repo: OrderRepository, order_item_repo: OrderItemRepository):
         self.order_repo = order_repo
         self.order_item_repo = order_item_repo
@@ -190,8 +166,6 @@ class GetOrderUseCase:
 
 
 class ListOrdersUseCase:
-    """Caso de uso: Listar pedidos."""
-
     def __init__(self, repository: OrderRepository):
         self.repository = repository
 
@@ -206,20 +180,26 @@ class ListOrdersUseCase:
 
 
 class UpdateOrderStatusUseCase:
-    """Caso de uso: Atualizar status do pedido.
+    """Update order status with inventory integration.
 
-    Valida transições e imutabilidade.
+    FASE 7.1:
+    - CONFIRMED → deduct stock atomically
+    - CANCELLED → return stock atomically (if already deducted)
     """
 
-    def __init__(self, repository: OrderRepository):
+    def __init__(self, repository: OrderRepository,
+                 inventory_repo: Optional[InventoryRepository] = None,
+                 order_item_repo=None):
         self.repository = repository
+        self.inventory_repo = inventory_repo
+        self.order_item_repo = order_item_repo
 
     def execute(self, codigo: str, status: str) -> Optional[Order]:
         order = self.repository.buscar_por_codigo(codigo)
         if not order:
             return None
 
-        # Verifica imutabilidade
+        # Immutability check
         from app.domain.order.entity import TERMINAL_STATUSES
         if order.status in TERMINAL_STATUSES:
             raise ValueError(
@@ -232,27 +212,81 @@ class UpdateOrderStatusUseCase:
         except ValueError:
             raise ValueError(f"Status inválido: {status}")
 
+        # FASE 7.1: Deduct stock on CONFIRMATION
+        if order_status == OrderStatus.CONFIRMED and self.inventory_repo:
+            self._deduct_stock(order)
+
+        # FASE 7.1: Return stock on CANCELLATION
+        if order_status == OrderStatus.CANCELLED and self.inventory_repo:
+            self._return_stock(order)
+
         return self.repository.atualizar_status(codigo, order_status)
+
+    def _deduct_stock(self, order: Order):
+        """Deduct stock for all order items atomically. Idempotent."""
+        if self.order_item_repo:
+            items = self.order_item_repo.listar_por_pedido(order.codigo)
+        else:
+            items = []
+
+        for item in items:
+            try:
+                self.inventory_repo.deduct_stock_atomic(
+                    product_codigo=item.product_codigo,
+                    quantity=item.quantity,
+                    reason=f"Venda — Pedido #{order.codigo}",
+                    reference_type="ORDER",
+                    reference_id=order.codigo,
+                )
+            except ValueError as e:
+                # If already deducted (idempotency), skip
+                if "já registrado" in str(e):
+                    continue
+                raise
+
+    def _return_stock(self, order: Order):
+        """Return stock for all order items. Only if stock was previously deducted."""
+        if self.order_item_repo:
+            items = self.order_item_repo.listar_por_pedido(order.codigo)
+        else:
+            items = []
+
+        for item in items:
+            # Check if stock was actually deducted for this product in this order
+            existing_sale = self.inventory_repo.get_movement_by_reference(
+                "ORDER", order.codigo,
+                product_codigo=item.product_codigo,
+                movement_type="SALE",
+            )
+            if not existing_sale:
+                # No stock was deducted for this product — skip
+                continue
+
+            try:
+                self.inventory_repo.return_stock_atomic(
+                    product_codigo=item.product_codigo,
+                    quantity=item.quantity,
+                    reason=f"Devolução — cancelamento Pedido #{order.codigo}",
+                    reference_type="ORDER_RETURN",
+                    reference_id=order.codigo,
+                )
+            except ValueError as e:
+                # If already returned (idempotency), skip
+                if "já registrada" in str(e):
+                    continue
+                raise
 
 
 class AssignDriverUseCase:
-    """Caso de uso: Atribuir entregador ao pedido."""
-
-    def __init__(
-        self,
-        order_repo: OrderRepository,
-        driver_repo: "DeliveryDriverRepository",
-    ):
+    def __init__(self, order_repo: OrderRepository, driver_repo=None):
         self.order_repo = order_repo
         self.driver_repo = driver_repo
 
     def execute(self, codigo: str, driver_codigo: str) -> Optional[Order]:
-        # Valida pedido
         order = self.order_repo.buscar_por_codigo(codigo)
         if not order:
             raise ValueError("Pedido não encontrado")
 
-        # Verifica imutabilidade
         from app.domain.order.entity import TERMINAL_STATUSES
         if order.status in TERMINAL_STATUSES:
             raise ValueError(
@@ -260,7 +294,6 @@ class AssignDriverUseCase:
                 f"e não pode ser alterado"
             )
 
-        # Valida entregador
         driver = self.driver_repo.buscar_por_codigo(driver_codigo)
         if not driver or not driver.ativo:
             raise ValueError("Entregador não encontrado ou inativo")

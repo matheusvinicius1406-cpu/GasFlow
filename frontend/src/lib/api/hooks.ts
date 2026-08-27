@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse } from '@/types'
+import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse, InventoryItem, StockMovement } from '@/types'
 
 // ── Customer Hooks ───────────────────────────────────────
 
@@ -237,6 +237,105 @@ export function useAssignDriver() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['orders', variables.codigo] })
+    },
+  })
+}
+
+// ── Inventory Hooks — FASE 7 ───────────────────────────
+
+export interface InventorySearchParams {
+  stock_status?: string
+  product_type?: string
+}
+
+export function useInventoryList(params?: InventorySearchParams) {
+  return useQuery({
+    queryKey: ['inventory', params],
+    queryFn: async () => {
+      const { data } = await api.inventory.list(params)
+      return data as { items: InventoryItem[]; total: number }
+    },
+  })
+}
+
+export function useInventoryItem(codigo: string) {
+  return useQuery({
+    queryKey: ['inventory', codigo],
+    queryFn: async () => {
+      const { data } = await api.inventory.get(codigo)
+      return data as InventoryItem
+    },
+    enabled: !!codigo,
+  })
+}
+
+export function useInventoryMovements(codigo: string, page = 1) {
+  return useQuery({
+    queryKey: ['inventory', codigo, 'movements', page],
+    queryFn: async () => {
+      const { data } = await api.inventory.getMovements(codigo, { page, page_size: 20 })
+      return data as { items: StockMovement[]; total: number; page: number; page_size: number; total_pages: number }
+    },
+    enabled: !!codigo,
+  })
+}
+
+export function useAddStock() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ codigo, quantity, reason }: { codigo: string; quantity: number; reason?: string }) => {
+      const { data } = await api.inventory.addStock(codigo, { quantity, reason: reason ?? 'Entrada de estoque' })
+      return data
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory', variables.codigo] })
+    },
+  })
+}
+
+export function useAdjustStock() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ codigo, new_quantity, reason }: { codigo: string; new_quantity: number; reason?: string }) => {
+      const { data } = await api.inventory.adjust(codigo, { new_quantity, reason: reason ?? 'Ajuste de inventário' })
+      return data
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory', variables.codigo] })
+    },
+  })
+}
+
+export function useRecordLoss() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ codigo, quantity, reason }: { codigo: string; quantity: number; reason: string }) => {
+      const { data } = await api.inventory.recordLoss(codigo, { quantity, reason })
+      return data
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory', variables.codigo] })
+    },
+  })
+}
+
+export function useSetMinimum() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ codigo, minimum_quantity }: { codigo: string; minimum_quantity: number }) => {
+      const { data } = await api.inventory.setMinimum(codigo, { minimum_quantity })
+      return data as InventoryItem
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory', variables.codigo] })
     },
   })
 }

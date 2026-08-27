@@ -100,29 +100,17 @@ export type OrderSource =
 export interface Order {
   codigo: string
   client_codigo: string
-
-  // Valores
   subtotal: number
   delivery_fee: number
   discount: number
   total: number
-
-  // Pagamento
   payment_method?: string
   payment_status: PaymentStatus
-
-  // Entrega
   address_snapshot: string
   delivery_driver_codigo?: string
-
-  // Status
   status: OrderStatus
-
-  // Metadados
   source: OrderSource
   notes?: string
-
-  // Timestamps
   created_at: string
   updated_at?: string
 }
@@ -139,6 +127,44 @@ export interface OrderCreateInput {
   payment_method?: string
   source?: OrderSource
   notes?: string
+}
+
+// ── Inventory (Backend: /inventory/) ──────────────────
+export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'
+
+export interface InventoryItem {
+  product_codigo: string
+  quantity: number
+  minimum_quantity: number
+  maximum_quantity?: number
+  stock_status: StockStatus
+  available_quantity: number
+  updated_at?: string
+}
+
+export interface StockMovement {
+  id: number
+  product_codigo: string
+  type: string
+  quantity: number
+  reason: string
+  reference_type?: string
+  reference_id?: string
+  balance_before: number
+  balance_after: number
+  created_at?: string
+  created_by?: string
+}
+
+export interface ProductWithInventory {
+  codigo: string
+  nome: string
+  tipo: string
+  preco: number
+  ativo: boolean
+  quantity: number
+  minimum_quantity: number
+  stock_status: StockStatus
 }
 
 // ── Delivery Driver ─────────────────────────────────────

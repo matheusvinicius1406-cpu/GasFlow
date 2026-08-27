@@ -74,6 +74,24 @@ export const api = {
     disable: (codigo: string) => apiClient.patch(`/products/${codigo}/disable`),
   },
 
+  // Inventory — FASE 7
+  inventory: {
+    list: (params?: { stock_status?: string; product_type?: string }) =>
+      apiClient.get('/inventory/', { params }),
+    get: (productCodigo: string) => apiClient.get(`/inventory/${productCodigo}`),
+    getMovements: (productCodigo: string, params?: { page?: number; page_size?: number }) =>
+      apiClient.get(`/inventory/${productCodigo}/movements`, { params }),
+    addStock: (productCodigo: string, data: { quantity: number; reason?: string }) =>
+      apiClient.post(`/inventory/${productCodigo}/entries`, data),
+    adjust: (productCodigo: string, data: { new_quantity: number; reason?: string }) =>
+      apiClient.post(`/inventory/${productCodigo}/adjustments`, data),
+    recordLoss: (productCodigo: string, data: { quantity: number; reason: string }) =>
+      apiClient.post(`/inventory/${productCodigo}/losses`, data),
+    setMinimum: (productCodigo: string, data: { minimum_quantity: number }) =>
+      apiClient.patch(`/inventory/${productCodigo}/minimum`, data),
+    reconciliation: () => apiClient.get('/inventory/reconciliation/check'),
+  },
+
   // Delivery Drivers
   drivers: {
     list: () => apiClient.get('/delivery-drivers/'),
