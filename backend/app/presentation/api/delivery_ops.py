@@ -263,33 +263,65 @@ async def update_driver_status(driver_id: str, status: str, ctx: TenantContext =
     return {"success": True, "driver": driver.to_dict()}
 
 
-# ── Vehicle Endpoints ───────────────────────────────────
+# ── Vehicle Endpoints (Database-backed) ───────────────
+
+def _get_vehicle_repo():
+    from app.infrastructure.database.dependencies import get_db
+    from app.infrastructure.repositories.vehicle_repository import VehicleRepository
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    db = DBSession(bind=engine)
+    return VehicleRepository(db, tenant_id="default"), db
+
 
 @router.post("/vehicles")
 async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends(require_admin)):
-    from app.domain.delivery.vehicle import Vehicle
-    store = _get_store()
-    if "vehicles" not in store:
-        store["vehicles"] = {}
-    vehicle = Vehicle(
-        tenant_id="default",
-        plate=req.plate,
-        model=req.model,
-        capacity=req.capacity,
-        capacity_unit=req.capacity_unit,
-    )
-    store["vehicles"][vehicle.id] = vehicle
-    return {"success": True, "vehicle": vehicle.to_dict()}
+    repo, db = _get_vehicle_repo()
+    try:
+        vehicle = repo.create_vehicle(
+            plate=req.plate,
+            model=req.model,
+            vehicle_type="VAN",
+            capacity_total=req.capacity,
+        )
+        return {
+            "success": True,
+            "vehicle": {
+                "id": str(vehicle.id),
+                "plate": vehicle.plate,
+                "model": vehicle.model,
+                "capacity_total": vehicle.capacity_total,
+                "status": vehicle.status,
+                "tenant_id": vehicle.tenant_id,
+                "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None,
+            }
+        }
+    finally:
+        db.close()
 
 
 @router.get("/vehicles")
 async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    vehicles = list(store.get("vehicles", {}).values())
-    vehicles = [v for v in vehicles if v.tenant_id == "default"]
-    if status:
-        vehicles = [v for v in vehicles if v.status.value == status]
-    return {"vehicles": [v.to_dict() for v in vehicles], "count": len(vehicles)}
+    repo, db = _get_vehicle_repo()
+    try:
+        vehicles = repo.list_vehicles(status=status)
+        return {
+            "vehicles": [
+                {
+                    "id": str(v.id),
+                    "plate": v.plate,
+                    "model": v.model,
+                    "capacity_total": v.capacity_total,
+                    "status": v.status,
+                    "assigned_driver_id": v.assigned_driver_id,
+                    "created_at": v.created_at.isoformat() if v.created_at else None,
+                }
+                for v in vehicles
+            ],
+            "count": len(vehicles),
+        }
+    finally:
+        db.close()
 
 
 # ── Route Endpoints ─────────────────────────────────────

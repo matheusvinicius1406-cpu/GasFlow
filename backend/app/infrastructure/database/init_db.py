@@ -7,6 +7,7 @@ from app.infrastructure.repositories.order_model import OrderModel
 from app.infrastructure.repositories.order_item_model import OrderItemModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+from app.infrastructure.repositories.vehicle_model import VehicleModel, VehicleCapacityModel, VehicleLoadModel
 from app.infrastructure.repositories.whatsapp_model import WhatsAppConversationModel, WhatsAppMessageModel
 from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
 from app.infrastructure.repositories.financial_models import (
