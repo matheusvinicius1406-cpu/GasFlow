@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from enum import Enum
 import uuid
-import hashlib
+import bcrypt
 from app.infrastructure.stores.shared_store import get_shared_store
 from app.domain.events.event_bus import (
     get_event_bus, publish_delivery_event, publish_driver_event, EventType
@@ -279,8 +279,7 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
         
         # Verify password
         if model.password_hash:
-            input_hash = hashlib.sha256(req.password.encode()).hexdigest()
-            if input_hash != model.password_hash:
+            if not bcrypt.checkpw(req.password.encode(), model.password_hash.encode()):
                 raise HTTPException(401, detail="Invalid credentials")
         
         # Determine tenant
@@ -708,6 +707,36 @@ async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
         }
     )
     return {"success": True}
+
+
+# ═══════════════════════════════════════════════════════════
+# AVAILABILITY ENDPOINT (shared)
+# ═══════════════════════════════════════════════════════════
+
+class AvailabilityRequest(BaseModel):
+    status: str = Field(..., pattern="^(AVAILABLE|PAUSED|UNAVAILABLE)$")
+    reason: Optional[str] = None
+
+
+async def handle_set_availability(ctx: Dict, req: AvailabilityRequest) -> Dict:
+    """Driver toggles availability. Persists to database."""
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx["tenant_id"])
+        model = repo.find_by_id_as_model(ctx["driver_id"])
+        if not model:
+            raise HTTPException(404, detail="Driver not found")
+        model.status = req.status
+        db.commit()
+        publish_driver_event(
+            EventType.DRIVER_AVAILABLE if req.status == "AVAILABLE" else EventType.DRIVER_PAUSED,
+            ctx["driver_id"], ctx["tenant_id"],
+            data={"new_status": req.status, "reason": req.reason or ""}
+        )
+        return {"success": True, "status": model.status}
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════

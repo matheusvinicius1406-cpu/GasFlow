@@ -25,6 +25,7 @@ from app.presentation.api.driver_api import (
     handle_list_routes,
     handle_current_route,
     handle_update_location,
+    handle_set_availability,
     handle_upload_proof,
     handle_sync,
     # Auth dependency
@@ -40,6 +41,7 @@ from app.presentation.api.driver_api import (
     DriverStopSummary,
     ActionRequest,
     LocationUpdate,
+    AvailabilityRequest,
     SyncRequest,
     SyncResponse,
 )
@@ -171,6 +173,19 @@ async def v1_driver_update_location(
 ):
     """Update driver GPS location. Rate limited to 1 per 10 sec."""
     return await handle_update_location(ctx, req)
+
+
+# ═══════════════════════════════════════════════════════════
+# Availability — /api/v1/driver/availability
+# ═══════════════════════════════════════════════════════════
+
+@router.post("/availability", summary="Set driver availability")
+async def v1_driver_set_availability(
+    req: AvailabilityRequest,
+    ctx: dict = Depends(_authenticate_driver),
+):
+    """Driver toggles availability status (AVAILABLE, PAUSED, UNAVAILABLE)."""
+    return await handle_set_availability(ctx, req)
 
 
 # ═══════════════════════════════════════════════════════════
