@@ -7,7 +7,9 @@ GET /audio/metrics — Audio processing metrics
 """
 
 import base64
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -87,7 +89,7 @@ class AudioProcessResponse(BaseModel):
 # ── Endpoints ───────────────────────────────────────────
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe_audio(req: TranscribeRequest):
+async def transcribe_audio(req: TranscribeRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Transcribe audio to text using STT provider."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
@@ -107,7 +109,7 @@ async def transcribe_audio(req: TranscribeRequest):
 
 
 @router.post("/process", response_model=AudioProcessResponse)
-async def process_audio(req: AudioProcessRequest):
+async def process_audio(req: AudioProcessRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Process audio through full pipeline: STT → Conversation Gateway → AI."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
@@ -137,7 +139,7 @@ async def process_audio(req: AudioProcessRequest):
 
 
 @router.get("/metrics")
-async def get_audio_metrics():
+async def get_audio_metrics(ctx: TenantContext = Depends(get_tenant_context)):
     """Get audio processing metrics."""
     gateway = _get_gateway()
     return gateway.get_metrics()

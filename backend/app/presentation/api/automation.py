@@ -16,7 +16,9 @@ POST /automation/kill-switch — Toggle kill switch
 GET /automation/metrics — Metrics
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
@@ -84,7 +86,7 @@ class KillSwitchRequest(BaseModel):
 # ── Workflows ───────────────────────────────────────────
 
 @router.get("/workflows")
-async def list_workflows():
+async def list_workflows(ctx: TenantContext = Depends(get_tenant_context)):
     return {"workflows": [
         {"id": w.id, "name": w.name, "status": w.status.value, "steps": len(w.steps)}
         for w in _workflows.values()
@@ -98,7 +100,7 @@ async def create_workflow(req: WorkflowCreateRequest):
     return {"id": wf.id, "name": wf.name, "status": wf.status.value}
 
 @router.post("/workflows/{workflow_id}/execute")
-async def execute_workflow(workflow_id: str, req: WorkflowExecuteRequest):
+async def execute_workflow(workflow_id: str, req: WorkflowExecuteRequest, ctx: TenantContext = Depends(get_tenant_context)):
     wf = _workflows.get(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -109,7 +111,7 @@ async def execute_workflow(workflow_id: str, req: WorkflowExecuteRequest):
 # ── Runs ────────────────────────────────────────────────
 
 @router.get("/runs")
-async def list_runs():
+async def list_runs(ctx: TenantContext = Depends(get_tenant_context)):
     runs = _workflow_engine._run_history
     return {"runs": [
         {"id": r.id, "workflow_id": r.workflow_id, "status": r.status.value,
@@ -118,13 +120,13 @@ async def list_runs():
     ]}
 
 @router.post("/runs/{run_id}/pause")
-async def pause_run(run_id: str):
+async def pause_run(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     if _workflow_engine.pause_run(run_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot pause run")
 
 @router.post("/runs/{run_id}/cancel")
-async def cancel_run(run_id: str):
+async def cancel_run(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     if _workflow_engine.cancel_run(run_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot cancel run")
@@ -133,7 +135,7 @@ async def cancel_run(run_id: str):
 # ── Approvals ───────────────────────────────────────────
 
 @router.get("/approvals")
-async def list_approvals():
+async def list_approvals(ctx: TenantContext = Depends(get_tenant_context)):
     _approval_engine.expire_old()
     return {"approvals": [
         {"id": a.id, "action": a.action, "status": a.status.value,
@@ -142,13 +144,13 @@ async def list_approvals():
     ]}
 
 @router.post("/approvals/{approval_id}/approve")
-async def approve_action(approval_id: str, req: ApprovalRequest):
+async def approve_action(approval_id: str, req: ApprovalRequest, ctx: TenantContext = Depends(get_tenant_context)):
     if _approval_engine.approve(approval_id, req.approved_by):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot approve")
 
 @router.post("/approvals/{approval_id}/reject")
-async def reject_action(approval_id: str):
+async def reject_action(approval_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     if _approval_engine.reject(approval_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot reject")
@@ -157,7 +159,7 @@ async def reject_action(approval_id: str):
 # ── Agents ──────────────────────────────────────────────
 
 @router.get("/agents")
-async def list_agents():
+async def list_agents(ctx: TenantContext = Depends(get_tenant_context)):
     return {"agents": [
         {"id": a.id, "name": a.name, "scope": a.scope.value,
          "enabled": a.enabled, "risk_ceiling": a.risk_ceiling}
@@ -165,14 +167,14 @@ async def list_agents():
     ]}
 
 @router.post("/agents/{agent_id}/execute")
-async def execute_agent(agent_id: str, req: AgentExecuteRequest):
+async def execute_agent(agent_id: str, req: AgentExecuteRequest, ctx: TenantContext = Depends(get_tenant_context)):
     run = _agent_engine.execute_agent(
         agent_id, req.goal, req.context, req.correlation_id, dry_run=req.dry_run,
     )
     return {"run_id": run.id, "status": run.status.value}
 
 @router.get("/agents/runs")
-async def list_agent_runs():
+async def list_agent_runs(ctx: TenantContext = Depends(get_tenant_context)):
     runs = _agent_engine.get_runs()
     return {"runs": [
         {"id": r.id, "agent_id": r.agent_id, "goal": r.goal, "status": r.status.value,
@@ -181,7 +183,7 @@ async def list_agent_runs():
     ]}
 
 @router.post("/agents/runs/{run_id}/stop")
-async def stop_agent(run_id: str):
+async def stop_agent(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     if _agent_engine.stop_agent(run_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot stop agent")
@@ -190,7 +192,7 @@ async def stop_agent(run_id: str):
 # ── Kill Switch ─────────────────────────────────────────
 
 @router.post("/kill-switch")
-async def toggle_kill_switch(req: KillSwitchRequest):
+async def toggle_kill_switch(req: KillSwitchRequest, ctx: TenantContext = Depends(get_tenant_context)):
     if req.active:
         _policy_engine.activate_kill_switch()
     else:
@@ -198,14 +200,14 @@ async def toggle_kill_switch(req: KillSwitchRequest):
     return {"active": _policy_engine.is_kill_switch_active}
 
 @router.get("/kill-switch")
-async def get_kill_switch():
+async def get_kill_switch(ctx: TenantContext = Depends(get_tenant_context)):
     return {"active": _policy_engine.is_kill_switch_active}
 
 
 # ── Metrics ─────────────────────────────────────────────
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(ctx: TenantContext = Depends(get_tenant_context)):
     return {
         "workflow": _workflow_engine.get_metrics(),
         "agent": _agent_engine.get_metrics(),

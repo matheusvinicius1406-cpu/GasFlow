@@ -11,7 +11,9 @@ Endpoints for:
 - GET /whatsapp/stats — Conversation statistics
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -195,7 +197,7 @@ def _build_tool_registry(session) -> ToolRegistry:
 # ── Endpoints ────────────────────────────────────────────
 
 @router.post("/incoming", response_model=IncomingMessageResponse)
-async def process_incoming(req: IncomingMessageRequest):
+async def process_incoming(req: IncomingMessageRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Process incoming WhatsApp message through AI pipeline."""
     session = SessionLocal()
     try:
@@ -276,7 +278,7 @@ async def list_conversations(
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: int):
+async def get_conversation(conversation_id: int, ctx: TenantContext = Depends(get_tenant_context)):
     """Get conversation detail with messages."""
     session = SessionLocal()
     try:
@@ -313,7 +315,7 @@ async def get_conversation(conversation_id: int):
 
 
 @router.post("/conversations/{conversation_id}/takeover")
-async def takeover_conversation(conversation_id: int, req: TakeoverRequest):
+async def takeover_conversation(conversation_id: int, req: TakeoverRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Operator takes over conversation."""
     session = SessionLocal()
     try:
@@ -329,7 +331,7 @@ async def takeover_conversation(conversation_id: int, req: TakeoverRequest):
 
 
 @router.post("/conversations/{conversation_id}/release")
-async def release_conversation(conversation_id: int):
+async def release_conversation(conversation_id: int, ctx: TenantContext = Depends(get_tenant_context)):
     """Release conversation back to AI."""
     session = SessionLocal()
     try:
@@ -345,7 +347,7 @@ async def release_conversation(conversation_id: int):
 
 
 @router.post("/conversations/{conversation_id}/reply")
-async def operator_reply(conversation_id: int, req: ReplyRequest):
+async def operator_reply(conversation_id: int, req: ReplyRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Operator sends manual reply."""
     session = SessionLocal()
     try:
@@ -361,7 +363,7 @@ async def operator_reply(conversation_id: int, req: ReplyRequest):
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats(ctx: TenantContext = Depends(get_tenant_context)):
     """Get conversation statistics."""
     session = SessionLocal()
     try:

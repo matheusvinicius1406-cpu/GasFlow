@@ -10,7 +10,9 @@ from decimal import Decimal
 from math import ceil
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 
 from app.infrastructure.database.connection import SessionLocal
 from app.infrastructure.repositories.financial_repositories import (
@@ -40,6 +42,7 @@ def list_payments(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     db = SessionLocal()
     try:
@@ -57,7 +60,7 @@ def list_payments(
 
 
 @router.post("/orders/{order_codigo}/payments", response_model=dict)
-def register_payment(order_codigo: str, data: PaymentCreate):
+def register_payment(order_codigo: str, data: PaymentCreate, ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         uc = RegisterPaymentUseCase(
@@ -85,7 +88,7 @@ def register_payment(order_codigo: str, data: PaymentCreate):
 
 
 @router.post("/payments/{payment_id}/refund", response_model=dict)
-def refund_payment(payment_id: int, reason: str = ""):
+def refund_payment(payment_id: int, reason: str = "", ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         uc = RefundPaymentUseCase(
@@ -109,6 +112,7 @@ def list_receivables(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     db = SessionLocal()
     try:
@@ -135,6 +139,7 @@ def list_expenses(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     db = SessionLocal()
     try:
@@ -152,7 +157,7 @@ def list_expenses(
 
 
 @router.post("/expenses", response_model=dict)
-def register_expense(data: ExpenseCreate):
+def register_expense(data: ExpenseCreate, ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         uc = RegisterExpenseUseCase(
@@ -176,7 +181,7 @@ def register_expense(data: ExpenseCreate):
 
 
 @router.post("/expenses/{expense_id}/cancel", response_model=dict)
-def cancel_expense(expense_id: int):
+def cancel_expense(expense_id: int, ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         repo = SQLAlchemyExpenseRepository(db)
@@ -195,6 +200,7 @@ def list_cash_movements(
     type_filter: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     db = SessionLocal()
     try:
@@ -212,7 +218,7 @@ def list_cash_movements(
 
 
 @router.get("/cash/balance", response_model=dict)
-def get_cash_balance():
+def get_cash_balance(ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         repo = SQLAlchemyCashMovementRepository(db)
@@ -225,7 +231,7 @@ def get_cash_balance():
 # ── Reports ──────────────────────────────────────────
 
 @router.get("/reports/daily", response_model=DailySummaryResponse)
-def daily_report(date: Optional[str] = Query(None)):
+def daily_report(date: Optional[str] = Query(None), ctx: TenantContext = Depends(get_tenant_context)):
     db = SessionLocal()
     try:
         target_date = datetime.fromisoformat(date) if date else datetime.utcnow()

@@ -6,6 +6,8 @@ FASE 7: Inventory Core — stock management, movements, adjustments.
 
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database.dependencies import get_db
@@ -58,6 +60,7 @@ def list_inventory(
     stock_status: Optional[str] = Query(default=None, description="Filtrar por status: IN_STOCK, LOW_STOCK, OUT_OF_STOCK"),
     product_type: Optional[str] = Query(default=None, description="Filtrar por tipo de produto"),
     db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Lista todos os itens de inventário com filtros."""
     inv_repo = SQLAlchemyInventoryRepository(db)
@@ -91,6 +94,7 @@ def list_inventory(
 def get_inventory(
     product_codigo: str,
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Busca inventário de um produto específico."""
     use_case = GetInventoryByProductUseCase(repository)
@@ -116,6 +120,7 @@ def get_movements(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Lista movimentações de estoque de um produto."""
     use_case = GetMovementsUseCase(repository)
@@ -136,6 +141,7 @@ def add_stock(
     product_codigo: str,
     data: StockEntryRequest,
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Registra entrada de estoque."""
     use_case = AddStockUseCase(repository)
@@ -169,6 +175,7 @@ def adjust_stock(
     product_codigo: str,
     data: StockAdjustRequest,
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Ajusta estoque (contagem física)."""
     use_case = AdjustStockUseCase(repository)
@@ -202,6 +209,7 @@ def record_loss(
     product_codigo: str,
     data: StockLossRequest,
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Registra perda de estoque."""
     use_case = LossStockUseCase(repository)
@@ -233,6 +241,7 @@ def record_loss(
 @router.get("/reconciliation/check", response_model=list[ReconciliationResponse])
 def reconciliation_check(
     db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Verifica consistência entre inventory e ledger."""
     repo = SQLAlchemyInventoryRepository(db)
@@ -247,6 +256,7 @@ def set_minimum(
     product_codigo: str,
     data: SetMinimumRequest,
     repository: SQLAlchemyInventoryRepository = Depends(_get_inventory_repo),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Define estoque mínimo de um produto."""
     use_case = SetMinimumUseCase(repository)

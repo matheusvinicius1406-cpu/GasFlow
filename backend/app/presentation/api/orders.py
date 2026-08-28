@@ -30,6 +30,8 @@ from app.presentation.schemas.order import (
     OrderStatusUpdate,
     AssignDriverRequest,
 )
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 
 
 router = APIRouter(
@@ -52,7 +54,8 @@ def _get_repositories(db: Session = Depends(get_db)):
 @router.post("/", response_model=OrderResponse)
 def create_order(
     order: OrderCreate,
-    repos: dict = Depends(_get_repositories)
+    repos: dict = Depends(_get_repositories),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     try:
         use_case = CreateOrderUseCase(
@@ -70,7 +73,8 @@ def create_order(
 @router.get("/", response_model=list[OrderResponse])
 def list_orders(
     status: Optional[str] = Query(default=None),
-    repos: dict = Depends(_get_repositories)
+    repos: dict = Depends(_get_repositories),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListOrdersUseCase(repos["order"])
     return use_case.execute(status=status)
@@ -79,7 +83,8 @@ def list_orders(
 @router.get("/{codigo}", response_model=OrderDetailResponse)
 def get_order(
     codigo: str,
-    repos: dict = Depends(_get_repositories)
+    repos: dict = Depends(_get_repositories),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetOrderUseCase(
         order_repo=repos["order"],
@@ -95,7 +100,8 @@ def get_order(
 def update_order_status(
     codigo: str,
     data: OrderStatusUpdate,
-    repos: dict = Depends(_get_repositories)
+    repos: dict = Depends(_get_repositories),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     try:
         use_case = UpdateOrderStatusUseCase(
@@ -115,7 +121,8 @@ def update_order_status(
 def assign_driver(
     codigo: str,
     data: AssignDriverRequest,
-    repos: dict = Depends(_get_repositories)
+    repos: dict = Depends(_get_repositories),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     try:
         use_case = AssignDriverUseCase(

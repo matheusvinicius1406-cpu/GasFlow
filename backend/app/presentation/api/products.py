@@ -15,6 +15,8 @@ from app.application.product.use_cases import (
     DisableProductUseCase,
 )
 from app.presentation.schemas.product import ProductCreate, ProductUpdate, ProductResponse
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 
 
 router = APIRouter(
@@ -30,7 +32,8 @@ def _get_repository(db: Session = Depends(get_db)):
 @router.post("/", response_model=ProductResponse)
 def create_product(
     product: ProductCreate,
-    repository: SQLAlchemyProductRepository = Depends(_get_repository)
+    repository: SQLAlchemyProductRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = CreateProductUseCase(repository)
     return use_case.execute(product.model_dump())
@@ -38,7 +41,8 @@ def create_product(
 
 @router.get("/", response_model=list[ProductResponse])
 def list_products(
-    repository: SQLAlchemyProductRepository = Depends(_get_repository)
+    repository: SQLAlchemyProductRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListProductsUseCase(repository)
     return use_case.execute()
@@ -47,7 +51,8 @@ def list_products(
 @router.get("/{codigo}", response_model=ProductResponse)
 def get_product(
     codigo: str,
-    repository: SQLAlchemyProductRepository = Depends(_get_repository)
+    repository: SQLAlchemyProductRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetProductUseCase(repository)
     product = use_case.execute(codigo)
@@ -60,7 +65,8 @@ def get_product(
 def update_product(
     codigo: str,
     data: ProductUpdate,
-    repository: SQLAlchemyProductRepository = Depends(_get_repository)
+    repository: SQLAlchemyProductRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = UpdateProductUseCase(repository)
     product = use_case.execute(codigo, data.model_dump(exclude_unset=True))
@@ -72,7 +78,8 @@ def update_product(
 @router.patch("/{codigo}/disable", response_model=ProductResponse)
 def disable_product(
     codigo: str,
-    repository: SQLAlchemyProductRepository = Depends(_get_repository)
+    repository: SQLAlchemyProductRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = DisableProductUseCase(repository)
     product = use_case.execute(codigo)

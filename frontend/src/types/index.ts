@@ -198,7 +198,7 @@ export interface User {
   role: UserRole
 }
 
-export type UserRole = 'ADMIN' | 'MANAGER' | 'ATTENDANT' | 'DISPATCHER' | 'DRIVER'
+export type UserRole = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'DRIVER' | 'CUSTOMER' | 'SYSTEM'
 
 // ── Dashboard ───────────────────────────────────────────
 export interface DashboardStats {

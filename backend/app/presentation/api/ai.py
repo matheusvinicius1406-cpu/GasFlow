@@ -9,7 +9,9 @@ GET /ai/audit — Get audit log
 """
 
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
@@ -190,7 +192,7 @@ def _get_tools():
 # ── Endpoints ─────────────────────────────────────────
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Main AI chat endpoint."""
     db = SessionLocal()
     try:
@@ -242,7 +244,7 @@ def list_tools():
 
 
 @router.get("/conversations", response_model=List[ConversationInfo])
-def list_conversations():
+def list_conversations(ctx: TenantContext = Depends(get_tenant_context)):
     """List recent conversations."""
     db = SessionLocal()
     try:
@@ -261,7 +263,7 @@ def list_conversations():
 
 
 @router.get("/audit")
-def get_audit_log(limit: int = 50):
+def get_audit_log(limit: int = 50, ctx: TenantContext = Depends(get_tenant_context)):
     """Get AI audit log."""
     engine = _get_engine()
     return engine.get_audit_log(limit=limit)

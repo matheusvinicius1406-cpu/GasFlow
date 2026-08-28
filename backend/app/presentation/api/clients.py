@@ -26,6 +26,8 @@ from app.presentation.schemas.client import (
     ClientListResponse,
     Customer360Response,
 )
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 
 
 router = APIRouter(
@@ -41,7 +43,8 @@ def _get_repository(db: Session = Depends(get_db)):
 @router.post("/", response_model=ClientResponse)
 def create_client(
     client: ClientCreate,
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = CreateClientUseCase(repository)
     try:
@@ -57,7 +60,8 @@ def list_clients(
     ativo: Optional[bool] = Query(default=None, description="Filtrar por status ativo"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListClientsUseCase(repository)
     return use_case.execute(
@@ -71,7 +75,8 @@ def list_clients(
 
 @router.get("/legacy", response_model=list[ClientResponse])
 def list_clients_legacy(
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Legacy endpoint — retorna todos os clientes ativos sem paginação."""
     use_case = ListClientsUseCase(repository)
@@ -82,7 +87,8 @@ def list_clients_legacy(
 @router.get("/{codigo}", response_model=ClientResponse)
 def get_client(
     codigo: str,
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetClientUseCase(repository)
     client = use_case.execute(codigo)
@@ -94,12 +100,12 @@ def get_client(
 @router.get("/{codigo}/360", response_model=Customer360Response)
 def get_customer_360(
     codigo: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Customer 360 — visão consolidada com métricas CRM + financeiras."""
     client_repo = SQLAlchemyClientRepository(db)
     order_repo = SQLAlchemyOrderRepository(db)
-    # FASE 8: Pass financial repos for outstanding/paid metrics
     from app.infrastructure.repositories.financial_repositories import (
         SQLAlchemyReceivableRepository,
     )
@@ -115,10 +121,10 @@ def get_customer_360(
 def get_customer_orders(
     codigo: str,
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Lista pedidos do cliente."""
-    # Verify client exists
     client = repository.buscar_por_codigo(codigo)
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -132,7 +138,8 @@ def get_customer_orders(
 def update_client(
     codigo: str,
     data: ClientUpdate,
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = UpdateClientUseCase(repository)
     try:
@@ -147,7 +154,8 @@ def update_client(
 @router.patch("/{codigo}/disable", response_model=ClientResponse)
 def disable_client(
     codigo: str,
-    repository: SQLAlchemyClientRepository = Depends(_get_repository)
+    repository: SQLAlchemyClientRepository = Depends(_get_repository),
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = DisableClientUseCase(repository)
     client = use_case.execute(codigo)

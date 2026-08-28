@@ -14,33 +14,10 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-from app.application.security.auth_service import AuthService
 from app.domain.security.models import TenantContext, SystemRole
+from app.presentation.dependencies import get_auth_service, get_tenant_context
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# ── Singleton ───────────────────────────────────────────
-
-_auth_service: Optional[AuthService] = None
-
-
-def get_auth_service() -> AuthService:
-    global _auth_service
-    if _auth_service is None:
-        _auth_service = AuthService()
-    return _auth_service
-
-
-def get_tenant_context(authorization: Optional[str] = Header(None)) -> TenantContext:
-    """Extract tenant context from Authorization header."""
-    auth = get_auth_service()
-    token = ""
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
-    ctx = auth.validate_token(token)
-    if not ctx:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return ctx
 
 
 # ── Schemas ─────────────────────────────────────────────

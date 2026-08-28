@@ -4,7 +4,9 @@ Delivery Operations API — FASE 14
 Endpoints for deliveries, drivers, vehicles, routes, dispatch.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.presentation.dependencies import get_tenant_context
+from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -77,7 +79,7 @@ def _get_store():
 # ── Delivery Endpoints ──────────────────────────────────
 
 @router.post("/deliveries")
-async def create_delivery(req: CreateDeliveryRequest):
+async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.delivery import Delivery, AddressSnapshot
     from app.domain.delivery.driver import Driver, DriverStatus
     store = _get_store()
@@ -104,7 +106,7 @@ async def create_delivery(req: CreateDeliveryRequest):
 
 
 @router.get("/deliveries")
-async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None):
+async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     tenant_id = "default"
     deliveries = list(store.get("deliveries", {}).values())
@@ -121,7 +123,7 @@ async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str]
 
 
 @router.get("/deliveries/{delivery_id}")
-async def get_delivery(delivery_id: str):
+async def get_delivery(delivery_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     delivery = store.get("deliveries", {}).get(delivery_id)
     if not delivery:
@@ -130,7 +132,7 @@ async def get_delivery(delivery_id: str):
 
 
 @router.patch("/deliveries/{delivery_id}/assign")
-async def assign_delivery(delivery_id: str, req: AssignRequest):
+async def assign_delivery(delivery_id: str, req: AssignRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.delivery import DeliveryStatus
     from app.domain.delivery.driver import DriverStatus
     store = _get_store()
@@ -150,7 +152,7 @@ async def assign_delivery(delivery_id: str, req: AssignRequest):
 
 
 @router.patch("/deliveries/{delivery_id}/status")
-async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest):
+async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.delivery import DeliveryStatus, DeliveryFailureReason, DeliveryProof, ProofType
     store = _get_store()
     tenant_id = "default"
@@ -196,7 +198,7 @@ async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest):
 # ── Driver Endpoints ────────────────────────────────────
 
 @router.post("/drivers")
-async def create_driver(req: CreateDriverRequest):
+async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.driver import Driver
     store = _get_store()
     if "drivers" not in store:
@@ -213,7 +215,7 @@ async def create_driver(req: CreateDriverRequest):
 
 
 @router.get("/drivers")
-async def list_drivers(status: Optional[str] = None):
+async def list_drivers(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     drivers = list(store.get("drivers", {}).values())
     drivers = [d for d in drivers if d.tenant_id == "default"]
@@ -223,7 +225,7 @@ async def list_drivers(status: Optional[str] = None):
 
 
 @router.get("/drivers/{driver_id}")
-async def get_driver(driver_id: str):
+async def get_driver(driver_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     driver = store.get("drivers", {}).get(driver_id)
     if not driver:
@@ -232,7 +234,7 @@ async def get_driver(driver_id: str):
 
 
 @router.patch("/drivers/{driver_id}/location")
-async def update_driver_location(driver_id: str, req: LocationUpdateRequest):
+async def update_driver_location(driver_id: str, req: LocationUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     driver = store.get("drivers", {}).get(driver_id)
     if not driver:
@@ -242,7 +244,7 @@ async def update_driver_location(driver_id: str, req: LocationUpdateRequest):
 
 
 @router.patch("/drivers/{driver_id}/status")
-async def update_driver_status(driver_id: str, status: str):
+async def update_driver_status(driver_id: str, status: str, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.driver import DriverStatus
     store = _get_store()
     driver = store.get("drivers", {}).get(driver_id)
@@ -266,7 +268,7 @@ async def update_driver_status(driver_id: str, status: str):
 # ── Vehicle Endpoints ───────────────────────────────────
 
 @router.post("/vehicles")
-async def create_vehicle(req: CreateVehicleRequest):
+async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.vehicle import Vehicle
     store = _get_store()
     if "vehicles" not in store:
@@ -283,7 +285,7 @@ async def create_vehicle(req: CreateVehicleRequest):
 
 
 @router.get("/vehicles")
-async def list_vehicles(status: Optional[str] = None):
+async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     vehicles = list(store.get("vehicles", {}).values())
     vehicles = [v for v in vehicles if v.tenant_id == "default"]
@@ -295,7 +297,7 @@ async def list_vehicles(status: Optional[str] = None):
 # ── Route Endpoints ─────────────────────────────────────
 
 @router.post("/routes")
-async def create_route(req: CreateRouteRequest):
+async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(get_tenant_context)):
     from app.domain.delivery.route import Route
     store = _get_store()
     if "routes" not in store:
@@ -323,7 +325,7 @@ async def create_route(req: CreateRouteRequest):
 
 
 @router.get("/routes")
-async def list_routes(status: Optional[str] = None):
+async def list_routes(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     routes = list(store.get("routes", {}).values())
     routes = [r for r in routes if r.tenant_id == "default"]
@@ -333,7 +335,7 @@ async def list_routes(status: Optional[str] = None):
 
 
 @router.get("/routes/{route_id}")
-async def get_route(route_id: str):
+async def get_route(route_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     route = store.get("routes", {}).get(route_id)
     if not route:
@@ -342,7 +344,7 @@ async def get_route(route_id: str):
 
 
 @router.post("/routes/{route_id}/dispatch")
-async def dispatch_route(route_id: str):
+async def dispatch_route(route_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     route = store.get("routes", {}).get(route_id)
     if not route:
@@ -353,7 +355,7 @@ async def dispatch_route(route_id: str):
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/arrive")
-async def arrive_stop(route_id: str, stop_id: str):
+async def arrive_stop(route_id: str, stop_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     route = store.get("routes", {}).get(route_id)
     if not route:
@@ -369,7 +371,7 @@ async def arrive_stop(route_id: str, stop_id: str):
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/complete")
-async def complete_stop(route_id: str, stop_id: str):
+async def complete_stop(route_id: str, stop_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     route = store.get("routes", {}).get(route_id)
     if not route:
@@ -386,7 +388,7 @@ async def complete_stop(route_id: str, stop_id: str):
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/fail")
-async def fail_stop(route_id: str, stop_id: str, reason: str = ""):
+async def fail_stop(route_id: str, stop_id: str, reason: str = "", ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     route = store.get("routes", {}).get(route_id)
     if not route:
@@ -402,7 +404,7 @@ async def fail_stop(route_id: str, stop_id: str, reason: str = ""):
 # ── Dispatch Dashboard ──────────────────────────────────
 
 @router.get("/dispatch/summary")
-async def dispatch_summary():
+async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     tenant_id = "default"
     deliveries = [d for d in store.get("deliveries", {}).values() if d.tenant_id == tenant_id]
