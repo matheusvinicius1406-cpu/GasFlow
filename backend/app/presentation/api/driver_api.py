@@ -26,9 +26,10 @@ Never: Driver App → Finance/Inventory/Admin APIs
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import uuid
+import hashlib
 from app.infrastructure.stores.shared_store import get_shared_store
 from app.domain.events.event_bus import (
     get_event_bus, publish_delivery_event, publish_driver_event, EventType
@@ -247,45 +248,71 @@ def _driver_to_dict(d) -> Dict[str, Any]:
     }
 
 
+def _get_db_session():
+    """Get a fresh SQLAlchemy session for driver lookup."""
+    from app.infrastructure.database.dependencies import get_db
+    from sqlalchemy.orm import Session as DBSession
+    # Create a standalone session (not request-scoped)
+    from app.infrastructure.database.base import Base
+    from app.infrastructure.database.init_db import engine
+    return DBSession(bind=engine)
+
+
 async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
-    """Driver app login. Returns session token."""
-    store = _get_store()
-    # Find driver by username (supports both dict and domain objects)
-    driver = None
-    for d in store["drivers"].values():
-        dd = _driver_to_dict(d)
-        name = dd.get("name", "")
-        phone = dd.get("phone", "")
-        if (isinstance(name, str) and name.lower() == req.username.lower()) or phone == req.username:
-            driver = dd
-            break
-    if not driver:
-        raise HTTPException(401, detail="Invalid credentials")
-
-    # Simple password check (demo: any password works for existing drivers)
-    token = str(uuid.uuid4())
-    session = {
-        "token": token,
-        "driver_id": driver["id"],
-        "tenant_id": driver.get("tenant_id", "default"),
-        "role": "DRIVER",
-        "device_id": req.device_id,
-        "device_name": req.device_name,
-        "platform": req.platform,
-        "created_at": datetime.utcnow().isoformat(),
-        "expires_at": (datetime.utcnow().replace(
-            hour=datetime.utcnow().hour + 8
-        )).isoformat(),
-    }
-    store["sessions"][token] = session
-
-    return DriverLoginResponse(
-        success=True,
-        token=token,
-        driver_id=driver["id"],
-        tenant_id=driver.get("tenant_id", "default"),
-        expires_at=session["expires_at"],
-    )
+    """Driver app login. Returns session token.
+    
+    Auth flow:
+    1. Find driver by username in database (delivery_drivers table)
+    2. Verify password hash
+    3. Create session token in memory
+    4. Return token
+    """
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id="default")
+        
+        # Find driver by username
+        model = repo.find_by_username(req.username)
+        if not model:
+            raise HTTPException(401, detail="Invalid credentials")
+        
+        # Verify password
+        if model.password_hash:
+            input_hash = hashlib.sha256(req.password.encode()).hexdigest()
+            if input_hash != model.password_hash:
+                raise HTTPException(401, detail="Invalid credentials")
+        
+        # Determine tenant
+        tenant_id = model.tenant_id or "default"
+        
+        # Create session
+        token = str(uuid.uuid4())
+        session = {
+            "token": token,
+            "driver_id": model.codigo,
+            "tenant_id": tenant_id,
+            "role": "DRIVER",
+            "device_id": req.device_id,
+            "device_name": req.device_name,
+            "platform": req.platform,
+            "created_at": datetime.utcnow().isoformat(),
+            "expires_at": (datetime.utcnow() + timedelta(hours=8)).isoformat(),
+        }
+        
+        # Store session in memory (tokens are ephemeral)
+        store = _get_store()
+        store["sessions"][token] = session
+        
+        return DriverLoginResponse(
+            success=True,
+            token=token,
+            driver_id=model.codigo,
+            tenant_id=tenant_id,
+            expires_at=session["expires_at"],
+        )
+    finally:
+        db.close()
 
 
 async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
@@ -295,18 +322,37 @@ async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
 
 
 async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
-    store = _get_store()
-    driver = store["drivers"].get(ctx["driver_id"])
-    if not driver:
-        raise HTTPException(404, detail="Driver not found")
-    return DriverMeResponse(
-        driver_id=driver["id"],
-        name=driver["name"],
-        phone=driver["phone"],
-        status=driver.get("status", "AVAILABLE"),
-        active=driver.get("active", True),
-        tenant_id=driver.get("tenant_id", "default"),
-    )
+    """Get driver profile from database."""
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.get("tenant_id", "default"))
+        model = repo.find_by_id_as_model(ctx["driver_id"])
+        if not model:
+            # Fallback: try in-memory store (for backward compat)
+            store = _get_store()
+            driver = store["drivers"].get(ctx["driver_id"])
+            if driver:
+                dd = _driver_to_dict(driver)
+                return DriverMeResponse(
+                    driver_id=dd.get("id", ctx["driver_id"]),
+                    name=dd.get("name", ""),
+                    phone=dd.get("phone", ""),
+                    status=dd.get("status", "AVAILABLE"),
+                    active=dd.get("active", True),
+                    tenant_id=dd.get("tenant_id", "default"),
+                )
+            raise HTTPException(404, detail="Driver not found")
+        return DriverMeResponse(
+            driver_id=model.codigo,
+            name=model.nome,
+            phone=model.telefone,
+            status=model.status or "AVAILABLE",
+            active=model.ativo,
+            tenant_id=model.tenant_id or "default",
+        )
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════

@@ -277,7 +277,13 @@ class CreateDriverUseCase:
             codigo=codigo, nome=data["nome"], telefone=data["telefone"],
             placa=data.get("placa"), ativo=True, created_at=datetime.utcnow(),
         )
-        return self.repository.criar(driver)
+        result = self.repository.criar(driver)
+        # Save credentials if provided
+        username = data.get("username")
+        password_hash = data.get("password_hash")
+        if username and password_hash:
+            self.repository.set_credentials(result.codigo, username, password_hash)
+        return result
 
 
 class GetDriverUseCase:

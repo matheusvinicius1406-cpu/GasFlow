@@ -21,4 +21,8 @@ class DeliveryDriverModel(Base):
     telefone = Column(String, nullable=False)
     placa = Column(String, nullable=True)
     ativo = Column(Boolean, default=True)
+    username = Column(String, nullable=True, unique=False)
+    password_hash = Column(String, nullable=True)
+    status = Column(String, default="AVAILABLE")
+    vehicle_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

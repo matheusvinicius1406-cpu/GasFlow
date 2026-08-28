@@ -11,6 +11,8 @@ class DeliveryDriverCreate(BaseModel):
     nome: str
     telefone: str
     placa: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class DeliveryDriverResponse(BaseModel):
@@ -21,4 +23,6 @@ class DeliveryDriverResponse(BaseModel):
     telefone: str
     placa: Optional[str] = None
     ativo: bool
+    username: Optional[str] = None
+    status: Optional[str] = None
     created_at: datetime
