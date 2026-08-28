@@ -1,33 +1,72 @@
+import { useState, useEffect } from 'react'
 import { ShoppingCart, Users, Package, Truck, DollarSign, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-
-// Mock data for development - will be replaced with real API calls
-const mockStats = {
-  totalOrders: 47,
-  pendingOrders: 12,
-  totalRevenue: 8450.0,
-  totalClients: 156,
-  totalProducts: 8,
-  activeDrivers: 3,
-}
-
-const mockRecentOrders = [
-  { codigo: '000047', client_codigo: '000012', product: 'P13', quantity: 2, value: 179.8, status: 'PENDING', created_at: '2026-08-26T10:30:00' },
-  { codigo: '000046', client_codigo: '000008', product: 'AGUA_20L', quantity: 3, value: 45.0, status: 'DELIVERED', created_at: '2026-08-26T09:15:00' },
-  { codigo: '000045', client_codigo: '000023', product: 'P13', quantity: 1, value: 89.9, status: 'DELIVERING', created_at: '2026-08-26T08:45:00' },
-  { codigo: '000044', client_codigo: '000005', product: 'P13', quantity: 4, value: 359.6, status: 'CONFIRMED', created_at: '2026-08-25T18:20:00' },
-  { codigo: '000043', client_codigo: '000019', product: 'AGUA_20L', quantity: 2, value: 30.0, status: 'CANCELLED', created_at: '2026-08-25T16:00:00' },
-]
-
-const mockAlerts = [
-  { id: 1, message: 'Estoque de P13 abaixo do mínimo', type: 'warning' as const },
-  { id: 2, message: '3 pedidos aguardando confirmação', type: 'info' as const },
-  { id: 3, message: 'Motorista João não entregar hoje', type: 'error' as const },
-]
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { apiClient } from '@/lib/api/client'
+import { formatDate, formatCurrency } from '@/lib/utils'
+import type { Order, Product } from '@/types'
 
 export function DashboardPage() {
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    totalRevenue: 0,
+    totalClients: 0,
+    totalProducts: 0,
+    activeDrivers: 0,
+  })
+  const [recentOrders, setRecentOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [ordersRes, clientsRes, productsRes, driversRes] = await Promise.allSettled([
+          apiClient.get('/orders/'),
+          apiClient.get('/clients/'),
+          apiClient.get('/products/'),
+          apiClient.get('/delivery-drivers/'),
+        ])
+
+        const orders: Order[] = ordersRes.status === 'fulfilled' ? ordersRes.value.data : []
+        const clientsData = clientsRes.status === 'fulfilled' ? clientsRes.value.data : { total: 0 }
+        const products: Product[] = productsRes.status === 'fulfilled' ? productsRes.value.data : []
+        const drivers: unknown[] = driversRes.status === 'fulfilled' ? driversRes.value.data : []
+
+        const totalRevenue = orders
+          .filter(o => o.payment_status === 'PAID')
+          .reduce((sum, o) => sum + (o.total ?? 0), 0)
+
+        setStats({
+          totalOrders: orders.length,
+          pendingOrders: orders.filter(o => o.status === 'PENDING').length,
+          totalRevenue,
+          totalClients: clientsData.total ?? clientsData.length ?? 0,
+          totalProducts: products.length,
+          activeDrivers: Array.isArray(drivers) ? drivers.length : 0,
+        })
+
+        setRecentOrders(orders.slice(0, 5))
+      } catch {
+        // Keep defaults
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -38,28 +77,25 @@ export function DashboardPage() {
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Pedidos Hoje"
-          value={mockStats.totalOrders}
+          title="Total de Pedidos"
+          value={stats.totalOrders}
           icon={ShoppingCart}
-          trend={{ value: 12, isPositive: true }}
         />
         <StatCard
           title="Faturamento"
-          value={`R$ ${mockStats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          value={formatCurrency(stats.totalRevenue)}
           icon={DollarSign}
-          trend={{ value: 8, isPositive: true }}
         />
         <StatCard
           title="Clientes Ativos"
-          value={mockStats.totalClients}
+          value={stats.totalClients}
           icon={Users}
-          trend={{ value: 3, isPositive: true }}
         />
         <StatCard
-          title="Em Entrega"
-          value={mockStats.pendingOrders}
+          title="Pendentes"
+          value={stats.pendingOrders}
           icon={Truck}
-          description={`${mockStats.activeDrivers} motoristas ativos`}
+          description={`${stats.activeDrivers} motoristas`}
         />
       </div>
 
@@ -70,56 +106,78 @@ export function DashboardPage() {
             <CardTitle>Pedidos Recentes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {mockRecentOrders.map((order) => (
-                <div
-                  key={order.codigo}
-                  className="flex items-center justify-between rounded-lg border border-border p-3"
-                >
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">
-                      Pedido #{order.codigo}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Cliente {order.client_codigo} • {order.product} x{order.quantity}
-                    </p>
+            {recentOrders.length === 0 ? (
+              <EmptyState
+                icon={ShoppingCart}
+                title="Nenhum pedido"
+                description="Os pedidos recentes aparecerão aqui."
+              />
+            ) : (
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div
+                    key={order.codigo}
+                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Pedido #{order.codigo}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Cliente {order.client_codigo} • {formatDate(order.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-medium text-foreground">
+                        {formatCurrency(order.total)}
+                      </p>
+                      <StatusBadge status={order.status} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm font-medium text-foreground">
-                      R$ {order.value.toFixed(2)}
-                    </p>
-                    <StatusBadge status={order.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Alerts */}
         <Card>
           <CardHeader>
-            <CardTitle>Alertas</CardTitle>
+            <CardTitle>Resumo Rápido</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-start gap-3 rounded-lg border border-border p-3"
-                >
-                  <AlertTriangle
-                    className={`h-5 w-5 ${
-                      alert.type === 'warning'
-                        ? 'text-warning'
-                        : alert.type === 'error'
-                        ? 'text-destructive'
-                        : 'text-info'
-                    }`}
-                  />
-                  <p className="text-sm text-foreground">{alert.message}</p>
+              {stats.pendingOrders > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                  <p className="text-sm text-foreground">
+                    {stats.pendingOrders} pedido{stats.pendingOrders > 1 ? 's' : ''} aguardando processamento
+                  </p>
                 </div>
-              ))}
+              )}
+              {stats.totalClients > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <Users className="h-5 w-5 text-primary" />
+                  <p className="text-sm text-foreground">
+                    {stats.totalClients} cliente{stats.totalClients > 1 ? 's' : ''} cadastrado{stats.totalClients > 1 ? 's' : ''}
+                  </p>
+                </div>
+              )}
+              {stats.totalProducts > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <Package className="h-5 w-5 text-blue-500" />
+                  <p className="text-sm text-foreground">
+                    {stats.totalProducts} produto{stats.totalProducts > 1 ? 's' : ''} cadastrado{stats.totalProducts > 1 ? 's' : ''}
+                  </p>
+                </div>
+              )}
+              {stats.pendingOrders === 0 && stats.totalClients === 0 && stats.totalProducts === 0 && (
+                <EmptyState
+                  icon={Package}
+                  title="Sistema vazio"
+                  description="Comece cadastrando clientes e produtos."
+                />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -132,7 +190,7 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Produtos</p>
-                <p className="text-2xl font-bold text-foreground">{mockStats.totalProducts}</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalProducts}</p>
               </div>
               <Package className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -143,8 +201,8 @@ export function DashboardPage() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Motoristas Ativos</p>
-                <p className="text-2xl font-bold text-foreground">{mockStats.activeDrivers}</p>
+                <p className="text-sm text-muted-foreground">Motoristas</p>
+                <p className="text-2xl font-bold text-foreground">{stats.activeDrivers}</p>
               </div>
               <Truck className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -157,7 +215,9 @@ export function DashboardPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Ticket Médio</p>
                 <p className="text-2xl font-bold text-foreground">
-                  R$ {(mockStats.totalRevenue / mockStats.totalOrders).toFixed(2)}
+                  {stats.totalOrders > 0
+                    ? formatCurrency(stats.totalRevenue / stats.totalOrders)
+                    : formatCurrency(0)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />

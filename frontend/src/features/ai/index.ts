@@ -1,1 +1,1 @@
-export { default as CopilotPage } from './CopilotPage';
+export { CopilotPage } from './CopilotPage';

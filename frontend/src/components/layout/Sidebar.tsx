@@ -6,7 +6,6 @@ import {
   MessageSquare,
   Truck,
   UserCog,
-  Route,
   Package,
   Warehouse,
   DollarSign,
@@ -31,12 +30,11 @@ const navItems: NavItem[] = [
   { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
   { label: 'Entregas', href: '/deliveries', icon: Truck },
   { label: 'Motoristas', href: '/drivers', icon: UserCog },
-  { label: 'Rotas', href: '/routes', icon: Route, disabled: true },
   { label: 'Produtos', href: '/products', icon: Package },
-  { label: 'Estoque', href: '/inventory', icon: Warehouse, disabled: true },
-  { label: 'Financeiro', href: '/finance', icon: DollarSign, disabled: true },
+  { label: 'Estoque', href: '/inventory', icon: Warehouse },
+  { label: 'Financeiro', href: '/finance', icon: DollarSign },
+  { label: 'Inteligência', href: '/intelligence', icon: Brain },
   { label: 'Relatórios', href: '/reports', icon: BarChart3, disabled: true },
-  { label: 'Inteligência', href: '/intelligence', icon: Brain, disabled: true },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ]
 

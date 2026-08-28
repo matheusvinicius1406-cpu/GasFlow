@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
 import { ConversationsPage } from './ConversationsPage'
+import { apiClient } from '@/lib/api/client'
 
 interface WhatsAppAccount {
   id: string
@@ -36,10 +37,6 @@ interface QRData {
   expiresAt: string
   expiresIn: number
 }
-
-// FASE 4.1: Frontend talks ONLY to the backend (FastAPI)
-// Backend URL is configured via env var or defaults to localhost:8000
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function getStatusColor(state: string): 'success' | 'warning' | 'destructive' | 'secondary' {
   switch (state) {
@@ -68,15 +65,9 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
 
   const fetchQR = useCallback(async () => {
     try {
-      // FASE 4.1: Calls backend, NOT WhatsApp Service directly
-      const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/qr`)
-      if (res.ok) {
-        const data = await res.json()
-        setQr(data)
-        setError(null)
-      } else {
-        setQr(null)
-      }
+      const { data } = await apiClient.get(`/whatsapp/accounts/${account.id}/qr`)
+      setQr(data)
+      setError(null)
     } catch {
       setQr(null)
     }
@@ -91,17 +82,11 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
     setLoading(true)
     setError(null)
     try {
-      // FASE 4.1: Calls backend, NOT WhatsApp Service directly
-      const res = await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/start`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.detail || 'Falha ao iniciar')
-      }
+      await apiClient.post(`/whatsapp/accounts/${account.id}/start`)
       onRefresh()
-    } catch {
-      setError('Falha ao iniciar conexão')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(msg || 'Falha ao iniciar conexão')
     } finally {
       setLoading(false)
     }
@@ -111,7 +96,7 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
     setLoading(true)
     setError(null)
     try {
-      await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/stop`, { method: 'POST' })
+      await apiClient.post(`/whatsapp/accounts/${account.id}/stop`)
       onRefresh()
     } catch {
       setError('Falha ao parar conexão')
@@ -125,7 +110,7 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
     setLoading(true)
     setError(null)
     try {
-      await fetch(`${API_BASE}/api/whatsapp/accounts/${account.id}/logout`, { method: 'POST' })
+      await apiClient.post(`/whatsapp/accounts/${account.id}/logout`)
       setQr(null)
       onRefresh()
     } catch {
@@ -233,15 +218,9 @@ function WhatsAppAccountsView() {
 
   const fetchAccounts = useCallback(async () => {
     try {
-      // FASE 4.1: Calls backend, NOT WhatsApp Service directly
-      const res = await fetch(`${API_BASE}/api/whatsapp/accounts`)
-      if (res.ok) {
-        const data = await res.json()
-        setAccounts(data.accounts || [])
-        setError(null)
-      } else {
-        setError('Falha ao carregar contas')
-      }
+      const { data } = await apiClient.get('/whatsapp/accounts')
+      setAccounts(data.accounts || [])
+      setError(null)
     } catch {
       setError('Serviço indisponível')
     } finally {
@@ -251,7 +230,6 @@ function WhatsAppAccountsView() {
 
   useEffect(() => {
     fetchAccounts()
-    // FASE 4.1: Poll every 15s with proper cleanup
     const interval = setInterval(fetchAccounts, 15000)
     return () => clearInterval(interval)
   }, [fetchAccounts])
@@ -382,4 +360,3 @@ export function WhatsAppPage() {
     </div>
   )
 }
-

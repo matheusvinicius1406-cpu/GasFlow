@@ -12,8 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { apiClient } from '@/lib/api/client'
 
 interface ConversationMessage {
   id: number
@@ -304,11 +303,8 @@ export function ConversationsPage() {
 
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/conversations`)
-      if (res.ok) {
-        const data = await res.json()
-        setConversations(data.conversations || [])
-      }
+      const { data } = await apiClient.get('/whatsapp/conversations')
+      setConversations(data.conversations || [])
     } catch {
       // silent
     } finally {
@@ -319,10 +315,8 @@ export function ConversationsPage() {
   const fetchDetail = useCallback(async (id: number) => {
     setDetailLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/conversations/${id}`)
-      if (res.ok) {
-        setDetail(await res.json())
-      }
+      const { data } = await apiClient.get(`/whatsapp/conversations/${id}`)
+      setDetail(data)
     } catch {
       // silent
     } finally {
@@ -343,11 +337,7 @@ export function ConversationsPage() {
   const handleTakeover = async () => {
     if (!selectedId) return
     try {
-      await fetch(`${API_BASE}/api/whatsapp/conversations/${selectedId}/takeover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator: 'Operador' }),
-      })
+      await apiClient.post(`/whatsapp/conversations/${selectedId}/takeover`, { operator: 'Operador' })
       fetchDetail(selectedId)
     } catch {
       // silent
@@ -357,9 +347,7 @@ export function ConversationsPage() {
   const handleRelease = async () => {
     if (!selectedId) return
     try {
-      await fetch(`${API_BASE}/api/whatsapp/conversations/${selectedId}/release`, {
-        method: 'POST',
-      })
+      await apiClient.post(`/whatsapp/conversations/${selectedId}/release`)
       fetchDetail(selectedId)
     } catch {
       // silent
@@ -369,11 +357,7 @@ export function ConversationsPage() {
   const handleSendReply = async (text: string) => {
     if (!selectedId) return
     try {
-      await fetch(`${API_BASE}/api/whatsapp/conversations/${selectedId}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
+      await apiClient.post(`/whatsapp/conversations/${selectedId}/reply`, { text })
       fetchDetail(selectedId)
     } catch {
       // silent
