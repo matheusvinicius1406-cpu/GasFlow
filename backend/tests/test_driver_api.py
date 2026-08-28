@@ -35,56 +35,56 @@ from app.domain.delivery.routing import MockRoutingProvider
 @pytest.fixture
 def store():
     """Shared in-memory store for tests."""
-    from app.presentation.api.driver_api import _store, _store_lock
-    with _store_lock:
-        _store.clear()
-        # Populate default data
-        _store["drivers"] = {}
-        _store["deliveries"] = {}
-        _store["routes"] = {}
-        _store["sessions"] = {}
-        _store["idempotency_keys"] = set()
-        _store["locations"] = {}
-        _store["proofs"] = {}
-        # Driver A
-        _store["drivers"]["drv-a"] = {
-            "id": "drv-a", "name": "Motorista A", "phone": "11999998888",
-            "status": "AVAILABLE", "active": True, "tenant_id": "default",
-        }
-        # Driver B
-        _store["drivers"]["drv-b"] = {
-            "id": "drv-b", "name": "Motorista B", "phone": "11999997777",
-            "status": "AVAILABLE", "active": True, "tenant_id": "default",
-        }
-        # Driver C - different tenant
-        _store["drivers"]["drv-c"] = {
-            "id": "drv-c", "name": "Motorista C", "phone": "11999996666",
-            "status": "AVAILABLE", "active": True, "tenant_id": "other-tenant",
-        }
-        # Delivery A
-        _store["deliveries"]["del-a"] = {
-            "id": "del-a", "order_id": "ORD-A", "tenant_id": "default",
-            "status": "PENDING", "customer_codigo": "C001",
-            "customer_name": "Maria Silva",
-            "address": {"street": "Rua A", "number": "100", "neighborhood": "Centro", "city": "SP"},
-            "driver_id": None, "version": 1, "timeline": [],
-        }
-        # Delivery B
-        _store["deliveries"]["del-b"] = {
-            "id": "del-b", "order_id": "ORD-B", "tenant_id": "default",
-            "status": "ASSIGNED", "customer_codigo": "C002",
-            "customer_name": "João Santos",
-            "address": {"street": "Rua B", "number": "200", "neighborhood": "Vila", "city": "SP"},
-            "driver_id": "drv-b", "version": 2, "timeline": [],
-        }
-        # Delivery C - different tenant
-        _store["deliveries"]["del-c"] = {
-            "id": "del-c", "order_id": "ORD-C", "tenant_id": "other-tenant",
-            "status": "PENDING", "customer_codigo": "C003",
-            "customer_name": "Pedro Costa",
-            "address": {"street": "Rua C", "number": "300"},
-            "driver_id": None, "version": 1, "timeline": [],
-        }
+    from app.infrastructure.stores.shared_store import get_shared_store, clear_store
+    _store = get_shared_store()
+    clear_store()
+    # Populate default data
+    _store["drivers"] = {}
+    _store["deliveries"] = {}
+    _store["routes"] = {}
+    _store["sessions"] = {}
+    _store["idempotency_keys"] = set()
+    _store["locations"] = {}
+    _store["proofs"] = {}
+    # Driver A
+    _store["drivers"]["drv-a"] = {
+    "id": "drv-a", "name": "Motorista A", "phone": "11999998888",
+    "status": "AVAILABLE", "active": True, "tenant_id": "default",
+    }
+    # Driver B
+    _store["drivers"]["drv-b"] = {
+    "id": "drv-b", "name": "Motorista B", "phone": "11999997777",
+    "status": "AVAILABLE", "active": True, "tenant_id": "default",
+    }
+    # Driver C - different tenant
+    _store["drivers"]["drv-c"] = {
+    "id": "drv-c", "name": "Motorista C", "phone": "11999996666",
+        "status": "AVAILABLE", "active": True, "tenant_id": "other-tenant",
+    }
+    # Delivery A
+    _store["deliveries"]["del-a"] = {
+        "id": "del-a", "order_id": "ORD-A", "tenant_id": "default",
+        "status": "PENDING", "customer_codigo": "C001",
+        "customer_name": "Maria Silva",
+        "address": {"street": "Rua A", "number": "100", "neighborhood": "Centro", "city": "SP"},
+        "driver_id": None, "version": 1, "timeline": [],
+    }
+    # Delivery B
+    _store["deliveries"]["del-b"] = {
+        "id": "del-b", "order_id": "ORD-B", "tenant_id": "default",
+        "status": "ASSIGNED", "customer_codigo": "C002",
+        "customer_name": "João Santos",
+        "address": {"street": "Rua B", "number": "200", "neighborhood": "Vila", "city": "SP"},
+        "driver_id": "drv-b", "version": 2, "timeline": [],
+    }
+    # Delivery C - different tenant
+    _store["deliveries"]["del-c"] = {
+        "id": "del-c", "order_id": "ORD-C", "tenant_id": "other-tenant",
+        "status": "PENDING", "customer_codigo": "C003",
+        "customer_name": "Pedro Costa",
+        "address": {"street": "Rua C", "number": "300"},
+        "driver_id": None, "version": 1, "timeline": [],
+    }
     return _store
 
 
@@ -298,7 +298,6 @@ class TestLocation:
         assert "drv-a" in store["locations"]
 
     def test_location_rate_limit(self, store, setup_data):
-        from app.presentation.api.driver_api import _store
         store["locations"]["drv-a"] = {
             "latitude": -23.55,
             "longitude": -46.63,

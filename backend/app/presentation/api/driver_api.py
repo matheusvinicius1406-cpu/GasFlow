@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 from enum import Enum
 import uuid
-import threading
+from app.infrastructure.stores.shared_store import get_shared_store
 
 
 # ═══════════════════════════════════════════════════════════
@@ -163,30 +163,11 @@ class ConflictResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════
-# IN-MEMORY STORE (singleton)
+# SHARED STORE (single source of truth)
 # ═══════════════════════════════════════════════════════════
 
-_store: Dict[str, Any] = {}
-_store_lock = threading.Lock()
-
-
 def _get_store() -> Dict[str, Any]:
-    with _store_lock:
-        if "deliveries" not in _store:
-            _store["deliveries"] = {}
-        if "drivers" not in _store:
-            _store["drivers"] = {}
-        if "routes" not in _store:
-            _store["routes"] = {}
-        if "sessions" not in _store:
-            _store["sessions"] = {}
-        if "idempotency_keys" not in _store:
-            _store["idempotency_keys"] = set()
-        if "locations" not in _store:
-            _store["locations"] = {}
-        if "proofs" not in _store:
-            _store["proofs"] = {}
-    return _store
+    return get_shared_store()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -246,14 +227,34 @@ def _allowed_actions(status: str) -> Dict[str, bool]:
 # AUTH ENDPOINTS (shared by both legacy and v1)
 # ═══════════════════════════════════════════════════════════
 
+def _driver_to_dict(d) -> Dict[str, Any]:
+    """Convert Driver domain object or dict to flat dict for login lookup."""
+    if isinstance(d, dict):
+        return d
+    # Driver domain object — use to_dict() or attributes
+    if hasattr(d, 'to_dict'):
+        return d.to_dict()
+    return {
+        "id": getattr(d, 'id', ''),
+        "name": getattr(d, 'name', ''),
+        "phone": getattr(d, 'phone', ''),
+        "tenant_id": getattr(d, 'tenant_id', 'default'),
+        "status": getattr(d, 'status', None),
+        "active": getattr(d, 'active', True),
+    }
+
+
 async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
     """Driver app login. Returns session token."""
     store = _get_store()
-    # Find driver by username (simplified)
+    # Find driver by username (supports both dict and domain objects)
     driver = None
     for d in store["drivers"].values():
-        if d.get("name", "").lower() == req.username.lower() or d.get("phone") == req.username:
-            driver = d
+        dd = _driver_to_dict(d)
+        name = dd.get("name", "")
+        phone = dd.get("phone", "")
+        if (isinstance(name, str) and name.lower() == req.username.lower()) or phone == req.username:
+            driver = dd
             break
     if not driver:
         raise HTTPException(401, detail="Invalid credentials")

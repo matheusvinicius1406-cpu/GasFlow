@@ -7,6 +7,7 @@ Endpoints for deliveries, drivers, vehicles, routes, dispatch.
 from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context, require_admin, require_role
 from app.domain.security.models import TenantContext
+from app.infrastructure.stores.shared_store import get_shared_store
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -67,13 +68,10 @@ class LocationUpdateRequest(BaseModel):
     accuracy: Optional[float] = None
 
 
-# ── In-memory repos (singleton) ─────────────────────────
-
-_in_memory_store = {}
-
+# ── Shared store (single source of truth) ───────────────
 
 def _get_store():
-    return _in_memory_store
+    return get_shared_store()
 
 
 # ── Delivery Endpoints ──────────────────────────────────
