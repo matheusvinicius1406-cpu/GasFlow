@@ -1,10 +1,19 @@
 """
 Driver API — FASE 14.5
 
-Separate API namespace for the future Driver App.
-Uses FASE 13 auth, delivery domain, and mobile-friendly DTOs.
+Driver-facing API endpoints for the entregadorGasFlow mobile app.
+Uses token-based auth, tenant isolation, and delivery ownership checks.
 
-Namespace: /api/driver
+This module defines:
+- DTOs (Data Transfer Objects) for driver communication
+- Authentication dependency
+- Idempotency helpers
+- State machine helpers
+- In-memory store (demo; replace with real DB in production)
+
+Route definitions live in two files:
+- driver_api.py  → legacy /api/driver/v1/* (backward compatibility)
+- driver_v1.py   → official /api/v1/driver/* (central API)
 
 Architecture:
     DRIVER APP → HTTPS → FastAPI → DRIVER API → AUTH → TENANT → DRIVER OWNERSHIP
@@ -21,8 +30,6 @@ from datetime import datetime
 from enum import Enum
 import uuid
 import threading
-
-router = APIRouter(prefix="/api/driver", tags=["driver-app"])
 
 
 # ═══════════════════════════════════════════════════════════
@@ -236,11 +243,10 @@ def _allowed_actions(status: str) -> Dict[str, bool]:
 
 
 # ═══════════════════════════════════════════════════════════
-# AUTH ENDPOINTS
+# AUTH ENDPOINTS (shared by both legacy and v1)
 # ═══════════════════════════════════════════════════════════
 
-@router.post("/v1/auth/login", response_model=DriverLoginResponse)
-async def driver_login(req: DriverLoginRequest):
+async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
     """Driver app login. Returns session token."""
     store = _get_store()
     # Find driver by username (simplified)
@@ -278,15 +284,13 @@ async def driver_login(req: DriverLoginRequest):
     )
 
 
-@router.post("/v1/auth/logout")
-async def driver_logout(ctx: Dict = Depends(_authenticate_driver)):
+async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
     store = _get_store()
     store["sessions"].pop(ctx.get("token", ""), None)
     return {"success": True}
 
 
-@router.get("/v1/me", response_model=DriverMeResponse)
-async def driver_me(ctx: Dict = Depends(_authenticate_driver)):
+async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
     store = _get_store()
     driver = store["drivers"].get(ctx["driver_id"])
     if not driver:
@@ -302,15 +306,11 @@ async def driver_me(ctx: Dict = Depends(_authenticate_driver)):
 
 
 # ═══════════════════════════════════════════════════════════
-# DELIVERY ENDPOINTS (Driver-scoped only)
+# DELIVERY ENDPOINTS (shared)
 # ═══════════════════════════════════════════════════════════
 
-@router.get("/v1/deliveries")
-async def driver_list_deliveries(
-    status: Optional[str] = None,
-    limit: int = 20,
-    offset: int = 0,
-    ctx: Dict = Depends(_authenticate_driver),
+async def handle_list_deliveries(
+    ctx: Dict, status: Optional[str] = None, limit: int = 20, offset: int = 0,
 ):
     """List deliveries assigned to THIS driver only."""
     store = _get_store()
@@ -345,15 +345,14 @@ async def driver_list_deliveries(
     return {"deliveries": summaries, "count": len(summaries)}
 
 
-@router.get("/v1/deliveries/{delivery_id}", response_model=DriverDeliveryDetail)
-async def driver_get_delivery(delivery_id: str, ctx: Dict = Depends(_authenticate_driver)):
+async def handle_get_delivery(ctx: Dict, delivery_id: str) -> DriverDeliveryDetail:
     """Get delivery detail for THIS driver only."""
     store = _get_store()
     delivery = store["deliveries"].get(delivery_id)
     if not delivery:
         raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
     if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")  # 404, not 403 (don't reveal existence)
+        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")  # 404, not 403
     if delivery.get("tenant_id") != ctx["tenant_id"]:
         raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
 
@@ -388,12 +387,8 @@ async def driver_get_delivery(delivery_id: str, ctx: Dict = Depends(_authenticat
     )
 
 
-@router.post("/v1/deliveries/{delivery_id}/accept")
-async def driver_accept_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
-                                  ctx: Dict = Depends(_authenticate_driver)):
-    """Driver accepts a delivery assignment."""
+async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
     store = _get_store()
-    # Idempotency check
     replay = _check_idempotency(store, req.idempotency_key)
     if replay:
         return replay
@@ -406,11 +401,9 @@ async def driver_accept_delivery(delivery_id: str, req: ActionRequest = ActionRe
     if delivery.get("tenant_id") != ctx["tenant_id"]:
         raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
 
-    # State check
     if delivery["status"] != "PENDING":
         raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot accept")
 
-    # Optimistic concurrency
     version = delivery.get("version", 1)
     delivery["status"] = "ASSIGNED"
     delivery["version"] = version + 1
@@ -421,10 +414,7 @@ async def driver_accept_delivery(delivery_id: str, req: ActionRequest = ActionRe
     return {"success": True, "version": delivery["version"]}
 
 
-@router.post("/v1/deliveries/{delivery_id}/start")
-async def driver_start_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
-                                 ctx: Dict = Depends(_authenticate_driver)):
-    """Driver starts route for a delivery."""
+async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
     store = _get_store()
     replay = _check_idempotency(store, req.idempotency_key)
     if replay:
@@ -448,10 +438,7 @@ async def driver_start_delivery(delivery_id: str, req: ActionRequest = ActionReq
     return {"success": True, "version": delivery["version"]}
 
 
-@router.post("/v1/deliveries/{delivery_id}/arrive")
-async def driver_arrive_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
-                                  ctx: Dict = Depends(_authenticate_driver)):
-    """Driver arrives at delivery location."""
+async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
     store = _get_store()
     replay = _check_idempotency(store, req.idempotency_key)
     if replay:
@@ -475,10 +462,7 @@ async def driver_arrive_delivery(delivery_id: str, req: ActionRequest = ActionRe
     return {"success": True, "version": delivery["version"]}
 
 
-@router.post("/v1/deliveries/{delivery_id}/complete")
-async def driver_complete_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
-                                    ctx: Dict = Depends(_authenticate_driver)):
-    """Driver completes delivery with optional proof."""
+async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
     store = _get_store()
     replay = _check_idempotency(store, req.idempotency_key)
     if replay:
@@ -505,7 +489,6 @@ async def driver_complete_delivery(delivery_id: str, req: ActionRequest = Action
     if req.notes:
         delivery["driver_notes"] = req.notes
 
-    # Add timeline event
     timeline = delivery.get("timeline", [])
     timeline.append({
         "status": "DELIVERED",
@@ -520,10 +503,7 @@ async def driver_complete_delivery(delivery_id: str, req: ActionRequest = Action
     return {"success": True, "version": delivery["version"]}
 
 
-@router.post("/v1/deliveries/{delivery_id}/fail")
-async def driver_fail_delivery(delivery_id: str, req: ActionRequest,
-                                ctx: Dict = Depends(_authenticate_driver)):
-    """Driver reports delivery failure."""
+async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
     store = _get_store()
     replay = _check_idempotency(store, req.idempotency_key)
     if replay:
@@ -538,7 +518,6 @@ async def driver_fail_delivery(delivery_id: str, req: ActionRequest,
     if delivery["status"] not in ("EN_ROUTE", "ARRIVED"):
         raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot fail")
 
-    # Sanitize notes (no scripts/HTML)
     notes = (req.failure_notes or "").replace("<", "").replace(">", "")
 
     delivery["status"] = "FAILED"
@@ -563,12 +542,10 @@ async def driver_fail_delivery(delivery_id: str, req: ActionRequest,
 
 
 # ═══════════════════════════════════════════════════════════
-# ROUTE ENDPOINTS (Driver-scoped)
+# ROUTE ENDPOINTS (shared)
 # ═══════════════════════════════════════════════════════════
 
-@router.get("/v1/routes")
-async def driver_list_routes(ctx: Dict = Depends(_authenticate_driver)):
-    """List routes assigned to THIS driver."""
+async def handle_list_routes(ctx: Dict) -> Dict:
     store = _get_store()
     routes = [
         r for r in store["routes"].values()
@@ -589,9 +566,7 @@ async def driver_list_routes(ctx: Dict = Depends(_authenticate_driver)):
     return {"routes": summaries, "count": len(summaries)}
 
 
-@router.get("/v1/routes/current")
-async def driver_current_route(ctx: Dict = Depends(_authenticate_driver)):
-    """Get current active route for THIS driver."""
+async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
     store = _get_store()
     for r in store["routes"].values():
         if (r.get("driver_id") == ctx["driver_id"] and
@@ -622,16 +597,13 @@ async def driver_current_route(ctx: Dict = Depends(_authenticate_driver)):
 
 
 # ═══════════════════════════════════════════════════════════
-# LOCATION ENDPOINT
+# LOCATION ENDPOINT (shared)
 # ═══════════════════════════════════════════════════════════
 
-@router.post("/v1/location")
-async def driver_update_location(req: LocationUpdate, ctx: Dict = Depends(_authenticate_driver)):
-    """Update driver GPS location. Rate limited to 1 per 10 sec."""
+async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
     store = _get_store()
     driver_id = ctx["driver_id"]
 
-    # Simple rate limit: 1 update per 10 seconds
     last_loc = store["locations"].get(driver_id)
     if last_loc:
         last_time = datetime.fromisoformat(last_loc["timestamp"])
@@ -652,20 +624,12 @@ async def driver_update_location(req: LocationUpdate, ctx: Dict = Depends(_authe
 
 
 # ═══════════════════════════════════════════════════════════
-# PROOF ENDPOINT
+# PROOF ENDPOINT (shared)
 # ═══════════════════════════════════════════════════════════
 
-@router.post("/v1/proofs")
-async def driver_upload_proof(
-    delivery_id: str = Header(...),
-    proof_type: str = Header(...),
-    notes: str = Header(default=""),
-    ctx: Dict = Depends(_authenticate_driver),
-):
-    """Upload delivery proof (metadata only — actual file upload prepared for future)."""
+async def handle_upload_proof(ctx: Dict, delivery_id: str, proof_type: str, notes: str = "") -> Dict:
     store = _get_store()
 
-    # Validate delivery ownership
     delivery = store["deliveries"].get(delivery_id)
     if not delivery:
         raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
@@ -674,7 +638,6 @@ async def driver_upload_proof(
     if delivery.get("tenant_id") != ctx["tenant_id"]:
         raise HTTPException(403, detail="FORBIDDEN")
 
-    # Validate proof type
     valid_types = {"PHOTO", "SIGNATURE", "OTP", "MANUAL_CONFIRMATION"}
     if proof_type not in valid_types:
         raise HTTPException(400, detail=f"PROOF_INVALID: type={proof_type}")
@@ -693,15 +656,10 @@ async def driver_upload_proof(
 
 
 # ═══════════════════════════════════════════════════════════
-# SYNC ENDPOINT (Offline support)
+# SYNC ENDPOINT (shared)
 # ═══════════════════════════════════════════════════════════
 
-@router.post("/v1/sync")
-async def driver_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver)):
-    """
-    Offline sync endpoint.
-    Accepts batched actions, returns accepted/rejected/conflicts.
-    """
+async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
     store = _get_store()
     driver_id = ctx["driver_id"]
     tenant_id = ctx["tenant_id"]
@@ -716,12 +674,10 @@ async def driver_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver
         idempotency_key = action.get("idempotency_key")
         client_version = action.get("client_version", 0)
 
-        # Idempotency check
         if idempotency_key and idempotency_key in store["idempotency_keys"]:
             accepted.append(idempotency_key)
             continue
 
-        # Delivery ownership check
         delivery = store["deliveries"].get(delivery_id)
         if not delivery:
             rejected.append({"action": action_type, "delivery_id": delivery_id,
@@ -732,7 +688,6 @@ async def driver_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver
                              "error": "FORBIDDEN"})
             continue
 
-        # Optimistic concurrency
         server_version = delivery.get("version", 0)
         if client_version and client_version < server_version:
             conflicts.append({
@@ -744,7 +699,6 @@ async def driver_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver
             })
             continue
 
-        # Apply action
         success = False
         if action_type == "start" and delivery["status"] in ("ASSIGNED", "DISPATCHED"):
             delivery["status"] = "EN_ROUTE"
@@ -779,3 +733,111 @@ async def driver_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver
         conflicts=conflicts,
         next_sync_token=str(uuid.uuid4()),
     )
+
+
+# ═══════════════════════════════════════════════════════════
+# LEGACY ROUTER (backward compatibility: /api/driver/v1/*)
+# ═══════════════════════════════════════════════════════════
+
+router = APIRouter(prefix="/api/driver", tags=["driver-app-legacy"])
+
+
+@router.post("/v1/auth/login", response_model=DriverLoginResponse)
+async def legacy_driver_login(req: DriverLoginRequest):
+    """[LEGACY] Driver app login. Use /api/v1/driver/auth/login instead."""
+    return await handle_driver_login(req)
+
+
+@router.post("/v1/auth/logout")
+async def legacy_driver_logout(ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Driver app logout."""
+    return await handle_driver_logout(ctx)
+
+
+@router.get("/v1/me", response_model=DriverMeResponse)
+async def legacy_driver_me(ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Get driver profile."""
+    return await handle_driver_me(ctx)
+
+
+@router.get("/v1/deliveries")
+async def legacy_list_deliveries(
+    status: Optional[str] = None, limit: int = 20, offset: int = 0,
+    ctx: Dict = Depends(_authenticate_driver),
+):
+    """[LEGACY] List deliveries."""
+    return await handle_list_deliveries(ctx, status=status, limit=limit, offset=offset)
+
+
+@router.get("/v1/deliveries/{delivery_id}", response_model=DriverDeliveryDetail)
+async def legacy_get_delivery(delivery_id: str, ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Get delivery detail."""
+    return await handle_get_delivery(ctx, delivery_id)
+
+
+@router.post("/v1/deliveries/{delivery_id}/accept")
+async def legacy_accept_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
+                                  ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Accept delivery."""
+    return await handle_accept_delivery(ctx, delivery_id, req)
+
+
+@router.post("/v1/deliveries/{delivery_id}/start")
+async def legacy_start_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
+                                 ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Start route."""
+    return await handle_start_delivery(ctx, delivery_id, req)
+
+
+@router.post("/v1/deliveries/{delivery_id}/arrive")
+async def legacy_arrive_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
+                                  ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Arrive at location."""
+    return await handle_arrive_delivery(ctx, delivery_id, req)
+
+
+@router.post("/v1/deliveries/{delivery_id}/complete")
+async def legacy_complete_delivery(delivery_id: str, req: ActionRequest = ActionRequest(),
+                                    ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Complete delivery."""
+    return await handle_complete_delivery(ctx, delivery_id, req)
+
+
+@router.post("/v1/deliveries/{delivery_id}/fail")
+async def legacy_fail_delivery(delivery_id: str, req: ActionRequest,
+                                ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Report failure."""
+    return await handle_fail_delivery(ctx, delivery_id, req)
+
+
+@router.get("/v1/routes")
+async def legacy_list_routes(ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] List routes."""
+    return await handle_list_routes(ctx)
+
+
+@router.get("/v1/routes/current")
+async def legacy_current_route(ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Current active route."""
+    return await handle_current_route(ctx)
+
+
+@router.post("/v1/location")
+async def legacy_update_location(req: LocationUpdate, ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Update GPS location."""
+    return await handle_update_location(ctx, req)
+
+
+@router.post("/v1/proofs")
+async def legacy_upload_proof(
+    delivery_id: str = Header(...), proof_type: str = Header(...),
+    notes: str = Header(default=""), ctx: Dict = Depends(_authenticate_driver),
+):
+    """[LEGACY] Upload delivery proof."""
+    return await handle_upload_proof(ctx, delivery_id, proof_type, notes)
+
+
+@router.post("/v1/sync")
+async def legacy_sync(req: SyncRequest, ctx: Dict = Depends(_authenticate_driver)):
+    """[LEGACY] Offline sync."""
+    return await handle_sync(ctx, req)
