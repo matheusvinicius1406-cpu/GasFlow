@@ -11,10 +11,12 @@ from math import ceil
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
+
+from app.infrastructure.database.dependencies import get_db
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 
-from app.infrastructure.database.connection import SessionLocal
 from app.infrastructure.repositories.financial_repositories import (
     SQLAlchemyPaymentRepository, SQLAlchemyReceivableRepository,
     SQLAlchemyExpenseRepository, SQLAlchemyCashMovementRepository,
@@ -42,33 +44,34 @@ def list_payments(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyPaymentRepository(db)
-        from app.domain.financial.payment import PaymentStatus
-        s = PaymentStatus(status) if status else None
-        items, total = repo.list_all(status=s, page=page, page_size=page_size)
-        return PaymentListResponse(
-            items=[PaymentResponse.model_validate(_to_dict(i)) for i in items],
-            total=total, page=page, page_size=page_size,
-            total_pages=ceil(total / page_size) if page_size else 1,
-        )
-    finally:
-        db.close()
+    repo = SQLAlchemyPaymentRepository(db, ctx.tenant_id)
+    from app.domain.financial.payment import PaymentStatus
+    s = PaymentStatus(status) if status else None
+    items, total = repo.list_all(status=s, page=page, page_size=page_size)
+    return PaymentListResponse(
+        items=[PaymentResponse.model_validate(_to_dict(i)) for i in items],
+        total=total, page=page, page_size=page_size,
+        total_pages=ceil(total / page_size) if page_size else 1,
+    )
 
 
 @router.post("/orders/{order_codigo}/payments", response_model=dict)
-def register_payment(order_codigo: str, data: PaymentCreate, ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
+def register_payment(
+    order_codigo: str,
+    data: PaymentCreate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    uc = RegisterPaymentUseCase(
+        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
+        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+        ledger_repo=SQLAlchemyFinancialLedgerRepository(db, ctx.tenant_id),
+    )
     try:
-        uc = RegisterPaymentUseCase(
-            payment_repo=SQLAlchemyPaymentRepository(db),
-            receivable_repo=SQLAlchemyReceivableRepository(db),
-            cash_repo=SQLAlchemyCashMovementRepository(db),
-            ledger_repo=SQLAlchemyFinancialLedgerRepository(db),
-        )
         result = uc.execute({
             "order_codigo": order_codigo,
             "amount": data.amount,
@@ -83,26 +86,26 @@ def register_payment(order_codigo: str, data: PaymentCreate, ctx: TenantContext 
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
 @router.post("/payments/{payment_id}/refund", response_model=dict)
-def refund_payment(payment_id: int, reason: str = "", ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
+def refund_payment(
+    payment_id: int,
+    reason: str = "",
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    uc = RefundPaymentUseCase(
+        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
+        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+        ledger_repo=SQLAlchemyFinancialLedgerRepository(db, ctx.tenant_id),
+    )
     try:
-        uc = RefundPaymentUseCase(
-            payment_repo=SQLAlchemyPaymentRepository(db),
-            receivable_repo=SQLAlchemyReceivableRepository(db),
-            cash_repo=SQLAlchemyCashMovementRepository(db),
-            ledger_repo=SQLAlchemyFinancialLedgerRepository(db),
-        )
         result = uc.execute(payment_id, reason)
         return {"status": result["status"], "message": "Refund processed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
 # ── Receivables ──────────────────────────────────────
@@ -112,24 +115,21 @@ def list_receivables(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyReceivableRepository(db)
-        if status and status == "OVERDUE":
-            items, total = repo.list_overdue(page=page, page_size=page_size)
-        elif status and status in ("OPEN", "PARTIAL"):
-            items, total = repo.list_open(page=page, page_size=page_size)
-        else:
-            items, total = repo.list_open(page=page, page_size=page_size)
-        return ReceivableListResponse(
-            items=[_receivable_to_response(i) for i in items],
-            total=total, page=page, page_size=page_size,
-            total_pages=ceil(total / page_size) if page_size else 1,
-        )
-    finally:
-        db.close()
+    repo = SQLAlchemyReceivableRepository(db, ctx.tenant_id)
+    if status and status == "OVERDUE":
+        items, total = repo.list_overdue(page=page, page_size=page_size)
+    elif status and status in ("OPEN", "PARTIAL"):
+        items, total = repo.list_open(page=page, page_size=page_size)
+    else:
+        items, total = repo.list_open(page=page, page_size=page_size)
+    return ReceivableListResponse(
+        items=[_receivable_to_response(i) for i in items],
+        total=total, page=page, page_size=page_size,
+        total_pages=ceil(total / page_size) if page_size else 1,
+    )
 
 
 # ── Expenses ─────────────────────────────────────────
@@ -139,32 +139,32 @@ def list_expenses(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyExpenseRepository(db)
-        from app.domain.financial.expense import ExpenseStatus
-        s = ExpenseStatus(status) if status else None
-        items, total = repo.list_all(status=s, page=page, page_size=page_size)
-        return ExpenseListResponse(
-            items=[ExpenseResponse.model_validate(_to_dict(i)) for i in items],
-            total=total, page=page, page_size=page_size,
-            total_pages=ceil(total / page_size) if page_size else 1,
-        )
-    finally:
-        db.close()
+    repo = SQLAlchemyExpenseRepository(db, ctx.tenant_id)
+    from app.domain.financial.expense import ExpenseStatus
+    s = ExpenseStatus(status) if status else None
+    items, total = repo.list_all(status=s, page=page, page_size=page_size)
+    return ExpenseListResponse(
+        items=[ExpenseResponse.model_validate(_to_dict(i)) for i in items],
+        total=total, page=page, page_size=page_size,
+        total_pages=ceil(total / page_size) if page_size else 1,
+    )
 
 
 @router.post("/expenses", response_model=dict)
-def register_expense(data: ExpenseCreate, ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
+def register_expense(
+    data: ExpenseCreate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    uc = RegisterExpenseUseCase(
+        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+        ledger_repo=SQLAlchemyFinancialLedgerRepository(db, ctx.tenant_id),
+    )
     try:
-        uc = RegisterExpenseUseCase(
-            expense_repo=SQLAlchemyExpenseRepository(db),
-            cash_repo=SQLAlchemyCashMovementRepository(db),
-            ledger_repo=SQLAlchemyFinancialLedgerRepository(db),
-        )
         result = uc.execute({
             "description": data.description,
             "amount": data.amount,
@@ -176,21 +176,19 @@ def register_expense(data: ExpenseCreate, ctx: TenantContext = Depends(get_tenan
         return {"status": "created", "expense": ExpenseResponse.model_validate(_to_dict(result["expense"]))}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
 @router.post("/expenses/{expense_id}/cancel", response_model=dict)
-def cancel_expense(expense_id: int, ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyExpenseRepository(db)
-        expense = repo.cancel(expense_id)
-        if not expense:
-            raise HTTPException(status_code=404, detail="Expense not found")
-        return {"status": "cancelled", "expense": ExpenseResponse.model_validate(_to_dict(expense))}
-    finally:
-        db.close()
+def cancel_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    repo = SQLAlchemyExpenseRepository(db, ctx.tenant_id)
+    expense = repo.cancel(expense_id)
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"status": "cancelled", "expense": ExpenseResponse.model_validate(_to_dict(expense))}
 
 
 # ── Cash Movements ───────────────────────────────────
@@ -200,51 +198,47 @@ def list_cash_movements(
     type_filter: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyCashMovementRepository(db)
-        from app.domain.financial.cash_movement import CashMovementType
-        t = CashMovementType(type_filter) if type_filter else None
-        items, total = repo.list_all(type_filter=t, page=page, page_size=page_size)
-        return CashMovementListResponse(
-            items=[CashMovementResponse.model_validate(_to_dict(i)) for i in items],
-            total=total, page=page, page_size=page_size,
-            total_pages=ceil(total / page_size) if page_size else 1,
-        )
-    finally:
-        db.close()
+    repo = SQLAlchemyCashMovementRepository(db, ctx.tenant_id)
+    from app.domain.financial.cash_movement import CashMovementType
+    t = CashMovementType(type_filter) if type_filter else None
+    items, total = repo.list_all(type_filter=t, page=page, page_size=page_size)
+    return CashMovementListResponse(
+        items=[CashMovementResponse.model_validate(_to_dict(i)) for i in items],
+        total=total, page=page, page_size=page_size,
+        total_pages=ceil(total / page_size) if page_size else 1,
+    )
 
 
 @router.get("/cash/balance", response_model=dict)
-def get_cash_balance(ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyCashMovementRepository(db)
-        balance = repo.current_balance()
-        return {"balance": balance}
-    finally:
-        db.close()
+def get_cash_balance(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    repo = SQLAlchemyCashMovementRepository(db, ctx.tenant_id)
+    balance = repo.current_balance()
+    return {"balance": balance}
 
 
 # ── Reports ──────────────────────────────────────────
 
 @router.get("/reports/daily", response_model=DailySummaryResponse)
-def daily_report(date: Optional[str] = Query(None), ctx: TenantContext = Depends(get_tenant_context)):
-    db = SessionLocal()
-    try:
-        target_date = datetime.fromisoformat(date) if date else datetime.utcnow()
-        uc = FinancialReportsUseCase(
-            payment_repo=SQLAlchemyPaymentRepository(db),
-            receivable_repo=SQLAlchemyReceivableRepository(db),
-            expense_repo=SQLAlchemyExpenseRepository(db),
-            cash_repo=SQLAlchemyCashMovementRepository(db),
-        )
-        result = uc.daily_summary(target_date)
-        return DailySummaryResponse(**result)
-    finally:
-        db.close()
+def daily_report(
+    date: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    target_date = datetime.fromisoformat(date) if date else datetime.utcnow()
+    uc = FinancialReportsUseCase(
+        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
+        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
+        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+    )
+    result = uc.daily_summary(target_date)
+    return DailySummaryResponse(**result)
 
 
 # ── Helpers ──────────────────────────────────────────

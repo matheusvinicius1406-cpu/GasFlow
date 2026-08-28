@@ -12,6 +12,7 @@ from app.domain.whatsapp.entity import (
 )
 from app.domain.whatsapp.repository import WhatsAppRepository
 from app.infrastructure.repositories.whatsapp_model import (
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
     WhatsAppConversationModel,
     WhatsAppMessageModel,
 )
@@ -20,8 +21,8 @@ from app.infrastructure.repositories.whatsapp_model import (
 class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
     """Implementação do repositório de WhatsApp usando SQLAlchemy."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     # ── Conversas ──────────────────────────────────────────
 

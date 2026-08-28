@@ -15,7 +15,8 @@ from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
-from app.infrastructure.database.connection import SessionLocal
+from sqlalchemy.orm import Session
+from app.infrastructure.database.dependencies import get_db
 from app.infrastructure.ai.mock_provider import MockLLMProvider
 from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository, SQLAlchemyMessageRepository
 from app.application.ai.engine import AIEngine
@@ -192,9 +193,8 @@ def _get_tools():
 # ── Endpoints ─────────────────────────────────────────
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest, ctx: TenantContext = Depends(get_tenant_context)):
+def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
     """Main AI chat endpoint."""
-    db = SessionLocal()
     try:
         engine = _get_engine()
         engine.conversation_repo = SQLAlchemyConversationRepository(db)
@@ -225,8 +225,6 @@ def chat(request: ChatRequest, ctx: TenantContext = Depends(get_tenant_context))
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI processing error: {str(e)}")
-    finally:
-        db.close()
 
 
 @router.get("/tools", response_model=List[ToolInfo])
@@ -244,22 +242,18 @@ def list_tools():
 
 
 @router.get("/conversations", response_model=List[ConversationInfo])
-def list_conversations(ctx: TenantContext = Depends(get_tenant_context)):
+def list_conversations(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
     """List recent conversations."""
-    db = SessionLocal()
-    try:
-        repo = SQLAlchemyConversationRepository(db)
-        convs = repo.list_all(limit=20)
-        return [
-            ConversationInfo(
-                external_id=c.external_id, title=c.title,
-                created_at=c.created_at.isoformat() if c.created_at else None,
-                message_count=len(c.messages),
-            )
-            for c in convs
-        ]
-    finally:
-        db.close()
+    repo = SQLAlchemyConversationRepository(db)
+    convs = repo.list_all(limit=20)
+    return [
+        ConversationInfo(
+            external_id=c.external_id, title=c.title,
+            created_at=c.created_at.isoformat() if c.created_at else None,
+            message_count=len(c.messages),
+        )
+        for c in convs
+    ]
 
 
 @router.get("/audit")

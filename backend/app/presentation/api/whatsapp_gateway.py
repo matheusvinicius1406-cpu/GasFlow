@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from app.infrastructure.database.connection import SessionLocal
+from sqlalchemy.orm import Session
+from app.infrastructure.database.dependencies import get_db
 from app.infrastructure.whatsapp.repositories import (
     SQLAlchemyConversationRepository,
     SQLAlchemyConversationMessageRepository,
@@ -83,10 +84,10 @@ class ReplyRequest(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────
 
-def _build_tool_registry(session) -> ToolRegistry:
+def _build_tool_registry(db) -> ToolRegistry:
     """Build tool registry for AI engine."""
     registry = ToolRegistry()
-    factory = AIToolsFactory(db_session=session)
+    factory = AIToolsFactory(db_db=db)
 
     registry.register(ToolDefinition(
         name="get_customer", description="Buscar cliente",
@@ -197,49 +198,47 @@ def _build_tool_registry(session) -> ToolRegistry:
 # ── Endpoints ────────────────────────────────────────────
 
 @router.post("/incoming", response_model=IncomingMessageResponse)
-async def process_incoming(req: IncomingMessageRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def process_incoming(req: IncomingMessageRequest, db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
     """Process incoming WhatsApp message through AI pipeline."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        registry = _build_tool_registry(session)
-        provider = MockLLMProvider()
-        ai_engine = AIEngine(llm_provider=provider, tool_registry=registry)
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    registry = _build_tool_registry(db)
+    provider = MockLLMProvider()
+    ai_engine = AIEngine(llm_provider=provider, tool_registry=registry)
 
-        # Get repositories for customer/product resolution
-        from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
-        from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
-        from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+    # Get repositories for customer/product resolution
+    from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+    from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
+    from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 
-        gateway = MessageGateway(
-            conversation_repo=conv_repo,
-            message_repo=msg_repo,
-            ai_engine=ai_engine,
-            customer_repository=SQLAlchemyClientRepository(session),
-            product_repository=SQLAlchemyProductRepository(session),
-            inventory_repository=SQLAlchemyInventoryRepository(session),
-        )
+    gateway = MessageGateway(
+        conversation_repo=conv_repo,
+        message_repo=msg_repo,
+        ai_engine=ai_engine,
+        customer_repository=SQLAlchemyClientRepository(db),
+        product_repository=SQLAlchemyProductRepository(db),
+        inventory_repository=SQLAlchemyInventoryRepository(db),
+    )
 
-        result = gateway.process_incoming({
-            "account_id": req.account_id,
-            "sender_phone": req.sender_phone,
-            "provider_message_id": req.provider_message_id,
-            "text": req.text,
-            "message_type": req.message_type,
-            "from_me": req.from_me,
-        })
+    result = gateway.process_incoming({
+        "account_id": req.account_id,
+        "sender_phone": req.sender_phone,
+        "provider_message_id": req.provider_message_id,
+        "text": req.text,
+        "message_type": req.message_type,
+        "from_me": req.from_me,
+    })
 
-        outbound = result.get("outbound")
-        return IncomingMessageResponse(
-            status=result.get("status", "error"),
-            conversation_id=result.get("conversation_id"),
-            outbound_text=outbound.text if outbound else None,
-            outbound_to=outbound.recipient_phone if outbound else None,
-            error=result.get("error"),
-        )
-    finally:
-        session.close()
+    outbound = result.get("outbound")
+    return IncomingMessageResponse(
+        status=result.get("status", "error"),
+        conversation_id=result.get("conversation_id"),
+        outbound_text=outbound.text if outbound else None,
+        outbound_to=outbound.recipient_phone if outbound else None,
+        error=result.get("error"),
+    )
 
 
 @router.get("/conversations")
@@ -249,131 +248,118 @@ async def list_conversations(
     offset: int = Query(0, ge=0),
 ):
     """List active WhatsApp conversations."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        conversations, total = conv_repo.list_active(account_id=account_id, limit=limit, offset=offset)
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    conversations, total = conv_repo.list_active(account_id=account_id, limit=limit, offset=offset)
 
-        items = []
-        for conv in conversations:
-            messages = msg_repo.list_by_conversation(conv.id, limit=1, offset=0)
-            last_msg = messages[-1].content if messages else None
-            msg_count = msg_repo.count_by_conversation(conv.id)
-            items.append(ConversationInfo(
-                id=conv.id,
-                account_id=conv.account_id,
-                customer_phone=conv.customer_phone,
-                customer_codigo=conv.customer_codigo,
-                state=conv.state.value,
-                human_operator=conv.human_operator,
-                message_count=msg_count,
-                last_message=last_msg[:200] if last_msg else None,
-                created_at=conv.created_at.isoformat() if conv.created_at else None,
-                updated_at=conv.updated_at.isoformat() if conv.updated_at else None,
-            ).model_dump())
-        return {"conversations": items, "total": total}
-    finally:
-        session.close()
-
-
-@router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: int, ctx: TenantContext = Depends(get_tenant_context)):
-    """Get conversation detail with messages."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        conv = conv_repo.find_by_id(conversation_id)
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversa não encontrada.")
-
-        messages = msg_repo.list_by_conversation(conversation_id, limit=200)
-        msg_list = [{
-            "id": m.id,
-            "direction": m.direction,
-            "sender": m.sender,
-            "content": m.content,
-            "message_type": m.message_type,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        } for m in messages]
-
-        return ConversationDetail(
+    items = []
+    for conv in conversations:
+        messages = msg_repo.list_by_conversation(conv.id, limit=1, offset=0)
+        last_msg = messages[-1].content if messages else None
+        msg_count = msg_repo.count_by_conversation(conv.id)
+        items.append(ConversationInfo(
             id=conv.id,
             account_id=conv.account_id,
             customer_phone=conv.customer_phone,
             customer_codigo=conv.customer_codigo,
             state=conv.state.value,
             human_operator=conv.human_operator,
-            draft=conv.draft.to_dict() if conv.draft else None,
-            messages=msg_list,
+            message_count=msg_count,
+            last_message=last_msg[:200] if last_msg else None,
             created_at=conv.created_at.isoformat() if conv.created_at else None,
             updated_at=conv.updated_at.isoformat() if conv.updated_at else None,
-        ).model_dump()
-    finally:
-        session.close()
+        ).model_dump())
+    return {"conversations": items, "total": total}
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: int, db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
+    """Get conversation detail with messages."""
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    conv = conv_repo.find_by_id(conversation_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    messages = msg_repo.list_by_conversation(conversation_id, limit=200)
+    msg_list = [{
+        "id": m.id,
+        "direction": m.direction,
+        "sender": m.sender,
+        "content": m.content,
+        "message_type": m.message_type,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    } for m in messages]
+
+    return ConversationDetail(
+        id=conv.id,
+        account_id=conv.account_id,
+        customer_phone=conv.customer_phone,
+        customer_codigo=conv.customer_codigo,
+        state=conv.state.value,
+        human_operator=conv.human_operator,
+        draft=conv.draft.to_dict() if conv.draft else None,
+        messages=msg_list,
+        created_at=conv.created_at.isoformat() if conv.created_at else None,
+        updated_at=conv.updated_at.isoformat() if conv.updated_at else None,
+    ).model_dump()
 
 
 @router.post("/conversations/{conversation_id}/takeover")
-async def takeover_conversation(conversation_id: int, req: TakeoverRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def takeover_conversation(conversation_id: int, req: TakeoverRequest, db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
     """Operator takes over conversation."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        operator_gw = OperatorGateway(conv_repo, msg_repo)
-        result = operator_gw.takeover(conversation_id, req.operator)
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True, "message": f"Operador {req.operator} assumiu a conversa."}
-    finally:
-        session.close()
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    operator_gw = OperatorGateway(conv_repo, msg_repo)
+    result = operator_gw.takeover(conversation_id, req.operator)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"success": True, "message": f"Operador {req.operator} assumiu a conversa."}
 
 
 @router.post("/conversations/{conversation_id}/release")
-async def release_conversation(conversation_id: int, ctx: TenantContext = Depends(get_tenant_context)):
+async def release_conversation(conversation_id: int, db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
     """Release conversation back to AI."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        operator_gw = OperatorGateway(conv_repo, msg_repo)
-        result = operator_gw.release_to_ai(conversation_id)
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True, "message": "Conversa devolvida à IA."}
-    finally:
-        session.close()
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    operator_gw = OperatorGateway(conv_repo, msg_repo)
+    result = operator_gw.release_to_ai(conversation_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"success": True, "message": "Conversa devolvida à IA."}
 
 
 @router.post("/conversations/{conversation_id}/reply")
-async def operator_reply(conversation_id: int, req: ReplyRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def operator_reply(conversation_id: int, req: ReplyRequest, db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
     """Operator sends manual reply."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        msg_repo = SQLAlchemyConversationMessageRepository(session)
-        operator_gw = OperatorGateway(conv_repo, msg_repo)
-        result = operator_gw.send_manual_reply(conversation_id, "operator", req.text)
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True, "message": "Resposta enviada."}
-    finally:
-        session.close()
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    msg_repo = SQLAlchemyConversationMessageRepository(db)
+    operator_gw = OperatorGateway(conv_repo, msg_repo)
+    result = operator_gw.send_manual_reply(conversation_id, "operator", req.text)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"success": True, "message": "Resposta enviada."}
 
 
 @router.get("/stats")
-async def get_stats(ctx: TenantContext = Depends(get_tenant_context)):
+async def get_stats(db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context)):
     """Get conversation statistics."""
-    session = SessionLocal()
-    try:
-        conv_repo = SQLAlchemyConversationRepository(session)
-        return {
-            "active_conversations": conv_repo.count_active(),
-            "by_account": {
-                a: conv_repo.count_active(account_id=a)
-                for a in ["primary", "secondary"]
-            },
-        }
-    finally:
-        session.close()
+    
+    conv_repo = SQLAlchemyConversationRepository(db)
+    return {
+        "active_conversations": conv_repo.count_active(),
+        "by_account": {
+            a: conv_repo.count_active(account_id=a)
+            for a in ["primary", "secondary"]
+        },
+    }
