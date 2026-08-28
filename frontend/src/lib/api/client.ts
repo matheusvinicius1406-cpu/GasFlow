@@ -116,6 +116,28 @@ export const api = {
     disable: (codigo: string) => apiClient.patch(`/delivery-drivers/${codigo}/disable`),
   },
 
+  // Delivery Operations — FASE 14
+  deliveryOps: {
+    listDeliveries: (params?: { status?: string; driver_id?: string }) =>
+      apiClient.get('/delivery/deliveries', { params }),
+    getDelivery: (id: string) => apiClient.get(`/delivery/deliveries/${id}`),
+    createDelivery: (data: unknown) => apiClient.post('/delivery/deliveries', data),
+    assignDelivery: (id: string, data: unknown) => apiClient.patch(`/delivery/deliveries/${id}/assign`, data),
+    updateStatus: (id: string, data: unknown) => apiClient.patch(`/delivery/deliveries/${id}/status`, data),
+    listDrivers: (params?: { status?: string }) =>
+      apiClient.get('/delivery/drivers', { params }),
+    getDriver: (id: string) => apiClient.get(`/delivery/drivers/${id}`),
+    dispatchSummary: () => apiClient.get('/delivery/dispatch/summary'),
+    listVehicles: () => apiClient.get('/delivery/vehicles'),
+    listRoutes: () => apiClient.get('/delivery/routes'),
+  },
+
+  // Finance Reports
+  financeReports: {
+    daily: (date?: string) => apiClient.get('/finance/reports/daily', { params: { date } }),
+    cashBalance: () => apiClient.get('/finance/cash/balance'),
+  },
+
   // WhatsApp
   whatsapp: {
     status: () => apiClient.get('/whatsapp/status'),
