@@ -10,6 +10,7 @@ from app.infrastructure.database.base import Base
 class ConversationModel(Base):
     __tablename__ = "ai_conversations"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     external_id = Column(String(36), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=True)
@@ -20,6 +21,7 @@ class ConversationModel(Base):
 class AIMessageModel(Base):
     __tablename__ = "ai_messages"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(String(36), nullable=False, index=True)
     role = Column(String(20), nullable=False)  # user, assistant, system, tool_call, tool_result
@@ -31,6 +33,7 @@ class AIMessageModel(Base):
 class AIAuditLogModel(Base):
     __tablename__ = "ai_audit_log"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     request_id = Column(String(32), nullable=False, index=True)
     conversation_id = Column(String(36), nullable=True)

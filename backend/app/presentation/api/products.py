@@ -25,8 +25,8 @@ router = APIRouter(
 )
 
 
-def _get_repository(db: Session = Depends(get_db)):
-    return SQLAlchemyProductRepository(db)
+def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
+    return SQLAlchemyProductRepository(db, ctx.tenant_id)
 
 
 @router.post("/", response_model=ProductResponse)

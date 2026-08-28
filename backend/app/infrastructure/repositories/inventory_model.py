@@ -17,6 +17,7 @@ class InventoryModel(Base):
     """Inventory — single source of truth for stock quantity."""
     __tablename__ = "inventory"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     product_codigo = Column(
         String,

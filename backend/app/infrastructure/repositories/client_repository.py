@@ -10,13 +10,14 @@ from sqlalchemy.orm import Session
 from app.domain.client.entity import Client, normalize_phone
 from app.domain.client.repository import ClientRepository
 from app.infrastructure.repositories.client_model import ClientModel
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
 
-class SQLAlchemyClientRepository(ClientRepository):
+class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
     """Implementação do repositório de clientes usando SQLAlchemy."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, model: ClientModel) -> Client:
         """Converte modelo SQLAlchemy para entidade de domínio."""
@@ -60,6 +61,7 @@ class SQLAlchemyClientRepository(ClientRepository):
                 return model
 
         return ClientModel(
+            tenant_id=self.tenant_id,
             codigo=entity.codigo,
             nome=entity.nome,
             telefone=entity.telefone,
@@ -77,6 +79,7 @@ class SQLAlchemyClientRepository(ClientRepository):
 
     def criar(self, client: Client) -> Client:
         model = self._to_model(client)
+        model.tenant_id = self.tenant_id
         self.db.add(model)
         try:
             self.db.commit()
@@ -89,29 +92,29 @@ class SQLAlchemyClientRepository(ClientRepository):
         return self._to_entity(model)
 
     def buscar_por_codigo(self, codigo: str) -> Optional[Client]:
-        model = self.db.query(ClientModel).filter(ClientModel.codigo == codigo).first()
+        model = self._filter_by_tenant(ClientModel).filter(ClientModel.codigo == codigo).first()
         return self._to_entity(model) if model else None
 
     def buscar_por_id(self, id: int) -> Optional[Client]:
-        model = self.db.query(ClientModel).filter(ClientModel.id == id).first()
+        model = self._filter_by_tenant(ClientModel).filter(ClientModel.id == id).first()
         return self._to_entity(model) if model else None
 
     def buscar_por_telefone(self, telefone: str) -> Optional[Client]:
         normalized = normalize_phone(telefone)
-        model = self.db.query(ClientModel).filter(
+        model = self._filter_by_tenant(ClientModel).filter(
             ClientModel.telefone == normalized
         ).first()
         return self._to_entity(model) if model else None
 
     def listar_todos(self) -> List[Client]:
-        models = self.db.query(ClientModel).filter(ClientModel.ativo == True).all()
+        models = self._filter_by_tenant(ClientModel).filter(ClientModel.ativo == True).all()
         return [self._to_entity(m) for m in models]
 
     def buscar(self, query: str = "", tipo: Optional[str] = None,
                ativo: Optional[bool] = None,
                page: int = 1, page_size: int = 20) -> Tuple[List[Client], int]:
         """Busca clientes com filtros, paginação e contagem total."""
-        q = self.db.query(ClientModel)
+        q = self._filter_by_tenant(ClientModel)
 
         if query:
             search = f"%{query}%"
@@ -144,7 +147,7 @@ class SQLAlchemyClientRepository(ClientRepository):
         return self._to_entity(model)
 
     def desativar(self, codigo: str) -> Optional[Client]:
-        model = self.db.query(ClientModel).filter(ClientModel.codigo == codigo).first()
+        model = self._filter_by_tenant(ClientModel).filter(ClientModel.codigo == codigo).first()
         if not model:
             return None
         model.ativo = False

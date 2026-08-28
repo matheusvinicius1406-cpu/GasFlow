@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from app.domain.delivery.entity import DeliveryDriver
 from app.domain.delivery.repository import DeliveryDriverRepository
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
 
-class SQLAlchemyDeliveryDriverRepository(DeliveryDriverRepository):
+class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
     """Implementação do repositório de entregadores usando SQLAlchemy."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, model: DeliveryDriverModel) -> DeliveryDriver:
         return DeliveryDriver(

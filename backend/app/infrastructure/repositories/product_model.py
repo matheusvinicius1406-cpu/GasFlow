@@ -10,6 +10,7 @@ from app.infrastructure.database.base import Base
 class ProductModel(Base):
     __tablename__ = "products"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     codigo = Column(String, unique=True, index=True)
     nome = Column(String, nullable=False)

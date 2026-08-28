@@ -17,6 +17,7 @@ from app.infrastructure.database.base import Base
 class WhatsAppConversationModel(Base):
     __tablename__ = "whatsapp_conversations"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(String(50), nullable=False, default="primary", index=True)
     phone_number = Column(String(20), nullable=False, index=True)

@@ -12,6 +12,7 @@ from app.infrastructure.database.base import Base
 class OrderItemModel(Base):
     __tablename__ = "order_items"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     order_codigo = Column(String, ForeignKey("orders.codigo"), nullable=False, index=True)
     product_codigo = Column(String, nullable=False)

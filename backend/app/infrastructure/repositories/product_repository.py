@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from app.domain.product.entity import Product
 from app.domain.product.repository import ProductRepository
 from app.infrastructure.repositories.product_model import ProductModel
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
 
-class SQLAlchemyProductRepository(ProductRepository):
+class SQLAlchemyProductRepository(TenantMixin, ProductRepository):
     """Implementação do repositório de produtos usando SQLAlchemy."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, model: ProductModel) -> Product:
         return Product(

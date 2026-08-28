@@ -40,14 +40,14 @@ router = APIRouter(
 )
 
 
-def _get_repositories(db: Session = Depends(get_db)):
+def _get_repositories(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
     return {
-        "order": SQLAlchemyOrderRepository(db),
-        "order_item": SQLAlchemyOrderItemRepository(db),
-        "client": SQLAlchemyClientRepository(db),
-        "product": SQLAlchemyProductRepository(db),
-        "delivery": SQLAlchemyDeliveryDriverRepository(db),
-        "inventory": SQLAlchemyInventoryRepository(db),
+        "order": SQLAlchemyOrderRepository(db, ctx.tenant_id),
+        "order_item": SQLAlchemyOrderItemRepository(db, ctx.tenant_id),
+        "client": SQLAlchemyClientRepository(db, ctx.tenant_id),
+        "product": SQLAlchemyProductRepository(db, ctx.tenant_id),
+        "delivery": SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id),
+        "inventory": SQLAlchemyInventoryRepository(db, ctx.tenant_id),
     }
 
 

@@ -17,13 +17,14 @@ from app.domain.inventory.entity import Inventory
 from app.domain.inventory.stock_movement import StockMovement, MovementType
 from app.domain.inventory.repository import InventoryRepository
 from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
 
-class SQLAlchemyInventoryRepository(InventoryRepository):
+class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
     """Implementation with atomic stock operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     # ── Entity Conversion ──────────────────────────────────
 

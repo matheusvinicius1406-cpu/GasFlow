@@ -24,8 +24,8 @@ router = APIRouter(
 )
 
 
-def _get_repository(db: Session = Depends(get_db)):
-    return SQLAlchemyDeliveryDriverRepository(db)
+def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
+    return SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
 
 
 @router.post("/", response_model=DeliveryDriverResponse)

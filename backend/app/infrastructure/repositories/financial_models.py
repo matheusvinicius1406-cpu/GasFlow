@@ -17,6 +17,7 @@ from app.infrastructure.database.base import Base
 class PaymentModel(Base):
     __tablename__ = "payments"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     order_codigo = Column(
         String, ForeignKey("orders.codigo"), nullable=False, index=True
@@ -40,6 +41,7 @@ class PaymentModel(Base):
 class ReceivableModel(Base):
     __tablename__ = "receivables"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     customer_codigo = Column(
         String, ForeignKey("clients.codigo"), nullable=False, index=True
@@ -65,6 +67,7 @@ class ReceivableModel(Base):
 class ExpenseModel(Base):
     __tablename__ = "expenses"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     description = Column(Text, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
@@ -85,6 +88,7 @@ class ExpenseModel(Base):
 class CashMovementModel(Base):
     __tablename__ = "cash_movements"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     type = Column(String, nullable=False)  # RECEIPT, EXPENSE, REFUND, ADJUSTMENT
     amount = Column(Numeric(10, 2), nullable=False)
@@ -104,6 +108,7 @@ class CashMovementModel(Base):
 class FinancialLedgerModel(Base):
     __tablename__ = "financial_ledger"
 
+    tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     event_type = Column(String, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
