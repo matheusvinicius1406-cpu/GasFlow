@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 from sqlalchemy import func, text
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
@@ -34,9 +35,9 @@ def _to_decimal(val) -> Decimal:
     return Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-class SQLAlchemyPaymentRepository(PaymentRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, m: PaymentModel) -> Payment:
         return Payment(
@@ -120,9 +121,9 @@ class SQLAlchemyPaymentRepository(PaymentRepository):
         ).count() > 0
 
 
-class SQLAlchemyReceivableRepository(ReceivableRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, m: ReceivableModel) -> Receivable:
         return Receivable(
@@ -223,9 +224,9 @@ class SQLAlchemyReceivableRepository(ReceivableRepository):
         return result.rowcount
 
 
-class SQLAlchemyExpenseRepository(ExpenseRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, m: ExpenseModel) -> Expense:
         return Expense(
@@ -290,9 +291,9 @@ class SQLAlchemyExpenseRepository(ExpenseRepository):
         return _to_decimal(result)
 
 
-class SQLAlchemyCashMovementRepository(CashMovementRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, m: CashMovementModel) -> CashMovement:
         return CashMovement(
@@ -357,9 +358,9 @@ class SQLAlchemyCashMovementRepository(CashMovementRepository):
         return _to_decimal(result)
 
 
-class SQLAlchemyFinancialLedgerRepository(FinancialLedgerRepository):
-    def __init__(self, db: Session):
-        self.db = db
+class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository):
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, m: FinancialLedgerModel) -> FinancialLedgerEntry:
         return FinancialLedgerEntry(

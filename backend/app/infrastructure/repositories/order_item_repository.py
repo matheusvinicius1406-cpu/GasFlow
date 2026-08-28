@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from app.domain.order_item.entity import OrderItem
 from app.domain.order_item.repository import OrderItemRepository
 from app.infrastructure.repositories.order_item_model import OrderItemModel
+from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
 
-class SQLAlchemyOrderItemRepository(OrderItemRepository):
+class SQLAlchemyOrderItemRepository(TenantMixin, OrderItemRepository):
     """Implementação do repositório de itens de pedido usando SQLAlchemy."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
 
     def _to_entity(self, model: OrderItemModel) -> OrderItem:
         return OrderItem(
