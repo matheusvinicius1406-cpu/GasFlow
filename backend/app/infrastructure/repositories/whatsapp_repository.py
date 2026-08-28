@@ -40,7 +40,7 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
 
     def _to_conversation_model(self, entity: WhatsAppConversation) -> WhatsAppConversationModel:
         if entity.id:
-            model = self.db.query(WhatsAppConversationModel).filter(
+            model = self._filter_by_tenant(WhatsAppConversationModel).filter(
                 WhatsAppConversationModel.id == entity.id
             ).first()
             if model:
@@ -60,7 +60,7 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
         )
 
     def buscar_conversa_por_telefone(self, phone_number: str) -> Optional[WhatsAppConversation]:
-        model = self.db.query(WhatsAppConversationModel).filter(
+        model = self._filter_by_tenant(WhatsAppConversationModel).filter(
             WhatsAppConversationModel.phone_number == phone_number
         ).first()
         return self._to_conversation_entity(model) if model else None
@@ -107,7 +107,7 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
         return self._to_message_entity(model)
 
     def listar_mensagens(self, conversation_id: int, limit: int = 50) -> List[WhatsAppMessage]:
-        models = self.db.query(WhatsAppMessageModel).filter(
+        models = self._filter_by_tenant(WhatsAppMessageModel).filter(
             WhatsAppMessageModel.conversation_id == conversation_id
         ).order_by(WhatsAppMessageModel.created_at.desc()).limit(limit).all()
         return [self._to_message_entity(m) for m in reversed(models)]
@@ -116,5 +116,5 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
 
     def buscar_cliente_por_telefone(self, phone_number: str) -> Optional[str]:
         from app.infrastructure.repositories.client_model import ClientModel
-        client = self.db.query(ClientModel).filter(ClientModel.telefone == phone_number).first()
+        client = self._filter_by_tenant(ClientModel).filter(ClientModel.telefone == phone_number).first()
         return client.codigo if client else None

@@ -29,7 +29,7 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
 
     def _to_model(self, entity: DeliveryDriver) -> DeliveryDriverModel:
         if entity.id:
-            model = self.db.query(DeliveryDriverModel).filter(DeliveryDriverModel.id == entity.id).first()
+            model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.id == entity.id).first()
             if model:
                 model.codigo = entity.codigo
                 model.nome = entity.nome
@@ -39,6 +39,7 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
                 return model
 
         return DeliveryDriverModel(
+            tenant_id=self.tenant_id,
             codigo=entity.codigo,
             nome=entity.nome,
             telefone=entity.telefone,
@@ -48,21 +49,22 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
 
     def criar(self, driver: DeliveryDriver) -> DeliveryDriver:
         model = self._to_model(driver)
+        model.tenant_id = self.tenant_id
         self.db.add(model)
         self.db.commit()
         self.db.refresh(model)
         return self._to_entity(model)
 
     def buscar_por_codigo(self, codigo: str) -> Optional[DeliveryDriver]:
-        model = self.db.query(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
         return self._to_entity(model) if model else None
 
     def listar_todos(self) -> List[DeliveryDriver]:
-        models = self.db.query(DeliveryDriverModel).filter(DeliveryDriverModel.ativo == True).all()
+        models = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.ativo == True).all()
         return [self._to_entity(m) for m in models]
 
     def desativar(self, codigo: str) -> Optional[DeliveryDriver]:
-        model = self.db.query(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
         if not model:
             return None
         model.ativo = False
@@ -71,7 +73,7 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
         return self._to_entity(model)
 
     def proximo_codigo(self) -> str:
-        last = self.db.query(DeliveryDriverModel).order_by(DeliveryDriverModel.id.desc()).first()
+        last = self._filter_by_tenant(DeliveryDriverModel).order_by(DeliveryDriverModel.id.desc()).first()
         if not last:
             return "000001"
         next_id = int(last.codigo) + 1

@@ -46,13 +46,13 @@ class SQLAlchemyOrderItemRepository(TenantMixin, OrderItemRepository):
         return self._to_entity(model)
 
     def listar_por_pedido(self, order_codigo: str) -> List[OrderItem]:
-        models = self.db.query(OrderItemModel).filter(
+        models = self._filter_by_tenant(OrderItemModel).filter(
             OrderItemModel.order_codigo == order_codigo
         ).all()
         return [self._to_entity(m) for m in models]
 
     def deletar_por_pedido(self, order_codigo: str) -> int:
-        result = self.db.query(OrderItemModel).filter(
+        result = self._filter_by_tenant(OrderItemModel).filter(
             OrderItemModel.order_codigo == order_codigo
         ).delete()
         self.db.commit()

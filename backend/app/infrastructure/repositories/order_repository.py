@@ -38,7 +38,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
 
     def _to_model(self, entity: Order) -> OrderModel:
         if entity.id:
-            model = self.db.query(OrderModel).filter(OrderModel.id == entity.id).first()
+            model = self._filter_by_tenant(OrderModel).filter(OrderModel.id == entity.id).first()
             if model:
                 model.codigo = entity.codigo
                 model.client_codigo = entity.client_codigo
@@ -56,6 +56,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
                 return model
 
         return OrderModel(
+            tenant_id=self.tenant_id,
             codigo=entity.codigo,
             client_codigo=entity.client_codigo,
             address_snapshot=entity.address_snapshot,
@@ -73,24 +74,25 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
 
     def criar(self, order: Order) -> Order:
         model = self._to_model(order)
+        model.tenant_id = self.tenant_id
         self.db.add(model)
         self.db.commit()
         self.db.refresh(model)
         return self._to_entity(model)
 
     def buscar_por_codigo(self, codigo: str) -> Optional[Order]:
-        model = self.db.query(OrderModel).filter(OrderModel.codigo == codigo).first()
+        model = self._filter_by_tenant(OrderModel).filter(OrderModel.codigo == codigo).first()
         return self._to_entity(model) if model else None
 
     def listar_todos(self, status: Optional[OrderStatus] = None) -> List[Order]:
-        query = self.db.query(OrderModel)
+        query = self._filter_by_tenant(OrderModel)
         if status:
             query = query.filter(OrderModel.status == status.value)
         models = query.order_by(OrderModel.id.desc()).all()
         return [self._to_entity(m) for m in models]
 
     def atualizar_status(self, codigo: str, status: OrderStatus) -> Optional[Order]:
-        model = self.db.query(OrderModel).filter(OrderModel.codigo == codigo).first()
+        model = self._filter_by_tenant(OrderModel).filter(OrderModel.codigo == codigo).first()
         if not model:
             return None
         model.status = status.value
@@ -100,7 +102,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
         return self._to_entity(model)
 
     def atribuir_entregador(self, codigo: str, driver_codigo: str) -> Optional[Order]:
-        model = self.db.query(OrderModel).filter(OrderModel.codigo == codigo).first()
+        model = self._filter_by_tenant(OrderModel).filter(OrderModel.codigo == codigo).first()
         if not model:
             return None
         model.delivery_driver_codigo = driver_codigo
@@ -110,7 +112,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
         return self._to_entity(model)
 
     def proximo_codigo(self) -> str:
-        last = self.db.query(OrderModel).order_by(OrderModel.id.desc()).first()
+        last = self._filter_by_tenant(OrderModel).order_by(OrderModel.id.desc()).first()
         if not last:
             return "000001"
         return f"{int(last.codigo) + 1:06d}"
@@ -124,7 +126,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
         from app.infrastructure.repositories.order_item_model import OrderItemModel
 
         models = (
-            self.db.query(OrderModel)
+            self._filter_by_tenant(OrderModel)
             .filter(OrderModel.client_codigo == client_codigo)
             .order_by(OrderModel.created_at.asc())
             .all()
@@ -162,6 +164,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
                     OrderItemModel.product_nome,
                     func.sum(OrderItemModel.quantity).label("total_qty")
                 )
+                .filter(OrderItemModel.tenant_id == self.tenant_id)
                 .filter(OrderItemModel.order_codigo.in_(order_codes))
                 .group_by(OrderItemModel.product_nome)
                 .order_by(func.sum(OrderItemModel.quantity).desc())
@@ -183,7 +186,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
     def get_customer_orders(self, client_codigo: str) -> list:
         """Retorna pedidos do cliente para Customer 360."""
         models = (
-            self.db.query(OrderModel)
+            self._filter_by_tenant(OrderModel)
             .filter(OrderModel.client_codigo == client_codigo)
             .order_by(OrderModel.created_at.desc())
             .limit(50)

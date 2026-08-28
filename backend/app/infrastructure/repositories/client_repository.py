@@ -43,7 +43,7 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
     def _to_model(self, entity: Client) -> ClientModel:
         """Converte entidade de domínio para modelo SQLAlchemy."""
         if entity.id:
-            model = self.db.query(ClientModel).filter(ClientModel.id == entity.id).first()
+            model = self._filter_by_tenant(ClientModel).filter(ClientModel.id == entity.id).first()
             if model:
                 model.codigo = entity.codigo
                 model.nome = entity.nome
@@ -157,7 +157,7 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
         return self._to_entity(model)
 
     def proximo_codigo(self) -> str:
-        last = self.db.query(ClientModel).order_by(ClientModel.id.desc()).first()
+        last = self._filter_by_tenant(ClientModel).order_by(ClientModel.id.desc()).first()
         if not last:
             return "000001"
         next_id = int(last.codigo) + 1

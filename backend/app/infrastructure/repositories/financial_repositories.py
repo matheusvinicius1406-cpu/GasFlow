@@ -55,6 +55,7 @@ class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
 
     def create(self, payment: Payment) -> Payment:
         model = PaymentModel(
+            tenant_id=self.tenant_id,
             order_codigo=payment.order_codigo,
             amount=payment.amount,
             method=payment.method.value,
@@ -71,7 +72,7 @@ class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
         return self._to_entity(model)
 
     def update_status(self, payment_id: int, status, notes: Optional[str] = None) -> Payment:
-        model = self.db.query(PaymentModel).filter(PaymentModel.id == payment_id).first()
+        model = self._filter_by_tenant(PaymentModel).filter(PaymentModel.id == payment_id).first()
         if not model:
             raise ValueError(f"Payment {payment_id} not found")
         model.status = status.value if hasattr(status, 'value') else status
@@ -83,24 +84,24 @@ class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
 
 
     def get_by_id(self, payment_id: int) -> Optional[Payment]:
-        model = self.db.query(PaymentModel).filter(PaymentModel.id == payment_id).first()
+        model = self._filter_by_tenant(PaymentModel).filter(PaymentModel.id == payment_id).first()
         return self._to_entity(model) if model else None
 
     def get_by_order(self, order_codigo: str) -> List[Payment]:
-        models = self.db.query(PaymentModel).filter(
+        models = self._filter_by_tenant(PaymentModel).filter(
             PaymentModel.order_codigo == order_codigo
         ).order_by(PaymentModel.created_at).all()
         return [self._to_entity(m) for m in models]
 
     def get_by_idempotency_key(self, key: str) -> Optional[Payment]:
-        model = self.db.query(PaymentModel).filter(
+        model = self._filter_by_tenant(PaymentModel).filter(
             PaymentModel.idempotency_key == key
         ).first()
         return self._to_entity(model) if model else None
 
     def list_all(self, status: Optional[PaymentStatus] = None,
                  page: int = 1, page_size: int = 50) -> Tuple[List[Payment], int]:
-        q = self.db.query(PaymentModel)
+        q = self._filter_by_tenant(PaymentModel)
         if status:
             q = q.filter(PaymentModel.status == status.value)
         total = q.count()
@@ -110,13 +111,14 @@ class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
 
     def total_paid_for_order(self, order_codigo: str) -> Decimal:
         result = self.db.query(func.coalesce(func.sum(PaymentModel.amount), 0)).filter(
+            PaymentModel.tenant_id == self.tenant_id,
             PaymentModel.order_codigo == order_codigo,
             PaymentModel.status.in_(["PAID", "PARTIAL"]),
         ).scalar()
         return _to_decimal(result)
 
     def exists_by_idempotency_key(self, key: str) -> bool:
-        return self.db.query(PaymentModel).filter(
+        return self._filter_by_tenant(PaymentModel).filter(
             PaymentModel.idempotency_key == key
         ).count() > 0
 
@@ -140,6 +142,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
 
     def _from_entity(self, r: Receivable) -> ReceivableModel:
         return ReceivableModel(
+            tenant_id=self.tenant_id,
             id=r.id,
             customer_codigo=r.customer_codigo,
             order_codigo=r.order_codigo,
@@ -159,7 +162,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         return self._to_entity(model)
 
     def update(self, receivable: Receivable) -> Receivable:
-        model = self.db.query(ReceivableModel).filter(ReceivableModel.id == receivable.id).first()
+        model = self._filter_by_tenant(ReceivableModel).filter(ReceivableModel.id == receivable.id).first()
         if not model:
             raise ValueError(f"Receivable {receivable.id} not found")
         model.paid_amount = receivable.paid_amount
@@ -170,23 +173,23 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         return self._to_entity(model)
 
     def get_by_id(self, receivable_id: int) -> Optional[Receivable]:
-        model = self.db.query(ReceivableModel).filter(ReceivableModel.id == receivable_id).first()
+        model = self._filter_by_tenant(ReceivableModel).filter(ReceivableModel.id == receivable_id).first()
         return self._to_entity(model) if model else None
 
     def get_by_order(self, order_codigo: str) -> Optional[Receivable]:
-        model = self.db.query(ReceivableModel).filter(
+        model = self._filter_by_tenant(ReceivableModel).filter(
             ReceivableModel.order_codigo == order_codigo
         ).first()
         return self._to_entity(model) if model else None
 
     def get_by_customer(self, customer_codigo: str) -> List[Receivable]:
-        models = self.db.query(ReceivableModel).filter(
+        models = self._filter_by_tenant(ReceivableModel).filter(
             ReceivableModel.customer_codigo == customer_codigo
         ).order_by(ReceivableModel.created_at.desc()).all()
         return [self._to_entity(m) for m in models]
 
     def list_open(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]:
-        q = self.db.query(ReceivableModel).filter(
+        q = self._filter_by_tenant(ReceivableModel).filter(
             ReceivableModel.status.in_(["OPEN", "PARTIAL", "OVERDUE"])
         )
         total = q.count()
@@ -195,7 +198,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         return [self._to_entity(m) for m in models], total
 
     def list_overdue(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]:
-        q = self.db.query(ReceivableModel).filter(
+        q = self._filter_by_tenant(ReceivableModel).filter(
             ReceivableModel.status == "OVERDUE"
         )
         total = q.count()
@@ -207,6 +210,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         result = self.db.query(
             func.coalesce(func.sum(ReceivableModel.original_amount - ReceivableModel.paid_amount), 0)
         ).filter(
+            ReceivableModel.tenant_id == self.tenant_id,
             ReceivableModel.customer_codigo == customer_codigo,
             ReceivableModel.status.in_(["OPEN", "PARTIAL", "OVERDUE"]),
         ).scalar()
@@ -218,7 +222,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
                  "WHERE status IN ('OPEN', 'PARTIAL') "
                  "AND due_date < :now "
                  "AND (original_amount - paid_amount) > 0"),
-            {"now": current_date}
+            {"now": current_date, "tenant_id": self.tenant_id}
         )
         self.db.commit()
         return result.rowcount
@@ -243,6 +247,7 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
 
     def create(self, expense: Expense) -> Expense:
         model = ExpenseModel(
+            tenant_id=self.tenant_id,
             description=expense.description,
             amount=expense.amount,
             category=expense.category.value,
@@ -258,12 +263,12 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         return self._to_entity(model)
 
     def get_by_id(self, expense_id: int) -> Optional[Expense]:
-        model = self.db.query(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
+        model = self._filter_by_tenant(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
         return self._to_entity(model) if model else None
 
     def list_all(self, status: Optional[ExpenseStatus] = None,
                  page: int = 1, page_size: int = 50) -> Tuple[List[Expense], int]:
-        q = self.db.query(ExpenseModel)
+        q = self._filter_by_tenant(ExpenseModel)
         if status:
             q = q.filter(ExpenseModel.status == status.value)
         total = q.count()
@@ -272,7 +277,7 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         return [self._to_entity(m) for m in models], total
 
     def cancel(self, expense_id: int) -> Optional[Expense]:
-        model = self.db.query(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
+        model = self._filter_by_tenant(ExpenseModel).filter(ExpenseModel.id == expense_id).first()
         if not model:
             return None
         model.status = "CANCELLED"
@@ -284,6 +289,7 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         result = self.db.query(
             func.coalesce(func.sum(ExpenseModel.amount), 0)
         ).filter(
+            ExpenseModel.tenant_id == self.tenant_id,
             ExpenseModel.date >= start,
             ExpenseModel.date < end,
             ExpenseModel.status == "ACTIVE",
@@ -309,6 +315,7 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
 
     def create(self, movement: CashMovement) -> CashMovement:
         model = CashMovementModel(
+            tenant_id=self.tenant_id,
             type=movement.type.value,
             amount=movement.amount,
             description=movement.description,
@@ -323,14 +330,14 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
         return self._to_entity(model)
 
     def get_by_id(self, movement_id: int) -> Optional[CashMovement]:
-        model = self.db.query(CashMovementModel).filter(
+        model = self._filter_by_tenant(CashMovementModel).filter(
             CashMovementModel.id == movement_id
         ).first()
         return self._to_entity(model) if model else None
 
     def list_all(self, type_filter: Optional[CashMovementType] = None,
                  page: int = 1, page_size: int = 50) -> Tuple[List[CashMovement], int]:
-        q = self.db.query(CashMovementModel)
+        q = self._filter_by_tenant(CashMovementModel)
         if type_filter:
             q = q.filter(CashMovementModel.type == type_filter.value)
         total = q.count()
@@ -339,7 +346,7 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
         return [self._to_entity(m) for m in models], total
 
     def current_balance(self) -> Decimal:
-        last = self.db.query(CashMovementModel).order_by(
+        last = self._filter_by_tenant(CashMovementModel).order_by(
             CashMovementModel.id.desc()
         ).first()
         if last:
@@ -351,6 +358,7 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
         result = self.db.query(
             func.coalesce(func.sum(CashMovementModel.amount), 0)
         ).filter(
+            CashMovementModel.tenant_id == self.tenant_id,
             CashMovementModel.type == movement_type.value,
             CashMovementModel.created_at >= start,
             CashMovementModel.created_at < end,
@@ -375,6 +383,7 @@ class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository
 
     def create(self, entry: FinancialLedgerEntry) -> FinancialLedgerEntry:
         model = FinancialLedgerModel(
+            tenant_id=self.tenant_id,
             event_type=entry.event_type.value,
             amount=entry.amount,
             reference_type=entry.reference_type,
@@ -389,7 +398,7 @@ class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository
 
     def list_all(self, event_type: Optional[LedgerEventType] = None,
                  page: int = 1, page_size: int = 50) -> Tuple[List[FinancialLedgerEntry], int]:
-        q = self.db.query(FinancialLedgerModel)
+        q = self._filter_by_tenant(FinancialLedgerModel)
         if event_type:
             q = q.filter(FinancialLedgerModel.event_type == event_type.value)
         total = q.count()
@@ -399,7 +408,7 @@ class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository
 
     def exists(self, reference_type: str, reference_id: str,
                event_type: LedgerEventType) -> bool:
-        return self.db.query(FinancialLedgerModel).filter(
+        return self._filter_by_tenant(FinancialLedgerModel).filter(
             FinancialLedgerModel.reference_type == reference_type,
             FinancialLedgerModel.reference_id == reference_id,
             FinancialLedgerModel.event_type == event_type.value,
