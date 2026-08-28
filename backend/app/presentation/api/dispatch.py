@@ -146,51 +146,28 @@ async def assign_driver_to_delivery(
 ):
     """
     Assign a driver to a delivery.
-    Validates eligibility and updates both entities.
+    Uses AssignmentService for transactional assignment.
     """
-    store = _get_store()
+    from app.infrastructure.database.init_db import engine
+    from sqlalchemy.orm import Session
+    from app.application.delivery.assignment_service import AssignmentService
 
-    # Find delivery
-    delivery = store.get("deliveries", {}).get(req.delivery_id)
-    if not delivery:
-        raise HTTPException(404, "Delivery not found")
-
-    # Find driver
-    driver = store.get("drivers", {}).get(req.driver_id)
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-
-    # Check driver is available
-    if not driver.is_available:
-        raise HTTPException(400, f"Driver is {driver.status.value}")
-
-    # Check vehicle capacity if items are specified
-    if req.vehicle_id:
-        vehicle = store.get("vehicles", {}).get(req.vehicle_id)
-        if vehicle:
-            # Check capacity (simplified for in-memory)
-            pass
-
-    # Assign
-    if not delivery.assign(req.driver_id, req.vehicle_id):
-        raise HTTPException(400, f"Cannot assign in status {delivery.status.value}")
-
-    driver.set_busy()
-
-    # Publish event
-    publish_delivery_event(
-        EventType.DELIVERY_ASSIGNED, req.delivery_id, ctx.tenant_id,
-        driver_id=req.driver_id, data={
-            "vehicle_id": req.vehicle_id or None,
-            "source": "dispatch",
-        }
-    )
-
-    return {
-        "success": True,
-        "delivery": delivery.to_dict(),
-        "driver": driver.to_dict(),
-    }
+    db = Session(bind=engine)
+    try:
+        service = AssignmentService(db)
+        result = service.assign(
+            tenant_id=ctx.tenant_id,
+            delivery_id=req.delivery_id,
+            driver_codigo=req.driver_id,
+            vehicle_id=int(req.vehicle_id) if req.vehicle_id else None,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(500, detail=f"Assignment failed: {e}")
+    finally:
+        db.close()
 
 
 @router.get("/status")
