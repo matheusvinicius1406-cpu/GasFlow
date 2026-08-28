@@ -14,11 +14,14 @@ import { ReportsPage } from '@/features/reports'
 import { IntelligencePage } from '@/features/intelligence'
 import { SettingsPage } from '@/features/settings'
 import { LoginPage } from '@/features/auth'
+import { DriverLoginPage, DriverHomePage } from '@/features/driver'
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/driver/login" element={<DriverLoginPage />} />
+      <Route path="/driver" element={<DriverHomePage />} />
       <Route
         path="/"
         element={
