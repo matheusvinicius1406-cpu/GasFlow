@@ -19,6 +19,7 @@ from app.domain.security.models import (
     hash_password, verify_password, generate_token, needs_rehash,
     ROLE_PERMISSIONS, RateLimiter,
 )
+from app.core.config import settings
 
 
 class AuthService:
@@ -59,14 +60,14 @@ class AuthService:
             )
             self._roles[role.id] = role
 
-        # Default admin user
+        # Default admin user (password from environment)
         admin_role = [r for r in self._roles.values() if r.system_role == SystemRole.ADMIN][0]
         admin = User(
             id="admin-001",
             username="admin",
             email="admin@gasflow.local",
             display_name="Administrator",
-            password_hash=hash_password("admin123"),
+            password_hash=hash_password(settings.admin_password),
             status=UserStatus.ACTIVE,
         )
         self._users[admin.id] = admin

@@ -8,6 +8,7 @@ Arquitetura: Domain-Driven Design (DDD)
 - Presentation: API Routes e Schemas
 """
 
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -28,6 +29,11 @@ from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
 from app.presentation.api.driver_api import router as driver_api_router
 from app.core.config import settings
+from app.core.logging import LoggingMiddleware, setup_logging
+from app.core.security_headers import SecurityHeadersMiddleware
+
+# Setup structured logging
+logger = setup_logging(settings.log_level)
 
 app = FastAPI(
     title=settings.app_name,
@@ -35,6 +41,13 @@ app = FastAPI(
     description="Sistema operacional para depósitos de gás e água — API + WhatsApp Automation"
 )
 
+# Security headers (applied first = outermost)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Request logging
+app.add_middleware(LoggingMiddleware)
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -43,7 +56,10 @@ app.add_middleware(
     allow_headers=settings.cors_headers,
 )
 
+# Initialize database (creates tables if not using migrations)
 init_db()
+
+logger.info(f"GasFlow backend starting — env={settings.environment}", extra={"service": "gasflow-backend"})
 
 
 @app.get("/")
