@@ -315,9 +315,15 @@ class AuthService:
 
     # ── Helpers ──────────────────────────────────────────
 
-    def _get_membership(self, user_id: str, tenant_id: str = "default") -> Optional[TenantMembership]:
+    def _get_membership(self, user_id: str, tenant_id: Optional[str] = None) -> Optional[TenantMembership]:
+        if tenant_id:
+            for m in self._memberships:
+                if m.user_id == user_id and m.tenant_id == tenant_id:
+                    return m
+            return None
+        # No tenant specified: return first membership (for login)
         for m in self._memberships:
-            if m.user_id == user_id and m.tenant_id == tenant_id:
+            if m.user_id == user_id:
                 return m
         return None
 
@@ -330,6 +336,34 @@ class AuthService:
 
     def get_roles(self) -> List[Role]:
         return list(self._roles.values())
+
+    def create_tenant(self, tenant_id: str, name: str, creator_user_id: str = "") -> Dict[str, Any]:
+        """Create a new tenant and optionally add creator as ADMIN."""
+        if tenant_id in self._tenants:
+            return {"success": False, "error": f"Tenant '{tenant_id}' already exists"}
+
+        tenant = Tenant(id=tenant_id, name=name)
+        self._tenants[tenant_id] = tenant
+
+        # If creator provided, add them as ADMIN to this tenant
+        if creator_user_id:
+            user = self._users.get(creator_user_id)
+            if user:
+                admin_role = next(
+                    (r for r in self._roles.values() if r.system_role == SystemRole.ADMIN), None
+                )
+                if admin_role:
+                    self._memberships.append(TenantMembership(
+                        user_id=creator_user_id, tenant_id=tenant_id, role_id=admin_role.id,
+                    ))
+
+        self._audit(creator_user_id or "system", tenant_id,
+                    AuditAction.TENANT_CREATED.value, result="SUCCESS")
+        return {"success": True, "tenant_id": tenant_id}
+
+    def get_tenants(self) -> List[Tenant]:
+        """List all tenants."""
+        return list(self._tenants.values())
 
     def get_active_sessions(self, user_id: str) -> List[Session]:
         return [s for s in self._sessions.values()

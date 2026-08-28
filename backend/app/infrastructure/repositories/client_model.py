@@ -14,7 +14,7 @@ class ClientModel(Base):
 
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
-    codigo = Column(String, unique=True, index=True)
+    codigo = Column(String, index=True)
     nome = Column(String, nullable=False)
     telefone = Column(String, nullable=False)
     telefone_secundario = Column(String, nullable=True)
@@ -34,6 +34,8 @@ class ClientModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "codigo", name="uq_client_tenant_codigo"),
+            
         Index("ix_clients_telefone", "telefone"),
         Index("ix_clients_tipo", "tipo"),
         Index("ix_clients_ativo", "ativo"),

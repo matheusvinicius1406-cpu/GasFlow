@@ -41,6 +41,11 @@ class CreateUserRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=200)
     display_name: str = ""
     role: str = "OPERATOR"
+    tenant_id: Optional[str] = None  # defaults to caller's tenant
+
+class CreateTenantRequest(BaseModel):
+    tenant_id: str = Field(..., min_length=2, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+    name: str = Field(..., min_length=1, max_length=200)
 
 class UserInfo(BaseModel):
     id: str
@@ -48,6 +53,10 @@ class UserInfo(BaseModel):
     email: str
     display_name: str
     status: str
+
+class TenantInfo(BaseModel):
+    id: str
+    name: str
 
 
 # ── Endpoints ───────────────────────────────────────────
@@ -106,7 +115,7 @@ async def list_users(ctx: TenantContext = Depends(require_admin)):
 async def create_user(req: CreateUserRequest, ctx: TenantContext = Depends(require_admin)):
     auth = get_auth_service()
     result = auth.create_user(req.username, req.email, req.password,
-                              req.display_name, req.role, ctx.tenant_id)
+                              req.display_name, req.role, req.tenant_id or ctx.tenant_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return {"success": True, "user_id": result["user_id"]}
@@ -134,3 +143,21 @@ async def get_audit(ctx: TenantContext = Depends(require_admin),
          "timestamp": r.timestamp.isoformat()}
         for r in records
     ]}
+
+
+@router.get("/tenants")
+async def list_tenants(ctx: TenantContext = Depends(require_admin)):
+    """List all tenants (admin only)."""
+    auth = get_auth_service()
+    tenants = auth.get_tenants()
+    return {"tenants": [{"id": t.id, "name": t.name} for t in tenants]}
+
+
+@router.post("/tenants")
+async def create_tenant(req: CreateTenantRequest, ctx: TenantContext = Depends(require_admin)):
+    """Create a new tenant (admin only)."""
+    auth = get_auth_service()
+    result = auth.create_tenant(req.tenant_id, req.name, ctx.user_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"success": True, "tenant_id": result["tenant_id"]}

@@ -6,7 +6,7 @@ Supports multi-item orders and order lifecycle (SALE + RETURN).
 """
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey,
+    Column, Integer, String, DateTime,
     Index, UniqueConstraint, Text
 )
 from datetime import datetime
@@ -21,10 +21,12 @@ class InventoryModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_codigo = Column(
         String,
-        ForeignKey("products.codigo"),
-        unique=True,
         nullable=False,
         index=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "product_codigo", name="uq_inventory_tenant_product"),
     )
     quantity = Column(Integer, nullable=False, default=0)
     minimum_quantity = Column(Integer, nullable=False, default=0)
@@ -39,7 +41,6 @@ class StockMovementModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_codigo = Column(
         String,
-        ForeignKey("products.codigo"),
         nullable=False,
         index=True,
     )

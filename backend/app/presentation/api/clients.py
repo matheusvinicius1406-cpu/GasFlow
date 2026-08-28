@@ -104,12 +104,12 @@ def get_customer_360(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Customer 360 — visão consolidada com métricas CRM + financeiras."""
-    client_repo = SQLAlchemyClientRepository(db)
-    order_repo = SQLAlchemyOrderRepository(db)
+    client_repo = SQLAlchemyClientRepository(db, ctx.tenant_id)
+    order_repo = SQLAlchemyOrderRepository(db, ctx.tenant_id)
     from app.infrastructure.repositories.financial_repositories import (
         SQLAlchemyReceivableRepository,
     )
-    recv_repo = SQLAlchemyReceivableRepository(db)
+    recv_repo = SQLAlchemyReceivableRepository(db, ctx.tenant_id)
     use_case = Customer360UseCase(client_repo, order_repo, receivable_repository=recv_repo)
     result = use_case.execute(codigo)
     if not result:
@@ -129,7 +129,7 @@ def get_customer_orders(
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
-    order_repo = SQLAlchemyOrderRepository(db)
+    order_repo = SQLAlchemyOrderRepository(db, ctx.tenant_id)
     orders = order_repo.get_customer_orders(codigo)
     return orders
 

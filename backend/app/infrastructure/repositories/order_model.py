@@ -4,7 +4,7 @@ Order SQLAlchemy Model — Modelo de persistência do Pedido.
 FASE 3.2: Numeric(10,2) para campos financeiros (precisão de centavos).
 """
 
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
@@ -12,10 +12,14 @@ from app.infrastructure.database.base import Base
 class OrderModel(Base):
     __tablename__ = "orders"
 
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "codigo", name="uq_order_tenant_codigo"),
+    )
+
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
-    codigo = Column(String, unique=True, index=True)
-    client_codigo = Column(String, ForeignKey("clients.codigo"), index=True)
+    codigo = Column(String, index=True)
+    client_codigo = Column(String, index=True)
 
     # Valores — Numeric para precisão financeira
     subtotal = Column(Numeric(10, 2), default=0.0, nullable=False)

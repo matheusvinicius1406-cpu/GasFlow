@@ -21,7 +21,7 @@ class WhatsAppConversationModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(String(50), nullable=False, default="primary", index=True)
     phone_number = Column(String(20), nullable=False, index=True)
-    client_codigo = Column(String(20), ForeignKey("clients.codigo"), nullable=True, index=True)
+    client_codigo = Column(String(20), nullable=True, index=True)
     status = Column(String(30), default="IDLE")  # IDLE, BROWSING, BUILDING_ORDER, AWAITING_CONFIRMATION, ORDER_CREATED, HUMAN_PENDING, HUMAN_ACTIVE, CLOSED
     human_operator = Column(String(100), nullable=True)
     draft_json = Column(Text, nullable=True)  # JSON-serialized order draft

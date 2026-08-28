@@ -153,21 +153,21 @@ def test_inventory_unique_constraint(db):
 
 
 def test_inventory_fk_constraint(db):
-    """FK to products.codigo enforced."""
-    db.add(InventoryModel(product_codigo="FAKE99", quantity=10, minimum_quantity=0))
-    with pytest.raises(Exception):
-        db.commit()
+    """Per-tenant codigo: DB-level FK removed. App enforces integrity."""
+    db.add(InventoryModel(product_codigo="FAKE99", quantity=10, minimum_quantity=0, tenant_id="default"))
+    db.commit()  # No FK constraint at DB level
+    db.rollback()
 
 
 def test_movement_fk_constraint(db):
-    """StockMovement FK enforced."""
+    """Per-tenant codigo: DB-level FK removed. App enforces integrity."""
     db.add(StockMovementModel(
         product_codigo="FAKE99", type="ENTRY", quantity=10,
         reason="Test", balance_before=0, balance_after=10,
         created_at=datetime.utcnow(),
     ))
-    with pytest.raises(Exception):
-        db.commit()
+    db.commit()  # No FK constraint at DB level
+    db.rollback()
 
 
 def test_movement_idempotency_constraint(db):

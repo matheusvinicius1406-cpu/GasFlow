@@ -7,7 +7,7 @@ Constraints: amount > 0, remaining >= 0, FK relationships.
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, Numeric,
-    ForeignKey, Index, UniqueConstraint
+    Index, UniqueConstraint
 )
 from datetime import datetime
 from decimal import Decimal
@@ -20,7 +20,7 @@ class PaymentModel(Base):
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     order_codigo = Column(
-        String, ForeignKey("orders.codigo"), nullable=False, index=True
+        String, nullable=False, index=True
     )
     amount = Column(Numeric(10, 2), nullable=False)
     method = Column(String, nullable=False)  # CASH, PIX, CARD, TRANSFER, OTHER
@@ -44,10 +44,10 @@ class ReceivableModel(Base):
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
     customer_codigo = Column(
-        String, ForeignKey("clients.codigo"), nullable=False, index=True
+        String, nullable=False, index=True
     )
     order_codigo = Column(
-        String, ForeignKey("orders.codigo"), nullable=False, index=True
+        String, nullable=False, index=True
     )
     original_amount = Column(Numeric(10, 2), nullable=False)
     paid_amount = Column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
