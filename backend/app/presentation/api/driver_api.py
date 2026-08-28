@@ -250,10 +250,7 @@ def _driver_to_dict(d) -> Dict[str, Any]:
 
 def _get_db_session():
     """Get a fresh SQLAlchemy session for driver lookup."""
-    from app.infrastructure.database.dependencies import get_db
     from sqlalchemy.orm import Session as DBSession
-    # Create a standalone session (not request-scoped)
-    from app.infrastructure.database.base import Base
     from app.infrastructure.database.init_db import engine
     return DBSession(bind=engine)
 
@@ -362,78 +359,75 @@ async def handle_list_deliveries(
     ctx: Dict, status: Optional[str] = None, limit: int = 20, offset: int = 0,
 ):
     """List deliveries assigned to THIS driver only."""
-    store = _get_store()
     driver_id = ctx["driver_id"]
     tenant_id = ctx["tenant_id"]
 
-    deliveries = [
-        d for d in store["deliveries"].values()
-        if d.get("driver_id") == driver_id and d.get("tenant_id") == tenant_id
-    ]
-    if status:
-        deliveries = [d for d in deliveries if d.get("status") == status]
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
+        records = repo.list_deliveries(status=status, driver_id=driver_id, limit=limit, offset=offset)
 
-    # Convert to compact DTOs
-    summaries = []
-    for d in deliveries[offset:offset + limit]:
-        addr = d.get("address", {})
-        addr_str = f"{addr.get('street', '')}, {addr.get('number', '')}"
-        if addr.get("neighborhood"):
-            addr_str += f" - {addr.get('neighborhood')}"
-
-        summaries.append(DriverDeliverySummary(
-            delivery_id=d["id"],
-            order_reference=d.get("order_id", ""),
-            customer_name=d.get("customer_name", ""),
-            address=addr_str,
-            status=d.get("status", "PENDING"),
-            scheduled_at=d.get("scheduled_at"),
-            eta_minutes=d.get("eta_minutes"),
-            version=d.get("version", 1),
-        ))
-    return {"deliveries": summaries, "count": len(summaries)}
+        summaries = []
+        for r in records:
+            addr_str = f"{r.address_street}, {r.address_number}"
+            if r.address_neighborhood:
+                addr_str += f" - {r.address_neighborhood}"
+            summaries.append(DriverDeliverySummary(
+                delivery_id=r.delivery_id,
+                order_reference=r.order_id,
+                customer_name=r.customer_name,
+                address=addr_str,
+                status=r.status,
+                scheduled_at=r.scheduled_at.isoformat() if r.scheduled_at else None,
+                version=r.version,
+            ))
+        return {"deliveries": summaries, "count": len(summaries)}
+    finally:
+        db.close()
 
 
 async def handle_get_delivery(ctx: Dict, delivery_id: str) -> DriverDeliveryDetail:
     """Get delivery detail for THIS driver only."""
-    store = _get_store()
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")  # 404, not 403
-    if delivery.get("tenant_id") != ctx["tenant_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
 
-    addr = delivery.get("address", {})
-    addr_str = f"{addr.get('street', '')}, {addr.get('number', '')}"
-    if addr.get("complement"):
-        addr_str += f" {addr.get('complement')}"
-    if addr.get("neighborhood"):
-        addr_str += f" - {addr.get('neighborhood')}"
-    if addr.get("city"):
-        addr_str += f", {addr.get('city')}"
+        addr_str = f"{record.address_street}, {record.address_number}"
+        if record.address_complement:
+            addr_str += f" {record.address_complement}"
+        if record.address_neighborhood:
+            addr_str += f" - {record.address_neighborhood}"
+        if record.address_city:
+            addr_str += f", {record.address_city}"
 
-    actions = _allowed_actions(delivery.get("status", "PENDING"))
+        actions = _allowed_actions(record.status)
 
-    return DriverDeliveryDetail(
-        delivery_id=delivery["id"],
-        order_reference=delivery.get("order_id", ""),
-        customer_name=delivery.get("customer_name", ""),
-        address=addr_str,
-        address_reference=addr.get("reference", ""),
-        status=delivery.get("status", "PENDING"),
-        scheduled_at=delivery.get("scheduled_at"),
-        eta_minutes=delivery.get("eta_minutes"),
-        route_id=delivery.get("route_id"),
-        notes=delivery.get("notes", ""),
-        version=delivery.get("version", 1),
-        can_accept=actions["can_accept"],
-        can_start=actions["can_start"],
-        can_arrive=actions["can_arrive"],
-        can_complete=actions["can_complete"],
-        can_fail=actions["can_fail"],
-    )
+        return DriverDeliveryDetail(
+            delivery_id=record.delivery_id,
+            order_reference=record.order_id,
+            customer_name=record.customer_name,
+            address=addr_str,
+            address_reference=record.address_reference,
+            status=record.status,
+            scheduled_at=record.scheduled_at.isoformat() if record.scheduled_at else None,
+            route_id=record.route_id,
+            notes=record.notes,
+            version=record.version,
+            can_accept=actions["can_accept"],
+            can_start=actions["can_start"],
+            can_arrive=actions["can_arrive"],
+            can_complete=actions["can_complete"],
+            can_fail=actions["can_fail"],
+        )
+    finally:
+        db.close()
 
 
 async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
@@ -442,29 +436,30 @@ async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
     if replay:
         return replay
 
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("tenant_id") != ctx["tenant_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.status != "PENDING":
+            raise HTTPException(400, detail=f"INVALID_STATE: current={record.status}, cannot accept")
 
-    if delivery["status"] != "PENDING":
-        raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot accept")
+        record = repo.assign_delivery(delivery_id, ctx["driver_id"], record.vehicle_id, record.version)
+        if not record:
+            raise HTTPException(409, detail="VERSION_CONFLICT")
 
-    version = delivery.get("version", 1)
-    delivery["status"] = "ASSIGNED"
-    delivery["version"] = version + 1
-    delivery["assigned_at"] = datetime.utcnow().isoformat()
-    store["deliveries"][delivery_id] = delivery
-
-    _record_idempotency(store, req.idempotency_key)
-    publish_delivery_event(
-        EventType.DELIVERY_ACCEPTED, delivery_id, ctx["tenant_id"],
-        driver_id=ctx["driver_id"], data={"previous_status": "PENDING"}
-    )
-    return {"success": True, "version": delivery["version"]}
+        _record_idempotency(store, req.idempotency_key)
+        publish_delivery_event(
+            EventType.DELIVERY_ACCEPTED, delivery_id, ctx["tenant_id"],
+            driver_id=ctx["driver_id"], data={"previous_status": "PENDING"}
+        )
+        return {"success": True, "version": record.version}
+    finally:
+        db.close()
 
 
 async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
@@ -473,26 +468,30 @@ async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest)
     if replay:
         return replay
 
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.status not in ("ASSIGNED", "DISPATCHED"):
+            raise HTTPException(400, detail=f"INVALID_STATE: current={record.status}, cannot start")
 
-    if delivery["status"] not in ("ASSIGNED", "DISPATCHED"):
-        raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot start")
+        record = repo.start_delivery(delivery_id, record.version, ctx["driver_id"])
+        if not record:
+            raise HTTPException(409, detail="VERSION_CONFLICT")
 
-    delivery["status"] = "EN_ROUTE"
-    delivery["version"] = delivery.get("version", 1) + 1
-    delivery["started_at"] = datetime.utcnow().isoformat()
-    store["deliveries"][delivery_id] = delivery
-
-    _record_idempotency(store, req.idempotency_key)
-    publish_delivery_event(
-        EventType.DELIVERY_STARTED, delivery_id, ctx["tenant_id"],
-        driver_id=ctx["driver_id"], data={"previous_status": "ASSIGNED"}
-    )
-    return {"success": True, "version": delivery["version"]}
+        _record_idempotency(store, req.idempotency_key)
+        publish_delivery_event(
+            EventType.DELIVERY_STARTED, delivery_id, ctx["tenant_id"],
+            driver_id=ctx["driver_id"], data={"previous_status": "ASSIGNED"}
+        )
+        return {"success": True, "version": record.version}
+    finally:
+        db.close()
 
 
 async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
@@ -501,26 +500,30 @@ async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
     if replay:
         return replay
 
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.status != "EN_ROUTE":
+            raise HTTPException(400, detail=f"INVALID_STATE: current={record.status}, cannot arrive")
 
-    if delivery["status"] != "EN_ROUTE":
-        raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot arrive")
+        record = repo.arrive_delivery(delivery_id, record.version)
+        if not record:
+            raise HTTPException(409, detail="VERSION_CONFLICT")
 
-    delivery["status"] = "ARRIVED"
-    delivery["version"] = delivery.get("version", 1) + 1
-    delivery["arrived_at"] = datetime.utcnow().isoformat()
-    store["deliveries"][delivery_id] = delivery
-
-    _record_idempotency(store, req.idempotency_key)
-    publish_delivery_event(
-        EventType.DELIVERY_ARRIVED, delivery_id, ctx["tenant_id"],
-        driver_id=ctx["driver_id"], data={"previous_status": "EN_ROUTE"}
-    )
-    return {"success": True, "version": delivery["version"]}
+        _record_idempotency(store, req.idempotency_key)
+        publish_delivery_event(
+            EventType.DELIVERY_ARRIVED, delivery_id, ctx["tenant_id"],
+            driver_id=ctx["driver_id"], data={"previous_status": "EN_ROUTE"}
+        )
+        return {"success": True, "version": record.version}
+    finally:
+        db.close()
 
 
 async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
@@ -529,46 +532,45 @@ async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionReque
     if replay:
         return replay
 
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.status != "ARRIVED":
+            raise HTTPException(400, detail=f"INVALID_STATE: current={record.status}, cannot complete")
 
-    if delivery["status"] != "ARRIVED":
-        raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot complete")
+        proof_data = None
+        if req.proof_type:
+            proof_data = {
+                "type": req.proof_type,
+                "driver_id": ctx["driver_id"],
+            }
 
-    delivery["status"] = "DELIVERED"
-    delivery["version"] = delivery.get("version", 1) + 1
-    delivery["delivered_at"] = datetime.utcnow().isoformat()
-    if req.proof_type:
-        delivery["proof"] = {
-            "type": req.proof_type,
-            "driver_id": ctx["driver_id"],
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-    if req.notes:
-        delivery["driver_notes"] = req.notes
+        record = repo.complete_delivery(
+            delivery_id, record.version,
+            proof_type=req.proof_type,
+            proof_data=proof_data,
+            driver_notes=req.notes or "",
+        )
+        if not record:
+            raise HTTPException(409, detail="VERSION_CONFLICT")
 
-    timeline = delivery.get("timeline", [])
-    timeline.append({
-        "status": "DELIVERED",
-        "timestamp": datetime.utcnow().isoformat(),
-        "actor_type": "DRIVER",
-        "notes": req.notes or "",
-    })
-    delivery["timeline"] = timeline
-
-    store["deliveries"][delivery_id] = delivery
-    _record_idempotency(store, req.idempotency_key)
-    publish_delivery_event(
-        EventType.DELIVERY_COMPLETED, delivery_id, ctx["tenant_id"],
-        driver_id=ctx["driver_id"], data={
-            "previous_status": "ARRIVED",
-            "proof_type": req.proof_type or None,
-        }
-    )
-    return {"success": True, "version": delivery["version"]}
+        _record_idempotency(store, req.idempotency_key)
+        publish_delivery_event(
+            EventType.DELIVERY_COMPLETED, delivery_id, ctx["tenant_id"],
+            driver_id=ctx["driver_id"], data={
+                "previous_status": "ARRIVED",
+                "proof_type": req.proof_type or None,
+            }
+        )
+        return {"success": True, "version": record.version}
+    finally:
+        db.close()
 
 
 async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
@@ -577,44 +579,39 @@ async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) 
     if replay:
         return replay
 
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.status not in ("EN_ROUTE", "ARRIVED"):
+            raise HTTPException(400, detail=f"INVALID_STATE: current={record.status}, cannot fail")
 
-    if delivery["status"] not in ("EN_ROUTE", "ARRIVED"):
-        raise HTTPException(400, detail=f"INVALID_STATE: current={delivery['status']}, cannot fail")
+        notes = (req.failure_notes or "").replace("<", "").replace(">", "")
+        record = repo.fail_delivery(
+            delivery_id, record.version,
+            reason=req.failure_reason or "OTHER",
+            notes=notes,
+        )
+        if not record:
+            raise HTTPException(409, detail="VERSION_CONFLICT")
 
-    notes = (req.failure_notes or "").replace("<", "").replace(">", "")
-
-    delivery["status"] = "FAILED"
-    delivery["version"] = delivery.get("version", 1) + 1
-    delivery["failed_at"] = datetime.utcnow().isoformat()
-    delivery["failed_reason"] = req.failure_reason or "OTHER"
-    delivery["failure_notes"] = notes
-
-    timeline = delivery.get("timeline", [])
-    timeline.append({
-        "status": "FAILED",
-        "timestamp": datetime.utcnow().isoformat(),
-        "actor_type": "DRIVER",
-        "notes": notes,
-        "reason": req.failure_reason or "OTHER",
-    })
-    delivery["timeline"] = timeline
-
-    store["deliveries"][delivery_id] = delivery
-    _record_idempotency(store, req.idempotency_key)
-    publish_delivery_event(
-        EventType.DELIVERY_FAILED, delivery_id, ctx["tenant_id"],
-        driver_id=ctx["driver_id"], data={
-            "previous_status": delivery.get("status", "UNKNOWN"),
-            "failure_reason": req.failure_reason or "OTHER",
-            "failure_notes": notes,
-        }
-    )
-    return {"success": True, "version": delivery["version"]}
+        _record_idempotency(store, req.idempotency_key)
+        publish_delivery_event(
+            EventType.DELIVERY_FAILED, delivery_id, ctx["tenant_id"],
+            driver_id=ctx["driver_id"], data={
+                "previous_status": "EN_ROUTE",
+                "failure_reason": req.failure_reason or "OTHER",
+                "failure_notes": notes,
+            }
+        )
+        return {"success": True, "version": record.version}
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -677,36 +674,44 @@ async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
 # ═══════════════════════════════════════════════════════════
 
 async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
-    store = _get_store()
     driver_id = ctx["driver_id"]
+    tenant_id = ctx["tenant_id"]
 
-    last_loc = store["locations"].get(driver_id)
-    if last_loc:
-        last_time = datetime.fromisoformat(last_loc["timestamp"])
-        if (datetime.utcnow() - last_time).total_seconds() < 10:
-            return {"success": True, "throttled": True}
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository
+        loc_repo = SQLAlchemyDriverLocationRepository(db)
 
-    store["locations"][driver_id] = {
-        "latitude": req.latitude,
-        "longitude": req.longitude,
-        "accuracy": req.accuracy,
-        "speed": req.speed,
-        "bearing": req.bearing,
-        "timestamp": datetime.utcnow().isoformat(),
-        "driver_id": driver_id,
-        "tenant_id": ctx["tenant_id"],
-    }
-    publish_driver_event(
-        EventType.DRIVER_LOCATION_UPDATED, driver_id, ctx["tenant_id"],
-        data={
-            "latitude": req.latitude,
-            "longitude": req.longitude,
-            "accuracy": req.accuracy,
-            "speed": req.speed,
-            "bearing": req.bearing,
-        }
-    )
-    return {"success": True}
+        # Rate limit: skip if last update was < 10s ago
+        existing = loc_repo.get_location(tenant_id, driver_id)
+        if existing:
+            age = (datetime.utcnow() - existing.timestamp).total_seconds()
+            if age < 10:
+                return {"success": True, "throttled": True}
+
+        loc_repo.upsert_location(
+            tenant_id=tenant_id,
+            driver_id=driver_id,
+            latitude=req.latitude,
+            longitude=req.longitude,
+            accuracy=req.accuracy,
+            speed=req.speed,
+            bearing=req.bearing,
+        )
+
+        publish_driver_event(
+            EventType.DRIVER_LOCATION_UPDATED, driver_id, tenant_id,
+            data={
+                "latitude": req.latitude,
+                "longitude": req.longitude,
+                "accuracy": req.accuracy,
+                "speed": req.speed,
+                "bearing": req.bearing,
+            }
+        )
+        return {"success": True}
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════
