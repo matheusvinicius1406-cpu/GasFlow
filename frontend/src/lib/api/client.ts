@@ -138,6 +138,41 @@ export const api = {
     cashBalance: () => apiClient.get('/finance/cash/balance'),
   },
 
+  // Payments
+  payments: {
+    listMethods: () => apiClient.get('/payments/methods'),
+    createMethod: (data: unknown) => apiClient.post('/payments/methods', data),
+    updateMethod: (id: string, data: unknown) => apiClient.patch(`/payments/methods/${id}`, data),
+    deleteMethod: (id: string) => apiClient.delete(`/payments/methods/${id}`),
+    toggleMethod: (id: string) => apiClient.patch(`/payments/methods/${id}/toggle`),
+    getPix: () => apiClient.get('/payments/pix'),
+    createPix: (data: unknown) => apiClient.post('/payments/pix', data),
+    updatePix: (id: string, data: unknown) => apiClient.patch(`/payments/pix/${id}`, data),
+    deletePix: (id: string) => apiClient.delete(`/payments/pix/${id}`),
+    list: (params?: { status?: string }) => apiClient.get('/payments/', { params }),
+    create: (data: unknown) => apiClient.post('/payments/', data),
+    get: (id: string) => apiClient.get(`/payments/${id}`),
+    confirm: (id: string, notes?: string) => apiClient.post(`/payments/${id}/confirm`, { notes: notes || '' }),
+    cancel: (id: string) => apiClient.post(`/payments/${id}/cancel`),
+    refund: (id: string) => apiClient.post(`/payments/${id}/refund`),
+    summary: () => apiClient.get('/payments/summary'),
+  },
+
+  // Printer
+  printer: {
+    print: (data: { order_id: string; is_reprint?: boolean }) => apiClient.post('/printer/print', data),
+    status: () => apiClient.get('/printer/status'),
+    jobs: (limit?: number) => apiClient.get('/printer/jobs', { params: { limit } }),
+    retry: (jobId: string) => apiClient.post(`/printer/jobs/${jobId}/retry`),
+  },
+
+  // Reports
+  reports: {
+    daily: (date?: string) => apiClient.get('/reports/daily', { params: { date } }),
+    dailyPdf: (date?: string) => apiClient.get('/reports/daily.pdf', { params: { date }, responseType: 'blob' }),
+    summary: () => apiClient.get('/reports/summary'),
+  },
+
   // WhatsApp
   whatsapp: {
     status: () => apiClient.get('/whatsapp/status'),
