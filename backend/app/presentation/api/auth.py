@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 
 from app.domain.security.models import TenantContext, SystemRole
-from app.presentation.dependencies import get_auth_service, get_tenant_context
+from app.presentation.dependencies import get_auth_service, get_tenant_context, require_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -92,10 +92,8 @@ async def get_me(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.get("/users")
-async def list_users(ctx: TenantContext = Depends(get_tenant_context)):
+async def list_users(ctx: TenantContext = Depends(require_admin)):
     auth = get_auth_service()
-    if not ctx.has_permission("user.read") and ctx.role != SystemRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     users = auth.get_users(ctx.tenant_id)
     return {"users": [
         {"id": u.id, "username": u.username, "email": u.email,
@@ -105,10 +103,8 @@ async def list_users(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.post("/users")
-async def create_user(req: CreateUserRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def create_user(req: CreateUserRequest, ctx: TenantContext = Depends(require_admin)):
     auth = get_auth_service()
-    if not ctx.has_permission("user.create") and ctx.role != SystemRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     result = auth.create_user(req.username, req.email, req.password,
                               req.display_name, req.role, ctx.tenant_id)
     if not result["success"]:
@@ -128,11 +124,9 @@ async def list_roles(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.get("/audit")
-async def get_audit(ctx: TenantContext = Depends(get_tenant_context),
+async def get_audit(ctx: TenantContext = Depends(require_admin),
                     limit: int = 50):
     auth = get_auth_service()
-    if not ctx.has_permission("admin.*") and ctx.role != SystemRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
     records = auth.get_audit_log(ctx.tenant_id, limit)
     return {"records": [
         {"id": r.id, "actor_id": r.actor_id, "action": r.action,

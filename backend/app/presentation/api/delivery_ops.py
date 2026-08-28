@@ -5,7 +5,7 @@ Endpoints for deliveries, drivers, vehicles, routes, dispatch.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.presentation.dependencies import get_tenant_context
+from app.presentation.dependencies import get_tenant_context, require_admin, require_role
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -79,7 +79,7 @@ def _get_store():
 # ── Delivery Endpoints ──────────────────────────────────
 
 @router.post("/deliveries")
-async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(require_admin)):
     from app.domain.delivery.delivery import Delivery, AddressSnapshot
     from app.domain.delivery.driver import Driver, DriverStatus
     store = _get_store()
@@ -198,7 +198,7 @@ async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx
 # ── Driver Endpoints ────────────────────────────────────
 
 @router.post("/drivers")
-async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(require_admin)):
     from app.domain.delivery.driver import Driver
     store = _get_store()
     if "drivers" not in store:
@@ -268,7 +268,7 @@ async def update_driver_status(driver_id: str, status: str, ctx: TenantContext =
 # ── Vehicle Endpoints ───────────────────────────────────
 
 @router.post("/vehicles")
-async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends(require_admin)):
     from app.domain.delivery.vehicle import Vehicle
     store = _get_store()
     if "vehicles" not in store:
@@ -297,7 +297,7 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
 # ── Route Endpoints ─────────────────────────────────────
 
 @router.post("/routes")
-async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(require_admin)):
     from app.domain.delivery.route import Route
     store = _get_store()
     if "routes" not in store:
