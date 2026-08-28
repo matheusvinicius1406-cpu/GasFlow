@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
   { label: 'Estoque', href: '/inventory', icon: Warehouse },
   { label: 'Financeiro', href: '/finance', icon: DollarSign },
   { label: 'Inteligência', href: '/intelligence', icon: Brain },
-  { label: 'Relatórios', href: '/reports', icon: BarChart3, disabled: true },
+  { label: 'Relatórios', href: '/reports', icon: BarChart3 },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ]
 
