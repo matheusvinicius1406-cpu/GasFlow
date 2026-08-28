@@ -32,6 +32,8 @@ from app.presentation.api.printer import router as printer_router
 from app.presentation.api.payments import router as payments_router
 from app.presentation.api.reports import router as reports_router
 from app.presentation.api.dispatch import router as dispatch_router
+from app.presentation.api.operations import router as operations_router
+from app.presentation.api.communication import router as communication_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging
@@ -103,6 +105,8 @@ app.include_router(printer_router)
 app.include_router(payments_router)
 app.include_router(reports_router)
 app.include_router(dispatch_router)
+app.include_router(operations_router)
+app.include_router(communication_router)
 
 # Unified v1 API (same routers, /api/v1 prefix)
 app.include_router(api_v1_router)
