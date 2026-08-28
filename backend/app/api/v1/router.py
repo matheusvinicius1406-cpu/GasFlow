@@ -23,6 +23,7 @@ from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
 from app.presentation.api.driver_api import router as driver_api_router
 from app.presentation.api.driver_v1 import router as driver_v1_router
+from app.presentation.api.dispatch import router as dispatch_router
 from app.presentation.api.printer import router as printer_router
 from app.presentation.api.payments import router as payments_router
 from app.presentation.api.reports import router as reports_router
@@ -45,6 +46,7 @@ api_v1_router.include_router(ai_router, tags=["AI"])
 api_v1_router.include_router(audio_router, tags=["Audio"])
 api_v1_router.include_router(automation_router, tags=["Automation"])
 api_v1_router.include_router(driver_v1_router, tags=["Driver"])
+api_v1_router.include_router(dispatch_router, tags=["Dispatch"])
 api_v1_router.include_router(printer_router, tags=["Printer"])
 api_v1_router.include_router(payments_router, tags=["Payments"])
 api_v1_router.include_router(reports_router, tags=["Reports"])
