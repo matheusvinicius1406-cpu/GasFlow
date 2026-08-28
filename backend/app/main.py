@@ -108,5 +108,14 @@ app.include_router(dispatch_router)
 app.include_router(operations_router)
 app.include_router(communication_router)
 
+# WebSocket realtime
+from app.infrastructure.realtime.websocket import router as realtime_ws_router, setup_realtime_bridge
+app.include_router(realtime_ws_router)
+
 # Unified v1 API (same routers, /api/v1 prefix)
 app.include_router(api_v1_router)
+
+# Connect Event Bus → WebSocket bridge on startup
+@app.on_event("startup")
+def _setup_realtime():
+    setup_realtime_bridge()

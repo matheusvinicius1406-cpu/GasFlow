@@ -16,6 +16,7 @@ from app.domain.delivery.dispatch_engine import (
 )
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
+from app.domain.events.event_bus import publish_delivery_event, publish_driver_event, EventType
 
 router = APIRouter(prefix="/dispatch", tags=["dispatch"])
 
@@ -175,6 +176,15 @@ async def assign_driver_to_delivery(
         raise HTTPException(400, f"Cannot assign in status {delivery.status.value}")
 
     driver.set_busy()
+
+    # Publish event
+    publish_delivery_event(
+        EventType.DELIVERY_ASSIGNED, req.delivery_id, ctx.tenant_id,
+        driver_id=req.driver_id, data={
+            "vehicle_id": req.vehicle_id or None,
+            "source": "dispatch",
+        }
+    )
 
     return {
         "success": True,

@@ -30,6 +30,9 @@ from datetime import datetime
 from enum import Enum
 import uuid
 from app.infrastructure.stores.shared_store import get_shared_store
+from app.domain.events.event_bus import (
+    get_event_bus, publish_delivery_event, publish_driver_event, EventType
+)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -412,6 +415,10 @@ async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
     store["deliveries"][delivery_id] = delivery
 
     _record_idempotency(store, req.idempotency_key)
+    publish_delivery_event(
+        EventType.DELIVERY_ACCEPTED, delivery_id, ctx["tenant_id"],
+        driver_id=ctx["driver_id"], data={"previous_status": "PENDING"}
+    )
     return {"success": True, "version": delivery["version"]}
 
 
@@ -436,6 +443,10 @@ async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest)
     store["deliveries"][delivery_id] = delivery
 
     _record_idempotency(store, req.idempotency_key)
+    publish_delivery_event(
+        EventType.DELIVERY_STARTED, delivery_id, ctx["tenant_id"],
+        driver_id=ctx["driver_id"], data={"previous_status": "ASSIGNED"}
+    )
     return {"success": True, "version": delivery["version"]}
 
 
@@ -460,6 +471,10 @@ async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
     store["deliveries"][delivery_id] = delivery
 
     _record_idempotency(store, req.idempotency_key)
+    publish_delivery_event(
+        EventType.DELIVERY_ARRIVED, delivery_id, ctx["tenant_id"],
+        driver_id=ctx["driver_id"], data={"previous_status": "EN_ROUTE"}
+    )
     return {"success": True, "version": delivery["version"]}
 
 
@@ -501,6 +516,13 @@ async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionReque
 
     store["deliveries"][delivery_id] = delivery
     _record_idempotency(store, req.idempotency_key)
+    publish_delivery_event(
+        EventType.DELIVERY_COMPLETED, delivery_id, ctx["tenant_id"],
+        driver_id=ctx["driver_id"], data={
+            "previous_status": "ARRIVED",
+            "proof_type": req.proof_type or None,
+        }
+    )
     return {"success": True, "version": delivery["version"]}
 
 
@@ -539,6 +561,14 @@ async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) 
 
     store["deliveries"][delivery_id] = delivery
     _record_idempotency(store, req.idempotency_key)
+    publish_delivery_event(
+        EventType.DELIVERY_FAILED, delivery_id, ctx["tenant_id"],
+        driver_id=ctx["driver_id"], data={
+            "previous_status": delivery.get("status", "UNKNOWN"),
+            "failure_reason": req.failure_reason or "OTHER",
+            "failure_notes": notes,
+        }
+    )
     return {"success": True, "version": delivery["version"]}
 
 
@@ -621,6 +651,16 @@ async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
         "driver_id": driver_id,
         "tenant_id": ctx["tenant_id"],
     }
+    publish_driver_event(
+        EventType.DRIVER_LOCATION_UPDATED, driver_id, ctx["tenant_id"],
+        data={
+            "latitude": req.latitude,
+            "longitude": req.longitude,
+            "accuracy": req.accuracy,
+            "speed": req.speed,
+            "bearing": req.bearing,
+        }
+    )
     return {"success": True}
 
 
@@ -724,6 +764,18 @@ async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
             if idempotency_key:
                 store["idempotency_keys"].add(idempotency_key)
             accepted.append(idempotency_key or action_type)
+            # Publish event for sync transitions
+            _sync_event_map = {
+                "start": EventType.DELIVERY_STARTED,
+                "arrive": EventType.DELIVERY_ARRIVED,
+                "complete": EventType.DELIVERY_COMPLETED,
+                "fail": EventType.DELIVERY_FAILED,
+            }
+            if action_type in _sync_event_map:
+                publish_delivery_event(
+                    _sync_event_map[action_type], delivery_id, tenant_id,
+                    driver_id=driver_id, data={"source": "sync"}
+                )
         else:
             rejected.append({"action": action_type, "delivery_id": delivery_id,
                              "error": f"INVALID_STATE: {delivery['status']}"})
