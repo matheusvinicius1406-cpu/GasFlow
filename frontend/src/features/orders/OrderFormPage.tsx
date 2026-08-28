@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, ShoppingCart } from 'lucide-react'
 import { useCustomersLegacy, useProducts, useCreateOrder } from '@/lib/api/hooks'
+import { apiClient } from '@/lib/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -28,6 +29,13 @@ export function OrderFormPage() {
 
   const navigate = useNavigate()
   const { data: customers, isLoading: loadingCustomers } = useCustomersLegacy()
+  const [paymentMethods, setPaymentMethods] = useState<{code: string; name: string; payment_type: string}[]>([])
+
+  useEffect(() => {
+    apiClient.get('/payments/methods').then(({ data }) => {
+      setPaymentMethods((data.methods || []).filter((m: {enabled: boolean}) => m.enabled))
+    }).catch(() => {})
+  }, [])
   const { data: products, isLoading: loadingProducts } = useProducts()
   const createOrder = useCreateOrder()
 
@@ -219,11 +227,19 @@ export function OrderFormPage() {
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                     >
                       <option value="">Selecione</option>
-                      <option value="Dinheiro">Dinheiro</option>
-                      <option value="PIX">PIX</option>
-                      <option value="Cartão de Crédito">Cartão de Crédito</option>
-                      <option value="Cartão de Débito">Cartão de Débito</option>
-                      <option value="Fiado">Fiado</option>
+                      {paymentMethods.length > 0 ? (
+                        paymentMethods.map(m => (
+                          <option key={m.code} value={m.code}>{m.name}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Dinheiro">Dinheiro</option>
+                          <option value="PIX">PIX</option>
+                          <option value="CREDIT_CARD">Cartão de Crédito</option>
+                          <option value="DEBIT_CARD">Cartão de Débito</option>
+                          <option value="ON_ACCOUNT">Fiado</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="space-y-2">

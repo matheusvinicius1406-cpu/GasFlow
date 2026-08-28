@@ -17,6 +17,8 @@ export function DashboardPage() {
     totalClients: 0,
     totalProducts: 0,
     activeDrivers: 0,
+    totalReceived: 0,
+    totalPending: 0,
   })
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,11 +26,12 @@ export function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [ordersRes, clientsRes, productsRes, driversRes] = await Promise.allSettled([
+        const [ordersRes, clientsRes, productsRes, driversRes, paymentsRes] = await Promise.allSettled([
           apiClient.get('/orders/'),
           apiClient.get('/clients/'),
           apiClient.get('/products/'),
           apiClient.get('/delivery-drivers/'),
+          apiClient.get('/payments/summary'),
         ])
 
         const orders: Order[] = ordersRes.status === 'fulfilled' ? ordersRes.value.data : []
@@ -40,6 +43,8 @@ export function DashboardPage() {
           .filter(o => o.payment_status === 'PAID')
           .reduce((sum, o) => sum + (o.total ?? 0), 0)
 
+        const paymentSummary = paymentsRes.status === 'fulfilled' ? paymentsRes.value.data : {}
+
         setStats({
           totalOrders: orders.length,
           pendingOrders: orders.filter(o => o.status === 'PENDING').length,
@@ -47,6 +52,8 @@ export function DashboardPage() {
           totalClients: clientsData.total ?? clientsData.length ?? 0,
           totalProducts: products.length,
           activeDrivers: Array.isArray(drivers) ? drivers.length : 0,
+          totalReceived: paymentSummary.total_received || 0,
+          totalPending: paymentSummary.total_pending || 0,
         })
 
         setRecentOrders(orders.slice(0, 5))
@@ -96,6 +103,22 @@ export function DashboardPage() {
           value={stats.pendingOrders}
           icon={Truck}
           description={`${stats.activeDrivers} motoristas`}
+        />
+      </div>
+
+      {/* Payment Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Recebido"
+          value={formatCurrency(stats.totalReceived)}
+          icon={DollarSign}
+          description="Pagamentos confirmados"
+        />
+        <StatCard
+          title="Pendente"
+          value={formatCurrency(stats.totalPending)}
+          icon={AlertTriangle}
+          description="Aguardando pagamento"
         />
       </div>
 
