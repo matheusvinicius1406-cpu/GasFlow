@@ -29,6 +29,7 @@ from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
 from app.presentation.api.driver_api import router as driver_api_router
 from app.presentation.api.printer import router as printer_router
+from app.presentation.api.payments import router as payments_router
 from app.presentation.api.reports import router as reports_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
@@ -98,6 +99,7 @@ app.include_router(auth_router)
 app.include_router(delivery_ops_router)
 app.include_router(driver_api_router)
 app.include_router(printer_router)
+app.include_router(payments_router)
 app.include_router(reports_router)
 
 # Unified v1 API (same routers, /api/v1 prefix)
