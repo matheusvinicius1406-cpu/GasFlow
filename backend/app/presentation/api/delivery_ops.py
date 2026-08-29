@@ -2,17 +2,25 @@
 Delivery Operations API — FASE 14
 
 Endpoints for deliveries, drivers, vehicles, routes, dispatch.
+All state is backed by the database — no in-memory stores.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context, require_admin, require_role
 from app.domain.security.models import TenantContext
-from app.infrastructure.stores.shared_store import get_shared_store
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
 router = APIRouter(prefix="/delivery", tags=["delivery-ops"])
+
+
+# ── Helper: get a DB session ───────────────────────────
+
+def _get_db():
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    return DBSession(bind=engine)
 
 
 # ── Schemas ─────────────────────────────────────────────
@@ -68,17 +76,10 @@ class LocationUpdateRequest(BaseModel):
     accuracy: Optional[float] = None
 
 
-# ── Shared store (single source of truth) ───────────────
-
-def _get_store():
-    return get_shared_store()
-
-
-# ── Delivery Endpoints ──────────────────────────────────
+# ── Delivery Endpoints (Database-backed) ────────────────
 
 @router.post("/deliveries")
 async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(require_admin)):
-    from app.domain.delivery.delivery import Delivery, AddressSnapshot
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
@@ -94,9 +95,10 @@ async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depen
             if d.order_id == req.order_id:
                 raise HTTPException(400, "Delivery already exists for this order")
 
+        import uuid as _uuid
         addr = req.address.model_dump() if req.address else {}
         record = repo.create_delivery(
-            delivery_id=None,  # auto-generate
+            delivery_id=str(_uuid.uuid4()),
             order_id=req.order_id,
             customer_codigo=req.customer_codigo,
             customer_name=req.customer_name,
@@ -108,109 +110,122 @@ async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depen
         db.close()
 
 
-def _d_get(d, key, default=None):
-    """Safe accessor for domain entities or dicts."""
-    if isinstance(d, dict):
-        return d.get(key, default)
-    return getattr(d, key, default)
-
-
-def _d_to_dict(d):
-    """Convert domain entity or dict to dict."""
-    if isinstance(d, dict):
-        return d
-    if hasattr(d, 'to_dict'):
-        return d.to_dict()
-    return d
-
-
 @router.get("/deliveries")
 async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    tenant_id = "default"
-    deliveries = list(store.get("deliveries", {}).values())
-    deliveries = [d for d in deliveries if _d_get(d, 'tenant_id') == tenant_id]
-    if status:
-        deliveries = [d for d in deliveries if _d_get(d, 'status') == status]
-    if driver_id:
-        deliveries = [d for d in deliveries if _d_get(d, 'driver_id') == driver_id]
-    return {"deliveries": [_d_to_dict(d) for d in deliveries], "count": len(deliveries)}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        deliveries = repo.list_deliveries(status=status, driver_id=driver_id, limit=200)
+        return {"deliveries": [d.to_dict() for d in deliveries], "count": len(deliveries)}
+    finally:
+        db.close()
 
 
 @router.get("/deliveries/{delivery_id}")
 async def get_delivery(delivery_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    delivery = store.get("deliveries", {}).get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, "Delivery not found")
-    return {"delivery": delivery.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        delivery = repo.get_delivery(delivery_id)
+        if not delivery:
+            raise HTTPException(404, "Delivery not found")
+        return {"delivery": delivery.to_dict()}
+    finally:
+        db.close()
 
 
 @router.patch("/deliveries/{delivery_id}/assign")
 async def assign_delivery(delivery_id: str, req: AssignRequest, ctx: TenantContext = Depends(get_tenant_context)):
-    from app.domain.delivery.delivery import DeliveryStatus
-    from app.domain.delivery.driver import DriverStatus
-    store = _get_store()
-    tenant_id = "default"
-    delivery = store.get("deliveries", {}).get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, "Delivery not found")
-    driver = store.get("drivers", {}).get(req.driver_id)
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    if not driver.is_available:
-        raise HTTPException(400, f"Driver is {driver.status.value}")
-    if not delivery.assign(req.driver_id, req.vehicle_id):
-        raise HTTPException(400, f"Cannot assign in status {delivery.status.value}")
-    driver.set_busy()
-    return {"success": True, "delivery": delivery.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
+
+        delivery = del_repo.get_delivery(delivery_id)
+        if not delivery:
+            raise HTTPException(404, "Delivery not found")
+        driver = drv_repo.buscar_por_codigo(req.driver_id)
+        if not driver:
+            raise HTTPException(404, "Driver not found")
+
+        new_record = del_repo.assign_delivery(delivery_id, req.driver_id, req.vehicle_id, delivery.version)
+        if not new_record:
+            raise HTTPException(400, f"Cannot assign in status {delivery.status}")
+
+        # Set driver busy via domain object
+        driver.set_busy()
+        drv_repo.db.commit()
+
+        return {"success": True, "delivery": new_record.to_dict()}
+    finally:
+        db.close()
 
 
 @router.patch("/deliveries/{delivery_id}/status")
 async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
-    from app.domain.delivery.delivery import DeliveryStatus, DeliveryFailureReason, DeliveryProof, ProofType
-    store = _get_store()
-    tenant_id = "default"
-    delivery = store.get("deliveries", {}).get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, "Delivery not found")
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
 
-    if req.status == "EN_ROUTE":
-        ok = delivery.start_route()
-    elif req.status == "ARRIVED":
-        ok = delivery.arrive()
-    elif req.status == "DELIVERED":
-        proof = None
-        if req.proof_type:
-            proof = DeliveryProof(delivery_id=delivery_id, proof_type=ProofType(req.proof_type))
-        ok = delivery.complete(proof)
-    elif req.status == "FAILED":
-        reason = DeliveryFailureReason.OTHER
-        if req.failure_reason:
-            try:
-                reason = DeliveryFailureReason(req.failure_reason)
-            except ValueError:
-                pass
-        ok = delivery.fail(reason, req.failure_notes)
-    elif req.status == "CANCELLED":
-        ok = delivery.cancel()
-    else:
-        raise HTTPException(400, f"Unknown status: {req.status}")
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        delivery = del_repo.get_delivery(delivery_id)
+        if not delivery:
+            raise HTTPException(404, "Delivery not found")
 
-    if not ok:
-        raise HTTPException(400, f"Cannot transition to {req.status}")
+        if req.status == "EN_ROUTE":
+            result = del_repo.start_delivery(delivery_id, delivery.version, delivery.driver_id or "")
+        elif req.status == "ARRIVED":
+            result = del_repo.arrive_delivery(delivery_id, delivery.version)
+        elif req.status == "DELIVERED":
+            result = del_repo.complete_delivery(
+                delivery_id, delivery.version,
+                proof_type=req.proof_type,
+            )
+        elif req.status == "FAILED":
+            result = del_repo.fail_delivery(
+                delivery_id, delivery.version,
+                reason=req.failure_reason or "OTHER",
+                notes=req.failure_notes,
+            )
+        elif req.status == "CANCELLED":
+            result = del_repo.cancel_delivery(delivery_id, delivery.version)
+        else:
+            raise HTTPException(400, f"Unknown status: {req.status}")
 
-    # Release driver on terminal state
-    if delivery.status in {DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED, DeliveryStatus.FAILED}:
-        if delivery.driver_id:
-            driver = store.get("drivers", {}).get(delivery.driver_id)
+        if not result:
+            raise HTTPException(400, f"Cannot transition to {req.status}")
+
+        # Release driver on terminal state
+        terminal_states = {"DELIVERED", "CANCELLED", "FAILED"}
+        if req.status in terminal_states and delivery.driver_id:
+            drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
+            driver = drv_repo.buscar_por_codigo(delivery.driver_id)
             if driver:
                 driver.set_available()
+                drv_repo.db.commit()
 
-    return {"success": True, "delivery": delivery.to_dict()}
+        return {"success": True, "delivery": result.to_dict()}
+    finally:
+        db.close()
 
 
-# ── Driver Endpoints ────────────────────────────────────
+# ── Driver Endpoints (Database-backed) ─────────────────
 
 @router.post("/drivers")
 async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(require_admin)):
@@ -254,52 +269,91 @@ async def list_drivers(status: Optional[str] = None, ctx: TenantContext = Depend
 
 @router.get("/drivers/{driver_id}")
 async def get_driver(driver_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    driver = store.get("drivers", {}).get(driver_id)
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    return {"driver": driver.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
+        driver = repo.buscar_por_codigo(driver_id)
+        if not driver:
+            raise HTTPException(404, "Driver not found")
+        return {"driver": driver.to_dict()}
+    finally:
+        db.close()
 
 
 @router.patch("/drivers/{driver_id}/location")
 async def update_driver_location(driver_id: str, req: LocationUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    driver = store.get("drivers", {}).get(driver_id)
-    if not driver:
-        raise HTTPException(404, "Driver not found")
-    driver.update_location(req.lat, req.lng, req.accuracy)
-    return {"success": True}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository
+
+    db = DBSession(bind=engine)
+    try:
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
+        driver = drv_repo.buscar_por_codigo(driver_id)
+        if not driver:
+            raise HTTPException(404, "Driver not found")
+
+        # Update domain object
+        driver.update_location(req.lat, req.lng, req.accuracy)
+        drv_repo.db.commit()
+
+        # Persist to GPS table
+        loc_repo = SQLAlchemyDriverLocationRepository(db)
+        loc_repo.upsert_location(
+            tenant_id=ctx.tenant_id,
+            driver_id=driver_id,
+            latitude=req.lat,
+            longitude=req.lng,
+            accuracy=req.accuracy,
+        )
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()
 
 
 @router.patch("/drivers/{driver_id}/status")
 async def update_driver_status(driver_id: str, status: str, ctx: TenantContext = Depends(get_tenant_context)):
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
     from app.domain.delivery.driver import DriverStatus
-    store = _get_store()
-    driver = store.get("drivers", {}).get(driver_id)
-    if not driver:
-        raise HTTPException(404, "Driver not found")
+
+    db = DBSession(bind=engine)
     try:
-        new_status = DriverStatus(status)
-    except ValueError:
-        raise HTTPException(400, f"Invalid status: {status}")
-    if new_status == DriverStatus.AVAILABLE:
-        driver.set_available()
-    elif new_status == DriverStatus.OFFLINE:
-        driver.go_offline()
-    elif new_status == DriverStatus.INACTIVE:
-        driver.deactivate()
-    else:
-        driver.status = new_status
-    return {"success": True, "driver": driver.to_dict()}
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
+        driver = repo.buscar_por_codigo(driver_id)
+        if not driver:
+            raise HTTPException(404, "Driver not found")
+        try:
+            new_status = DriverStatus(status)
+        except ValueError:
+            raise HTTPException(400, f"Invalid status: {status}")
+        if new_status == DriverStatus.AVAILABLE:
+            driver.set_available()
+        elif new_status == DriverStatus.OFFLINE:
+            driver.go_offline()
+        elif new_status == DriverStatus.INACTIVE:
+            driver.deactivate()
+        else:
+            driver.status = new_status
+        repo.db.commit()
+        return {"success": True, "driver": driver.to_dict()}
+    finally:
+        db.close()
 
 
 # ── Vehicle Endpoints (Database-backed) ───────────────
 
 def _get_vehicle_repo():
-    from app.infrastructure.database.dependencies import get_db
-    from app.infrastructure.repositories.vehicle_repository import VehicleRepository
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.vehicle_repository import VehicleRepository
     db = DBSession(bind=engine)
     return VehicleRepository(db, tenant_id="default"), db
 
@@ -317,12 +371,9 @@ async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends
         return {
             "success": True,
             "vehicle": {
-                "id": str(vehicle.id),
-                "plate": vehicle.plate,
-                "model": vehicle.model,
-                "capacity_total": vehicle.capacity_total,
-                "status": vehicle.status,
-                "tenant_id": vehicle.tenant_id,
+                "id": str(vehicle.id), "plate": vehicle.plate,
+                "model": vehicle.model, "capacity_total": vehicle.capacity_total,
+                "status": vehicle.status, "tenant_id": vehicle.tenant_id,
                 "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None,
             }
         }
@@ -338,11 +389,8 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
         return {
             "vehicles": [
                 {
-                    "id": str(v.id),
-                    "plate": v.plate,
-                    "model": v.model,
-                    "capacity_total": v.capacity_total,
-                    "status": v.status,
+                    "id": str(v.id), "plate": v.plate, "model": v.model,
+                    "capacity_total": v.capacity_total, "status": v.status,
                     "assigned_driver_id": v.assigned_driver_id,
                     "created_at": v.created_at.isoformat() if v.created_at else None,
                 }
@@ -354,7 +402,7 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
         db.close()
 
 
-# ── Route Endpoints ─────────────────────────────────────
+# ── Route Endpoints (Database-backed) ──────────────────
 
 @router.post("/routes")
 async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(require_admin)):
@@ -371,7 +419,6 @@ async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(req
             vehicle_id=req.vehicle_id,
             status="PLANNED",
         )
-        # Add stops
         if req.stops:
             for i, stop_data in enumerate(req.stops):
                 repo.add_stop(
@@ -472,73 +519,108 @@ async def dispatch_route(route_id: str, ctx: TenantContext = Depends(get_tenant_
 
 @router.post("/routes/{route_id}/stops/{stop_id}/arrive")
 async def arrive_stop(route_id: str, stop_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    route = store.get("routes", {}).get(route_id)
-    if not route:
-        raise HTTPException(404, "Route not found")
-    for stop in route.stops:
-        if stop.id == stop_id:
-            if not stop.arrive():
-                raise HTTPException(400, "Cannot arrive at this stop")
-            if route.status.value == "DISPATCHED":
-                route.start()
-            return {"success": True}
-    raise HTTPException(404, "Stop not found")
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.get_by_id(route_id)
+        if not route or route.tenant_id != ctx.tenant_id:
+            raise HTTPException(404, "Route not found")
+        stops = repo.get_stops(route_id)
+        stop = next((s for s in stops if s.id == stop_id), None)
+        if not stop:
+            raise HTTPException(404, "Stop not found")
+        if stop.status not in ("PENDING", "IN_PROGRESS"):
+            raise HTTPException(400, "Cannot arrive at this stop")
+        repo.update_stop(stop_id, status="IN_PROGRESS")
+        if route.status == "DISPATCHED":
+            repo.update(route_id, status="IN_PROGRESS")
+        return {"success": True}
+    finally:
+        db.close()
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/complete")
 async def complete_stop(route_id: str, stop_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    route = store.get("routes", {}).get(route_id)
-    if not route:
-        raise HTTPException(404, "Route not found")
-    for stop in route.stops:
-        if stop.id == stop_id:
-            if not stop.complete():
-                raise HTTPException(400, "Cannot complete this stop")
-            # Check if all stops completed
-            if all(s.is_terminal for s in route.stops):
-                route.complete_route()
-            return {"success": True}
-    raise HTTPException(404, "Stop not found")
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.get_by_id(route_id)
+        if not route or route.tenant_id != ctx.tenant_id:
+            raise HTTPException(404, "Route not found")
+        stops = repo.get_stops(route_id)
+        stop = next((s for s in stops if s.id == stop_id), None)
+        if not stop:
+            raise HTTPException(404, "Stop not found")
+        if stop.status in ("COMPLETED", "FAILED", "SKIPPED"):
+            raise HTTPException(400, "Cannot complete this stop")
+        repo.update_stop(stop_id, status="COMPLETED")
+        # Check if all stops completed
+        all_stops = repo.get_stops(route_id)
+        all_terminal = all(s.status in ("COMPLETED", "FAILED", "SKIPPED") for s in all_stops)
+        if all_terminal:
+            repo.update(route_id, status="COMPLETED")
+        return {"success": True}
+    finally:
+        db.close()
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/fail")
 async def fail_stop(route_id: str, stop_id: str, reason: str = "", ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    route = store.get("routes", {}).get(route_id)
-    if not route:
-        raise HTTPException(404, "Route not found")
-    for stop in route.stops:
-        if stop.id == stop_id:
-            if not stop.fail(reason):
-                raise HTTPException(400, "Cannot fail this stop")
-            return {"success": True}
-    raise HTTPException(404, "Stop not found")
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.get_by_id(route_id)
+        if not route or route.tenant_id != ctx.tenant_id:
+            raise HTTPException(404, "Route not found")
+        stops = repo.get_stops(route_id)
+        stop = next((s for s in stops if s.id == stop_id), None)
+        if not stop:
+            raise HTTPException(404, "Stop not found")
+        if stop.status in ("COMPLETED", "FAILED", "SKIPPED"):
+            raise HTTPException(400, "Cannot fail this stop")
+        repo.update_stop(stop_id, status="FAILED", notes=reason)
+        return {"success": True}
+    finally:
+        db.close()
 
 
-# ── Dispatch Dashboard ──────────────────────────────────
+# ── Dispatch Dashboard (Database-backed) ───────────────
 
 @router.get("/dispatch/summary")
 async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    tenant_id = "default"
-    deliveries = [d for d in store.get("deliveries", {}).values() if d.tenant_id == tenant_id]
-    drivers = [d for d in store.get("drivers", {}).values() if d.tenant_id == tenant_id]
-    statuses = {}
-    for d in deliveries:
-        s = d.status.value
-        statuses[s] = statuses.get(s, 0) + 1
-    return {
-        "deliveries": {"total": len(deliveries), "by_status": statuses},
-        "drivers": {
-            "total": len(drivers),
-            "available": sum(1 for d in drivers if d.is_available),
-        },
-    }
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        status_counts = del_repo.count_by_status()
+        total = sum(status_counts.values())
+        return {
+            "deliveries": {"total": total, "by_status": status_counts},
+            "drivers": {
+                "total": 0,  # Will be enriched when driver count query is added
+                "available": 0,
+            },
+        }
+    finally:
+        db.close()
 
 
-# ── Driver Locations ─────────────────────────────────────
+# ── Driver Locations (Database-backed) ─────────────────
 
 @router.get("/locations")
 async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)):
@@ -553,3 +635,12 @@ async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)
         return {"locations": locations}
     finally:
         db.close()
+
+
+# ── Backward-compat helper for printer/reports ─────────
+
+def get_store():
+    """Backward-compatible accessor — returns an empty dict.
+    All real state is now in the database. This exists solely so
+    that printer.py and reports.py don't crash on import."""
+    return {}

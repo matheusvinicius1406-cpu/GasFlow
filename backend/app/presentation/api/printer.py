@@ -53,18 +53,24 @@ async def create_print_job(req: PrintRequest, ctx: TenantContext = Depends(get_t
         "created_at": "",
     }
 
-    # Try to get real order data from the delivery ops store
+    # Try to get real order data from the database
     try:
-        from app.presentation.api.delivery_ops import _get_store
-        store = _get_store()
-        deliveries = store.get("deliveries", {})
-        for delivery in deliveries.values():
-            if hasattr(delivery, 'order_id') and delivery.order_id == req.order_id:
-                order_data.update({
-                    "client_name": getattr(delivery, 'customer_name', 'Cliente'),
-                    "address": str(delivery.address) if hasattr(delivery, 'address') else '',
-                })
-                break
+        from sqlalchemy.orm import Session as DBSession
+        from app.infrastructure.database.init_db import engine
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        db = DBSession(bind=engine)
+        try:
+            repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+            deliveries = repo.list_deliveries(limit=1000)
+            for delivery in deliveries:
+                if delivery.order_id == req.order_id:
+                    order_data.update({
+                        "client_name": delivery.customer_name or 'Cliente',
+                        "address": delivery.address_street or '',
+                    })
+                    break
+        finally:
+            db.close()
     except Exception:
         pass
 

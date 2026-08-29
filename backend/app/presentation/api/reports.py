@@ -22,29 +22,35 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 def _get_order_data_for_date(tenant_id: str, date: str):
-    """Get order data for a specific date from the delivery ops store."""
+    """Get order data for a specific date from the database."""
     try:
-        from app.presentation.api.delivery_ops import _get_store
-        store = _get_store()
+        from sqlalchemy.orm import Session as DBSession
+        from app.infrastructure.database.init_db import engine
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
 
         orders = []
         payments = []
         expenses = []
 
-        # Get deliveries (which contain order data)
-        for delivery in store.get("deliveries", {}).values():
-            if hasattr(delivery, 'tenant_id') and delivery.tenant_id == tenant_id:
+        db = DBSession(bind=engine)
+        try:
+            repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
+            deliveries = repo.list_deliveries(limit=1000)
+
+            for delivery in deliveries:
                 order_data = {
-                    "codigo": getattr(delivery, 'order_id', '???'),
-                    "client_name": getattr(delivery, 'customer_name', ''),
-                    "customer_codigo": getattr(delivery, 'customer_codigo', ''),
-                    "status": getattr(delivery, 'status', 'PENDING').value if hasattr(getattr(delivery, 'status', None), 'value') else str(getattr(delivery, 'status', 'PENDING')),
+                    "codigo": delivery.order_id or '???',
+                    "client_name": delivery.customer_name or '',
+                    "customer_codigo": delivery.customer_codigo or '',
+                    "status": delivery.status or 'PENDING',
                     "total": 0,
                     "items": [],
-                    "created_at": getattr(delivery, 'created_at', ''),
+                    "created_at": str(delivery.created_at) if delivery.created_at else '',
                     "payment_method": "",
                 }
                 orders.append(order_data)
+        finally:
+            db.close()
 
         return orders, payments, expenses
     except Exception:
@@ -117,31 +123,29 @@ async def get_business_summary(
 ):
     """Get business summary across all time."""
     try:
-        from app.presentation.api.delivery_ops import _get_store
-        store = _get_store()
+        from sqlalchemy.orm import Session as DBSession
+        from app.infrastructure.database.init_db import engine
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
 
-        deliveries = list(store.get("deliveries", {}).values())
-        drivers = list(store.get("drivers", {}).values())
+        db = DBSession(bind=engine)
+        try:
+            del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+            status_counts = del_repo.count_by_status()
+            total_deliveries = sum(status_counts.values())
+            delivered = status_counts.get('DELIVERED', 0)
+            failed = status_counts.get('FAILED', 0)
+            pending = total_deliveries - delivered - failed
 
-        # Filter by tenant
-        deliveries = [d for d in deliveries if hasattr(d, 'tenant_id') and d.tenant_id == ctx.tenant_id]
-        drivers = [d for d in drivers if hasattr(d, 'tenant_id') and d.tenant_id == ctx.tenant_id]
-
-        total_deliveries = len(deliveries)
-        delivered = sum(1 for d in deliveries if hasattr(d, 'status') and
-                        (d.status.value if hasattr(d.status, 'value') else str(d.status)) == 'DELIVERED')
-        failed = sum(1 for d in deliveries if hasattr(d, 'status') and
-                     (d.status.value if hasattr(d.status, 'value') else str(d.status)) == 'FAILED')
-        active_drivers = sum(1 for d in drivers if hasattr(d, 'is_available') and d.is_available)
-
-        return {
-            "total_deliveries": total_deliveries,
-            "delivered": delivered,
-            "failed": failed,
-            "pending": total_deliveries - delivered - failed,
-            "total_drivers": len(drivers),
-            "active_drivers": active_drivers,
-        }
+            return {
+                "total_deliveries": total_deliveries,
+                "delivered": delivered,
+                "failed": failed,
+                "pending": pending,
+                "total_drivers": 0,
+                "active_drivers": 0,
+            }
+        finally:
+            db.close()
     except Exception:
         return {
             "total_deliveries": 0,

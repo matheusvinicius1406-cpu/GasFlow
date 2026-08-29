@@ -70,13 +70,6 @@ class AssignRequest(BaseModel):
     vehicle_id: Optional[str] = None
 
 
-# ── In-memory store for demo (same as delivery_ops) ──────
-
-_in_memory_store = {}
-
-
-def _get_store():
-    return _in_memory_store
 
 
 # ── Endpoints ────────────────────────────────────────────
@@ -175,53 +168,40 @@ async def dispatch_status(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Get dispatch dashboard summary."""
-    store = _get_store()
-    tenant_id = "default"
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
 
-    deliveries = [d for d in store.get("deliveries", {}).values()
-                  if getattr(d, 'tenant_id', '') == tenant_id]
-    drivers = [d for d in store.get("drivers", {}).values()
-               if getattr(d, 'tenant_id', '') == tenant_id]
-    vehicles = [v for v in store.get("vehicles", {}).values()
-                if getattr(v, 'tenant_id', '') == tenant_id]
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
 
-    # Delivery stats
-    delivery_stats = {}
-    for d in deliveries:
-        status = getattr(d, 'status', None)
-        s = status.value if hasattr(status, 'value') else str(status)
-        delivery_stats[s] = delivery_stats.get(s, 0) + 1
+        status_counts = del_repo.count_by_status()
+        total_deliveries = sum(status_counts.values())
 
-    # Driver stats
-    driver_stats = {}
-    for d in drivers:
-        status = getattr(d, 'status', None)
-        s = status.value if hasattr(status, 'value') else str(status)
-        driver_stats[s] = driver_stats.get(s, 0) + 1
+        drivers = drv_repo.listar_todos()
+        total_drivers = len(drivers)
+        available_drivers = sum(1 for d in drivers if d.is_available)
+        online_drivers = sum(1 for d in drivers if d.status.value not in ("OFFLINE", "INACTIVE"))
 
-    # Vehicle stats
-    vehicle_stats = {}
-    for v in vehicles:
-        status = getattr(v, 'status', None)
-        s = status.value if hasattr(status, 'value') else str(status)
-        vehicle_stats[s] = vehicle_stats.get(s, 0) + 1
-
-    return {
-        "deliveries": {
-            "total": len(deliveries),
-            "by_status": delivery_stats,
-        },
-        "drivers": {
-            "total": len(drivers),
-            "by_status": driver_stats,
-            "available": sum(1 for d in drivers if getattr(d, 'is_available', False)),
-            "online": sum(1 for d in drivers if getattr(d, 'status', None) and
-                         d.status.value not in ("OFFLINE", "INACTIVE")),
-        },
-        "vehicles": {
-            "total": len(vehicles),
-            "by_status": vehicle_stats,
-            "available": sum(1 for v in vehicles if getattr(v, 'is_available', False)),
-            "with_capacity": sum(1 for v in vehicles if getattr(v, 'has_capacity', False)),
-        },
-    }
+        return {
+            "deliveries": {
+                "total": total_deliveries,
+                "by_status": status_counts,
+            },
+            "drivers": {
+                "total": total_drivers,
+                "available": available_drivers,
+                "online": online_drivers,
+            },
+            "vehicles": {
+                "total": 0,
+                "by_status": {},
+                "available": 0,
+                "with_capacity": 0,
+            },
+        }
+    finally:
+        db.close()

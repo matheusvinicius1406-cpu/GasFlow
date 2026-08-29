@@ -30,7 +30,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 import uuid
 import bcrypt
-from app.infrastructure.stores.shared_store import get_shared_store
 from app.domain.events.event_bus import (
     get_event_bus, publish_delivery_event, publish_driver_event, EventType
 )
@@ -172,8 +171,6 @@ class ConflictResponse(BaseModel):
 # SHARED STORE (single source of truth)
 # ═══════════════════════════════════════════════════════════
 
-def _get_store() -> Dict[str, Any]:
-    return get_shared_store()
 
 
 def _get_db() -> DBSession:

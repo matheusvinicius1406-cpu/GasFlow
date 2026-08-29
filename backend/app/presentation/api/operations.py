@@ -19,13 +19,6 @@ from app.domain.security.models import TenantContext
 router = APIRouter(prefix="/operations", tags=["operations"])
 
 
-# ── In-memory store (shared with delivery_ops) ──────────
-
-_in_memory_store = {}
-
-
-def _get_store():
-    return _in_memory_store
 
 
 # ── Schemas ──────────────────────────────────────────────
@@ -89,47 +82,41 @@ async def get_driver_locations(
     ctx: TenantContext = Depends(require_admin),
 ):
     """Get all driver locations for the operational map."""
-    store = _get_store()
-    drivers = list(store.get("drivers", {}).values())
-    result = []
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository, SQLAlchemyDeliveryPersistenceRepository
 
-    for d in drivers:
-        # Count active deliveries for this driver
-        active_deliveries = sum(
-            1 for deliv in store.get("deliveries", {}).values()
-            if getattr(deliv, 'driver_id', None) == d.id
-            and getattr(deliv, 'status', None) and
-            hasattr(deliv.status, 'value') and
-            deliv.status.value not in ("DELIVERED", "CANCELLED", "FAILED")
-        )
+    db = DBSession(bind=engine)
+    try:
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
+        loc_repo = SQLAlchemyDriverLocationRepository(db)
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
 
-        loc = d.location if hasattr(d, 'location') else None
-        loc_dict = loc if isinstance(loc, dict) else None
+        drivers = drv_repo.listar_todos()
+        result = []
 
-        # Try to get vehicle plate
-        vehicle_plate = None
-        if hasattr(d, 'vehicle_id') and d.vehicle_id:
-            vehicle = store.get("vehicles", {}).get(d.vehicle_id)
-            if vehicle:
-                vehicle_plate = getattr(vehicle, 'plate', None)
+        for d in drivers:
+            active_deliveries = len(del_repo.list_by_driver(d.codigo))
+            location = loc_repo.get_location(ctx.tenant_id, d.codigo)
 
-        result.append(DriverLocationResponse(
-            driver_id=d.id,
-            driver_name=getattr(d, 'name', ''),
-            status=d.status.value if hasattr(d.status, 'value') else str(d.status),
-            lat=loc_dict.get("lat") if loc_dict else (loc.lat if hasattr(loc, 'lat') else None),
-            lng=loc_dict.get("lng") if loc_dict else (loc.lng if hasattr(loc, 'lng') else None),
-            last_seen=loc_dict.get("timestamp") if loc_dict else (
-                loc.timestamp.isoformat() if hasattr(loc, 'timestamp') else None
-            ),
-            vehicle_id=getattr(d, 'vehicle_id', None),
-            vehicle_plate=vehicle_plate,
-            active_deliveries=active_deliveries,
-            is_paused=getattr(d, 'status', None) and hasattr(d.status, 'value') and d.status.value == "PAUSED",
-            pause_reason=getattr(d, 'pause_reason', None).value if hasattr(getattr(d, 'pause_reason', None), 'value') else None,
-        ))
+            result.append(DriverLocationResponse(
+                driver_id=d.codigo,
+                driver_name=d.name or '',
+                status=d.status.value,
+                lat=location.latitude if location else None,
+                lng=location.longitude if location else None,
+                last_seen=location.recorded_at.isoformat() if location and location.recorded_at else None,
+                vehicle_id=d.vehicle_id,
+                vehicle_plate=None,
+                active_deliveries=active_deliveries,
+                is_paused=d.status.value == "PAUSED",
+                pause_reason=None,
+            ))
 
-    return result
+        return result
+    finally:
+        db.close()
 
 
 @router.get("/map/deliveries", response_model=List[ActiveDeliveryResponse])
@@ -137,44 +124,50 @@ async def get_active_deliveries(
     ctx: TenantContext = Depends(require_admin),
 ):
     """Get all active deliveries for the operational map."""
-    store = _get_store()
-    deliveries = list(store.get("deliveries", {}).values())
-    result = []
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
 
-    for d in deliveries:
-        status = d.status.value if hasattr(d.status, 'value') else str(d.status)
-        if status in ("DELIVERED", "CANCELLED"):
-            continue
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
 
-        # Get driver name
-        driver_name = None
-        if d.driver_id:
-            driver = store.get("drivers", {}).get(d.driver_id)
-            if driver:
-                driver_name = getattr(driver, 'name', None)
+        all_deliveries = del_repo.list_deliveries(limit=200)
+        result = []
 
-        addr = d.address
-        addr_str = ""
-        if hasattr(addr, 'full_address'):
-            addr_str = addr.full_address()
-        elif hasattr(addr, 'street'):
-            addr_str = f"{addr.street}, {addr.number}"
+        for d in all_deliveries:
+            if d.status in ("DELIVERED", "CANCELLED"):
+                continue
 
-        result.append(ActiveDeliveryResponse(
-            delivery_id=d.id,
-            order_id=getattr(d, 'order_id', ''),
-            customer_name=getattr(d, 'customer_name', ''),
-            address=addr_str,
-            status=status,
-            driver_id=d.driver_id,
-            driver_name=driver_name,
-            vehicle_id=getattr(d, 'vehicle_id', None),
-            scheduled_at=d.scheduled_at.isoformat() if hasattr(d, 'scheduled_at') and d.scheduled_at else None,
-            started_at=d.started_at.isoformat() if hasattr(d, 'started_at') and d.started_at else None,
-            eta_minutes=d.eta_minutes if hasattr(d, 'eta_minutes') else None,
-        ))
+            driver_name = None
+            if d.driver_id:
+                driver = drv_repo.buscar_por_codigo(d.driver_id)
+                if driver:
+                    driver_name = driver.name
 
-    return result
+            addr_str = d.address_street or ''
+            if d.address_number:
+                addr_str += f", {d.address_number}"
+
+            result.append(ActiveDeliveryResponse(
+                delivery_id=d.delivery_id,
+                order_id=d.order_id or '',
+                customer_name=d.customer_name or '',
+                address=addr_str,
+                status=d.status,
+                driver_id=d.driver_id,
+                driver_name=driver_name,
+                vehicle_id=d.vehicle_id,
+                scheduled_at=d.scheduled_at.isoformat() if d.scheduled_at else None,
+                started_at=d.started_at.isoformat() if d.started_at else None,
+                eta_minutes=None,
+            ))
+
+        return result
+    finally:
+        db.close()
 
 
 @router.get("/dashboard", response_model=OperationalSummary)
@@ -182,91 +175,65 @@ async def get_operational_dashboard(
     ctx: TenantContext = Depends(require_admin),
 ):
     """Get operational dashboard summary with alerts."""
-    store = _get_store()
-    drivers = list(store.get("drivers", {}).values())
-    deliveries = list(store.get("deliveries", {}).values())
-    vehicles = list(store.get("vehicles", {}).values())
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
 
-    # Driver stats
-    drivers_online = sum(1 for d in drivers
-                        if hasattr(d.status, 'value') and
-                        d.status.value not in ("OFFLINE", "INACTIVE"))
-    drivers_available = sum(1 for d in drivers
-                           if hasattr(d, 'is_available') and d.is_available)
-    drivers_busy = sum(1 for d in drivers
-                      if hasattr(d.status, 'value') and d.status.value == "BUSY")
-    drivers_paused = sum(1 for d in drivers
-                        if hasattr(d.status, 'value') and d.status.value == "PAUSED")
-    drivers_offline = sum(1 for d in drivers
-                         if hasattr(d.status, 'value') and
-                         d.status.value in ("OFFLINE", "INACTIVE"))
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
 
-    # Delivery stats
-    from app.domain.delivery.delivery import DeliveryStatus
-    deliveries_pending = sum(1 for d in deliveries
-                            if hasattr(d.status, 'value') and d.status.value == "PENDING")
-    deliveries_in_progress = sum(1 for d in deliveries
-                                if hasattr(d.status, 'value') and
-                                d.status.value in ("ASSIGNED", "DISPATCHED", "EN_ROUTE", "ARRIVED"))
-    deliveries_completed = sum(1 for d in deliveries
-                              if hasattr(d.status, 'value') and d.status.value == "DELIVERED")
-    deliveries_failed = sum(1 for d in deliveries
-                           if hasattr(d.status, 'value') and d.status.value == "FAILED")
+        drivers = drv_repo.listar_todos()
+        status_counts = del_repo.count_by_status()
+        drivers_online = sum(1 for d in drivers if d.status.value not in ("OFFLINE", "INACTIVE"))
+        drivers_available = sum(1 for d in drivers if d.is_available)
+        drivers_busy = sum(1 for d in drivers if d.status.value == "BUSY")
+        drivers_paused = sum(1 for d in drivers if d.status.value == "PAUSED")
+        drivers_offline = sum(1 for d in drivers if d.status.value in ("OFFLINE", "INACTIVE"))
 
-    # Vehicle stats
-    vehicles_available = sum(1 for v in vehicles
-                            if hasattr(v.status, 'value') and v.status.value == "AVAILABLE")
-    vehicles_in_use = sum(1 for v in vehicles
-                         if hasattr(v.status, 'value') and v.status.value == "IN_USE")
+        # Delivery stats from DB counts
+        deliveries_pending = status_counts.get("PENDING", 0)
+        deliveries_in_progress = (
+            status_counts.get("ASSIGNED", 0) + status_counts.get("DISPATCHED", 0) +
+            status_counts.get("EN_ROUTE", 0) + status_counts.get("ARRIVED", 0)
+        )
+        deliveries_completed = status_counts.get("DELIVERED", 0)
+        deliveries_failed = status_counts.get("FAILED", 0)
 
-    # Generate alerts
-    alerts = []
+        # Generate alerts
+        alerts = []
 
-    # Alert: pending deliveries without driver
-    pending_without_driver = sum(1 for d in deliveries
-                                if hasattr(d.status, 'value') and d.status.value == "PENDING"
-                                and not getattr(d, 'driver_id', None))
-    if pending_without_driver > 0:
-        alerts.append(OperationalAlert(
-            alert_type="PENDING_NO_DRIVER",
-            severity="WARNING",
-            message=f"{pending_without_driver} entrega(s) sem motorista atribuído",
-            timestamp=datetime.utcnow().isoformat(),
-        ))
+        if deliveries_pending > 0 and drivers_available == 0 and drivers_online > 0:
+            alerts.append(OperationalAlert(
+                alert_type="PENDING_NO_DRIVER",
+                severity="WARNING",
+                message=f"{deliveries_pending} entrega(s) sem motorista disponivel",
+                timestamp=datetime.utcnow().isoformat(),
+            ))
 
-    # Alert: no available drivers
-    if drivers_online > 0 and drivers_available == 0:
-        alerts.append(OperationalAlert(
-            alert_type="NO_AVAILABLE_DRIVERS",
-            severity="CRITICAL",
-            message="Nenhum motorista disponível para novas entregas",
-            timestamp=datetime.utcnow().isoformat(),
-        ))
+        if drivers_online > 0 and drivers_available == 0:
+            alerts.append(OperationalAlert(
+                alert_type="NO_AVAILABLE_DRIVERS",
+                severity="CRITICAL",
+                message="Nenhum motorista disponivel para novas entregas",
+                timestamp=datetime.utcnow().isoformat(),
+            ))
 
-    # Alert: low vehicle capacity
-    from app.domain.delivery.vehicle import VehicleStatus
-    low_capacity_vehicles = sum(1 for v in vehicles
-                               if hasattr(v, 'has_capacity') and not v.has_capacity
-                               and hasattr(v.status, 'value') and v.status.value != "MAINTENANCE")
-    if low_capacity_vehicles > 0:
-        alerts.append(OperationalAlert(
-            alert_type="LOW_VEHICLE_CAPACITY",
-            severity="INFO",
-            message=f"{low_capacity_vehicles} veículo(s) com capacidade baixa",
-            timestamp=datetime.utcnow().isoformat(),
-        ))
-
-    return OperationalSummary(
-        drivers_online=drivers_online,
-        drivers_available=drivers_available,
-        drivers_busy=drivers_busy,
-        drivers_paused=drivers_paused,
-        drivers_offline=drivers_offline,
-        deliveries_pending=deliveries_pending,
-        deliveries_in_progress=deliveries_in_progress,
-        deliveries_completed_today=deliveries_completed,
-        deliveries_failed_today=deliveries_failed,
-        vehicles_available=vehicles_available,
-        vehicles_in_use=vehicles_in_use,
-        alerts=alerts,
-    )
+        return OperationalSummary(
+            drivers_online=drivers_online,
+            drivers_available=drivers_available,
+            drivers_busy=drivers_busy,
+            drivers_paused=drivers_paused,
+            drivers_offline=drivers_offline,
+            deliveries_pending=deliveries_pending,
+            deliveries_in_progress=deliveries_in_progress,
+            deliveries_completed_today=deliveries_completed,
+            deliveries_failed_today=deliveries_failed,
+            vehicles_available=0,
+            vehicles_in_use=0,
+            alerts=alerts,
+        )
+    finally:
+        db.close()
