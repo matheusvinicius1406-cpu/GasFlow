@@ -35,10 +35,9 @@ class ClientModel(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "codigo", name="uq_client_tenant_codigo"),
-            
+        UniqueConstraint("tenant_id", "telefone", name="uq_client_tenant_telefone"),
         Index("ix_clients_telefone", "telefone"),
         Index("ix_clients_tipo", "tipo"),
         Index("ix_clients_ativo", "ativo"),
         Index("ix_clients_email", "email"),
-        UniqueConstraint("telefone", name="uq_clients_telefone"),
     )

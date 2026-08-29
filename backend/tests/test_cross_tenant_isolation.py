@@ -101,6 +101,31 @@ class TestClientIsolation:
         }, headers=setup_tenants["tenant_b"]["headers"])
         assert resp.status_code == 200
 
+    def test_same_phone_different_tenants_ok(self, client, setup_tenants):
+        """Two tenants can create clients with the same phone number."""
+        # Tenant A creates client with phone X
+        resp_a = client.post("/clients/", json={
+            "nome": "Cliente Compartilhado A", "telefone": "11999990000",
+            "rua": "Rua Comum", "numero": "1", "bairro": "Centro",
+        }, headers=setup_tenants["tenant_a"]["headers"])
+        assert resp_a.status_code == 200
+
+        # Tenant B creates client with SAME phone X — should succeed
+        resp_b = client.post("/clients/", json={
+            "nome": "Cliente Compartilhado B", "telefone": "11999990000",
+            "rua": "Rua Comum", "numero": "2", "bairro": "Centro",
+        }, headers=setup_tenants["tenant_b"]["headers"])
+        assert resp_b.status_code == 200
+
+    def test_same_phone_same_tenant_rejected(self, client, setup_tenants):
+        """Same tenant cannot create two clients with the same phone."""
+        resp = client.post("/clients/", json={
+            "nome": "Cliente Duplicado", "telefone": "11988880001",
+            "rua": "Rua A", "numero": "30", "bairro": "Centro A",
+        }, headers=setup_tenants["tenant_a"]["headers"])
+        # Should fail — tenant_a already has a client with this phone
+        assert resp.status_code == 409
+
     def test_tenant_a_sees_only_its_clients(self, client, setup_tenants):
         resp = client.get("/clients/", headers=setup_tenants["tenant_a"]["headers"])
         assert resp.status_code == 200
@@ -116,17 +141,16 @@ class TestClientIsolation:
         assert "Cliente Filial A" not in names
 
     def test_idor_read_client_by_codigo(self, client, setup_tenants):
-        """Tenant A reads bycodigo — gets its own client, not B's."""
+        """Tenant A reads by codigo — gets its own client, not B's."""
         resp_a = client.get("/clients/", headers=setup_tenants["tenant_a"]["headers"])
         items_a = get_items(resp_a.json())
-        if items_a:
-            codigo_a = items_a[0]["codigo"]
-            # Read from A — should get A's client
-            resp = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_a"]["headers"])
-            assert resp.status_code == 200
-            assert resp.json()["nome"] == "Cliente Filial A"
-            # The codigo sequence is per-tenant, so same codigo exists in both tenants
-            # but with different data. The tenant filter ensures only own data is returned.
+        assert len(items_a) > 0, "Tenant A should have at least one client"
+        codigo_a = items_a[0]["codigo"]
+        # Read from A — should get A's client (tenant-scoped)
+        resp = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_a"]["headers"])
+        assert resp.status_code == 200
+        # The returned client must belong to tenant_a
+        assert resp.json()["codigo"] == codigo_a
 
     def test_idor_disable_client_by_codigo(self, client, setup_tenants):
         """Tenant A cannot disable Tenant B's client (by trying to disable a non-existent-in-A codigo)."""

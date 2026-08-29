@@ -46,14 +46,14 @@ def test_db():
 # ═══════════════════════════════════════════════════════════
 
 def test_unique_telefone_enforced_by_db(test_db):
-    """UNIQUE(telefone) constraint prevents duplicates at DB level."""
+    """UNIQUE(tenant_id, telefone) constraint prevents duplicates within same tenant."""
     c1 = ClientModel(
         codigo="000001", nome="A", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
+        rua="Rua A", numero="1", bairro="Centro", tenant_id="default"
     )
     c2 = ClientModel(
         codigo="000002", nome="B", telefone="11999999999",
-        rua="Rua B", numero="2", bairro="Centro"
+        rua="Rua B", numero="2", bairro="Centro", tenant_id="default"
     )
     test_db.add(c1)
     test_db.commit()
@@ -61,6 +61,24 @@ def test_unique_telefone_enforced_by_db(test_db):
     test_db.add(c2)
     with pytest.raises(IntegrityError):
         test_db.commit()
+
+
+def test_unique_telefone_different_tenants_ok(test_db):
+    """Different tenants can have clients with the same phone number."""
+    c1 = ClientModel(
+        codigo="000001", nome="A", telefone="11999999999",
+        rua="Rua A", numero="1", bairro="Centro", tenant_id="tenant_a"
+    )
+    c2 = ClientModel(
+        codigo="000001", nome="B", telefone="11999999999",
+        rua="Rua B", numero="2", bairro="Centro", tenant_id="tenant_b"
+    )
+    test_db.add(c1)
+    test_db.commit()
+
+    test_db.add(c2)
+    test_db.commit()  # Should succeed — different tenants
+    assert test_db.query(ClientModel).count() == 2
 
 
 def test_unique_telefone_different_phones_ok(test_db):
@@ -86,11 +104,11 @@ def test_unique_telefone_different_phones_ok(test_db):
 # ═══════════════════════════════════════════════════════════
 
 def test_concurrent_duplicate_phone(test_db):
-    """Two concurrent inserts with same phone — exactly one succeeds."""
+    """Two concurrent inserts with same phone in same tenant — exactly one succeeds."""
     # Seed with a client using the target phone
     c1 = ClientModel(
         codigo="000001", nome="Existing", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
+        rua="Rua A", numero="1", bairro="Centro", tenant_id="default"
     )
     test_db.add(c1)
     test_db.commit()
