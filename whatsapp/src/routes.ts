@@ -142,7 +142,7 @@ router.get('/whatsapp/accounts/:id/health', async (req: Request, res: Response) 
 // ═══════════════════════════════════════════════════════════
 
 import { normalizePhone } from './normalize';
-import { insertSentMessage, markSentMessageSent, markSentMessageFailed, findSentMessageByKey } from './db';
+import { insertSentMessage, markSentMessageSent, markSentMessageFailed, findSentMessageByKey, listSentMessages } from './db';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
