@@ -462,3 +462,20 @@ async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
             "available": sum(1 for d in drivers if d.is_available),
         },
     }
+
+
+# ── Driver Locations ─────────────────────────────────────
+
+@router.get("/locations")
+async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)):
+    """Get all driver GPS locations for the admin drivers map."""
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository
+    db = DBSession(bind=engine)
+    try:
+        loc_repo = SQLAlchemyDriverLocationRepository(db)
+        locations = loc_repo.get_all_locations(ctx.tenant_id)
+        return {"locations": locations}
+    finally:
+        db.close()

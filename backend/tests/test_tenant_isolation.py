@@ -114,7 +114,7 @@ class TestTenantFiltering:
 
     def test_delivery_filtered_by_tenant(self, client, admin_token):
         """Verify delivery endpoints work with tenant filter."""
-        for path in ["/delivery-drivers/", "/delivery/deliveries"]:
+        for path in ["/delivery-drivers/", "/delivery/deliveries", "/delivery/locations"]:
             resp = client.get(path, headers=auth_header(admin_token))
             assert resp.status_code == 200, f"{path} returned {resp.status_code}"
 
