@@ -38,6 +38,7 @@ from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.rate_limit import RateLimitMiddleware
 
 # Setup structured logging
 logger = setup_logging(settings.log_level)
@@ -53,6 +54,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # Request logging
 app.add_middleware(LoggingMiddleware)
+
+# Rate limiting
+app.add_middleware(RateLimitMiddleware)
 
 # CORS
 app.add_middleware(
