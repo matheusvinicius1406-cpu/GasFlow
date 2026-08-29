@@ -186,46 +186,43 @@ def _get_db() -> DBSession:
 # ═══════════════════════════════════════════════════════════
 
 def _authenticate_driver(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """Extract driver context from Authorization header."""
+    """Extract driver context from Authorization header.
+
+    Database is the single source of truth for sessions.
+    No in-memory fallback — DB failure returns controlled error.
+    """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, detail="Authentication required")
     token = authorization[7:]
 
-    # Try persistent session first
     db = _get_db()
     try:
         from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
         session_repo = SQLAlchemyDriverSessionRepository(db)
         record = session_repo.get_session(token)
-        if record:
-            # Check expiry
-            if record.expires_at and record.expires_at < datetime.utcnow():
-                raise HTTPException(401, detail="Token expired")
-            return record.to_dict()
+        if not record:
+            raise HTTPException(401, detail="Invalid or expired token")
+        # Check expiry
+        if record.expires_at and record.expires_at < datetime.utcnow():
+            raise HTTPException(401, detail="Token expired")
+        return record.to_dict()
     finally:
         db.close()
-
-    # Fallback: in-memory store (backward compat for existing sessions)
-    store = _get_store()
-    session = store["sessions"].get(token)
-    if not session:
-        raise HTTPException(401, detail="Invalid or expired token")
-    if session.get("expires_at"):
-        if datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
-            raise HTTPException(401, detail="Token expired")
-    return session
 
 
 # ═══════════════════════════════════════════════════════════
 # HELPER — Check idempotency
 # ═══════════════════════════════════════════════════════════
 
-def _check_idempotency(store: Dict, key: Optional[str]) -> Optional[Dict]:
-    """Return previous result if idempotency key already processed."""
+def _check_idempotency(key: Optional[str]) -> Optional[Dict]:
+    """Return previous result if idempotency key already processed.
+
+    Database is the single source of truth.
+    No in-memory fallback — DB failure returns None (allow processing).
+    """
     if not key:
         return None
 
-    # Try persistent idempotency first
     db = _get_db()
     try:
         from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
@@ -234,17 +231,12 @@ def _check_idempotency(store: Dict, key: Optional[str]) -> Optional[Dict]:
             return {"success": True, "idempotent_replay": True}
     finally:
         db.close()
-
-    # Fallback: in-memory store
-    if key in store.get("idempotency_keys", set()):
-        return {"success": True, "idempotent_replay": True}
     return None
 
 
-def _record_idempotency(store: Dict, key: Optional[str]):
-    """Record idempotency key."""
+def _record_idempotency(key: Optional[str]):
+    """Record idempotency key to database."""
     if key:
-        # Persist to database
         db = _get_db()
         try:
             from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
@@ -252,8 +244,6 @@ def _record_idempotency(store: Dict, key: Optional[str]):
             idem_repo.record(key)
         finally:
             db.close()
-        # Also keep in-memory for backward compat
-        store.get("idempotency_keys", set()).add(key)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -327,17 +317,7 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
         
         # Create session
         token = str(uuid.uuid4())
-        session = {
-            "token": token,
-            "driver_id": model.codigo,
-            "tenant_id": tenant_id,
-            "role": "DRIVER",
-            "device_id": req.device_id,
-            "device_name": req.device_name,
-            "platform": req.platform,
-            "created_at": datetime.utcnow().isoformat(),
-            "expires_at": (datetime.utcnow() + timedelta(hours=8)).isoformat(),
-        }
+        expires_at = datetime.utcnow() + timedelta(hours=8)
         
         # Persist session to database
         db_session = _get_db()
@@ -357,23 +337,19 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
         finally:
             db_session.close()
 
-        # Also keep in-memory for backward compat
-        store = _get_store()
-        store["sessions"][token] = session
-        
         return DriverLoginResponse(
             success=True,
             token=token,
             driver_id=model.codigo,
             tenant_id=tenant_id,
-            expires_at=session["expires_at"],
+            expires_at=expires_at.isoformat(),
         )
     finally:
         db.close()
 
 
 async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
-    # Revoke persistent session
+    """Revoke session. Database is the single source of truth."""
     db = _get_db()
     try:
         from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
@@ -381,34 +357,20 @@ async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
         session_repo.revoke_session(ctx.get("token", ""))
     finally:
         db.close()
-
-    # Also remove from in-memory store
-    store = _get_store()
-    store["sessions"].pop(ctx.get("token", ""), None)
     return {"success": True}
 
 
 async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
-    """Get driver profile from database."""
+    """Get driver profile from database.
+
+    Database is the single source of truth. No in-memory fallback.
+    """
     db = _get_db_session()
     try:
         from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
         repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.get("tenant_id", "default"))
         model = repo.find_by_id_as_model(ctx["driver_id"])
         if not model:
-            # Fallback: try in-memory store (for backward compat)
-            store = _get_store()
-            driver = store["drivers"].get(ctx["driver_id"])
-            if driver:
-                dd = _driver_to_dict(driver)
-                return DriverMeResponse(
-                    driver_id=dd.get("id", ctx["driver_id"]),
-                    name=dd.get("name", ""),
-                    phone=dd.get("phone", ""),
-                    status=dd.get("status", "AVAILABLE"),
-                    active=dd.get("active", True),
-                    tenant_id=dd.get("tenant_id", "default"),
-                )
             raise HTTPException(404, detail="Driver not found")
         return DriverMeResponse(
             driver_id=model.codigo,
@@ -502,8 +464,7 @@ async def handle_get_delivery(ctx: Dict, delivery_id: str) -> DriverDeliveryDeta
 
 
 async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
-    store = _get_store()
-    replay = _check_idempotency(store, req.idempotency_key)
+    replay = _check_idempotency(req.idempotency_key)
     if replay:
         return replay
 
@@ -523,7 +484,7 @@ async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
         if not record:
             raise HTTPException(409, detail="VERSION_CONFLICT")
 
-        _record_idempotency(store, req.idempotency_key)
+        _record_idempotency(req.idempotency_key)
         publish_delivery_event(
             EventType.DELIVERY_ACCEPTED, delivery_id, ctx["tenant_id"],
             driver_id=ctx["driver_id"], data={"previous_status": "PENDING"}
@@ -534,8 +495,7 @@ async def handle_accept_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
 
 
 async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
-    store = _get_store()
-    replay = _check_idempotency(store, req.idempotency_key)
+    replay = _check_idempotency(req.idempotency_key)
     if replay:
         return replay
 
@@ -555,7 +515,7 @@ async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest)
         if not record:
             raise HTTPException(409, detail="VERSION_CONFLICT")
 
-        _record_idempotency(store, req.idempotency_key)
+        _record_idempotency(req.idempotency_key)
         publish_delivery_event(
             EventType.DELIVERY_STARTED, delivery_id, ctx["tenant_id"],
             driver_id=ctx["driver_id"], data={"previous_status": "ASSIGNED"}
@@ -566,8 +526,7 @@ async def handle_start_delivery(ctx: Dict, delivery_id: str, req: ActionRequest)
 
 
 async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
-    store = _get_store()
-    replay = _check_idempotency(store, req.idempotency_key)
+    replay = _check_idempotency(req.idempotency_key)
     if replay:
         return replay
 
@@ -587,7 +546,7 @@ async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
         if not record:
             raise HTTPException(409, detail="VERSION_CONFLICT")
 
-        _record_idempotency(store, req.idempotency_key)
+        _record_idempotency(req.idempotency_key)
         publish_delivery_event(
             EventType.DELIVERY_ARRIVED, delivery_id, ctx["tenant_id"],
             driver_id=ctx["driver_id"], data={"previous_status": "EN_ROUTE"}
@@ -598,8 +557,7 @@ async def handle_arrive_delivery(ctx: Dict, delivery_id: str, req: ActionRequest
 
 
 async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
-    store = _get_store()
-    replay = _check_idempotency(store, req.idempotency_key)
+    replay = _check_idempotency(req.idempotency_key)
     if replay:
         return replay
 
@@ -631,7 +589,7 @@ async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionReque
         if not record:
             raise HTTPException(409, detail="VERSION_CONFLICT")
 
-        _record_idempotency(store, req.idempotency_key)
+        _record_idempotency(req.idempotency_key)
         publish_delivery_event(
             EventType.DELIVERY_COMPLETED, delivery_id, ctx["tenant_id"],
             driver_id=ctx["driver_id"], data={
@@ -645,8 +603,7 @@ async def handle_complete_delivery(ctx: Dict, delivery_id: str, req: ActionReque
 
 
 async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) -> Dict:
-    store = _get_store()
-    replay = _check_idempotency(store, req.idempotency_key)
+    replay = _check_idempotency(req.idempotency_key)
     if replay:
         return replay
 
@@ -671,7 +628,7 @@ async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) 
         if not record:
             raise HTTPException(409, detail="VERSION_CONFLICT")
 
-        _record_idempotency(store, req.idempotency_key)
+        _record_idempotency(req.idempotency_key)
         publish_delivery_event(
             EventType.DELIVERY_FAILED, delivery_id, ctx["tenant_id"],
             driver_id=ctx["driver_id"], data={
@@ -687,10 +644,12 @@ async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) 
 
 # ═══════════════════════════════════════════════════════════
 # ROUTE ENDPOINTS (shared)
+# Category A — transient operational state (route plan for dispatch session).
+# Routes are computed by dispatch and consumed within the same operational cycle.
+# TODO Fase 21: persist routes when multi-stop route planning requires restart survival.
 # ═══════════════════════════════════════════════════════════
 
 async def handle_list_routes(ctx: Dict) -> Dict:
-    store = _get_store()
     routes = [
         r for r in store["routes"].values()
         if r.get("driver_id") == ctx["driver_id"] and r.get("tenant_id") == ctx["tenant_id"]
@@ -711,7 +670,6 @@ async def handle_list_routes(ctx: Dict) -> Dict:
 
 
 async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
-    store = _get_store()
     for r in store["routes"].values():
         if (r.get("driver_id") == ctx["driver_id"] and
                 r.get("tenant_id") == ctx["tenant_id"] and
@@ -820,31 +778,33 @@ async def handle_set_availability(ctx: Dict, req: AvailabilityRequest) -> Dict:
 # ═══════════════════════════════════════════════════════════
 
 async def handle_upload_proof(ctx: Dict, delivery_id: str, proof_type: str, notes: str = "") -> Dict:
-    store = _get_store()
-
-    delivery = store["deliveries"].get(delivery_id)
-    if not delivery:
-        raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
-    if delivery.get("driver_id") != ctx["driver_id"]:
-        raise HTTPException(403, detail="FORBIDDEN")
-    if delivery.get("tenant_id") != ctx["tenant_id"]:
-        raise HTTPException(403, detail="FORBIDDEN")
-
+    """Upload delivery proof. Uses database as single source of truth."""
     valid_types = {"PHOTO", "SIGNATURE", "OTP", "MANUAL_CONFIRMATION"}
     if proof_type not in valid_types:
         raise HTTPException(400, detail=f"PROOF_INVALID: type={proof_type}")
 
-    proof_id = str(uuid.uuid4())
-    store["proofs"][proof_id] = {
-        "id": proof_id,
-        "delivery_id": delivery_id,
-        "driver_id": ctx["driver_id"],
-        "tenant_id": ctx["tenant_id"],
-        "proof_type": proof_type,
-        "notes": notes,
-        "created_at": datetime.utcnow().isoformat(),
-    }
-    return {"success": True, "proof_id": proof_id}
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx["tenant_id"])
+        record = repo.get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(404, detail="DELIVERY_NOT_FOUND")
+        if record.driver_id != ctx["driver_id"]:
+            raise HTTPException(403, detail="FORBIDDEN")
+
+        proof_id = str(uuid.uuid4())
+        record.proof_type = proof_type
+        record.proof_data = {
+            "proof_id": proof_id,
+            "driver_id": ctx["driver_id"],
+            "notes": notes,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        db.commit()
+        return {"success": True, "proof_id": proof_id}
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -852,7 +812,7 @@ async def handle_upload_proof(ctx: Dict, delivery_id: str, proof_type: str, note
 # ═══════════════════════════════════════════════════════════
 
 async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
-    store = _get_store()
+    """Offline sync. Uses database as single source of truth."""
     driver_id = ctx["driver_id"]
     tenant_id = ctx["tenant_id"]
 
@@ -860,76 +820,80 @@ async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
     rejected = []
     conflicts = []
 
-    for action in req.actions:
-        action_type = action.get("type", "")
-        delivery_id = action.get("delivery_id", "")
-        idempotency_key = action.get("idempotency_key")
-        client_version = action.get("client_version", 0)
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository, SQLAlchemyIdempotencyRepository
+        )
+        delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
+        idem_repo = SQLAlchemyIdempotencyRepository(db)
 
-        if idempotency_key and idempotency_key in store["idempotency_keys"]:
-            accepted.append(idempotency_key)
-            continue
+        for action in req.actions:
+            action_type = action.get("type", "")
+            delivery_id = action.get("delivery_id", "")
+            idempotency_key = action.get("idempotency_key")
+            client_version = action.get("client_version", 0)
 
-        delivery = store["deliveries"].get(delivery_id)
-        if not delivery:
-            rejected.append({"action": action_type, "delivery_id": delivery_id,
-                             "error": "DELIVERY_NOT_FOUND"})
-            continue
-        if delivery.get("driver_id") != driver_id or delivery.get("tenant_id") != tenant_id:
-            rejected.append({"action": action_type, "delivery_id": delivery_id,
-                             "error": "FORBIDDEN"})
-            continue
+            if idempotency_key and idem_repo.exists(idempotency_key):
+                accepted.append(idempotency_key)
+                continue
 
-        server_version = delivery.get("version", 0)
-        if client_version and client_version < server_version:
-            conflicts.append({
-                "action": action_type,
-                "delivery_id": delivery_id,
-                "current_version": server_version,
-                "current_status": delivery.get("status"),
-                "client_version": client_version,
-            })
-            continue
+            record = delivery_repo.get_delivery(delivery_id)
+            if not record:
+                rejected.append({"action": action_type, "delivery_id": delivery_id,
+                                 "error": "DELIVERY_NOT_FOUND"})
+                continue
+            if record.driver_id != driver_id:
+                rejected.append({"action": action_type, "delivery_id": delivery_id,
+                                 "error": "FORBIDDEN"})
+                continue
 
-        success = False
-        if action_type == "start" and delivery["status"] in ("ASSIGNED", "DISPATCHED"):
-            delivery["status"] = "EN_ROUTE"
-            delivery["version"] = server_version + 1
-            success = True
-        elif action_type == "arrive" and delivery["status"] == "EN_ROUTE":
-            delivery["status"] = "ARRIVED"
-            delivery["version"] = server_version + 1
-            success = True
-        elif action_type == "complete" and delivery["status"] == "ARRIVED":
-            delivery["status"] = "DELIVERED"
-            delivery["version"] = server_version + 1
-            success = True
-        elif action_type == "fail" and delivery["status"] in ("EN_ROUTE", "ARRIVED"):
-            delivery["status"] = "FAILED"
-            delivery["version"] = server_version + 1
-            delivery["failed_reason"] = action.get("failure_reason", "OTHER")
-            success = True
+            server_version = record.version
+            if client_version and client_version < server_version:
+                conflicts.append({
+                    "action": action_type,
+                    "delivery_id": delivery_id,
+                    "current_version": server_version,
+                    "current_status": record.status,
+                    "client_version": client_version,
+                })
+                continue
 
-        if success:
-            store["deliveries"][delivery_id] = delivery
-            if idempotency_key:
-                store["idempotency_keys"].add(idempotency_key)
-            accepted.append(idempotency_key or action_type)
-            # Publish event for sync transitions
-            _sync_event_map = {
-                "start": EventType.DELIVERY_STARTED,
-                "arrive": EventType.DELIVERY_ARRIVED,
-                "complete": EventType.DELIVERY_COMPLETED,
-                "fail": EventType.DELIVERY_FAILED,
-            }
-            if action_type in _sync_event_map:
-                publish_delivery_event(
-                    _sync_event_map[action_type], delivery_id, tenant_id,
-                    driver_id=driver_id, data={"source": "sync"}
+            result_record = None
+            previous_status = record.status
+            if action_type == "start" and record.status in ("ASSIGNED", "DISPATCHED"):
+                result_record = delivery_repo.start_delivery(delivery_id, server_version, driver_id)
+            elif action_type == "arrive" and record.status == "EN_ROUTE":
+                result_record = delivery_repo.arrive_delivery(delivery_id, server_version)
+            elif action_type == "complete" and record.status == "ARRIVED":
+                result_record = delivery_repo.complete_delivery(delivery_id, server_version)
+            elif action_type == "fail" and record.status in ("EN_ROUTE", "ARRIVED"):
+                result_record = delivery_repo.fail_delivery(
+                    delivery_id, server_version,
+                    reason=action.get("failure_reason", "OTHER"),
+                    notes=(action.get("failure_notes", "") or "").replace("<", "").replace(">", ""),
                 )
-        else:
-            rejected.append({"action": action_type, "delivery_id": delivery_id,
-                             "error": f"INVALID_STATE: {delivery['status']}"})
+
+            if result_record:
+                if idempotency_key:
+                    idem_repo.record(idempotency_key)
+                accepted.append(idempotency_key or action_type)
+                _sync_event_map = {
+                    "start": EventType.DELIVERY_STARTED,
+                    "arrive": EventType.DELIVERY_ARRIVED,
+                    "complete": EventType.DELIVERY_COMPLETED,
+                    "fail": EventType.DELIVERY_FAILED,
+                }
+                if action_type in _sync_event_map:
+                    publish_delivery_event(
+                        _sync_event_map[action_type], delivery_id, tenant_id,
+                        driver_id=driver_id, data={"source": "sync"}
+                    )
+            else:
+                rejected.append({"action": action_type, "delivery_id": delivery_id,
+                                 "error": f"INVALID_STATE: {record.status}"})
+    finally:
+        db.close()
 
     return SyncResponse(
         accepted=accepted,

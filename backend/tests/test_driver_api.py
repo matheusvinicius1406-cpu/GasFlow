@@ -243,21 +243,21 @@ class TestIdempotency:
         """Same idempotency_key → one effect."""
         from app.presentation.api.driver_api import _check_idempotency, _record_idempotency
         key = "idem-001"
-        assert _check_idempotency(store, key) is None  # First time
-        _record_idempotency(store, key)
-        result = _check_idempotency(store, key)
+        assert _check_idempotency(key) is None  # First time
+        _record_idempotency(key)
+        result = _check_idempotency(key)
         assert result is not None  # Replay detected
         assert result["idempotent_replay"]
 
     def test_different_keys_independent(self, store, setup_data):
         from app.presentation.api.driver_api import _check_idempotency, _record_idempotency
-        _record_idempotency(store, "key-1")
-        assert _check_idempotency(store, "key-2") is None
+        _record_idempotency("key-1")
+        assert _check_idempotency("key-2") is None
 
     def test_no_key_always_proceeds(self, store, setup_data):
         from app.presentation.api.driver_api import _check_idempotency
-        assert _check_idempotency(store, None) is None
-        assert _check_idempotency(store, "") is None
+        assert _check_idempotency(None) is None
+        assert _check_idempotency("") is None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -358,8 +358,8 @@ class TestSync:
         """Same idempotency key → accepted, no double effect."""
         from app.presentation.api.driver_api import _record_idempotency, _check_idempotency
         key = "sync-key-1"
-        _record_idempotency(store, key)
-        result = _check_idempotency(store, key)
+        _record_idempotency(key)
+        result = _check_idempotency(key)
         assert result["idempotent_replay"]
 
 
@@ -514,8 +514,8 @@ class TestAdversarial:
     def test_18_offline_replay(self, store, setup_data):
         from app.presentation.api.driver_api import _record_idempotency, _check_idempotency
         key = "replay-001"
-        _record_idempotency(store, key)
-        assert _check_idempotency(store, key)["idempotent_replay"]
+        _record_idempotency(key)
+        assert _check_idempotency(key)["idempotent_replay"]
 
     """19. Out-of-order action?"""
     def test_19_out_of_order(self, store, setup_data):
@@ -592,9 +592,19 @@ class TestAdversarial:
     """32. Sync flood?"""
     def test_32_sync_idempotent(self, store, setup_data):
         from app.presentation.api.driver_api import _record_idempotency
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
+        from app.infrastructure.database.init_db import engine as db_engine
+        from sqlalchemy.orm import Session as DBSession
         for i in range(10):
-            _record_idempotency(store, f"sync-key-{i}")
-        assert len(store["idempotency_keys"]) == 10
+            _record_idempotency(f"sync-key-{i}")
+        # Verify via database (single source of truth)
+        db = DBSession(bind=db_engine)
+        try:
+            repo = SQLAlchemyIdempotencyRepository(db)
+            for i in range(10):
+                assert repo.exists(f"sync-key-{i}"), f"sync-key-{i} not found in DB"
+        finally:
+            db.close()
 
     """33. Token replay?"""
     def test_33_token_replay(self, store, setup_data):
