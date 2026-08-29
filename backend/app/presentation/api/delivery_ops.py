@@ -358,60 +358,116 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
 
 @router.post("/routes")
 async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(require_admin)):
-    from app.domain.delivery.route import Route
-    store = _get_store()
-    if "routes" not in store:
-        store["routes"] = {}
-    route = Route(
-        tenant_id="default",
-        driver_id=req.driver_id,
-        vehicle_id=req.vehicle_id,
-    )
-    if req.stops:
-        for i, stop_data in enumerate(req.stops):
-            delivery_id = stop_data.get("delivery_id", "")
-            delivery = store.get("deliveries", {}).get(delivery_id)
-            addr = ""
-            if delivery:
-                addr = delivery.address.full_address()
-            route.add_stop(
-                delivery_id=delivery_id,
-                sequence=stop_data.get("sequence", i + 1),
-                customer_name=stop_data.get("customer_name", delivery.customer_name if delivery else ""),
-                address_snapshot=addr or stop_data.get("address", ""),
-            )
-    store["routes"][route.id] = route
-    return {"success": True, "route": route.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.create(
+            tenant_id=ctx.tenant_id,
+            driver_id=req.driver_id,
+            vehicle_id=req.vehicle_id,
+            status="PLANNED",
+        )
+        # Add stops
+        if req.stops:
+            for i, stop_data in enumerate(req.stops):
+                repo.add_stop(
+                    route_id=route.id,
+                    delivery_id=stop_data.get("delivery_id", ""),
+                    sequence=stop_data.get("sequence", i + 1),
+                    customer_name=stop_data.get("customer_name", ""),
+                    address_snapshot=stop_data.get("address", ""),
+                )
+        stops = repo.get_stops(route.id)
+        return {"success": True, "route": {
+            "id": route.id, "tenant_id": route.tenant_id,
+            "driver_id": route.driver_id, "vehicle_id": route.vehicle_id,
+            "status": route.status, "stops": [
+                {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
+                 "status": s.status, "customer_name": s.customer_name,
+                 "address_snapshot": s.address_snapshot}
+                for s in stops
+            ],
+        }}
+    finally:
+        db.close()
 
 
 @router.get("/routes")
 async def list_routes(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    routes = list(store.get("routes", {}).values())
-    routes = [r for r in routes if r.tenant_id == "default"]
-    if status:
-        routes = [r for r in routes if r.status.value == status]
-    return {"routes": [r.to_dict() for r in routes], "count": len(routes)}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        routes = repo.list_by_tenant(ctx.tenant_id, status=status)
+        result = []
+        for r in routes:
+            stops = repo.get_stops(r.id)
+            result.append({
+                "id": r.id, "tenant_id": r.tenant_id,
+                "driver_id": r.driver_id, "vehicle_id": r.vehicle_id,
+                "status": r.status, "stops": [
+                    {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
+                     "status": s.status, "customer_name": s.customer_name}
+                    for s in stops
+                ],
+            })
+        return {"routes": result, "count": len(result)}
+    finally:
+        db.close()
 
 
 @router.get("/routes/{route_id}")
 async def get_route(route_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    route = store.get("routes", {}).get(route_id)
-    if not route:
-        raise HTTPException(404, "Route not found")
-    return {"route": route.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.get_by_id(route_id)
+        if not route or route.tenant_id != ctx.tenant_id:
+            raise HTTPException(404, "Route not found")
+        stops = repo.get_stops(route.id)
+        return {"route": {
+            "id": route.id, "tenant_id": route.tenant_id,
+            "driver_id": route.driver_id, "vehicle_id": route.vehicle_id,
+            "status": route.status, "stops": [
+                {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
+                 "status": s.status, "customer_name": s.customer_name,
+                 "address_snapshot": s.address_snapshot}
+                for s in stops
+            ],
+        }}
+    finally:
+        db.close()
 
 
 @router.post("/routes/{route_id}/dispatch")
 async def dispatch_route(route_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    route = store.get("routes", {}).get(route_id)
-    if not route:
-        raise HTTPException(404, "Route not found")
-    if not route.dispatch():
-        raise HTTPException(400, f"Cannot dispatch route in status {route.status.value}")
-    return {"success": True, "route": route.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyRouteRepository(db)
+        route = repo.get_by_id(route_id)
+        if not route or route.tenant_id != ctx.tenant_id:
+            raise HTTPException(404, "Route not found")
+        if route.status != "PLANNED":
+            raise HTTPException(400, f"Cannot dispatch route in status {route.status}")
+        repo.update(route_id, status="DISPATCHED")
+        return {"success": True, "route": {"id": route_id, "status": "DISPATCHED"}}
+    finally:
+        db.close()
 
 
 @router.post("/routes/{route_id}/stops/{stop_id}/arrive")

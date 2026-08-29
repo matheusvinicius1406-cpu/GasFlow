@@ -26,6 +26,7 @@ from app.infrastructure.repositories.auth_model import (
 from app.infrastructure.repositories.payment_model import (
     PaymentMethodRecord, PixConfigRecord, PaymentServiceRecord
 )
+from app.infrastructure.repositories.route_model import RouteRecord, RouteStopRecord
 
 
 

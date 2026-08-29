@@ -643,59 +643,65 @@ async def handle_fail_delivery(ctx: Dict, delivery_id: str, req: ActionRequest) 
 
 
 # ═══════════════════════════════════════════════════════════
-# ROUTE ENDPOINTS (shared)
-# Category A — transient operational state (route plan for dispatch session).
-# Routes are computed by dispatch and consumed within the same operational cycle.
-# TODO Fase 21: persist routes when multi-stop route planning requires restart survival.
+# ROUTE ENDPOINTS — persisted to database
 # ═══════════════════════════════════════════════════════════
 
 async def handle_list_routes(ctx: Dict) -> Dict:
-    routes = [
-        r for r in store["routes"].values()
-        if r.get("driver_id") == ctx["driver_id"] and r.get("tenant_id") == ctx["tenant_id"]
-    ]
-    summaries = []
-    for r in routes:
-        stops = r.get("stops", [])
-        completed = sum(1 for s in stops if s.get("status") in ("COMPLETED", "FAILED", "SKIPPED"))
-        summaries.append(DriverRouteSummary(
-            route_id=r["id"],
-            status=r.get("status", "PLANNED"),
-            total_stops=len(stops),
-            completed_stops=completed,
-            pending_stops=len(stops) - completed,
-            progress_pct=(completed / len(stops) * 100) if stops else 0,
-        ))
-    return {"routes": summaries, "count": len(summaries)}
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+        repo = SQLAlchemyRouteRepository(db)
+        routes = repo.list_by_tenant(ctx["tenant_id"], driver_id=ctx["driver_id"])
+        summaries = []
+        for r in routes:
+            stops = repo.get_stops(r.id)
+            completed = sum(1 for s in stops if s.status in ("COMPLETED", "FAILED", "SKIPPED"))
+            summaries.append(DriverRouteSummary(
+                route_id=r.id,
+                status=r.status,
+                total_stops=len(stops),
+                completed_stops=completed,
+                pending_stops=len(stops) - completed,
+                progress_pct=(completed / len(stops) * 100) if stops else 0,
+            ))
+        return {"routes": summaries, "count": len(summaries)}
+    finally:
+        db.close()
 
 
 async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
-    for r in store["routes"].values():
-        if (r.get("driver_id") == ctx["driver_id"] and
-                r.get("tenant_id") == ctx["tenant_id"] and
-                r.get("status") in ("DISPATCHED", "IN_PROGRESS")):
-            stops = r.get("stops", [])
-            completed = sum(1 for s in stops if s.get("status") in ("COMPLETED", "FAILED", "SKIPPED"))
-            stop_summaries = [
-                DriverStopSummary(
-                    stop_id=s["id"],
-                    delivery_id=s.get("delivery_id", ""),
-                    sequence=s.get("sequence", 0),
-                    status=s.get("status", "PENDING"),
-                    customer_name=s.get("customer_name", ""),
-                    address=s.get("address_snapshot", ""),
-                    eta_minutes=s.get("eta_minutes"),
+    db = _get_db_session()
+    try:
+        from app.infrastructure.repositories.route_repository import SQLAlchemyRouteRepository
+        repo = SQLAlchemyRouteRepository(db)
+        routes = repo.list_by_tenant(
+            ctx["tenant_id"], driver_id=ctx["driver_id"]
+        )
+        for r in routes:
+            if r.status in ("DISPATCHED", "IN_PROGRESS"):
+                stops = repo.get_stops(r.id)
+                completed = sum(1 for s in stops if s.status in ("COMPLETED", "FAILED", "SKIPPED"))
+                stop_summaries = [
+                    DriverStopSummary(
+                        stop_id=s.id,
+                        delivery_id=s.delivery_id,
+                        sequence=s.sequence,
+                        status=s.status,
+                        customer_name=s.customer_name,
+                        address_snapshot=s.address_snapshot,
+                    )
+                    for s in stops
+                ]
+                return DriverRouteDetail(
+                    route_id=r.id,
+                    status=r.status,
+                    stops=stop_summaries,
+                    progress_pct=(completed / len(stops) * 100) if stops else 0,
+                    version=r.version,
                 )
-                for s in sorted(stops, key=lambda x: x.get("sequence", 0))
-            ]
-            return DriverRouteDetail(
-                route_id=r["id"],
-                status=r["status"],
-                stops=stop_summaries,
-                progress_pct=(completed / len(stops) * 100) if stops else 0,
-                version=r.get("version", 1),
-            )
-    raise HTTPException(404, detail="No active route found")
+        raise HTTPException(404, detail="No active route found")
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════
