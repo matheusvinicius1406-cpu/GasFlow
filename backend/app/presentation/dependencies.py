@@ -32,7 +32,14 @@ _auth_service: Optional[AuthService] = None
 def get_auth_service() -> AuthService:
     global _auth_service
     if _auth_service is None:
-        _auth_service = AuthService()
+        try:
+            from sqlalchemy.orm import Session as DBSession
+            from app.infrastructure.database.init_db import engine
+            db = DBSession(bind=engine)
+            _auth_service = AuthService(db=db)
+        except Exception:
+            # Fallback to in-memory if DB unavailable
+            _auth_service = AuthService()
     return _auth_service
 
 

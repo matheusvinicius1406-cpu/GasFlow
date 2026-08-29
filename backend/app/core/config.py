@@ -22,7 +22,7 @@ class Settings(BaseModel):
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./gasflow.db")
 
     # Auth / Security
-    admin_password: str = os.getenv("ADMIN_PASSWORD", "admin123")
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "")
     session_ttl_minutes: int = int(os.getenv("SESSION_TTL_MINUTES", "60"))
     max_failed_attempts: int = int(os.getenv("MAX_FAILED_ATTEMPTS", "5"))
     lockout_minutes: int = int(os.getenv("LOCKOUT_MINUTES", "15"))
@@ -60,11 +60,21 @@ class Settings(BaseModel):
 
         env = os.getenv("ENVIRONMENT", "development")
 
+        env = os.getenv("ENVIRONMENT", "development")
+        admin_pw = os.getenv("ADMIN_PASSWORD", "")
+        if env == "production" and not admin_pw:
+            raise ValueError(
+                "ADMIN_PASSWORD environment variable is required in production. "
+                "Set it to a strong password before starting the server."
+            )
+        if not admin_pw:
+            admin_pw = "admin123"  # Dev-only fallback
+
         return cls(
             environment=env,
             debug=os.getenv("DEBUG", "false").lower() in ("true", "1", "yes"),
             database_url=os.getenv("DATABASE_URL", "sqlite:///./gasflow.db"),
-            admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
+            admin_password=admin_pw,
             cors_origins=origins,
             whatsapp_service_url=os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),

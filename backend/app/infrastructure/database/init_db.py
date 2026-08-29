@@ -19,6 +19,10 @@ from app.infrastructure.repositories.delivery_persistence_model import (
     DeliveryRecord, DriverLocationRecord, OutboxEntry,
     DriverSessionRecord, IdempotencyKeyRecord
 )
+from app.infrastructure.repositories.auth_model import (
+    AuthUserModel, AuthSessionModel, AuthTenantModel,
+    AuthRoleModel, AuthMembershipModel, AuthAuditModel
+)
 
 
 
