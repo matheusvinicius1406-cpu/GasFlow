@@ -142,15 +142,33 @@ class TestClientIsolation:
 
     def test_idor_read_client_by_codigo(self, client, setup_tenants):
         """Tenant A reads by codigo — gets its own client, not B's."""
-        resp_a = client.get("/clients/", headers=setup_tenants["tenant_a"]["headers"])
-        items_a = get_items(resp_a.json())
-        assert len(items_a) > 0, "Tenant A should have at least one client"
-        codigo_a = items_a[0]["codigo"]
-        # Read from A — should get A's client (tenant-scoped)
+        # Create deterministic test data for this test
+        resp_create = client.post("/clients/", json={
+            "nome": "IDOR Test A", "telefone": "11900001111",
+            "rua": "Rua IDOR", "numero": "1", "bairro": "Centro",
+        }, headers=setup_tenants["tenant_a"]["headers"])
+        assert resp_create.status_code == 200
+        codigo_a = resp_create.json()["codigo"]
+
+        resp_create_b = client.post("/clients/", json={
+            "nome": "IDOR Test B", "telefone": "21900002222",
+            "rua": "Rua IDOR", "numero": "2", "bairro": "Centro",
+        }, headers=setup_tenants["tenant_b"]["headers"])
+        assert resp_create_b.status_code == 200
+
+        # Tenant A reads its own client — should get "IDOR Test A"
         resp = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_a"]["headers"])
         assert resp.status_code == 200
-        # The returned client must belong to tenant_a
         assert resp.json()["codigo"] == codigo_a
+        assert resp.json()["nome"] == "IDOR Test A"
+
+        # Both tenants have codigo=000001 (sequential). Verify tenant isolation:
+        # When tenant_a reads 000001, it gets "IDOR Test A", NOT "IDOR Test B"
+        resp_b_read = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_b"]["headers"])
+        assert resp_b_read.status_code == 200
+        assert resp_b_read.json()["nome"] == "IDOR Test B", (
+            "Tenant B should get its own client when reading codigo=000001, not Tenant A's"
+        )
 
     def test_idor_disable_client_by_codigo(self, client, setup_tenants):
         """Tenant A cannot disable Tenant B's client (by trying to disable a non-existent-in-A codigo)."""

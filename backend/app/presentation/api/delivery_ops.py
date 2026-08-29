@@ -103,21 +103,33 @@ async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depen
     return {"success": True, "delivery": delivery.to_dict()}
 
 
+def _d_get(d, key, default=None):
+    """Safe accessor for domain entities or dicts."""
+    if isinstance(d, dict):
+        return d.get(key, default)
+    return getattr(d, key, default)
+
+
+def _d_to_dict(d):
+    """Convert domain entity or dict to dict."""
+    if isinstance(d, dict):
+        return d
+    if hasattr(d, 'to_dict'):
+        return d.to_dict()
+    return d
+
+
 @router.get("/deliveries")
 async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
     store = _get_store()
     tenant_id = "default"
     deliveries = list(store.get("deliveries", {}).values())
-    deliveries = [d for d in deliveries if d.tenant_id == tenant_id]
+    deliveries = [d for d in deliveries if _d_get(d, 'tenant_id') == tenant_id]
     if status:
-        from app.domain.delivery.delivery import DeliveryStatus
-        try:
-            deliveries = [d for d in deliveries if d.status.value == status]
-        except ValueError:
-            pass
+        deliveries = [d for d in deliveries if _d_get(d, 'status') == status]
     if driver_id:
-        deliveries = [d for d in deliveries if d.driver_id == driver_id]
-    return {"deliveries": [d.to_dict() for d in deliveries], "count": len(deliveries)}
+        deliveries = [d for d in deliveries if _d_get(d, 'driver_id') == driver_id]
+    return {"deliveries": [_d_to_dict(d) for d in deliveries], "count": len(deliveries)}
 
 
 @router.get("/deliveries/{delivery_id}")

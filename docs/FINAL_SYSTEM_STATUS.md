@@ -7,12 +7,12 @@
 
 - **Branch:** main
 - **HEAD:** `45f4bca` feat(delivery): database persistence, GPS tracking, outbox, and driver app enhancements
-- **Working tree:** modified (Phase 15.1 fix pending commit)
+- **Working tree:** modified (Phase 15.1 + 15.2 fixes pending commit)
 - **Date:** 2026-08-29
 
 ---
 
-## PHASE 15.1 FIX — Client Phone Uniqueness Scoped by Tenant
+## PHASE 15.2 FIX — Delivery Contract Normalization
 
 ### Problem
 `ClientModel` had `UniqueConstraint("telefone")` — **global**, not per-tenant.
@@ -27,9 +27,28 @@ but the DB constraint was global. App passed, DB failed.
 - Migration `b001`: drops old constraint, creates new per-tenant constraint
 - Tests updated: Phase6 validation + cross-tenant isolation
 
-### Result
+### Result (after 15.1)
 - Before: 835 passed, 4 failed
 - After: **841 passed, 1 failed** (delivery_ops dict bug — separate issue)
+
+---
+
+## PHASE 15.2 FIX — Delivery Contract Normalization
+
+### Problem
+`delivery_ops.py:list_deliveries` assumed domain entities (`.tenant_id`) but received dicts from `shared_store` (populated by `test_driver_api.py` and `create_delivery`).
+
+### Root Cause
+`test_driver_api.py` stores plain dicts in `store["deliveries"]`, while `delivery_ops.py` assumes domain entities with attribute access.
+
+### Fix
+- Added `_d_get()` and `_d_to_dict()` helpers for safe access to both dicts and domain entities
+- Updated `list_deliveries` to use these helpers
+- Strengthened IDOR test to be self-contained and verify cross-tenant data isolation
+
+### Result
+- After 15.1: 841 passed, 1 failed
+- After 15.2: **842 passed, 0 failed**
 
 ---
 
@@ -57,7 +76,7 @@ but the DB constraint was global. App passed, DB failed.
 | test_audio.py | 30 | ✅ |
 | test_automation.py | 20 | ✅ |
 | test_phase6_validation.py | 32 | ✅ |
-| **Backend Total** | **841** | **841 passed, 1 failed** |
+| **Backend Total** | **842** | **842 passed, 0 failed** |
 | WhatsApp | 38 | ✅ |
 | Frontend Tests | 37 | ✅ |
 
@@ -67,8 +86,7 @@ but the DB constraint was global. App passed, DB failed.
 
 | # | Issue | Severity | Status |
 |---|-------|----------|--------|
-| 1 | `delivery_ops.py:111` dict vs object bug | HIGH | Known — Phase 15.2 |
-| 2 | Frontend TypeScript build errors | HIGH | Known — Phase 15.8 |
+| 1 | Frontend TypeScript build errors | HIGH | Known — Phase 15.8 |
 | 3 | WhatsApp TypeScript error | MEDIUM | Known — Phase 15.9 |
 | 4 | Auth in-memory | HIGH | Known — Phase 15.6 |
 | 5 | `admin123` default | HIGH | Known — Phase 15.7 |
@@ -104,9 +122,12 @@ but the DB constraint was global. App passed, DB failed.
 **FASES 5–8 + 15.1 = STABLE** ✅
 
 - 0 critical (phone constraint FIXED)
-- 1 high remaining (delivery_ops dict bug — separate)
+- 0 high remaining (delivery_ops dict bug FIXED)
 - 0 financial inconsistency
 - 0 inventory inconsistency
 - Multi-tenant phone isolation: VERIFIED
+- Multi-tenant delivery isolation: VERIFIED
+
+**ALL BACKEND TESTS PASS (842/842)** ✅
 
 WhatsApp PASS | CRM PASS | Inventory PASS | Finance PASS | Tenant Isolation PASS | Frontend Tests PASS
