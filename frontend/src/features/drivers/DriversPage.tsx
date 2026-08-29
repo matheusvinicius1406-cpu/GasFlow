@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { UserCog, RefreshCw, MapPin, Clock, Truck, CheckCircle, Pause, XCircle } from 'lucide-react'
+import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -18,11 +18,13 @@ interface DriverWithLocation extends DeliveryDriver {
     lng: number
     timestamp: string
     is_stale: boolean
-    age_seconds: number
+    age_seconds?: number
   }
 }
 
-const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'default'; icon: typeof Truck }> = {
+type StatusConfigEntry = { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'default'; icon: typeof Truck }
+
+const STATUS_CONFIG: Record<string, StatusConfigEntry> = {
   AVAILABLE: { label: 'Disponível', variant: 'success', icon: CheckCircle },
   BUSY: { label: 'Ocupado', variant: 'warning', icon: Truck },
   PAUSED: { label: 'Pausado', variant: 'secondary', icon: Pause },
@@ -30,9 +32,11 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
   UNAVAILABLE: { label: 'Indisponível', variant: 'destructive', icon: XCircle },
 }
 
+const DEFAULT_STATUS_CONFIG: StatusConfigEntry = { label: 'Desconhecido', variant: 'secondary', icon: Truck }
+
 export function DriversPage() {
   const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
-  const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean }>>({})
+  const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean; age_seconds?: number }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -81,7 +85,7 @@ export function DriversPage() {
 
   const activeCount = drivers.filter(d => d.status && d.status !== 'OFFLINE' && d.status !== 'INACTIVE').length
   const availableCount = drivers.filter(d => d.status === 'AVAILABLE').length
-  const onlineWithGPS = drivers.filter(d => locations[d.codigo] && !locations[d.codigo].is_stale).length
+  const onlineWithGPS = drivers.filter(d => locations[d.codigo]?.is_stale === false).length
 
   return (
     <div className="space-y-6">
@@ -118,7 +122,7 @@ export function DriversPage() {
           <CardContent>
             <div className="space-y-3">
               {drivers.map((driver) => {
-                const statusConfig = STATUS_CONFIG[driver.status || 'AVAILABLE'] || STATUS_CONFIG.AVAILABLE
+                const statusConfig = STATUS_CONFIG[driver.status || 'AVAILABLE'] ?? DEFAULT_STATUS_CONFIG
                 const StatusIcon = statusConfig.icon
                 const loc = locations[driver.codigo]
                 return (
@@ -142,7 +146,7 @@ export function DriversPage() {
                             <span className="flex items-center gap-1">
                               <MapPin className="h-3 w-3" />
                               GPS: {loc.is_stale ? 'Stale' : 'Ativo'}
-                              {loc.age_seconds > 0 && ` (${Math.floor(loc.age_seconds / 60)}min)`}
+                              {loc.age_seconds != null && loc.age_seconds > 0 && ` (${Math.floor(loc.age_seconds / 60)}min)`}
                             </span>
                           )}
                           {!loc && (

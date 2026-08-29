@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, MapPin, Clock, CheckCircle, XCircle, RefreshCw, LogOut, Package, Pause, Play, Navigation, Phone, AlertTriangle, History, User, ChevronRight } from 'lucide-react'
+import { Truck, MapPin, Clock, CheckCircle, XCircle, RefreshCw, LogOut, Package, Pause, Play, Navigation } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -23,15 +23,6 @@ interface Delivery {
   status: string
   scheduled_at: string | null
   version: number
-}
-
-interface DriverProfile {
-  driver_id: string
-  name: string
-  phone: string
-  status: string
-  active: boolean
-  tenant_id: string
 }
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'default'; icon: typeof Truck }> = {
@@ -101,7 +92,6 @@ export function DriverHomePage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [profile, setProfile] = useState<DriverProfile | null>(null)
   const [driverName, setDriverName] = useState('')
   const [driverStatus, setDriverStatus] = useState('AVAILABLE')
   const [gpsEnabled, setGpsEnabled] = useState(false)
@@ -143,7 +133,6 @@ export function DriverHomePage() {
       })
       if (response.ok) {
         const data = await response.json()
-        setProfile(data)
         setDriverName(data.name || 'Motorista')
         setDriverStatus(data.status || 'AVAILABLE')
       }

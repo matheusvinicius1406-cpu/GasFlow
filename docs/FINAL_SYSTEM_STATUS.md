@@ -79,6 +79,7 @@ but the DB constraint was global. App passed, DB failed.
 | **Backend Total** | **842** | **842 passed, 0 failed** |
 | WhatsApp | 38 | ✅ |
 | Frontend Tests | 37 | ✅ |
+| Frontend Build | ✅ PASS (0 TS errors) |
 
 ---
 
@@ -86,7 +87,13 @@ but the DB constraint was global. App passed, DB failed.
 
 | # | Issue | Severity | Status |
 |---|-------|----------|--------|
-| 1 | Frontend TypeScript build errors | HIGH | Known — Phase 15.8 |
+| 1 | ESLint not installed | LOW | Known |
+| 2 | Auth in-memory | HIGH | Known — Phase 15.6 |
+| 3 | `admin123` default | HIGH | Known — Phase 15.7 |
+| 4 | In-memory stores | HIGH | Known — Phase 15.3/15.4 |
+| 5 | WhatsApp typecheck error | MEDIUM | Known |
+| 6 | No CI/CD | MEDIUM | Known |
+| 7 | No docker-compose.prod | MEDIUM | Known |
 | 3 | WhatsApp TypeScript error | MEDIUM | Known — Phase 15.9 |
 | 4 | Auth in-memory | HIGH | Known — Phase 15.6 |
 | 5 | `admin123` default | HIGH | Known — Phase 15.7 |
