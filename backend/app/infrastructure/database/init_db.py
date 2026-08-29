@@ -23,6 +23,9 @@ from app.infrastructure.repositories.auth_model import (
     AuthUserModel, AuthSessionModel, AuthTenantModel,
     AuthRoleModel, AuthMembershipModel, AuthAuditModel
 )
+from app.infrastructure.repositories.payment_model import (
+    PaymentMethodRecord, PixConfigRecord, PaymentServiceRecord
+)
 
 
 
