@@ -125,7 +125,7 @@ class TestPasswordSecurity:
 
 class TestAuthentication:
     def test_login_success(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert result["success"]
         assert result["token"]
         assert result["role"] == "ADMIN"
@@ -152,7 +152,7 @@ class TestAuthentication:
         assert "Invalid" in result["error"]
 
     def test_logout(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert auth_service.logout(result["token"])
         ctx = auth_service.validate_token(result["token"])
         assert ctx is None
@@ -175,7 +175,7 @@ class TestAuthentication:
 
 class TestSessionManagement:
     def test_session_valid(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         ctx = auth_service.validate_token(result["token"])
         assert ctx is not None
         assert ctx.user_id == "admin-001"
@@ -185,26 +185,26 @@ class TestSessionManagement:
         assert ctx is None
 
     def test_session_revoked(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         auth_service.logout(result["token"])
         ctx = auth_service.validate_token(result["token"])
         assert ctx is None
 
     def test_max_sessions(self, auth_service):
         for i in range(6):
-            auth_service.login("admin", "admin123")
+            auth_service.login("admin", "test_password_123")
         sessions = auth_service.get_active_sessions("admin-001")
         assert len(sessions) <= auth_service.MAX_SESSIONS_PER_USER
 
     def test_revoke_all_sessions(self, auth_service):
         for _ in range(3):
-            auth_service.login("admin", "admin123")
+            auth_service.login("admin", "test_password_123")
         count = auth_service.revoke_all_sessions("admin-001")
         assert count >= 1
 
     def test_session_expiry(self, auth_service):
         """Session expires when TTL is in the past."""
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         session_id = auth_service._sessions_by_token.get(result["token"])
         session = auth_service._sessions.get(session_id)
         session.expires_at = datetime.utcnow() - timedelta(minutes=1)
@@ -212,7 +212,7 @@ class TestSessionManagement:
         assert ctx is None
 
     def test_session_last_seen_updated(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         auth_service.validate_token(result["token"])
         session_id = auth_service._sessions_by_token.get(result["token"])
         session = auth_service._sessions.get(session_id)
@@ -345,7 +345,7 @@ class TestBruteForce:
 
 class TestAuditLog:
     def test_login_audited(self, auth_service):
-        auth_service.login("admin", "admin123")
+        auth_service.login("admin", "test_password_123")
         log = auth_service.get_audit_log("default")
         auth_events = [r for r in log if r.action == "AUTH_SUCCESS"]
         assert len(auth_events) >= 1
@@ -357,7 +357,7 @@ class TestAuditLog:
         assert len(auth_events) >= 1
 
     def test_logout_audited(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         auth_service.logout(result["token"])
         log = auth_service.get_audit_log("default")
         revoke_events = [r for r in log if r.action == "SESSION_REVOKED"]
@@ -372,7 +372,7 @@ class TestAuditLog:
     def test_audit_records_immutable(self, auth_service):
         """Audit records are append-only."""
         log_before = auth_service.get_audit_log("default")
-        auth_service.login("admin", "admin123")
+        auth_service.login("admin", "test_password_123")
         log_after = auth_service.get_audit_log("default")
         assert len(log_after) >= len(log_before)
 
@@ -426,7 +426,7 @@ class TestEdgeCases:
         assert ctx is None
 
     def test_disabled_user_session(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         user = auth_service.get_user("admin-001")
         user.status = UserStatus.DISABLED
         ctx = auth_service.validate_token(result["token"])
@@ -561,7 +561,7 @@ class TestConcurrency:
         results = []
 
         def login_worker():
-            r = auth_service.login("admin", "admin123")
+            r = auth_service.login("admin", "test_password_123")
             results.append(r["success"])
 
         threads = [threading.Thread(target=login_worker) for _ in range(3)]
@@ -573,7 +573,7 @@ class TestConcurrency:
 
     def test_concurrent_token_validation(self, auth_service):
         """Concurrent token validation should be safe."""
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         token = result["token"]
         results = []
 
@@ -597,8 +597,8 @@ class TestAdversarial:
     """1. Duplicate login → token reuse? PASS (each login creates new session)"""
 
     def test_01_duplicate_login_no_token_reuse(self, auth_service):
-        r1 = auth_service.login("admin", "admin123")
-        r2 = auth_service.login("admin", "admin123")
+        r1 = auth_service.login("admin", "test_password_123")
+        r2 = auth_service.login("admin", "test_password_123")
         assert r1["token"] != r2["token"]
 
     """2. Cross-customer data? PASS (ownership enforced)"""
@@ -639,7 +639,7 @@ class TestAdversarial:
 
     """8. Secret extraction? PASS (secrets not in responses)"""
     def test_08_no_secret_in_login_response(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert "password" not in str(result).lower() or "password_hash" not in str(result)
 
     """9. Human bypass? PASS (human takeover does not bypass auth)"""
@@ -685,7 +685,7 @@ class TestAdversarial:
     """16. AI outage? PASS (fallback message sent)"""
     def test_16_ai_outage_fallback(self, auth_service):
         # Auth service is independent of AI
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert result["success"]
 
     """17. WhatsApp outage? PASS (returns error, no crash)"""
@@ -723,7 +723,7 @@ class TestAdversarial:
 
     """23. PII leakage? PASS (audit logs don't store passwords)"""
     def test_23_pii_in_audit(self, auth_service):
-        auth_service.login("admin", "admin123")
+        auth_service.login("admin", "test_password_123")
         log = auth_service.get_audit_log("default")
         for record in log:
             # Audit records shouldn't contain raw passwords
@@ -731,7 +731,7 @@ class TestAdversarial:
 
     """24. Session token replay? PASS (revoked token rejected)"""
     def test_24_session_token_replay(self, auth_service):
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         auth_service.logout(result["token"])
         ctx = auth_service.validate_token(result["token"])
         assert ctx is None
@@ -783,7 +783,7 @@ class TestAdversarial:
     """30. All previous phases pass? PASS (full regression)"""
     def test_30_previous_phases_still_work(self, auth_service):
         # Auth service works alongside all other services
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert result["success"]
         ctx = auth_service.validate_token(result["token"])
         assert ctx is not None

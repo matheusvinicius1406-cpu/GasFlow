@@ -62,13 +62,12 @@ class Settings(BaseModel):
 
         env = os.getenv("ENVIRONMENT", "development")
         admin_pw = os.getenv("ADMIN_PASSWORD", "")
-        if env == "production" and not admin_pw:
-            raise ValueError(
-                "ADMIN_PASSWORD environment variable is required in production. "
-                "Set it to a strong password before starting the server."
-            )
         if not admin_pw:
-            admin_pw = "admin123"  # Dev-only fallback
+            raise ValueError(
+                "ADMIN_PASSWORD environment variable is required. "
+                "Set it to a strong password before starting the server. "
+                "Example: export ADMIN_PASSWORD=your_secure_password"
+            )
 
         return cls(
             environment=env,

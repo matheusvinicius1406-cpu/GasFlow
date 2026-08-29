@@ -68,7 +68,7 @@ def auth_service(db):
 class TestAuthRestart:
     def test_login_and_validate_token(self, db, auth_service):
         """Login → validate token → still works."""
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         assert result["success"] is True
         token = result["token"]
 
@@ -82,7 +82,7 @@ class TestAuthRestart:
     def test_session_survives_new_instance(self, db):
         """Login with AuthService #1 → create AuthService #2 → token still valid."""
         auth1 = AuthService(db=db)
-        result = auth1.login("admin", "admin123")
+        result = auth1.login("admin", "test_password_123")
         token = result["token"]
 
         # New AuthService instance (simulates restart)
@@ -93,7 +93,7 @@ class TestAuthRestart:
 
     def test_logout_survives(self, db, auth_service):
         """Login → logout → new instance → token invalid."""
-        result = auth_service.login("admin", "admin123")
+        result = auth_service.login("admin", "test_password_123")
         token = result["token"]
 
         auth_service.logout(token)
@@ -185,7 +185,7 @@ class TestTenantPersistence:
 class TestAuditPersistence:
     def test_audit_log_persists(self, db, auth_service):
         """Login generates audit → new instance → audit visible."""
-        auth_service.login("admin", "admin123")
+        auth_service.login("admin", "test_password_123")
 
         auth2 = AuthService(db=db)
         log = auth2.get_audit_log("default", limit=10)

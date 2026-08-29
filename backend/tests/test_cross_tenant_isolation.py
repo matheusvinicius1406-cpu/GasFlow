@@ -18,7 +18,7 @@ def client():
 @pytest.fixture(scope="module")
 def setup_tenants(client):
     """Create two tenants with admin users. Returns tokens for both."""
-    resp = client.post("/auth/login", json={"username": "admin", "password": "admin123"})
+    resp = client.post("/auth/login", json={"username": "admin", "password": "test_password_123"})
     assert resp.status_code == 200
     admin_token = resp.json()["token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -37,7 +37,7 @@ def setup_tenants(client):
     for username, tid in [("admin_a", "tenant_a"), ("admin_b", "tenant_b")]:
         resp = client.post("/auth/users", json={
             "username": username, "email": f"{username}@gasflow.local",
-            "password": "admin123", "display_name": f"Admin {tid}",
+            "password": "test_password_123", "display_name": f"Admin {tid}",
             "role": "ADMIN", "tenant_id": tid,
         }, headers=admin_headers)
         assert resp.status_code == 200
@@ -45,7 +45,7 @@ def setup_tenants(client):
     # Login as each tenant admin
     tokens = {}
     for username, tid in [("admin_a", "tenant_a"), ("admin_b", "tenant_b")]:
-        resp = client.post("/auth/login", json={"username": username, "password": "admin123"})
+        resp = client.post("/auth/login", json={"username": username, "password": "test_password_123"})
         assert resp.status_code == 200
         assert resp.json()["tenant_id"] == tid
         t = resp.json()["token"]

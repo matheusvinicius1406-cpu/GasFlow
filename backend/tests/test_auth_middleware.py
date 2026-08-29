@@ -16,7 +16,7 @@ def client():
 @pytest.fixture(scope="module")
 def admin_token(client):
     """Login once and reuse token across all tests in this module."""
-    res = client.post("/auth/login", json={"username": "admin", "password": "admin123"})
+    res = client.post("/auth/login", json={"username": "admin", "password": "test_password_123"})
     assert res.status_code == 200
     return res.json()["token"]
 
@@ -35,7 +35,7 @@ class TestPublicEndpoints:
         assert client.get("/").json()["status"] == "online"
 
     def test_login(self, client):
-        res = client.post("/auth/login", json={"username": "admin", "password": "admin123"})
+        res = client.post("/auth/login", json={"username": "admin", "password": "test_password_123"})
         assert res.status_code == 200
         assert res.json()["success"] is True
 
