@@ -79,28 +79,33 @@ def _get_store():
 @router.post("/deliveries")
 async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(require_admin)):
     from app.domain.delivery.delivery import Delivery, AddressSnapshot
-    from app.domain.delivery.driver import Driver, DriverStatus
-    store = _get_store()
-    tenant_id = "default"
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
 
-    # Check duplicate order
-    for d in store.get("deliveries", {}).values():
-        if d.order_id == req.order_id and d.tenant_id == tenant_id:
-            raise HTTPException(400, "Delivery already exists for this order")
+    tenant_id = ctx.tenant_id
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
 
-    addr = AddressSnapshot(**(req.address.model_dump() if req.address else {}))
-    delivery = Delivery(
-        order_id=req.order_id,
-        tenant_id=tenant_id,
-        customer_codigo=req.customer_codigo,
-        customer_name=req.customer_name,
-        address=addr,
-        notes=req.notes,
-    )
-    if "deliveries" not in store:
-        store["deliveries"] = {}
-    store["deliveries"][delivery.id] = delivery
-    return {"success": True, "delivery": delivery.to_dict()}
+        # Check duplicate order via DB
+        existing = repo.list_deliveries(driver_id=None, limit=1000)
+        for d in existing:
+            if d.order_id == req.order_id:
+                raise HTTPException(400, "Delivery already exists for this order")
+
+        addr = req.address.model_dump() if req.address else {}
+        record = repo.create_delivery(
+            delivery_id=None,  # auto-generate
+            order_id=req.order_id,
+            customer_codigo=req.customer_codigo,
+            customer_name=req.customer_name,
+            address=addr,
+            notes=req.notes,
+        )
+        return {"success": True, "delivery": record.to_dict()}
+    finally:
+        db.close()
 
 
 def _d_get(d, key, default=None):
@@ -209,29 +214,42 @@ async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx
 
 @router.post("/drivers")
 async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(require_admin)):
-    from app.domain.delivery.driver import Driver
-    store = _get_store()
-    if "drivers" not in store:
-        store["drivers"] = {}
-    driver = Driver(
-        tenant_id="default",
-        name=req.name,
-        phone=req.phone,
-        license_number=req.license_number,
-        vehicle_id=req.vehicle_id,
-    )
-    store["drivers"][driver.id] = driver
-    return {"success": True, "driver": driver.to_dict()}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+    from app.domain.delivery.driver import Driver as DriverDomain
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
+        driver = DriverDomain(
+            tenant_id=ctx.tenant_id,
+            name=req.name,
+            phone=req.phone,
+            license_number=req.license_number,
+            vehicle_id=req.vehicle_id,
+        )
+        repo.criar(driver)
+        return {"success": True, "driver": driver.to_dict()}
+    finally:
+        db.close()
 
 
 @router.get("/drivers")
 async def list_drivers(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
-    store = _get_store()
-    drivers = list(store.get("drivers", {}).values())
-    drivers = [d for d in drivers if d.tenant_id == "default"]
-    if status:
-        drivers = [d for d in drivers if d.status.value == status]
-    return {"drivers": [d.to_dict() for d in drivers], "count": len(drivers)}
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+
+    db = DBSession(bind=engine)
+    try:
+        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
+        drivers = repo.listar_todos()
+        if status:
+            drivers = [d for d in drivers if d.status.value == status]
+        return {"drivers": [d.to_dict() for d in drivers], "count": len(drivers)}
+    finally:
+        db.close()
 
 
 @router.get("/drivers/{driver_id}")
