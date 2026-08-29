@@ -16,7 +16,8 @@ from app.infrastructure.repositories.financial_models import (
 )
 from app.infrastructure.ai.models import ConversationModel, AIMessageModel, AIAuditLogModel
 from app.infrastructure.repositories.delivery_persistence_model import (
-    DeliveryRecord, DriverLocationRecord, OutboxEntry
+    DeliveryRecord, DriverLocationRecord, OutboxEntry,
+    DriverSessionRecord, IdempotencyKeyRecord
 )
 
 

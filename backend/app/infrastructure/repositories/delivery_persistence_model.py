@@ -170,3 +170,57 @@ class OutboxEntry(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     processed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+
+
+class DriverSessionRecord(Base):
+    """Persistent driver session — replaces in-memory sessions store."""
+    __tablename__ = "driver_sessions"
+
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_driver_session_token"),
+        Index("ix_driver_session_driver", "driver_id"),
+        Index("ix_driver_session_tenant", "tenant_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(200), nullable=False)
+    driver_id = Column(String(36), nullable=False)
+    tenant_id = Column(String, default="default", nullable=False)
+    role = Column(String(20), default="DRIVER")
+    device_id = Column(String(100), nullable=True)
+    device_name = Column(String(100), nullable=True)
+    platform = Column(String(50), nullable=True)
+    status = Column(String(20), default="ACTIVE")  # ACTIVE, REVOKED, EXPIRED
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    last_seen_at = Column(DateTime, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "token": self.token,
+            "driver_id": self.driver_id,
+            "tenant_id": self.tenant_id,
+            "role": self.role,
+            "device_id": self.device_id,
+            "device_name": self.device_name,
+            "platform": self.platform,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+        }
+
+
+class IdempotencyKeyRecord(Base):
+    """Persistent idempotency key — replaces in-memory idempotency store."""
+    __tablename__ = "idempotency_keys"
+
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_idempotency_key"),
+        Index("ix_idempotency_tenant", "tenant_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(200), nullable=False)
+    tenant_id = Column(String, default="default", nullable=False)
+    result_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)

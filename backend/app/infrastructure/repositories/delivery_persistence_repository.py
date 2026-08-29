@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 from app.infrastructure.repositories.delivery_persistence_model import (
     DeliveryRecord, DriverLocationRecord, OutboxEntry,
+    DriverSessionRecord, IdempotencyKeyRecord
 )
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
@@ -392,5 +393,107 @@ class SQLAlchemyOutboxRepository:
         self.db.query(OutboxEntry).filter(
             OutboxEntry.status == "PROCESSED",
             OutboxEntry.processed_at < cutoff,
+        ).delete()
+        self.db.commit()
+
+
+# ── Driver Session Repository ──────────────────────────
+
+class SQLAlchemyDriverSessionRepository:
+    """Repository for driver sessions — replaces in-memory sessions store."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create_session(
+        self,
+        token: str,
+        driver_id: str,
+        tenant_id: str,
+        role: str = "DRIVER",
+        device_id: Optional[str] = None,
+        device_name: Optional[str] = None,
+        platform: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
+    ) -> DriverSessionRecord:
+        record = DriverSessionRecord(
+            token=token,
+            driver_id=driver_id,
+            tenant_id=tenant_id,
+            role=role,
+            device_id=device_id,
+            device_name=device_name,
+            platform=platform,
+            status="ACTIVE",
+            expires_at=expires_at,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def get_session(self, token: str) -> Optional[DriverSessionRecord]:
+        return self.db.query(DriverSessionRecord).filter(
+            DriverSessionRecord.token == token,
+            DriverSessionRecord.status == "ACTIVE",
+        ).first()
+
+    def revoke_session(self, token: str):
+        record = self.db.query(DriverSessionRecord).filter(
+            DriverSessionRecord.token == token
+        ).first()
+        if record:
+            record.status = "REVOKED"
+            self.db.commit()
+
+    def revoke_all_for_driver(self, driver_id: str):
+        self.db.query(DriverSessionRecord).filter(
+            DriverSessionRecord.driver_id == driver_id,
+            DriverSessionRecord.status == "ACTIVE",
+        ).update({"status": "REVOKED"})
+        self.db.commit()
+
+    def cleanup_expired(self):
+        from datetime import timedelta
+        now = datetime.utcnow()
+        self.db.query(DriverSessionRecord).filter(
+            DriverSessionRecord.status == "ACTIVE",
+            DriverSessionRecord.expires_at < now,
+        ).update({"status": "EXPIRED"})
+        self.db.commit()
+
+    def to_dict(self, record: DriverSessionRecord) -> dict:
+        return record.to_dict()
+
+
+# ── Idempotency Key Repository ─────────────────────────
+
+class SQLAlchemyIdempotencyRepository:
+    """Repository for idempotency keys — replaces in-memory idempotency store."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def exists(self, key: str) -> bool:
+        return self.db.query(IdempotencyKeyRecord).filter(
+            IdempotencyKeyRecord.key == key
+        ).first() is not None
+
+    def record(self, key: str, tenant_id: str = "default", result_json: Optional[Dict] = None):
+        if self.exists(key):
+            return
+        record = IdempotencyKeyRecord(
+            key=key,
+            tenant_id=tenant_id,
+            result_json=result_json,
+        )
+        self.db.add(record)
+        self.db.commit()
+
+    def cleanup_old(self, days: int = 7):
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        self.db.query(IdempotencyKeyRecord).filter(
+            IdempotencyKeyRecord.created_at < cutoff,
         ).delete()
         self.db.commit()

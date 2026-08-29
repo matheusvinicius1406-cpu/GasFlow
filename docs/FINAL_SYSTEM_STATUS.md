@@ -94,6 +94,7 @@ but the DB constraint was global. App passed, DB failed.
 | 5 | WhatsApp typecheck error | MEDIUM | Known |
 | 6 | No CI/CD | MEDIUM | Known |
 | 7 | No docker-compose.prod | MEDIUM | Known |
+| 8 | Auth still partially in-memory | MEDIUM | Known — sessions persisted, backward compat |
 | 3 | WhatsApp TypeScript error | MEDIUM | Known — Phase 15.9 |
 | 4 | Auth in-memory | HIGH | Known — Phase 15.6 |
 | 5 | `admin123` default | HIGH | Known — Phase 15.7 |

@@ -34,6 +34,8 @@ from app.infrastructure.stores.shared_store import get_shared_store
 from app.domain.events.event_bus import (
     get_event_bus, publish_delivery_event, publish_driver_event, EventType
 )
+from sqlalchemy.orm import Session as DBSession
+from app.infrastructure.database.init_db import engine
 
 
 # ═══════════════════════════════════════════════════════════
@@ -174,8 +176,13 @@ def _get_store() -> Dict[str, Any]:
     return get_shared_store()
 
 
+def _get_db() -> DBSession:
+    """Get a new database session."""
+    return DBSession(bind=engine)
+
+
 # ═══════════════════════════════════════════════════════════
-# AUTH — Simple token-based for driver app
+# AUTH — Persistent token-based for driver app
 # ═══════════════════════════════════════════════════════════
 
 def _authenticate_driver(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -183,11 +190,26 @@ def _authenticate_driver(authorization: Optional[str] = Header(None)) -> Dict[st
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, detail="Authentication required")
     token = authorization[7:]
+
+    # Try persistent session first
+    db = _get_db()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
+        session_repo = SQLAlchemyDriverSessionRepository(db)
+        record = session_repo.get_session(token)
+        if record:
+            # Check expiry
+            if record.expires_at and record.expires_at < datetime.utcnow():
+                raise HTTPException(401, detail="Token expired")
+            return record.to_dict()
+    finally:
+        db.close()
+
+    # Fallback: in-memory store (backward compat for existing sessions)
     store = _get_store()
     session = store["sessions"].get(token)
     if not session:
         raise HTTPException(401, detail="Invalid or expired token")
-    # Check expiry
     if session.get("expires_at"):
         if datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
             raise HTTPException(401, detail="Token expired")
@@ -202,7 +224,19 @@ def _check_idempotency(store: Dict, key: Optional[str]) -> Optional[Dict]:
     """Return previous result if idempotency key already processed."""
     if not key:
         return None
-    if key in store["idempotency_keys"]:
+
+    # Try persistent idempotency first
+    db = _get_db()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
+        idem_repo = SQLAlchemyIdempotencyRepository(db)
+        if idem_repo.exists(key):
+            return {"success": True, "idempotent_replay": True}
+    finally:
+        db.close()
+
+    # Fallback: in-memory store
+    if key in store.get("idempotency_keys", set()):
         return {"success": True, "idempotent_replay": True}
     return None
 
@@ -210,7 +244,16 @@ def _check_idempotency(store: Dict, key: Optional[str]) -> Optional[Dict]:
 def _record_idempotency(store: Dict, key: Optional[str]):
     """Record idempotency key."""
     if key:
-        store["idempotency_keys"].add(key)
+        # Persist to database
+        db = _get_db()
+        try:
+            from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
+            idem_repo = SQLAlchemyIdempotencyRepository(db)
+            idem_repo.record(key)
+        finally:
+            db.close()
+        # Also keep in-memory for backward compat
+        store.get("idempotency_keys", set()).add(key)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -296,7 +339,25 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
             "expires_at": (datetime.utcnow() + timedelta(hours=8)).isoformat(),
         }
         
-        # Store session in memory (tokens are ephemeral)
+        # Persist session to database
+        db_session = _get_db()
+        try:
+            from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
+            session_repo = SQLAlchemyDriverSessionRepository(db_session)
+            session_repo.create_session(
+                token=token,
+                driver_id=model.codigo,
+                tenant_id=tenant_id,
+                role="DRIVER",
+                device_id=req.device_id,
+                device_name=req.device_name,
+                platform=req.platform,
+                expires_at=datetime.utcnow() + timedelta(hours=8),
+            )
+        finally:
+            db_session.close()
+
+        # Also keep in-memory for backward compat
         store = _get_store()
         store["sessions"][token] = session
         
@@ -312,6 +373,16 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
 
 
 async def handle_driver_logout(ctx: Dict) -> Dict[str, Any]:
+    # Revoke persistent session
+    db = _get_db()
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
+        session_repo = SQLAlchemyDriverSessionRepository(db)
+        session_repo.revoke_session(ctx.get("token", ""))
+    finally:
+        db.close()
+
+    # Also remove from in-memory store
     store = _get_store()
     store["sessions"].pop(ctx.get("token", ""), None)
     return {"success": True}
