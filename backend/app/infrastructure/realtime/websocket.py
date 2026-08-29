@@ -180,23 +180,51 @@ def setup_realtime_bridge():
 # ── WebSocket Endpoints ─────────────────────────────────
 
 def _verify_ws_token(token: str) -> Optional[dict]:
-    """Verify token and return metadata. Returns None if invalid."""
+    """Verify token and return metadata. Returns None if invalid.
+    
+    Uses database for auth (single source of truth).
+    Falls back to shared_store only for driver sessions (already persisted).
+    """
     if not token:
         return None
-    
-    from app.infrastructure.stores.shared_store import get_shared_store
-    store = get_shared_store()
-    
-    session = store.get("sessions", {}).get(token)
-    if not session:
-        return None
-    
-    return {
-        "user_id": session.get("user_id", ""),
-        "tenant_id": session.get("tenant_id", ""),
-        "role": session.get("role", ""),
-        "driver_id": session.get("driver_id", ""),
-    }
+
+    # Try admin/operator auth via AuthService (DB-backed)
+    try:
+        from app.presentation.dependencies import get_auth_service
+        auth = get_auth_service()
+        ctx = auth.validate_token(token)
+        if ctx and ctx.is_authenticated:
+            return {
+                "user_id": ctx.user_id,
+                "tenant_id": ctx.tenant_id,
+                "role": ctx.role.value if hasattr(ctx.role, 'value') else str(ctx.role),
+                "driver_id": "",
+            }
+    except Exception:
+        pass
+
+    # Try driver auth via DB session
+    try:
+        from sqlalchemy.orm import Session as DBSession
+        from app.infrastructure.database.init_db import engine
+        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverSessionRepository
+        db = DBSession(bind=engine)
+        try:
+            session_repo = SQLAlchemyDriverSessionRepository(db)
+            record = session_repo.get_session(token)
+            if record:
+                return {
+                    "user_id": record.driver_id,
+                    "tenant_id": record.tenant_id,
+                    "role": "DRIVER",
+                    "driver_id": record.driver_id,
+                }
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    return None
 
 
 @router.websocket("/ws")
