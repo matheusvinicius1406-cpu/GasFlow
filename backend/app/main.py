@@ -28,6 +28,7 @@ from app.presentation.api.audio import router as audio_router
 from app.presentation.api.automation import router as automation_router
 from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
+from app.presentation.api.dashboard import router as dashboard_router
 from app.presentation.api.driver_api import router as driver_api_router
 from app.presentation.api.printer import router as printer_router
 from app.presentation.api.payments import router as payments_router
@@ -117,6 +118,7 @@ app.include_router(driver_api_router)
 app.include_router(printer_router)
 app.include_router(payments_router)
 app.include_router(reports_router)
+app.include_router(dashboard_router)
 app.include_router(dispatch_router)
 app.include_router(operations_router)
 app.include_router(communication_router)

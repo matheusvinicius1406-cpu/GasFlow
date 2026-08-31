@@ -2,6 +2,66 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse, InventoryItem, StockMovement } from '@/types'
 
+// ── Dashboard Hook ───────────────────────────────────────
+
+export interface DashboardData {
+  summary: {
+    total_orders: number
+    pending_orders: number
+    confirmed_orders: number
+    delivering_orders: number
+    delivered_orders: number
+    today_orders: number
+    total_revenue: number
+    today_revenue: number
+    avg_ticket: number
+  }
+  clients: { total: number }
+  products: { total: number }
+  drivers: { total: number }
+  financial: {
+    total_received: number
+    today_received: number
+    total_pending: number
+    total_expenses: number
+    today_expenses: number
+    cash_balance: number
+    result: number
+  }
+  inventory: {
+    total_items: number
+    low_stock_count: number
+    out_of_stock_count: number
+    low_stock_products: Array<{ product_codigo: string; quantity: number; minimum: number }>
+  }
+  recent_orders: Array<{
+    codigo: string
+    client_codigo: string
+    total: number
+    status: string
+    payment_status: string
+    created_at: string | null
+  }>
+  alerts: Array<{
+    type: 'warning' | 'danger' | 'info'
+    title: string
+    description: string
+    action: string
+  }>
+  generated_at: string
+}
+
+export function useDashboard() {
+  return useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const { data } = await api.dashboard()
+      return data as DashboardData
+    },
+    refetchInterval: 30000, // Refresh every 30s
+  })
+}
+
 // ── Customer Hooks ───────────────────────────────────────
 
 export interface CustomerSearchParams {

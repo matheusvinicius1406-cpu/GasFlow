@@ -40,6 +40,9 @@ apiClient.interceptors.response.use(
 
 // API endpoints
 export const api = {
+  // Dashboard
+  dashboard: () => apiClient.get('/dashboard'),
+
   // Health
   health: () => apiClient.get('/health'),
 
