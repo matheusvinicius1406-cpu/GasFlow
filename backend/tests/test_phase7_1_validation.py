@@ -807,6 +807,13 @@ def test_schemas_exclude_balance_fields():
 
 def test_persistence_file_based():
     """PROOF: Inventory and movements persist across sessions."""
+    # Only create the tables this test needs (not all 36)
+    needed_tables = [
+        Base.metadata.tables["products"],
+        Base.metadata.tables["inventory"],
+        Base.metadata.tables["stock_movements"],
+    ]
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
@@ -819,7 +826,7 @@ def test_persistence_file_based():
             cursor.execute("PRAGMA foreign_keys = ON")
             cursor.close()
 
-        Base.metadata.create_all(bind=engine1)
+        Base.metadata.create_all(bind=engine1, tables=needed_tables)
         Session1 = sessionmaker(bind=engine1)
 
         # Session 1: create data
