@@ -17,6 +17,7 @@ Real database tests for:
 - Observability metrics
 """
 
+import gc
 import pytest
 import threading
 import time
@@ -67,6 +68,7 @@ def db():
     session = Session()
     yield session
     session.close()
+    gc.collect()
     engine.dispose()
 
 

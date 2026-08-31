@@ -7,11 +7,26 @@ Supports:
 """
 
 import os
+import sqlite3
+from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
+
+# Register custom datetime adapters for SQLite to avoid Python 3.12+
+# deprecation warning about the default datetime adapter.
+# Returns naive UTC datetimes for backward compatibility.
+def _adapt_datetime(dt):
+    return dt.isoformat()
+
+def _convert_datetime(s):
+    dt = datetime.fromisoformat(s.decode())
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+sqlite3.register_adapter(datetime, _adapt_datetime)
+sqlite3.register_converter('datetime', _convert_datetime)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

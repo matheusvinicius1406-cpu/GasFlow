@@ -10,6 +10,7 @@ Covers:
 - Idempotency
 """
 
+import gc
 import pytest
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine, event
@@ -39,6 +40,7 @@ def db():
     session = Session()
     yield session
     session.close()
+    gc.collect()
     engine.dispose()
 
 
