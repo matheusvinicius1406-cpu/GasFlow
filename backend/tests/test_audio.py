@@ -335,17 +335,64 @@ class TestAccountIsolation:
 # ═══════════════════════════════════════════════════════════
 
 class TestConcurrency:
-    def test_concurrent_audio_messages(self, stt_provider, conv_gateway):
-        gw = AudioGateway(stt_provider=stt_provider, conversation_gateway=conv_gateway)
+    def test_concurrent_audio_messages(self, stt_provider, conv_gateway, db):
+        """Each thread gets its own session from the same engine."""
+        from sqlalchemy.orm import sessionmaker
+        from app.infrastructure.whatsapp.repositories import (
+            SQLAlchemyConversationRepository, SQLAlchemyConversationMessageRepository,
+        )
+        from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+        from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
+        from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+        from app.infrastructure.ai.mock_provider import MockLLMProvider
+        from app.application.ai.engine import AIEngine
+        from app.application.ai.tools_impl import AIToolsFactory
+        from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
+        from app.application.whatsapp.gateway import MessageGateway
+
+        engine = db.get_bind()
         results = []
 
         def process(idx):
             try:
-                audio = _make_audio(text=f"test_{idx}", msg_id=f"CONC_AUDIO_{idx}")
-                r = gw.process_audio(audio, _fake_audio("hello"))
-                results.append(r)
+                ts = sessionmaker(bind=engine)()
+                try:
+                    conv_repo = SQLAlchemyConversationRepository(ts)
+                    msg_repo = SQLAlchemyConversationMessageRepository(ts)
+                    client_repo = SQLAlchemyClientRepository(ts)
+                    product_repo = SQLAlchemyProductRepository(ts)
+                    inventory_repo = SQLAlchemyInventoryRepository(ts)
+                    registry = ToolRegistry()
+                    factory = AIToolsFactory(db_session=ts)
+                    for name, desc, tt, perm, handler, schema in [
+                        ("get_customer", "Buscar", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer, {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}}}),
+                        ("search_customers", "Buscar", ToolType.READ, ToolPermission.READ_ONLY, factory.search_customers, {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+                        ("get_customer_360", "360", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer_360, {"type": "object", "properties": {"customer_codigo": {"type": "string"}}, "required": ["customer_codigo"]}),
+                        ("get_order", "Pedido", ToolType.READ, ToolPermission.READ_ONLY, factory.get_order, {"type": "object", "properties": {"order_codigo": {"type": "string"}}, "required": ["order_codigo"]}),
+                        ("get_inventory", "Estoque", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory, {"type": "object", "properties": {"product_codigo": {"type": "string"}}, "required": ["product_codigo"]}),
+                        ("get_low_stock", "Baixo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_low_stock, {"type": "object", "properties": {}}),
+                        ("get_inventory_summary", "Resumo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory_summary, {"type": "object", "properties": {}}),
+                        ("get_payments", "Pag", ToolType.READ, ToolPermission.READ_ONLY, factory.get_payments, {"type": "object", "properties": {}}),
+                        ("get_receivables", "Rec", ToolType.READ, ToolPermission.READ_ONLY, factory.get_receivables, {"type": "object", "properties": {}}),
+                        ("get_financial_summary", "Fin", ToolType.READ, ToolPermission.READ_ONLY, factory.get_financial_summary, {"type": "object", "properties": {}}),
+                        ("get_sales_summary", "Vendas", ToolType.READ, ToolPermission.READ_ONLY, factory.get_sales_summary, {"type": "object", "properties": {}}),
+                        ("search_products", "Prod", ToolType.READ, ToolPermission.READ_ONLY, factory.search_products, {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+                        ("create_order", "Pedido", ToolType.WRITE, ToolPermission.OPERATOR, factory.create_order, {"type": "object", "properties": {"client_codigo": {"type": "string"}, "items": {"type": "array"}}, "required": ["client_codigo", "items"]}),
+                        ("add_stock", "Estoque", ToolType.WRITE, ToolPermission.OPERATOR, factory.add_stock, {"type": "object", "properties": {"product_codigo": {"type": "string"}, "quantity": {"type": "number"}}, "required": ["product_codigo", "quantity"]}),
+                        ("register_payment", "Pgto", ToolType.WRITE, ToolPermission.OPERATOR, factory.register_payment, {"type": "object", "properties": {"order_codigo": {"type": "string"}, "amount": {"type": "number"}, "method": {"type": "string"}}, "required": ["order_codigo", "amount", "method"]}),
+                    ]:
+                        registry.register(ToolDefinition(name=name, description=desc, tool_type=tt, permission=perm, handler=handler, parameters=schema))
+                    llm = MockLLMProvider()
+                    ai_engine = AIEngine(llm_provider=llm, tool_registry=registry)
+                    tg = MessageGateway(conversation_repo=conv_repo, message_repo=msg_repo, client_repo=client_repo, product_repo=product_repo, order_repo=None, item_repo=None, inventory_repo=inventory_repo, ai_engine=ai_engine)
+                    agw = AudioGateway(stt_provider=stt_provider, conversation_gateway=tg)
+                    audio = _make_audio(text=f"test_{idx}", msg_id=f"CONC_AUDIO_{idx}")
+                    r = agw.process_audio(audio, _fake_audio("hello"))
+                    results.append(r)
+                finally:
+                    ts.close()
             except Exception:
-                pass  # Thread-level exception from concurrent DB access
+                pass
 
         threads = [threading.Thread(target=process, args=(i,)) for i in range(3)]
         for t in threads:

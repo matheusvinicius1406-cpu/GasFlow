@@ -575,14 +575,59 @@ class TestObservability:
 # ═══════════════════════════════════════════════════════════
 
 class TestConcurrency:
-    def test_concurrent_same_phone_same_account(self, gateway, sample_data):
+    def test_concurrent_same_phone_same_account(self, gateway, sample_data, db):
+        """Each thread gets its own session from the same engine."""
+        from sqlalchemy.orm import sessionmaker
+        from app.infrastructure.whatsapp.repositories import (
+            SQLAlchemyConversationRepository, SQLAlchemyConversationMessageRepository,
+        )
+        from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+        from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
+        from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
+        from app.infrastructure.repositories.order_item_repository import SQLAlchemyOrderItemRepository
+        from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+        from app.infrastructure.ai.mock_provider import MockLLMProvider
+        from app.application.ai.engine import AIEngine
+        from app.application.ai.tools_impl import AIToolsFactory
+        from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
+        from app.application.whatsapp.gateway import MessageGateway
+
+        engine = db.get_bind()
         results = []
+
         def process(idx):
             try:
-                r = gateway.process_incoming(_make_msg(text=f"Msg {idx}", msg_id=f"CONC_{idx}"))
-                results.append(r)
+                ts = sessionmaker(bind=engine)()
+                try:
+                    conv_repo = SQLAlchemyConversationRepository(ts)
+                    msg_repo = SQLAlchemyConversationMessageRepository(ts)
+                    client_repo = SQLAlchemyClientRepository(ts)
+                    product_repo = SQLAlchemyProductRepository(ts)
+                    order_repo = SQLAlchemyOrderRepository(ts)
+                    item_repo = SQLAlchemyOrderItemRepository(ts)
+                    inventory_repo = SQLAlchemyInventoryRepository(ts)
+                    registry = ToolRegistry()
+                    factory = AIToolsFactory(db_session=ts)
+                    for name, desc, tt, perm, handler, schema in [
+                        ("get_customer", "Buscar", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer, {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}}}),
+                        ("search_customers", "Buscar", ToolType.READ, ToolPermission.READ_ONLY, factory.search_customers, {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+                        ("get_customer_360", "360", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer_360, {"type": "object", "properties": {"customer_codigo": {"type": "string"}}, "required": ["customer_codigo"]}),
+                        ("get_order", "Pedido", ToolType.READ, ToolPermission.READ_ONLY, factory.get_order, {"type": "object", "properties": {"order_codigo": {"type": "string"}}, "required": ["order_codigo"]}),
+                        ("get_inventory", "Estoque", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory, {"type": "object", "properties": {"product_codigo": {"type": "string"}}, "required": ["product_codigo"]}),
+                        ("get_low_stock", "Baixo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_low_stock, {"type": "object", "properties": {}}),
+                        ("get_inventory_summary", "Resumo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory_summary, {"type": "object", "properties": {}}),
+                        ("create_order", "Criar", ToolType.WRITE, ToolPermission.WRITE, factory.create_order, {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "items": {"type": "array"}}, "required": ["customer_codigo", "items"]}),
+                    ]:
+                        registry.register(ToolDefinition(name=name, description=desc, tool_type=tt, permission=perm, handler=handler, parameters=schema))
+                    llm = MockLLMProvider()
+                    ai_engine = AIEngine(llm_provider=llm, tool_registry=registry)
+                    tg = MessageGateway(conversation_repo=conv_repo, message_repo=msg_repo, client_repo=client_repo, product_repo=product_repo, order_repo=order_repo, item_repo=item_repo, inventory_repo=inventory_repo, ai_engine=ai_engine)
+                    r = tg.process_incoming(_make_msg(text=f"Msg {idx}", msg_id=f"CONC_{idx}"))
+                    results.append(r)
+                finally:
+                    ts.close()
             except Exception:
-                pass  # Thread-level exception from concurrent DB access
+                pass
 
         threads = [threading.Thread(target=process, args=(i,)) for i in range(3)]
         for t in threads:
@@ -591,7 +636,6 @@ class TestConcurrency:
             t.join(timeout=10)
 
         conv_ids = [r["conversation_id"] for r in results if r.get("conversation_id")]
-        # All should share the same conversation (same phone)
         assert len(set(conv_ids)) <= 1
 
 
