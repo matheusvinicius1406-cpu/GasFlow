@@ -8,11 +8,15 @@ import {
   Truck,
   UserCog,
   Package,
+  Warehouse,
+  DollarSign,
+  BarChart3,
+  Brain,
   Settings,
-  Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { BrandMark } from '@/components/brand/BrandLogo'
 
 interface MobileSidebarProps {
   isOpen: boolean
@@ -27,6 +31,10 @@ const navItems = [
   { label: 'Entregas', href: '/deliveries', icon: Truck },
   { label: 'Motoristas', href: '/drivers', icon: UserCog },
   { label: 'Produtos', href: '/products', icon: Package },
+  { label: 'Estoque', href: '/inventory', icon: Warehouse },
+  { label: 'Financeiro', href: '/finance', icon: DollarSign },
+  { label: 'Relatórios', href: '/reports', icon: BarChart3 },
+  { label: 'Inteligência', href: '/intelligence', icon: Brain },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ]
 
@@ -42,12 +50,9 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
       />
 
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card lg:hidden">
+      <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card lg:hidden overflow-y-auto">
         <div className="flex h-16 items-center justify-between border-b border-border px-6">
-          <div className="flex items-center gap-2">
-            <Flame className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold text-foreground">GasFlow</span>
-          </div>
+          <BrandMark />
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5" />
           </Button>

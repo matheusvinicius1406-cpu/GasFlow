@@ -12,9 +12,9 @@ import {
   BarChart3,
   Brain,
   Settings,
-  Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { BrandMark } from '@/components/brand/BrandLogo'
 
 interface NavItem {
   label: string
@@ -33,8 +33,8 @@ const navItems: NavItem[] = [
   { label: 'Produtos', href: '/products', icon: Package },
   { label: 'Estoque', href: '/inventory', icon: Warehouse },
   { label: 'Financeiro', href: '/finance', icon: DollarSign },
-  { label: 'Inteligência', href: '/intelligence', icon: Brain },
   { label: 'Relatórios', href: '/reports', icon: BarChart3 },
+  { label: 'Inteligência', href: '/intelligence', icon: Brain },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ]
 
@@ -42,8 +42,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 border-r border-border bg-card lg:block">
       <div className="flex h-16 items-center gap-2 border-b border-border px-6">
-        <Flame className="h-6 w-6 text-primary" />
-        <span className="text-lg font-bold text-foreground">GasFlow</span>
+        <BrandMark />
       </div>
 
       <nav className="space-y-1 p-4">
