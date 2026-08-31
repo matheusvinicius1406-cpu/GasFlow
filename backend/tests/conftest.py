@@ -3,8 +3,8 @@ Pytest conftest — configures test-specific environment variables
 and cleans sensitive data between test modules.
 
 Each test file creates its own in-memory engine for isolation.
-This conftest does NOT create tables — that's done per-engine
-in each test's own db fixture.
+Tables on the file-based gasflow.db are created by init_db() when
+the app starts. This conftest cleans them up at session end.
 """
 
 import os
@@ -14,6 +14,20 @@ import pytest
 # This ensures Settings.from_env() uses test values
 os.environ.setdefault("ADMIN_PASSWORD", "test_password_123")
 os.environ.setdefault("ENVIRONMENT", "test")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_and_cleanup_db():
+    """Create tables at session start, drop at end.
+
+    Tables are created on the file-based gasflow.db engine.
+    Tests that use TestClient(app) or driver_api.py depend on these.
+    """
+    from app.infrastructure.database.base import Base
+    from app.infrastructure.database.init_db import engine
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(autouse=True, scope="module")

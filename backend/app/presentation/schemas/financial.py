@@ -8,7 +8,7 @@ Backend calculates all derived values.
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Payment ──────────────────────────────────────────
@@ -34,8 +34,7 @@ class PaymentResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Receivable ───────────────────────────────────────
@@ -52,8 +51,7 @@ class ReceivableResponse(BaseModel):
     created_at: datetime
     settled_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Expense ──────────────────────────────────────────
@@ -78,8 +76,7 @@ class ExpenseResponse(BaseModel):
     status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Cash Movement ────────────────────────────────────
@@ -94,8 +91,7 @@ class CashMovementResponse(BaseModel):
     balance_after: Decimal
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Financial Reports ────────────────────────────────

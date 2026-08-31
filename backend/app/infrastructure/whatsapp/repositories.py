@@ -42,7 +42,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_domain(model)
 
     def find_by_id(self, conversation_id: int) -> Optional[Conversation]:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return None
         return self._to_domain(model)
@@ -67,7 +67,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_domain(model)
 
     def update_state(self, conversation_id: int, state: ConversationState) -> bool:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return False
         model.status = state.value
@@ -76,7 +76,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def update_customer(self, conversation_id: int, customer_codigo: str) -> bool:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return False
         model.client_codigo = customer_codigo
@@ -85,7 +85,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def update_draft(self, conversation_id: int, draft: Optional[ConversationDraft]) -> bool:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return False
         model.draft_json = json.dumps(draft.to_dict(), ensure_ascii=False) if draft else None
@@ -112,7 +112,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return query.scalar() or 0
 
     def takeover(self, conversation_id: int, operator: str) -> bool:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return False
         model.human_operator = operator
@@ -122,7 +122,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def release_to_ai(self, conversation_id: int) -> bool:
-        model = self.session.query(WhatsAppConversationModel).get(conversation_id)
+        model = self.session.get(WhatsAppConversationModel, conversation_id)
         if not model:
             return False
         model.human_operator = None
@@ -191,7 +191,7 @@ class SQLAlchemyConversationMessageRepository(ConversationMessageRepository):
         message.id = model.id
 
         # Update conversation last_message
-        conv = self.session.query(WhatsAppConversationModel).get(message.conversation_id)
+        conv = self.session.get(WhatsAppConversationModel, message.conversation_id)
         if conv:
             conv.last_message = message.content[:500] if message.content else None
             conv.last_message_at = datetime.utcnow()
