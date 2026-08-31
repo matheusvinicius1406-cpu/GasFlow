@@ -9,6 +9,7 @@ Arquitetura: Domain-Driven Design (DDD)
 """
 
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -43,10 +44,18 @@ from app.core.rate_limit import RateLimitMiddleware
 # Setup structured logging
 logger = setup_logging(settings.log_level)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown."""
+    setup_realtime_bridge()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Sistema operacional para depósitos de gás e água — API + WhatsApp Automation"
+    description="Sistema operacional para depósitos de gás e água — API + WhatsApp Automation",
+    lifespan=lifespan,
 )
 
 # Security headers (applied first = outermost)
@@ -119,7 +128,4 @@ app.include_router(realtime_ws_router)
 # Unified v1 API (same routers, /api/v1 prefix)
 app.include_router(api_v1_router)
 
-# Connect Event Bus → WebSocket bridge on startup
-@app.on_event("startup")
-def _setup_realtime():
-    setup_realtime_bridge()
+

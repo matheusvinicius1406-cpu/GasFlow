@@ -66,10 +66,9 @@ class SQLAlchemyUserRepository:
 
     def list_by_tenant(self, tenant_id: str) -> List[AuthUserModel]:
         """List users belonging to a tenant via memberships."""
-        membership_user_ids = (
-            self.db.query(AuthMembershipModel.user_id)
-            .filter(AuthMembershipModel.tenant_id == tenant_id)
-            .subquery()
+        from sqlalchemy import select
+        membership_user_ids = select(AuthMembershipModel.user_id).where(
+            AuthMembershipModel.tenant_id == tenant_id
         )
         return self.db.query(AuthUserModel).filter(
             AuthUserModel.id.in_(membership_user_ids)
