@@ -13,6 +13,7 @@ import {
   Brain,
   Settings,
   Filter,
+  Repeat,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/brand/BrandLogo'
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
   { label: 'Clientes', href: '/customers', icon: Users },
   { label: 'Segmentos', href: '/segments', icon: Filter },
+  { label: 'Recompra', href: '/reorder', icon: Repeat },
   { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
   { label: 'Entregas', href: '/deliveries', icon: Truck },
   { label: 'Motoristas', href: '/drivers', icon: UserCog },

@@ -58,6 +58,19 @@ class SegmentRule:
     operator: RuleOperator
     value: Any = None  # String, number, or boolean depending on field
 
+    def __post_init__(self):
+        # Validate field and operator are valid enum values
+        if not isinstance(self.field, RuleField):
+            try:
+                self.field = RuleField(self.field)
+            except (ValueError, KeyError):
+                raise ValueError(f"Invalid rule field: {self.field}")
+        if not isinstance(self.operator, RuleOperator):
+            try:
+                self.operator = RuleOperator(self.operator)
+            except (ValueError, KeyError):
+                raise ValueError(f"Invalid rule operator: {self.operator}")
+
     def evaluate(self, customer_metrics: dict) -> bool:
         """Evaluate this rule against customer metrics.
         

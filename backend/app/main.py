@@ -37,6 +37,7 @@ from app.presentation.api.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
 from app.presentation.api.communication import router as communication_router
 from app.presentation.api.segmentation import router as segmentation_router
+from app.presentation.api.reorder import router as reorder_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging
@@ -124,6 +125,7 @@ app.include_router(dispatch_router)
 app.include_router(operations_router)
 app.include_router(communication_router)
 app.include_router(segmentation_router)
+app.include_router(reorder_router)
 
 # WebSocket realtime
 from app.infrastructure.realtime.websocket import router as realtime_ws_router, setup_realtime_bridge

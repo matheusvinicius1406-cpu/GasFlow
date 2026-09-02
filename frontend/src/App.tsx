@@ -13,7 +13,7 @@ import { FinancePage } from '@/features/finance'
 import { ReportsPage } from '@/features/reports'
 import { IntelligencePage } from '@/features/intelligence'
 import { SettingsPage } from '@/features/settings'
-import { SegmentsPage } from '@/features/segments'
+import { SegmentsPage, ReorderPage } from '@/features/segments'
 import { LoginPage } from '@/features/auth'
 import { DriverLoginPage, DriverHomePage } from '@/features/driver'
 
@@ -64,6 +64,7 @@ export function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="intelligence" element={<IntelligencePage />} />
         <Route path="segments" element={<SegmentsPage />} />
+        <Route path="reorder" element={<ReorderPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
