@@ -87,7 +87,7 @@ class ReplyRequest(BaseModel):
 def _build_tool_registry(db) -> ToolRegistry:
     """Build tool registry for AI engine."""
     registry = ToolRegistry()
-    factory = AIToolsFactory(db_db=db)
+    factory = AIToolsFactory(db_session=db)
 
     registry.register(ToolDefinition(
         name="get_customer", description="Buscar cliente",
@@ -246,6 +246,7 @@ async def list_conversations(
     account_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
 ):
     """List active WhatsApp conversations."""
     
