@@ -1,2 +1,5 @@
 export { WhatsAppPage } from './WhatsAppPage'
 export { ConversationsPage } from './ConversationsPage'
+export { CampaignWizardPage } from './CampaignWizardPage'
+export { CampaignHistoryPage } from './CampaignHistoryPage'
+export { CampaignResultsPage } from './CampaignResultsPage'

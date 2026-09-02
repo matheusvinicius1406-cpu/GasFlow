@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
 import { ConversationsPage } from './ConversationsPage'
+import { CampaignHistoryPage } from './CampaignHistoryPage'
 import { apiClient } from '@/lib/api/client'
 
 interface WhatsAppAccount {
@@ -349,12 +350,16 @@ export function WhatsAppPage() {
         <TabsList>
           <TabsTrigger value="accounts">Contas</TabsTrigger>
           <TabsTrigger value="conversations">Conversas</TabsTrigger>
+          <TabsTrigger value="campaigns">Campanhas</TabsTrigger>
         </TabsList>
         <TabsContent value="accounts">
           <WhatsAppAccountsView />
         </TabsContent>
         <TabsContent value="conversations">
           <ConversationsPage />
+        </TabsContent>
+        <TabsContent value="campaigns">
+          <CampaignHistoryPage />
         </TabsContent>
       </Tabs>
     </div>
