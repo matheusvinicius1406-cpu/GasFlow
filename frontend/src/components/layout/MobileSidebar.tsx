@@ -13,6 +13,7 @@ import {
   BarChart3,
   Brain,
   Settings,
+  Filter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -27,6 +28,7 @@ const navItems = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
   { label: 'Clientes', href: '/customers', icon: Users },
+  { label: 'Segmentos', href: '/segments', icon: Filter },
   { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
   { label: 'Entregas', href: '/deliveries', icon: Truck },
   { label: 'Motoristas', href: '/drivers', icon: UserCog },
