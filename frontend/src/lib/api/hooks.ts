@@ -34,6 +34,22 @@ export interface DashboardData {
     out_of_stock_count: number
     low_stock_products: Array<{ product_codigo: string; quantity: number; minimum: number }>
   }
+  trends: {
+    today_orders: { value: number; positive: boolean }
+    today_revenue: { value: number; positive: boolean }
+    delivering: { value: number; positive: boolean }
+    today_received: { value: number; positive: boolean }
+  }
+  hourly_orders: Array<{ hour: number; count: number }>
+  active_deliveries: Array<{
+    order_codigo: string
+    client_codigo: string
+    total: number
+    driver_codigo: string | null
+    driver_name: string | null
+    driver_phone: string | null
+    updated_at: string | null
+  }>
   recent_orders: Array<{
     codigo: string
     client_codigo: string

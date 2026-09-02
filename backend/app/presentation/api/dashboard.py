@@ -85,6 +85,70 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         low_stock = [i for i in inventory_items if i.stock_status == 'LOW_STOCK']
         out_of_stock = [i for i in inventory_items if i.stock_status == 'OUT_OF_STOCK']
 
+        # ── Yesterday Comparison (Trends) ──────────────────
+        yesterday = today - __import__('datetime').timedelta(days=1)
+        yesterday_orders = [o for o in all_orders if o.created_at and o.created_at.date() == yesterday]
+        yesterday_revenue = sum(float(o.total or 0) for o in yesterday_orders if o.payment_status == 'PAID')
+        yesterday_delivered = sum(1 for o in all_orders if o.status == 'DELIVERED' and o.updated_at and o.updated_at.date() == yesterday)
+
+        yesterday_payments = db.query(PaymentModel).filter(
+            PaymentModel.tenant_id == tid
+        ).all()
+        yesterday_received = sum(
+            float(p.amount or 0) for p in yesterday_payments
+            if p.status == 'PAID' and p.paid_at and p.paid_at.date() == yesterday
+        )
+
+        def _trend(current: float, previous: float) -> dict[str, Any]:
+            if previous == 0:
+                return {"value": 0, "positive": current >= 0}
+            pct = round(((current - previous) / previous) * 100, 1)
+            return {"value": abs(pct), "positive": pct >= 0}
+
+        trends = {
+            "today_orders": _trend(len(today_orders), len(yesterday_orders)),
+            "today_revenue": _trend(today_revenue, yesterday_revenue),
+            "delivering": _trend(delivering_orders, 0),
+            "today_received": _trend(today_received, yesterday_received),
+        }
+
+        # ── Hourly Distribution (Today) ────────────────────
+        hourly = [0] * 24
+        for o in today_orders:
+            if o.created_at:
+                hourly[o.created_at.hour] += 1
+        hourly_data = [
+            {"hour": h, "count": hourly[h]}
+            for h in range(6, 23)  # 06:00–22:00
+        ]
+
+        # ── Active Deliveries ──────────────────────────────
+        delivering_list = [o for o in all_orders if o.status == 'DELIVERING']
+        active_deliveries = []
+        for o in delivering_list[:10]:
+            driver_name = None
+            driver_phone = None
+            if o.delivery_driver_codigo:
+                try:
+                    driver = db.query(DeliveryDriverModel).filter(
+                        DeliveryDriverModel.tenant_id == tid,
+                        DeliveryDriverModel.codigo == o.delivery_driver_codigo
+                    ).first()
+                    if driver:
+                        driver_name = driver.name
+                        driver_phone = getattr(driver, 'phone', None)
+                except Exception:
+                    pass
+            active_deliveries.append({
+                "order_codigo": o.codigo,
+                "client_codigo": o.client_codigo,
+                "total": float(o.total or 0),
+                "driver_codigo": o.delivery_driver_codigo,
+                "driver_name": driver_name,
+                "driver_phone": driver_phone,
+                "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+            })
+
         # ── Recent Orders ───────────────────────────────────
         recent = sorted(all_orders, key=lambda o: o.created_at or datetime.min, reverse=True)[:5]
         recent_orders = [
@@ -146,6 +210,9 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
                     for i in low_stock[:5]
                 ],
             },
+            "trends": trends,
+            "hourly_orders": hourly_data,
+            "active_deliveries": active_deliveries,
             "recent_orders": recent_orders,
             "alerts": alerts,
             "generated_at": datetime.now().isoformat(),

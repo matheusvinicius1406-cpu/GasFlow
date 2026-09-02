@@ -14,16 +14,19 @@ import {
   Wallet,
   BarChart3,
   Zap,
+  MapPin,
+  Timer,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { useDashboard } from '@/lib/api/hooks'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import type { DashboardData } from '@/lib/api/hooks'
+import { cn, formatCurrency, formatDate, formatTime } from '@/lib/utils'
 import { getStatusConfig, ORDER_STATUS } from '@/lib/status'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
+import { Page, PageHeader, PageActions } from '@/components/layout/Page'
 
 // ── Greeting ───────────────────────────────────────────────
 
@@ -162,62 +165,222 @@ function StockBar({ label, current, minimum }: { label: string; current: number;
   )
 }
 
+// ── Hourly Orders Chart ────────────────────────────────────
+
+function HourlyChart({ data }: { data: DashboardData['hourly_orders'] }) {
+  if (!data || data.length === 0) return null
+
+  const maxCount = Math.max(...data.map((d) => d.count), 1)
+  const totalToday = data.reduce((s, d) => s + d.count, 0)
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Pedidos por Hora</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Hoje • {totalToday} pedido{totalToday !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <BarChart3 className="h-4 w-4 text-muted-foreground" />
+        </div>
+
+        <div className="flex items-end gap-[3px] h-32">
+          {data.map((d) => {
+            const height = maxCount > 0 ? (d.count / maxCount) * 100 : 0
+            const isNow = d.hour === new Date().getHours()
+            return (
+              <div key={d.hour} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className={cn(
+                    'w-full rounded-t transition-all duration-500 min-h-[2px]',
+                    isNow ? 'bg-primary' : d.count > 0 ? 'bg-primary/60' : 'bg-muted'
+                  )}
+                  style={{ height: `${Math.max(height, d.count > 0 ? 4 : 0)}%` }}
+                  title={`${String(d.hour).padStart(2, '0')}:00 — ${d.count} pedido${d.count !== 1 ? 's' : ''}`}
+                />
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="flex justify-between mt-2">
+          <span className="text-[10px] text-muted-foreground">06h</span>
+          <span className="text-[10px] text-muted-foreground">12h</span>
+          <span className="text-[10px] text-muted-foreground">18h</span>
+          <span className="text-[10px] text-muted-foreground">22h</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Active Deliveries Panel ────────────────────────────────
+
+function ActiveDeliveriesPanel({ deliveries }: { deliveries: DashboardData['active_deliveries'] }) {
+  if (!deliveries || deliveries.length === 0) return null
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Truck className="h-4 w-4 text-info" />
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-info opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-info text-[8px] text-white items-center justify-center font-bold">
+                  {deliveries.length}
+                </span>
+              </span>
+            </div>
+            <h2 className="text-base font-semibold text-foreground">Entregas em Rota</h2>
+          </div>
+          <Link to="/deliveries">
+            <Button variant="ghost" size="sm">
+              Ver todas <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="space-y-2">
+          {deliveries.map((d) => (
+            <Link
+              key={d.order_codigo}
+              to={`/orders/${d.order_codigo}`}
+              className={cn(
+                'flex items-center justify-between rounded-lg border border-border p-3',
+                'transition-colors hover:bg-accent/50'
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="rounded-full bg-info/10 p-2 flex-shrink-0">
+                  <Truck className="h-4 w-4 text-info" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">#{d.order_codigo}</p>
+                    <Badge variant="info" className="text-xs">Em entrega</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {d.driver_name && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {d.driver_name}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {d.client_codigo}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0 ml-3">
+                <p className="text-sm font-bold text-foreground">
+                  {formatCurrency(d.total)}
+                </p>
+                {d.updated_at && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 justify-end mt-0.5">
+                    <Timer className="h-3 w-3" />
+                    {formatTime(d.updated_at)}
+                  </p>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Loading Skeleton ───────────────────────────────────────
+
+function DashboardSkeleton() {
+  return (
+    <Page>
+      <PageHeader>
+        <div className="space-y-1">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+      </PageHeader>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-5">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-20 mb-1" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-5">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-20 mb-1" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-4">
+          <Card><CardContent className="p-5"><Skeleton className="h-64 w-full" /></CardContent></Card>
+          <Card><CardContent className="p-5"><Skeleton className="h-32 w-full" /></CardContent></Card>
+        </div>
+        <div className="space-y-4">
+          <Card><CardContent className="p-5"><Skeleton className="h-48 w-full" /></CardContent></Card>
+          <Card><CardContent className="p-5"><Skeleton className="h-32 w-full" /></CardContent></Card>
+        </div>
+      </div>
+    </Page>
+  )
+}
+
+// ── Error State ────────────────────────────────────────────
+
+function DashboardError() {
+  return (
+    <Page>
+      <PageHeader>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Erro ao carregar dados</p>
+        </div>
+      </PageHeader>
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+          <h3 className="text-lg font-semibold">Não foi possível carregar o dashboard</h3>
+          <p className="text-sm text-muted-foreground mt-2">Tente novamente em alguns instantes.</p>
+        </CardContent>
+      </Card>
+    </Page>
+  )
+}
+
 // ── Main Dashboard ─────────────────────────────────────────
 
 export function DashboardPage() {
   const { user } = useAuth()
   const { data: dashboard, isLoading, error } = useDashboard()
 
-  if (isLoading) {
-    return (
-      <Page>
-        <PageHeader>
-          <div className="space-y-1">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        </PageHeader>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-5">
-                <Skeleton className="h-4 w-24 mb-2" />
-                <Skeleton className="h-8 w-20 mb-1" />
-                <Skeleton className="h-3 w-32" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card><CardContent className="p-5"><Skeleton className="h-64 w-full" /></CardContent></Card>
-          <Card><CardContent className="p-5"><Skeleton className="h-64 w-full" /></CardContent></Card>
-        </div>
-      </Page>
-    )
-  }
-
-  if (error) {
-    return (
-      <Page>
-        <PageHeader>
-          <PageTitle subtitle="Erro ao carregar dados">Dashboard</PageTitle>
-        </PageHeader>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-            <h3 className="text-lg font-semibold">Não foi possível carregar o dashboard</h3>
-            <p className="text-sm text-muted-foreground mt-2">Tente novamente em alguns instantes.</p>
-          </CardContent>
-        </Card>
-      </Page>
-    )
-  }
+  if (isLoading) return <DashboardSkeleton />
+  if (error) return <DashboardError />
 
   const s = dashboard?.summary
   const f = dashboard?.financial
   const inv = dashboard?.inventory
+  const trends = dashboard?.trends
   const alerts = dashboard?.alerts ?? []
   const recentOrders = dashboard?.recent_orders ?? []
+  const hourlyData = dashboard?.hourly_orders ?? []
+  const activeDeliveries = dashboard?.active_deliveries ?? []
 
   const greetingName = user?.name?.split(' ')[0] ?? 'Operador'
 
@@ -243,12 +406,13 @@ export function DashboardPage() {
         </PageActions>
       </PageHeader>
 
-      {/* KPI Row */}
+      {/* KPI Row — Operational */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title="Pedidos Hoje"
           value={s?.today_orders ?? 0}
           icon={ShoppingCart}
+          trend={trends?.today_orders}
           subtitle={`${s?.total_orders ?? 0} total`}
           color="text-primary"
         />
@@ -256,6 +420,7 @@ export function DashboardPage() {
           title="Faturamento Hoje"
           value={formatCurrency(s?.today_revenue ?? 0)}
           icon={DollarSign}
+          trend={trends?.today_revenue}
           subtitle={`${formatCurrency(s?.total_revenue ?? 0)} total`}
           color="text-success"
         />
@@ -263,6 +428,7 @@ export function DashboardPage() {
           title="Em Rota"
           value={s?.delivering_orders ?? 0}
           icon={Truck}
+          trend={trends?.delivering}
           subtitle={`${s?.delivered_orders ?? 0} entregues`}
           color="text-info"
         />
@@ -275,7 +441,7 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Financial Quick View */}
+      {/* KPI Row — Financial */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title="Saldo em Caixa"
@@ -287,6 +453,7 @@ export function DashboardPage() {
           title="Recebido Hoje"
           value={formatCurrency(f?.today_received ?? 0)}
           icon={TrendingUp}
+          trend={trends?.today_received}
           subtitle={`${formatCurrency(f?.total_received ?? 0)} total`}
           color="text-success"
         />
@@ -304,10 +471,11 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Main Content */}
+      {/* Main Content — 3-column layout */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Recent Orders — 2 cols */}
+        {/* Left — 2 cols: Recent Orders + Hourly Chart + Stock */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Recent Orders */}
           <Card>
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">
@@ -379,6 +547,9 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Hourly Orders Chart */}
+          <HourlyChart data={hourlyData} />
+
           {/* Stock Overview */}
           {(inv?.low_stock_count ?? 0) > 0 || (inv?.out_of_stock_count ?? 0) > 0 ? (
             <Card>
@@ -426,8 +597,12 @@ export function DashboardPage() {
           ) : null}
         </div>
 
-        {/* Alerts Sidebar */}
+        {/* Right — 1 col: Active Deliveries + Alerts + Stats */}
         <div className="space-y-4">
+          {/* Active Deliveries */}
+          <ActiveDeliveriesPanel deliveries={activeDeliveries} />
+
+          {/* Alerts Sidebar */}
           <Card>
             <CardContent className="p-5">
               <h2 className="text-base font-semibold text-foreground mb-4">Alertas & Ações</h2>
