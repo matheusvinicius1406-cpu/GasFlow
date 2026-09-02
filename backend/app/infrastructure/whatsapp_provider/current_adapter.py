@@ -36,7 +36,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
 
     def __init__(self, account_id: str, service_url: str = DEFAULT_SERVICE_URL):
         self._account_id = account_id
-        self._service_url = service_url.rstrip("/")
+        self._service_url = service_url.rstrip("/") + "/api"
         self._connected = False
         self._phone: Optional[str] = None
         self._last_connected_at: Optional[datetime] = None
@@ -272,10 +272,10 @@ class WhatsAppWebAdapter(WhatsAppProvider):
     async def health_check(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self._service_url}/status")
+                resp = await client.get(f"{self._service_url.replace('/api', '')}/api/health")
                 if resp.status_code == 200:
                     data = resp.json()
-                    accounts = data.get("accounts", [])
+                    accounts = data.get("whatsapp", {}).get("accounts", [])
                     for acc in accounts:
                         if acc.get("id") == self._account_id:
                             return acc.get("status", {}).get("connected", False)
@@ -288,7 +288,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
     async def _get_account_status(self) -> Optional[Dict[str, Any]]:
         try:
             async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-                resp = await client.get(f"{self._service_url}/status")
+                resp = await client.get(f"{self._service_url}/whatsapp/accounts")
                 if resp.status_code == 200:
                     data = resp.json()
                     accounts = data.get("accounts", [])
