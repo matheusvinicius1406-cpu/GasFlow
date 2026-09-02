@@ -15,6 +15,8 @@ from app.infrastructure.repositories.client_repository import SQLAlchemyClientRe
 from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
 from app.infrastructure.repositories.whatsapp_automation_repository import SQLAlchemyAutomationRepository
 from app.application.whatsapp_automation.service import WhatsAppAutomationService
+from app.application.whatsapp_automation.executor import ExecutionProcessor
+from app.application.whatsapp_automation.whatsapp_bridge import WhatsAppSendBridge
 from app.domain.whatsapp_automation.entity import AutomationRule, AutomationStatus, AutomationTriggerType
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
@@ -27,6 +29,11 @@ def _get_service(db: Session = Depends(get_db), ctx: TenantContext = Depends(get
     client_repo = SQLAlchemyClientRepository(db, ctx.tenant_id)
     order_repo = SQLAlchemyOrderRepository(db, ctx.tenant_id)
     return WhatsAppAutomationService(auto_repo, client_repo, order_repo)
+
+
+def _get_processor(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)) -> ExecutionProcessor:
+    auto_repo = SQLAlchemyAutomationRepository(db, ctx.tenant_id)
+    return ExecutionProcessor(auto_repo)
 
 
 # ── Schemas ──────────────────────────────────────────
@@ -216,3 +223,46 @@ def get_metrics(
     service: WhatsAppAutomationService = Depends(_get_service),
 ):
     return service.get_metrics()
+
+
+# ── Execution Processing (FASE 14.5) ─────────────────
+
+@router.post("/executions/{execution_id}/process")
+async def process_execution(
+    execution_id: int,
+    processor: ExecutionProcessor = Depends(_get_processor),
+):
+    """Process a single execution: send via WhatsApp bridge."""
+    result = await processor.process_execution(execution_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/process-pending")
+async def process_pending(
+    limit: int = Query(10, ge=1, le=50),
+    processor: ExecutionProcessor = Depends(_get_processor),
+):
+    """Process all pending executions."""
+    result = await processor.process_pending_executions(limit=limit)
+    return result
+
+
+@router.get("/audit")
+async def get_audit_log(
+    limit: int = Query(100, ge=1, le=500),
+    processor: ExecutionProcessor = Depends(_get_processor),
+):
+    """Get automation audit log."""
+    return {"entries": processor.get_audit_log(limit=limit)}
+
+
+@router.get("/connection-check")
+async def check_connection(
+    account_id: str = Query("primary"),
+):
+    """Check if WhatsApp service is connected."""
+    bridge = WhatsAppSendBridge()
+    result = await bridge.check_connection(account_id=account_id)
+    return result
