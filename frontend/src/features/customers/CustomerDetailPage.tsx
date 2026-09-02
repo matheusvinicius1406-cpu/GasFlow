@@ -1,6 +1,6 @@
 import { } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, FileText, ShoppingCart, ShoppingBag, DollarSign, Calendar } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, ShoppingCart, ShoppingBag, DollarSign, Calendar } from 'lucide-react'
 import { useCustomer360, useCustomerOrders, useDisableCustomer } from '@/lib/api/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { StatCard } from '@/components/ui/StatCard'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { ModulePlaceholder } from '@/components/layout/ModulePlaceholder'
+
 import { formatPhone, formatDate, formatCurrency } from '@/lib/utils'
 
 const CLIENT_TYPES: Record<string, string> = {
@@ -308,19 +308,51 @@ export function CustomerDetailPage() {
         </TabsContent>
 
         <TabsContent value="timeline">
-          <ModulePlaceholder
-            icon={Clock}
-            title="Timeline"
-            description="Histórico de interações e pedidos do cliente"
-          />
+          <Card>
+            <CardContent className="py-8">
+              <div className="flex flex-col items-center text-center">
+                <Clock className="h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-semibold text-foreground">Timeline</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Histórico de interações e pedidos do cliente.
+                </p>
+                {orders.length > 0 && (
+                  <div className="mt-4 space-y-2 w-full max-w-md">
+                    {orders.slice(0, 5).map((order) => (
+                      <div key={order.codigo} className="flex items-center gap-3 text-sm">
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                        <span className="text-muted-foreground">{formatDate(order.created_at)}</span>
+                        <span className="font-medium">Pedido #{order.codigo}</span>
+                        <Badge variant={
+                          order.status === 'DELIVERED' ? 'success' :
+                          order.status === 'CANCELLED' ? 'destructive' : 'default'
+                        }>
+                          {order.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="notes">
-          <ModulePlaceholder
-            icon={FileText}
-            title="Notas"
-            description="Anotações e observações sobre o cliente"
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Observações do Cliente</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {customer.observacoes ? (
+                <p className="text-foreground">{customer.observacoes}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma observação registrada para este cliente.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

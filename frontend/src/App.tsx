@@ -6,7 +6,7 @@ import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
 import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/customers'
 import { WhatsAppPage, CampaignWizardPage, CampaignResultsPage } from '@/features/whatsapp'
 import { DeliveriesPage } from '@/features/deliveries'
-import { DriversPage } from '@/features/drivers'
+import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
@@ -55,6 +55,8 @@ export function App() {
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />
         <Route path="deliveries" element={<DeliveriesPage />} />
         <Route path="drivers" element={<DriversPage />} />
+        <Route path="drivers/new" element={<DriverFormPage />} />
+        <Route path="drivers/:codigo/edit" element={<DriverFormPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
         <Route path="finance" element={<FinancePage />} />

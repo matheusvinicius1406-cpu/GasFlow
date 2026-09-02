@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -98,7 +99,9 @@ export function DriversPage() {
         </div>
         <div className="flex gap-2">
           <Button onClick={fetchData} variant="outline"><RefreshCw className="h-4 w-4" /></Button>
-          <Button><UserCog className="h-4 w-4" /> Novo Motorista</Button>
+          <Link to="/drivers/new">
+            <Button><UserCog className="h-4 w-4" /> Novo Motorista</Button>
+          </Link>
         </div>
       </div>
 
@@ -114,7 +117,7 @@ export function DriversPage() {
           icon={UserCog}
           title="Nenhum motorista cadastrado"
           description="Comece cadastrando seu primeiro motorista."
-          action={<Button><UserCog className="h-4 w-4" /> Cadastrar Motorista</Button>}
+          action={<Link to="/drivers/new"><Button><UserCog className="h-4 w-4" /> Cadastrar Motorista</Button></Link>}
         />
       ) : (
         <Card>
@@ -158,7 +161,9 @@ export function DriversPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">Detalhes</Button>
+                      <Link to={`/drivers/${driver.codigo}/edit`}>
+                        <Button variant="ghost" size="sm">Editar</Button>
+                      </Link>
                     </div>
                   </div>
                 )

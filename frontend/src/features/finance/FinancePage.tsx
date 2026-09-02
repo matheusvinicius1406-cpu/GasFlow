@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { DollarSign, TrendingUp, TrendingDown, Plus, Wallet } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 
@@ -177,20 +178,28 @@ export function FinancePage() {
                 description="Os pagamentos aparecerão aqui quando forem registrados."
               />
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b"><th className="text-left p-2">Pedido</th><th className="text-left p-2">Valor</th><th className="text-left p-2">Método</th><th className="text-left p-2">Status</th><th className="text-left p-2">Data</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Método</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {payments.map(p => (
-                    <tr key={p.id} className="border-b hover:bg-accent/50">
-                      <td className="p-2 font-mono">#{p.order_codigo}</td>
-                      <td className="p-2 font-semibold">{formatMoney(p.amount)}</td>
-                      <td className="p-2">{METHOD_LABELS[p.method] || p.method}</td>
-                      <td className="p-2"><Badge className={STATUS_COLORS[p.status] || ''}>{p.status}</Badge></td>
-                      <td className="p-2">{p.paid_at ? new Date(p.paid_at).toLocaleDateString('pt-BR') : '-'}</td>
-                    </tr>
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono">#{p.order_codigo}</TableCell>
+                      <TableCell className="font-semibold">{formatMoney(p.amount)}</TableCell>
+                      <TableCell>{METHOD_LABELS[p.method] || p.method}</TableCell>
+                      <TableCell><Badge className={STATUS_COLORS[p.status] || ''}>{p.status}</Badge></TableCell>
+                      <TableCell>{p.paid_at ? new Date(p.paid_at).toLocaleDateString('pt-BR') : '-'}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
@@ -226,19 +235,26 @@ export function FinancePage() {
                 description="As despesas aparecerão aqui quando forem registradas."
               />
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b"><th className="text-left p-2">Descrição</th><th className="text-left p-2">Valor</th><th className="text-left p-2">Categoria</th><th className="text-left p-2">Status</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {expenses.map(e => (
-                    <tr key={e.id} className="border-b hover:bg-accent/50">
-                      <td className="p-2">{e.description}</td>
-                      <td className="p-2 font-semibold text-destructive">{formatMoney(e.amount)}</td>
-                      <td className="p-2">{CATEGORY_LABELS[e.category] || e.category}</td>
-                      <td className="p-2"><Badge className={STATUS_COLORS[e.status] || ''}>{e.status}</Badge></td>
-                    </tr>
+                    <TableRow key={e.id}>
+                      <TableCell>{e.description}</TableCell>
+                      <TableCell className="font-semibold text-destructive">{formatMoney(e.amount)}</TableCell>
+                      <TableCell>{CATEGORY_LABELS[e.category] || e.category}</TableCell>
+                      <TableCell><Badge className={STATUS_COLORS[e.status] || ''}>{e.status}</Badge></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
@@ -256,20 +272,28 @@ export function FinancePage() {
                 description="As movimentações de caixa aparecerão aqui."
               />
             ) : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b"><th className="text-left p-2">Tipo</th><th className="text-left p-2">Descrição</th><th className="text-left p-2">Valor</th><th className="text-left p-2">Saldo</th><th className="text-left p-2">Data</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Saldo</TableHead>
+                    <TableHead>Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {cashMovements.map(m => (
-                    <tr key={m.id} className="border-b hover:bg-accent/50">
-                      <td className="p-2"><Badge className={STATUS_COLORS[m.type] || ''}>{m.type === 'RECEIPT' ? 'Recebimento' : m.type === 'EXPENSE' ? 'Despesa' : m.type === 'REFUND' ? 'Estorno' : 'Ajuste'}</Badge></td>
-                      <td className="p-2">{m.description}</td>
-                      <td className={`p-2 font-semibold ${m.type === 'EXPENSE' || m.type === 'REFUND' ? 'text-destructive' : 'text-green-600'}`}>{m.type === 'EXPENSE' || m.type === 'REFUND' ? '-' : '+'}{formatMoney(m.amount)}</td>
-                      <td className="p-2 font-mono">{formatMoney(m.balance_after)}</td>
-                      <td className="p-2">{new Date(m.created_at).toLocaleDateString('pt-BR')}</td>
-                    </tr>
+                    <TableRow key={m.id}>
+                      <TableCell><Badge className={STATUS_COLORS[m.type] || ''}>{m.type === 'RECEIPT' ? 'Recebimento' : m.type === 'EXPENSE' ? 'Despesa' : m.type === 'REFUND' ? 'Estorno' : 'Ajuste'}</Badge></TableCell>
+                      <TableCell>{m.description}</TableCell>
+                      <TableCell className={`font-semibold ${m.type === 'EXPENSE' || m.type === 'REFUND' ? 'text-destructive' : 'text-green-600'}`}>{m.type === 'EXPENSE' || m.type === 'REFUND' ? '-' : '+'}{formatMoney(m.amount)}</TableCell>
+                      <TableCell className="font-mono">{formatMoney(m.balance_after)}</TableCell>
+                      <TableCell>{new Date(m.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
