@@ -16,6 +16,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
 import { ConversationsPage } from './ConversationsPage'
 import { CampaignHistoryPage } from './CampaignHistoryPage'
+import { AutomationsPage } from './AutomationsPage'
 import { apiClient } from '@/lib/api/client'
 
 interface WhatsAppAccount {
@@ -351,6 +352,7 @@ export function WhatsAppPage() {
           <TabsTrigger value="accounts">Contas</TabsTrigger>
           <TabsTrigger value="conversations">Conversas</TabsTrigger>
           <TabsTrigger value="campaigns">Campanhas</TabsTrigger>
+          <TabsTrigger value="automations">Automações</TabsTrigger>
         </TabsList>
         <TabsContent value="accounts">
           <WhatsAppAccountsView />
@@ -360,6 +362,9 @@ export function WhatsAppPage() {
         </TabsContent>
         <TabsContent value="campaigns">
           <CampaignHistoryPage />
+        </TabsContent>
+        <TabsContent value="automations">
+          <AutomationsPage />
         </TabsContent>
       </Tabs>
     </div>
