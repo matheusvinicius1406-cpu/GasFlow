@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -7,8 +8,10 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Wallet } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Wallet, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { useReceivables, useCashBalance } from '@/lib/api/hooks';
+import type { Receivable } from '@/types';
 
 interface Payment {
   id: number;
@@ -62,7 +65,7 @@ export function FinancePage() {
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [activeTab, setActiveTab] = useState<'payments' | 'expenses' | 'cash'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'receivables' | 'expenses' | 'cash'>('payments');
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', category: 'OTHER' });
 
@@ -104,6 +107,23 @@ export function FinancePage() {
       // error handled silently
     }
   }
+
+  const [receivableFilter, setReceivableFilter] = useState<string>('');
+  const [receivablePage, setReceivablePage] = useState(1);
+  const PAGE_SIZE = 20;
+  const { data: receivablesData, isLoading: loadingReceivables } = useReceivables(
+    {
+      ...(receivableFilter ? { status: receivableFilter } : {}),
+      page: receivablePage,
+      page_size: PAGE_SIZE,
+    }
+  );
+  useCashBalance(); // keeps cache warm for summary cards
+  const receivables = receivablesData?.items ?? [];
+  const receivableTotalPages = receivablesData?.total_pages ?? 1;
+  const totalReceivablePending = receivables
+    .filter((r: Receivable) => r.status === 'OPEN' || r.status === 'PARTIAL' || r.status === 'OVERDUE')
+    .reduce((s: number, r: Receivable) => s + Number(r.remaining_amount), 0);
 
   const totalPayments = payments.reduce((s, p) => s + Number(p.amount), 0);
   const totalExpenses = expenses.filter(e => e.status === 'ACTIVE').reduce((s, e) => s + Number(e.amount), 0);
@@ -158,10 +178,15 @@ export function FinancePage() {
       </div>
 
       {/* Tab Buttons */}
-      <div className="flex gap-2 border-b pb-2">
-        {(['payments', 'expenses', 'cash'] as const).map(tab => (
-          <Button key={tab} variant={activeTab === tab ? 'default' : 'ghost'} onClick={() => setActiveTab(tab)}>
-            {tab === 'payments' ? '💳 Pagamentos' : tab === 'expenses' ? '📋 Despesas' : '💰 Movimentações'}
+      <div className="flex gap-2 border-b pb-2 overflow-x-auto">
+        {([
+          { key: 'payments' as const, label: '💳 Pagamentos' },
+          { key: 'receivables' as const, label: '📄 Recebíveis' },
+          { key: 'expenses' as const, label: '📋 Despesas' },
+          { key: 'cash' as const, label: '💰 Movimentações' },
+        ]).map(tab => (
+          <Button key={tab.key} variant={activeTab === tab.key ? 'default' : 'ghost'} onClick={() => setActiveTab(tab.key)}>
+            {tab.label}
           </Button>
         ))}
       </div>
@@ -255,6 +280,137 @@ export function FinancePage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Receivables */}
+      {activeTab === 'receivables' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Recebíveis
+                {totalReceivablePending > 0 && (
+                  <Badge variant="warning" className="ml-2">
+                    {formatMoney(totalReceivablePending)} pendente
+                  </Badge>
+                )}
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Status filter */}
+            <div className="flex gap-2 mb-4">
+              {[{ val: '', label: 'Todos' }, { val: 'OPEN', label: 'Abertos' }, { val: 'PARTIAL', label: 'Parcial' }, { val: 'OVERDUE', label: 'Atrasados' }, { val: 'PAID', label: 'Pagos' }].map(f => (
+                <Button
+                  key={f.val}
+                  size="sm"
+                  variant={receivableFilter === f.val ? 'default' : 'outline'}
+                  onClick={() => { setReceivableFilter(f.val); setReceivablePage(1); }}
+                >
+                  {f.label}
+                </Button>
+              ))}
+            </div>
+            {loadingReceivables ? (
+              <div className="flex justify-center py-8"><LoadingSpinner /></div>
+            ) : receivables.length === 0 ? (
+              <EmptyState
+                icon={DollarSign}
+                title="Nenhum recebível"
+                description="Os recebíveis aparecerão aqui quando pedidos forem criados."
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Valor Original</TableHead>
+                    <TableHead>Pago</TableHead>
+                    <TableHead>Restante</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {receivables.map((r: Receivable) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono">
+                        <Link to={`/orders/${r.order_codigo}`} className="hover:underline">
+                          #{r.order_codigo}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{r.customer_codigo}</TableCell>
+                      <TableCell>{formatMoney(r.original_amount)}</TableCell>
+                      <TableCell>{formatMoney(r.paid_amount)}</TableCell>
+                      <TableCell className="font-semibold">
+                        {Number(r.remaining_amount) > 0 ? (
+                          <span className="text-destructive">{formatMoney(r.remaining_amount)}</span>
+                        ) : (
+                          <span className="text-success">{formatMoney(0)}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            r.status === 'PAID' ? 'success' :
+                            r.status === 'OVERDUE' ? 'destructive' :
+                            r.status === 'PARTIAL' ? 'info' : 'secondary'
+                          }
+                        >
+                          {r.status === 'OPEN' ? 'Aberto' :
+                           r.status === 'PARTIAL' ? 'Parcial' :
+                           r.status === 'PAID' ? 'Pago' :
+                           r.status === 'OVERDUE' ? 'Atrasado' : r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {Number(r.remaining_amount) > 0 && r.status !== 'CANCELLED' && (
+                          <Link to={`/orders/${r.order_codigo}`}>
+                            <Button variant="ghost" size="sm">Registrar Pagamento</Button>
+                          </Link>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {/* Pagination */}
+            {receivableTotalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Página {receivablePage} de {receivableTotalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReceivablePage(p => Math.max(1, p - 1))}
+                    disabled={receivablePage <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReceivablePage(p => Math.min(receivableTotalPages, p + 1))}
+                    disabled={receivablePage >= receivableTotalPages}
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

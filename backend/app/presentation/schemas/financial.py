@@ -14,7 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field
 # ── Payment ──────────────────────────────────────────
 
 class PaymentCreate(BaseModel):
-    order_codigo: str
+    """Payment creation schema.
+
+    Note: order_codigo is taken from the URL path parameter,
+    not required in the body.
+    """
     amount: Decimal = Field(..., gt=0, description="Payment amount > 0")
     method: str = Field("CASH", description="CASH, PIX, CARD, TRANSFER, OTHER")
     reference: Optional[str] = None

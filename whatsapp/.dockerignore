@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log*
+
+# Build artifacts
+dist
+
+# Runtime data (mounted as volumes)
+data/
+wwebjs_auth/
+.wwebjs_cache/
+export/
+
+# IDE
+.vscode
+.idea
+
+# Environment
+.env
+.env.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests
+tests/
+*.test.*
+
+# Documentation
+*.md
+
+# OS
+.DS_Store
+Thumbs.db

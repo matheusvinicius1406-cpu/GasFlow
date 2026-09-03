@@ -22,6 +22,7 @@ from app.infrastructure.repositories.financial_repositories import (
     SQLAlchemyExpenseRepository, SQLAlchemyCashMovementRepository,
     SQLAlchemyFinancialLedgerRepository,
 )
+from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
 from app.application.financial.use_cases import (
     RegisterPaymentUseCase, RegisterExpenseUseCase,
     RefundPaymentUseCase, FinancialReportsUseCase,
@@ -42,12 +43,23 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 @router.get("/payments", response_model=PaymentListResponse)
 def list_payments(
     status: Optional[str] = Query(None),
+    order_codigo: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     repo = SQLAlchemyPaymentRepository(db, ctx.tenant_id)
+
+    # Filter by specific order
+    if order_codigo:
+        items = repo.get_by_order(order_codigo)
+        return PaymentListResponse(
+            items=[PaymentResponse.model_validate(_to_dict(i)) for i in items],
+            total=len(items), page=1, page_size=len(items) or 1,
+            total_pages=1,
+        )
+
     from app.domain.financial.payment import PaymentStatus
     s = PaymentStatus(status) if status else None
     items, total = repo.list_all(status=s, page=page, page_size=page_size)
@@ -70,6 +82,7 @@ def register_payment(
         receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
         cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
         ledger_repo=SQLAlchemyFinancialLedgerRepository(db, ctx.tenant_id),
+        order_repo=SQLAlchemyOrderRepository(db, ctx.tenant_id),
     )
     try:
         result = uc.execute({
@@ -113,12 +126,24 @@ def refund_payment(
 @router.get("/receivables", response_model=ReceivableListResponse)
 def list_receivables(
     status: Optional[str] = Query(None),
+    order_codigo: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     repo = SQLAlchemyReceivableRepository(db, ctx.tenant_id)
+
+    # Filter by specific order — returns single receivable
+    if order_codigo:
+        receivable = repo.get_by_order(order_codigo)
+        items = [receivable] if receivable else []
+        return ReceivableListResponse(
+            items=[_receivable_to_response(i) for i in items],
+            total=len(items), page=1, page_size=1,
+            total_pages=1,
+        )
+
     if status and status == "OVERDUE":
         items, total = repo.list_overdue(page=page, page_size=page_size)
     elif status and status in ("OPEN", "PARTIAL"):

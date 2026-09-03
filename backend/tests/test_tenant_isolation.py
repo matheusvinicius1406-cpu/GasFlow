@@ -121,9 +121,10 @@ class TestTenantFiltering:
 
     def test_create_and_read_client_tenant_scoped(self, client, admin_token):
         """Create a client and verify it can be read back (same tenant)."""
+        import uuid as _uuid
         resp = client.post("/clients/", json={
             "nome": "Teste Isolation",
-            "telefone": "11988776655",
+            "telefone": f"119{str(_uuid.uuid4().int)[:7]}",
             "rua": "Rua Teste",
             "numero": "42",
             "bairro": "Centro",

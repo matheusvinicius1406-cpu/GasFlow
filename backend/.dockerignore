@@ -1,0 +1,49 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+.pytest_cache
+.coverage
+htmlcov
+
+# IDE
+.vscode
+.idea
+
+# Environment (secrets injected via docker-compose)
+.env
+.env.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests (not needed in production image)
+tests/
+test_*.db
+
+# Documentation
+docs/
+*.md

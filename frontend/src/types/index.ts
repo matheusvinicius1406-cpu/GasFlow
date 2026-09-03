@@ -200,6 +200,144 @@ export interface User {
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'DRIVER' | 'CUSTOMER' | 'SYSTEM'
 
+// ── Delivery ───────────────────────────────────────────
+export type DeliveryStatus =
+  | 'PENDING'
+  | 'ASSIGNED'
+  | 'DISPATCHED'
+  | 'EN_ROUTE'
+  | 'ARRIVED'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'RESCHEDULED'
+
+export type DeliveryFailureReason =
+  | 'CUSTOMER_ABSENT'
+  | 'ADDRESS_INVALID'
+  | 'REFUSED'
+  | 'DAMAGED'
+  | 'VEHICLE_FAILURE'
+  | 'WEATHER'
+  | 'OTHER'
+
+export interface DeliveryAddress {
+  street: string
+  number: string
+  complement: string
+  neighborhood: string
+  city: string
+  state: string
+  zip_code: string
+  reference: string
+}
+
+export interface DeliveryTimelineEvent {
+  status: DeliveryStatus
+  timestamp: string
+  actor_type: string
+  notes: string
+}
+
+export interface Delivery {
+  id: string
+  order_id: string
+  tenant_id: string
+  status: DeliveryStatus
+  customer_codigo: string
+  customer_name: string
+  driver_id: string | null
+  vehicle_id: string | null
+  route_id: string | null
+  scheduled_at: string | null
+  started_at: string | null
+  arrived_at: string | null
+  delivered_at: string | null
+  failed_at: string | null
+  failed_reason: DeliveryFailureReason | null
+  failure_notes: string
+  notes: string
+  created_at: string
+  updated_at: string
+  address: DeliveryAddress
+  timeline: DeliveryTimelineEvent[]
+  eta_minutes: number | null
+}
+
+export interface DeliveryDriverExtended {
+  id: string
+  tenant_id: string
+  name: string
+  phone: string
+  status: string
+  active: boolean
+  vehicle_id: string | null
+  license_number: string | null
+  is_available: boolean
+  is_online: boolean
+  has_location: boolean
+  last_seen: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Finance Payment (finance.py) ────────────────────────
+export type FinancePaymentStatus = 'PENDING' | 'PAID' | 'PARTIAL' | 'FAILED' | 'REFUNDED'
+
+export interface FinancePayment {
+  id: number
+  order_codigo: string
+  amount: number
+  method: string
+  status: FinancePaymentStatus
+  paid_at: string | null
+  reference: string | null
+  idempotency_key: string | null
+  notes: string | null
+  created_at: string
+}
+
+// ── Receivable ─────────────────────────────────────────
+export type ReceivableStatus = 'OPEN' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+
+export interface Receivable {
+  id: number
+  customer_codigo: string
+  order_codigo: string
+  original_amount: number
+  paid_amount: number
+  remaining_amount: number
+  due_date: string | null
+  status: ReceivableStatus
+  created_at: string
+  settled_at: string | null
+}
+
+// ── Finance Expense ────────────────────────────────────
+export interface FinanceExpense {
+  id: number
+  description: string
+  amount: number
+  category: string
+  date: string
+  payment_method: string | null
+  notes: string | null
+  status: string
+  created_at: string
+}
+
+// ── Cash Movement ──────────────────────────────────────
+export interface CashMovement {
+  id: number
+  type: string
+  amount: number
+  description: string
+  reference_type: string | null
+  reference_id: string | null
+  balance_after: number
+  created_at: string
+}
+
 // ── Dashboard ───────────────────────────────────────────
 export interface DashboardStats {
   totalOrders: number

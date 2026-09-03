@@ -1,8 +1,9 @@
 FROM node:20-slim
 
-# Instala Chromium e dependências do Puppeteer
+# Instala Chromium, curl (healthcheck) e dependências do Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    curl \
     fonts-liberation \
     libappindicator3-1 \
     libasound2 \

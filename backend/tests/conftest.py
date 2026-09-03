@@ -22,12 +22,33 @@ def setup_and_cleanup_db():
 
     Tables are created on the file-based gasflow.db engine.
     Tests that use TestClient(app) or driver_api.py depend on these.
+    Also ensures the rate limiter is clear at session start.
     """
     from app.infrastructure.database.base import Base
     from app.infrastructure.database.init_db import engine
     Base.metadata.create_all(bind=engine)
+    # Ensure rate limiter is clear at session start
+    try:
+        import app.presentation.dependencies as deps
+        if deps._auth_service is not None:
+            deps._auth_service._rate_limiter._buckets.clear()
+    except Exception:
+        pass
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def clear_rate_limiter_module():
+    """Clear rate limiter at module start.
+
+    Conftest autouse fixtures run before test-file fixtures,
+    so this executes before module-scoped login fixtures (admin_token)
+    that would otherwise hit 429 from accumulated buckets.
+    """
+    _clear_rate_limiter()
+    yield
+    _clear_rate_limiter()
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -52,27 +73,39 @@ def clean_db_module():
         conn.commit()
 
 
-def pytest_runtest_setup(item):
-    """Clear rate limiter and auth singleton BEFORE every test.
+def _clear_rate_limiter():
+    """Clear all rate limiter buckets.
 
-    This is a hook that runs before every test's setup phase,
-    including fixture setup. This ensures the RateLimiter buckets
-    are always empty when a login fixture runs, preventing 429 errors
-    that accumulate across test modules.
+    Clears BOTH:
+    1. AuthService._rate_limiter (login-level rate limiting)
+    2. core.rate_limit._limiter (middleware-level rate limiting)
     """
-    try:
-        import app.presentation.dependencies as deps
-        # Force a fresh auth service with clean rate limiter
-        deps._auth_service = None
-    except Exception:
-        pass
-
-
-def pytest_runtest_teardown(item):
-    """Ensure rate limiter is cleared after each test item."""
     try:
         import app.presentation.dependencies as deps
         if deps._auth_service is not None:
             deps._auth_service._rate_limiter._buckets.clear()
     except Exception:
         pass
+    try:
+        from app.core.rate_limit import _limiter
+        _limiter._buckets.clear()
+    except Exception:
+        pass
+
+
+def pytest_runtest_setup(item):
+    """Clear rate limiter BEFORE every test.
+
+    This hook runs before each test's setup phase.
+    """
+    _clear_rate_limiter()
+
+
+def pytest_runtest_teardown(item, nextitem):
+    """Clear rate limiter after each test and before next test's fixtures.
+
+    The nextitem parameter lets us clear BEFORE the next test's
+    module-scoped fixtures execute, fixing the 429 issue with
+    admin_token fixtures.
+    """
+    _clear_rate_limiter()

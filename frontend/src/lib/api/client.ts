@@ -124,9 +124,22 @@ export const api = {
     listDeliveries: (params?: { status?: string; driver_id?: string }) =>
       apiClient.get('/delivery/deliveries', { params }),
     getDelivery: (id: string) => apiClient.get(`/delivery/deliveries/${id}`),
-    createDelivery: (data: unknown) => apiClient.post('/delivery/deliveries', data),
-    assignDelivery: (id: string, data: unknown) => apiClient.patch(`/delivery/deliveries/${id}/assign`, data),
-    updateStatus: (id: string, data: unknown) => apiClient.patch(`/delivery/deliveries/${id}/status`, data),
+    createDelivery: (data: {
+      order_id: string;
+      customer_codigo: string;
+      customer_name: string;
+      address?: { street: string; number: string; complement?: string; neighborhood: string; city?: string; state?: string; zip_code?: string; reference?: string };
+      scheduled_at?: string;
+      notes?: string;
+    }) => apiClient.post('/delivery/deliveries', data),
+    assignDelivery: (id: string, data: { driver_id: string; vehicle_id?: string }) =>
+      apiClient.patch(`/delivery/deliveries/${id}/assign`, data),
+    updateStatus: (id: string, data: {
+      status: string;
+      failure_reason?: string;
+      failure_notes?: string;
+      proof_type?: string;
+    }) => apiClient.patch(`/delivery/deliveries/${id}/status`, data),
     listDrivers: (params?: { status?: string }) =>
       apiClient.get('/delivery/drivers', { params }),
     getDriver: (id: string) => apiClient.get(`/delivery/drivers/${id}`),
@@ -135,7 +148,43 @@ export const api = {
     listRoutes: () => apiClient.get('/delivery/routes'),
   },
 
-  // Finance Reports
+  // Finance — payments, receivables, expenses, cash
+  finance: {
+    // Payments
+    listPayments: (params?: { status?: string; order_codigo?: string; page?: number; page_size?: number }) =>
+      apiClient.get('/finance/payments', { params }),
+    registerPayment: (orderCodigo: string, data: {
+      amount: number;
+      method: string;
+      reference?: string;
+      idempotency_key?: string;
+      notes?: string;
+    }) => apiClient.post(`/finance/orders/${orderCodigo}/payments`, data),
+    refundPayment: (paymentId: number, reason?: string) =>
+      apiClient.post(`/finance/payments/${paymentId}/refund`, null, { params: { reason: reason || '' } }),
+
+    // Receivables
+    listReceivables: (params?: { status?: string; order_codigo?: string; page?: number; page_size?: number }) =>
+      apiClient.get('/finance/receivables', { params }),
+
+    // Expenses
+    listExpenses: (params?: { status?: string; page?: number; page_size?: number }) =>
+      apiClient.get('/finance/expenses', { params }),
+    createExpense: (data: { description: string; amount: number; category?: string; date?: string; payment_method?: string; notes?: string }) =>
+      apiClient.post('/finance/expenses', data),
+    cancelExpense: (expenseId: number) =>
+      apiClient.post(`/finance/expenses/${expenseId}/cancel`),
+
+    // Cash
+    listCash: (params?: { type_filter?: string; page?: number; page_size?: number }) =>
+      apiClient.get('/finance/cash', { params }),
+    cashBalance: () => apiClient.get('/finance/cash/balance'),
+
+    // Reports
+    daily: (date?: string) => apiClient.get('/finance/reports/daily', { params: { date } }),
+  },
+
+  // Finance Reports (backward compat)
   financeReports: {
     daily: (date?: string) => apiClient.get('/finance/reports/daily', { params: { date } }),
     cashBalance: () => apiClient.get('/finance/cash/balance'),

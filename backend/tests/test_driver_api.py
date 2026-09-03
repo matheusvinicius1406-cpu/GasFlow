@@ -241,8 +241,9 @@ class TestDeliveryActions:
 class TestIdempotency:
     def test_duplicate_action_same_key(self, store, setup_data):
         """Same idempotency_key → one effect."""
+        import uuid as _uuid
         from app.presentation.api.driver_api import _check_idempotency, _record_idempotency
-        key = "idem-001"
+        key = f"idem-unique-{_uuid.uuid4().hex[:12]}"  # Unique per run
         assert _check_idempotency(key) is None  # First time
         _record_idempotency(key)
         result = _check_idempotency(key)

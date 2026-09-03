@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse, InventoryItem, StockMovement } from '@/types'
+import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse, InventoryItem, StockMovement, Delivery, DeliveryDriverExtended, FinancePayment, Receivable, FinanceExpense, CashMovement } from '@/types'
 
 // ── Dashboard Hook ───────────────────────────────────────
 
@@ -412,6 +412,207 @@ export function useSetMinimum() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['inventory', variables.codigo] })
+    },
+  })
+}
+
+// ── Delivery Hooks — Bloco A ───────────────────────────
+
+export function useDeliveries(params?: { status?: string; driver_id?: string }) {
+  return useQuery({
+    queryKey: ['deliveries', params],
+    queryFn: async () => {
+      const { data } = await api.deliveryOps.listDeliveries(params)
+      return data as { deliveries: Delivery[]; count: number }
+    },
+  })
+}
+
+export function useDeliveryDrivers(params?: { status?: string }) {
+  return useQuery({
+    queryKey: ['delivery-drivers', params],
+    queryFn: async () => {
+      const { data } = await api.deliveryOps.listDrivers(params)
+      return data as { drivers: DeliveryDriverExtended[]; count: number }
+    },
+  })
+}
+
+export function useDeliverySummary() {
+  return useQuery({
+    queryKey: ['delivery-summary'],
+    queryFn: async () => {
+      const { data } = await api.deliveryOps.dispatchSummary()
+      return data as { deliveries: { total: number; by_status: Record<string, number> }; drivers: { total: number; available: number } }
+    },
+  })
+}
+
+export function useCreateDelivery() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: {
+      order_id: string;
+      customer_codigo: string;
+      customer_name: string;
+      address?: { street: string; number: string; complement?: string; neighborhood: string; city?: string; state?: string; zip_code?: string; reference?: string };
+      scheduled_at?: string;
+      notes?: string;
+    }) => {
+      const { data: result } = await api.deliveryOps.createDelivery(data)
+      return result as { success: boolean; delivery: Delivery }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
+      queryClient.invalidateQueries({ queryKey: ['delivery-summary'] })
+    },
+  })
+}
+
+export function useAssignDelivery() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, driver_id, vehicle_id }: { id: string; driver_id: string; vehicle_id?: string }) => {
+      const { data: result } = await api.deliveryOps.assignDelivery(id, { driver_id, vehicle_id })
+      return result as { success: boolean; delivery: Delivery }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
+      queryClient.invalidateQueries({ queryKey: ['delivery-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['delivery-drivers'] })
+    },
+  })
+}
+
+export function useUpdateDeliveryStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, status, failure_reason, failure_notes, proof_type }: {
+      id: string;
+      status: string;
+      failure_reason?: string;
+      failure_notes?: string;
+      proof_type?: string;
+    }) => {
+      const { data: result } = await api.deliveryOps.updateStatus(id, { status, failure_reason, failure_notes, proof_type })
+      return result as { success: boolean; delivery: Delivery }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
+      queryClient.invalidateQueries({ queryKey: ['delivery-summary'] })
+    },
+  })
+}
+
+// ── Finance Hooks — Bloco A ────────────────────────────
+
+export function useFinancePayments(params?: { status?: string; order_codigo?: string; page?: number; page_size?: number }) {
+  return useQuery({
+    queryKey: ['finance-payments', params],
+    queryFn: async () => {
+      const { data } = await api.finance.listPayments(params)
+      return data as PaginatedResponse<FinancePayment>
+    },
+  })
+}
+
+export function useOrderPayments(orderCodigo: string) {
+  return useQuery({
+    queryKey: ['finance-payments', 'order', orderCodigo],
+    queryFn: async () => {
+      const { data } = await api.finance.listPayments({ order_codigo: orderCodigo })
+      return data as PaginatedResponse<FinancePayment>
+    },
+    enabled: !!orderCodigo,
+  })
+}
+
+export function useRegisterPayment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ order_codigo, amount, method, reference, idempotency_key, notes }: {
+      order_codigo: string;
+      amount: number;
+      method: string;
+      reference?: string;
+      idempotency_key: string;
+      notes?: string;
+    }) => {
+      const { data } = await api.finance.registerPayment(order_codigo, {
+        amount,
+        method,
+        reference,
+        idempotency_key,
+        notes,
+      })
+      return data as { status: string; payment: FinancePayment }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance-payments'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-receivables'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-cash'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-balance'] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export function useReceivables(params?: { status?: string; order_codigo?: string; page?: number; page_size?: number }) {
+  return useQuery({
+    queryKey: ['finance-receivables', params],
+    queryFn: async () => {
+      const { data } = await api.finance.listReceivables(params)
+      return data as PaginatedResponse<Receivable>
+    },
+  })
+}
+
+export function useFinanceExpenses(params?: { status?: string; page?: number; page_size?: number }) {
+  return useQuery({
+    queryKey: ['finance-expenses', params],
+    queryFn: async () => {
+      const { data } = await api.finance.listExpenses(params)
+      return data as PaginatedResponse<FinanceExpense>
+    },
+  })
+}
+
+export function useCreateExpense() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: { description: string; amount: number; category?: string; date?: string; payment_method?: string; notes?: string }) => {
+      const { data: result } = await api.finance.createExpense(data)
+      return result as { status: string; expense: FinanceExpense }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance-expenses'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-cash'] })
+      queryClient.invalidateQueries({ queryKey: ['finance-balance'] })
+    },
+  })
+}
+
+export function useCashMovements(params?: { type_filter?: string; page?: number; page_size?: number }) {
+  return useQuery({
+    queryKey: ['finance-cash', params],
+    queryFn: async () => {
+      const { data } = await api.finance.listCash(params)
+      return data as PaginatedResponse<CashMovement>
+    },
+  })
+}
+
+export function useCashBalance() {
+  return useQuery({
+    queryKey: ['finance-balance'],
+    queryFn: async () => {
+      const { data } = await api.finance.cashBalance()
+      return data as { balance: number }
     },
   })
 }

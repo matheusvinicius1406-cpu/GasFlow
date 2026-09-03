@@ -1,0 +1,36 @@
+# Version control
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log*
+
+# Build artifacts
+dist
+.vite
+
+# IDE
+.vscode
+.idea
+
+# Environment
+.env
+.env.local
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests
+test/
+*.test.*
+vitest.config.*
+coverage/
+
+# Documentation
+*.md
+
+# OS
+.DS_Store
+Thumbs.db

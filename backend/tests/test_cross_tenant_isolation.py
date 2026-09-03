@@ -19,29 +19,44 @@ def client():
 @pytest.fixture(scope="module")
 def setup_tenants(client):
     """Create two tenants with admin users. Returns tokens for both."""
+    # Ensure rate limiter is clear before any logins in this module
+    try:
+        import app.presentation.dependencies as deps
+        if deps._auth_service is not None:
+            deps._auth_service._rate_limiter._buckets.clear()
+    except Exception:
+        pass
     resp = client.post("/auth/login", json={"username": "admin", "password": "test_password_123"})
     assert resp.status_code == 200
     admin_token = resp.json()["token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
-    # Create Tenant A
+    # Create Tenant A (idempotent: 200 = created, 400 = already exists)
     resp = client.post("/auth/tenants", json={"tenant_id": "tenant_a", "name": "GasFlow Filial A"},
                        headers=admin_headers)
-    assert resp.status_code == 200
+    assert resp.status_code in (200, 400)
 
     # Create Tenant B
     resp = client.post("/auth/tenants", json={"tenant_id": "tenant_b", "name": "GasFlow Filial B"},
                        headers=admin_headers)
-    assert resp.status_code == 200
+    assert resp.status_code in (200, 400)
 
-    # Create admin users
+    # Create admin users (idempotent)
     for username, tid in [("admin_a", "tenant_a"), ("admin_b", "tenant_b")]:
         resp = client.post("/auth/users", json={
             "username": username, "email": f"{username}@gasflow.local",
             "password": "test_password_123", "display_name": f"Admin {tid}",
             "role": "ADMIN", "tenant_id": tid,
         }, headers=admin_headers)
-        assert resp.status_code == 200
+        assert resp.status_code in (200, 400)
+
+    # Reset rate limiter before tenant admin logins
+    try:
+        import app.presentation.dependencies as deps
+        if deps._auth_service is not None:
+            deps._auth_service._rate_limiter._buckets.clear()
+    except Exception:
+        pass
 
     # Login as each tenant admin
     tokens = {}

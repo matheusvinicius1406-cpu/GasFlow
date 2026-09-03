@@ -22,10 +22,12 @@ from app.domain.financial.repository import (
     PaymentRepository, ReceivableRepository, ExpenseRepository,
     CashMovementRepository, FinancialLedgerRepository
 )
+from app.domain.order.entity import Order, PaymentStatus as OrderPaymentStatus
+from app.domain.order.repository import OrderRepository
 
 
 class RegisterPaymentUseCase:
-    """Register a payment for an order. Atomic: payment + receivable + cash + ledger."""
+    """Register a payment for an order. Atomic: payment + receivable + cash + ledger + order status."""
 
     def __init__(
         self,
@@ -33,11 +35,13 @@ class RegisterPaymentUseCase:
         receivable_repo: ReceivableRepository,
         cash_repo: CashMovementRepository,
         ledger_repo: FinancialLedgerRepository,
+        order_repo: Optional[OrderRepository] = None,
     ):
         self.payment_repo = payment_repo
         self.receivable_repo = receivable_repo
         self.cash_repo = cash_repo
         self.ledger_repo = ledger_repo
+        self.order_repo = order_repo
 
     def execute(self, data: dict) -> dict:
         order_codigo = data["order_codigo"]
@@ -96,7 +100,18 @@ class RegisterPaymentUseCase:
             receivable.settled_at = now
         receivable = self.receivable_repo.update(receivable)
 
-        # 6. Cash movement (receipt)
+        # 6. Sync order.payment_status
+        if self.order_repo:
+            order = self.order_repo.buscar_por_codigo(order_codigo)
+            if order:
+                if new_paid >= receivable.original_amount:
+                    order.payment_status = OrderPaymentStatus.PAID
+                elif new_paid > 0:
+                    order.payment_status = OrderPaymentStatus.PARTIAL
+                order.updated_at = now
+                self.order_repo.criar(order)  # _to_model handles update via entity.id
+
+        # 7. Cash movement (receipt)
         current_balance = self.cash_repo.current_balance()
         new_balance = current_balance + amount
         cash_movement = CashMovement(
@@ -110,7 +125,7 @@ class RegisterPaymentUseCase:
         )
         cash_movement = self.cash_repo.create(cash_movement)
 
-        # 7. Ledger entry
+        # 8. Ledger entry
         ledger_entry = FinancialLedgerEntry(
             event_type=LedgerEventType.PAYMENT_CREATED,
             amount=amount,
