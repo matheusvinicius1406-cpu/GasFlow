@@ -108,7 +108,9 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         trends = {
             "today_orders": _trend(len(today_orders), len(yesterday_orders)),
             "today_revenue": _trend(today_revenue, yesterday_revenue),
-            "delivering": _trend(delivering_orders, 0),
+            # Sem trend de "Em Rota": o schema atual não guarda histórico de
+            # entregas em rota, então comparar com 0 fabricaria um indicador
+            # sem sentido. O FE omite o chip quando a chave está ausente.
             "today_received": _trend(today_received, yesterday_received),
         }
 

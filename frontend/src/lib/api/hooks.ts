@@ -37,7 +37,9 @@ export interface DashboardData {
   trends: {
     today_orders: { value: number; positive: boolean }
     today_revenue: { value: number; positive: boolean }
-    delivering: { value: number; positive: boolean }
+    // Opcional: ausente quando o backend não tem baseline comparável
+    // (ex.: entregas em rota não têm histórico no schema atual).
+    delivering?: { value: number; positive: boolean }
     today_received: { value: number; positive: boolean }
   }
   hourly_orders: Array<{ hour: number; count: number }>
