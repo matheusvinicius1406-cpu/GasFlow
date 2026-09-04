@@ -56,11 +56,34 @@ class Settings(BaseModel):
     piper_executable: str = os.getenv("PIPER_EXECUTABLE", "/usr/local/bin/piper")
     piper_models_dir: str = os.getenv("PIPER_MODELS_DIR", "/models")
 
+    # ── PIX PSP ──────────────────────────────────────────────
+    # Provedor de pagamentos PIX: mock (default) | gerencianet | pagseguro |
+    # mercadopago. Providers reais exigem PSP_API_URL + PSP_API_KEY.
+    psp_provider: str = os.getenv("PSP_PROVIDER", "mock")
+    psp_api_url: str = os.getenv("PSP_API_URL", "")
+    psp_api_key: str = os.getenv("PSP_API_KEY", "")
+    psp_client_id: str = os.getenv("PSP_CLIENT_ID", "")
+    psp_client_secret: str = os.getenv("PSP_CLIENT_SECRET", "")
+    # Secret compartilhado p/ assinar/verificar webhooks do PSP. Vazio =
+    # webhook PIX desabilitado (503) — nunca aceitar confirmação sem assinatura.
+    psp_webhook_secret: str = os.getenv("PSP_WEBHOOK_SECRET", "")
+
     # ── Scaling / Rate Limiting ─────────────────────────────
     # backend do rate limiter: memory (default, single worker) |
     # redis (compartilhado entre workers/instâncias — produção).
     rate_limit_mode: str = os.getenv("RATE_LIMIT_MODE", "memory")
     rate_limit_redis_url: str = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0")
+
+    # ── Realtime (WebSocket cross-worker) ──────────────────
+    # propagação entre workers: memory (default, 1 worker/processo) |
+    # redis (compartilha eventos entre workers via pub/sub — multi-worker).
+    realtime_backend: str = os.getenv("REALTIME_BACKEND", "memory")
+    # Herda a URL do rate limiter quando REALTIME_REDIS_URL não é definida —
+    # evita o default localhost silencioso em produção (lição do GOLDEN).
+    realtime_redis_url: str = os.getenv(
+        "REALTIME_REDIS_URL",
+        os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0"),
+    )
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

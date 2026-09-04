@@ -1,7 +1,7 @@
 {
   "name": "gasflow-e2e",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "End-to-end tests (Playwright) for GasFlow — run against docker-compose.e2e.yml",
   "scripts": {
     "test": "playwright test",

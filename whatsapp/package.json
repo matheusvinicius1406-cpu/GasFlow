@@ -1,6 +1,6 @@
 {
   "name": "gasflow-whatsapp",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "private": true,
   "description": "WhatsApp automation service for GasFlow — contact management, campaigns, and order bot.",
   "main": "dist/server.js",

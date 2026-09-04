@@ -145,16 +145,27 @@ Requisitos de proxy (já configurados):
 | Dev (Vite) | `server.proxy['/ws']` com `ws: true` em `frontend/vite.config.ts` | sem rewrite — o backend serve `/ws` na raiz |
 | Prod (nginx) | `location /ws` com `Upgrade`/`Connection` + `proxy_http_version 1.1` em `frontend/nginx.conf` | timeouts de 3600s para conexões longas |
 
-Escala: o `ConnectionManager` é in-process (1 worker/proc). Para múltiplos
-workers, usar Redis pub/sub para espalhar eventos entre processos (P2).
+Multi-worker: com `REALTIME_BACKEND=redis` (default no compose prod) cada
+worker publica eventos no Redis (`RedisPubSub`) e um listener por processo os
+repassa aos clientes locais — eventos publicados em um worker chegam aos
+WebSocket clients dos demais (necessário porque `BACKEND_WORKERS=2` cria um
+ConnectionManager por processo). Mensagens carregam a origem e o worker que
+publicou não re-entrega a si mesmo (sem duplicatas).
 
 ## PIX
 
 - A chave PIX é configurada por tenant via API/UI (`/payments/pix`); o BR Code
   (copia-e-cola) e o QR Code são gerados pelo backend (`POST /payments/pix/payload`
-  para um valor/pedido). Status por TXID: `GET /payments/pix/{txid}/status` —
-  retorna `NOT_FOUND` até existir integração com PSP/webhook (confirmação é
-  manual em `POST /payments/{id}/confirm`).
+  para um valor/pedido). Status por TXID: `GET /payments/pix/{txid}/status`.
+- **PSP (PIX-02/pendência)**: `POST /payments/webhook/pix` recebe a confirmação
+  do banco (HMAC-SHA256 do corpo com `PSP_WEBHOOK_SECRET` no header
+  `X-Pix-Signature`), encontra o payment por txid e o confirma automaticamente
+  (`confirmed_by=psp-webhook`). Sem secret configurado o endpoint responde 503.
+- Provedor: `PSP_PROVIDER=mock` (default, sem rede) | `gerencianet` |
+  `pagseguro` | `mercadopago` (exigem `PSP_API_URL` + `PSP_API_KEY`; sem
+  credenciais as chamadas falham com erro explícito — nunca tentam rede
+  incompleta). Variáveis: `PSP_PROVIDER`, `PSP_API_URL`, `PSP_API_KEY`,
+  `PSP_CLIENT_ID`, `PSP_CLIENT_SECRET`, `PSP_WEBHOOK_SECRET`.
 
 ## Testes E2E
 

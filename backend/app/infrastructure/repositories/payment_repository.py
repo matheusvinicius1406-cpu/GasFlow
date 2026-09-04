@@ -149,6 +149,21 @@ class SQLAlchemyServicePaymentRepository:
             PaymentServiceRecord.tenant_id == tenant_id,
         ).all()
 
+    def find_by_external_id(self, external_id: str) -> Optional[PaymentServiceRecord]:
+        """Tenant-agnostic lookup by PSP external id (webhook confirmation)."""
+        return self.db.query(PaymentServiceRecord).filter(
+            PaymentServiceRecord.external_id == external_id
+        ).first()
+
+    def find_by_copy_paste(self, txid: str) -> Optional[PaymentServiceRecord]:
+        """Tenant-agnostic lookup by txid embedded in the BR Code copy-paste.
+
+        Fallback for payments created before the external_id convention.
+        """
+        return self.db.query(PaymentServiceRecord).filter(
+            PaymentServiceRecord.pix_copy_paste.like(f"%{txid}%")
+        ).first()
+
     def create(self, **kwargs) -> PaymentServiceRecord:
         import uuid as _uuid
         if 'id' not in kwargs or not kwargs['id']:

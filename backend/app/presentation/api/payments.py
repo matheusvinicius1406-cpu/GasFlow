@@ -24,14 +24,16 @@ Endpoints:
     GET    /payments/summary — Payment summary
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel
 from typing import Optional
 
+from app.core.config import settings
 from app.domain.payment.service import get_payment_service
 from app.domain.payment.models import PaymentStatus
+from app.infrastructure.payment.psp_gateway import verify_webhook_signature
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -228,6 +230,63 @@ async def generate_pix_payload(req: GeneratePixPayloadRequest,
     if not result:
         raise HTTPException(409, "Nenhuma chave PIX ativa configurada para este tenant")
     return result
+
+
+# ── PSP Webhook (confirmação automática de PIX) ───────
+
+class PixWebhookRequest(BaseModel):
+    txid: str
+    status: str = "CONFIRMED"
+    tenant_id: Optional[str] = None
+
+
+@router.post("/webhook/pix")
+async def pix_webhook(request: Request):
+    """Recebe a confirmação de pagamento do PSP (banco) e confirma o Payment.
+
+    Público por natureza (o banco não tem token da aplicação), mas exige
+    assinatura HMAC-SHA256 do corpo cru com PSP_WEBHOOK_SECRET no header
+    ``X-Pix-Signature``. Sem secret configurado o endpoint responde 503 —
+    nunca aceita confirmação não assinada.
+    """
+    secret = settings.psp_webhook_secret
+    if not secret:
+        raise HTTPException(503, "PIX webhook não configurado (PSP_WEBHOOK_SECRET)")
+
+    body = await request.body()
+    signature = request.headers.get("X-Pix-Signature", "")
+    if not verify_webhook_signature(body, signature, secret):
+        raise HTTPException(401, "Assinatura inválida")
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON inválido")
+
+    txid = (data or {}).get("txid", "")
+    status = (data or {}).get("status", "CONFIRMED").upper()
+    if not txid:
+        raise HTTPException(400, "txid é obrigatório")
+
+    service = get_payment_service()
+    payment = service.get_payment_by_txid(txid)
+    if not payment:
+        return {"success": False, "reason": "NOT_FOUND", "txid": txid}
+
+    if status == "CONFIRMED" and payment.status == PaymentStatus.PENDING:
+        service.confirm_payment(
+            payment.id, payment.tenant_id,
+            confirmed_by="psp-webhook",
+            notes=f"Confirmado via webhook PIX (txid {txid})",
+        )
+        return {"success": True, "txid": txid, "payment_id": payment.id}
+
+    return {
+        "success": False,
+        "reason": f"UNPROCESSED status={status}",
+        "txid": txid,
+        "payment_id": payment.id,
+    }
 
 
 @router.get("/pix/{txid}/status")

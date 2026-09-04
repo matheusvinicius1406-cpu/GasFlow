@@ -73,6 +73,11 @@ services:
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-redis}
       - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
+      # Realtime entre workers: prod roda BACKEND_WORKERS=2 por padrão — cada
+      # worker tem seu próprio Event Bus/ConnectionManager; o pub/sub Redis
+      # propaga eventos entre eles (ver docs RT-01 / pubsub.py).
+      - REALTIME_BACKEND=${REALTIME_BACKEND:-redis}
+      - REALTIME_REDIS_URL=redis://redis:6379/0
     # Aplica migrations antes de servir — o schema em prod é do Alembic,
     # não do create_all do boot (que segue disponível p/ dev/tests).
     command: >

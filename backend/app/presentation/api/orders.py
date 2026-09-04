@@ -32,6 +32,10 @@ from app.presentation.schemas.order import (
 )
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
+from app.domain.events.event_bus import (
+    EventType,
+    publish_order_event,
+)
 
 
 router = APIRouter(
@@ -65,7 +69,21 @@ def create_order(
             product_repo=repos["product"],
             inventory_repo=repos["inventory"],
         )
-        return use_case.execute(order.model_dump())
+        created = use_case.execute(order.model_dump())
+        # Notify operators in realtime: new order appears on the dashboard.
+        publish_order_event(
+            EventType.ORDER_CREATED,
+            created.codigo,
+            ctx.tenant_id,
+            data={
+                "codigo": created.codigo,
+                "status": created.status.value,
+                "total": created.total,
+                "client_codigo": created.client_codigo,
+                "item_count": len(created.items) if created.items else 0,
+            },
+        )
+        return created
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -112,6 +130,17 @@ def update_order_status(
         order = use_case.execute(codigo, data.status)
         if not order:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        publish_order_event(
+            EventType.ORDER_UPDATED,
+            order.codigo,
+            ctx.tenant_id,
+            data={
+                "codigo": order.codigo,
+                "status": order.status.value,
+                "total": order.total,
+                "client_codigo": order.client_codigo,
+            },
+        )
         return order
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -132,6 +161,16 @@ def assign_driver(
         order = use_case.execute(codigo, data.delivery_driver_codigo)
         if not order:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        publish_order_event(
+            EventType.ORDER_UPDATED,
+            order.codigo,
+            ctx.tenant_id,
+            data={
+                "codigo": order.codigo,
+                "status": order.status.value,
+                "delivery_driver_codigo": order.delivery_driver_codigo,
+            },
+        )
         return order
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))

@@ -2,6 +2,44 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
+## [1.0.0-rc.2] - 2026-09-04
+
+Resolução de pendências levantadas nas fases anteriores (ver
+`docs/phase15/PENDING_RESOLUTION.md`).
+
+### 🚀 Funcionalidades
+
+- **RT-01 (pendência)**: eventos `order.created`/`order.updated` publicados no
+  Event Bus (criação, mudança de status e atribuição de motorista); bridge
+  realtime assina `order.*`; frontend invalida lista de pedidos + dashboard.
+- **Realtime multi-worker (pendência RT-01)**: Redis pub/sub opcional
+  (`REALTIME_BACKEND=redis`) — eventos publicados em um worker uvicorn agora
+  chegam aos WebSocket clients dos demais workers (prod roda `BACKEND_WORKERS=2`
+  com um ConnectionManager por processo). Listener ignora eventos próprios
+  (sem duplicatas) e roteia eventos remotos sem loops.
+- **PIX PSP (pendência PIX-01)**: gateway de provedor (`mock` default +
+  adapters HTTP p/ gerencianet/pagseguro/mercadopago) e webhook de confirmação
+  `POST /payments/webhook/pix` (HMAC-SHA256) que encontra o payment por txid e
+  confirma automaticamente.
+- **FE-02 (pendência)**: testes para SegmentsPage, WhatsAppPage e
+  AutomationsPage (loading/empty/error/list/interação) — total do frontend
+  agora 130 testes.
+
+### 🐛 Correções
+
+- Nenhuma regressão; fixes de concorrência/sessão e do rate limiter Redis já
+  estavam no rc.1 (GOLDEN).
+
+### ⚠️ Limitações Conhecidas
+
+- PSP real (Gerencianet/PagSeguro/Mercado Pago) aguarda credenciais para
+  validação ao vivo (mock cobre o fluxo completo).
+- WA-02 (live WhatsApp): 15 testes do serviço real prontos — dependem da
+  porta 3000 livre (projeto `twenty` do usuário a ocupa) e de telefone pareado
+  (QR) para a suíte completa.
+- GHCR/E2E WhatsApp: aguardam push autenticado / pareamento (workflows e
+  specs prontos).
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 Release Candidate 1 — primeira versão candidata a produção, cobrindo as fases

@@ -8,6 +8,7 @@ Arquitetura: Domain-Driven Design (DDD)
 - Presentation: API Routes e Schemas
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,7 +52,22 @@ logger = setup_logging(settings.log_level)
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
     setup_realtime_bridge()
+    _ws_listener_task = None
+    if settings.realtime_backend == "redis":
+        from app.infrastructure.realtime.websocket import (
+            start_cross_worker_listener,
+        )
+
+        _ws_listener_task, _ = start_cross_worker_listener(
+            url=settings.realtime_redis_url
+        )
     yield
+    if _ws_listener_task is not None:
+        _ws_listener_task.cancel()
+        try:
+            await _ws_listener_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

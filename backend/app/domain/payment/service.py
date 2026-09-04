@@ -443,6 +443,32 @@ class PaymentService:
             payment.refund(reason)
         return payment
 
+    def get_payment_by_txid(self, txid: str) -> Optional[Payment]:
+        """Find a payment by PIX txid (external_id or copy-paste reference).
+
+        Used by the PSP webhook — the caller (bank) does not know the tenant,
+        so the lookup is tenant-agnostic. External ids are unique per payment.
+        """
+        if not txid:
+            return None
+        if self._use_db:
+            model = self._get_payment_repo().find_by_external_id(txid)
+            if model:
+                return self._payment_model_to_domain(model)
+            # Fallback: BR Code copy-paste embeds the txid (payments created
+            # before the external_id convention).
+            model = self._get_payment_repo().find_by_copy_paste(txid)
+            if model:
+                return self._payment_model_to_domain(model)
+            return None
+        with self._lock:
+            for payment in self._payments.values():
+                if payment.external_id == txid or (
+                    payment.pix_copy_paste and txid in payment.pix_copy_paste
+                ):
+                    return payment
+        return None
+
     def get_order_total_paid(self, order_id: str, tenant_id: str) -> float:
         """Get total amount paid for an order."""
         if self._use_db:

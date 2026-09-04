@@ -30,6 +30,8 @@ export interface RealtimeServerMessage {
  * - driver availability changes the driver list and dispatch summary.
  * - driver.location_updated is intentionally ignored: it is high-frequency
  *   and no current screen renders live positions (would cause refetch storms).
+ * - order.* events (new order / status change / driver assignment) refresh
+ *   the order list and dashboard KPIs.
  */
 export function realtimeQueryKeys(eventType: string): string[][] {
   if (eventType.startsWith('delivery.')) {
@@ -37,6 +39,9 @@ export function realtimeQueryKeys(eventType: string): string[][] {
   }
   if (eventType === 'driver.available' || eventType === 'driver.unavailable' || eventType === 'driver.paused') {
     return [['delivery-drivers'], ['delivery-summary'], ['dashboard']]
+  }
+  if (eventType.startsWith('order.')) {
+    return [['orders'], ['dashboard']]
   }
   return []
 }

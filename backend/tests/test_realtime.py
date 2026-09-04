@@ -244,7 +244,10 @@ def test_bridge_subscribes_delivery_and_driver_events(monkeypatch):
     assert EventType.DELIVERY_COMPLETED in subscribed
     assert EventType.DRIVER_AVAILABLE in subscribed
     assert EventType.DRIVER_LOCATION_UPDATED in subscribed
-    # Non-delivery/driver events are NOT bridged to WS
+    # Order events (RT-01 pendência) are bridged too
+    assert EventType.ORDER_CREATED in subscribed
+    assert EventType.ORDER_UPDATED in subscribed
+    # Unrelated events are NOT bridged to WS
     assert EventType.PAYMENT_CONFIRMED not in subscribed
 
 

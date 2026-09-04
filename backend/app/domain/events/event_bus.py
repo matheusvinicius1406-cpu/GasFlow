@@ -35,6 +35,10 @@ class EventType(str, Enum):
     DRIVER_LOCATION_UPDATED = "driver.location_updated"
     DRIVER_PAUSED = "driver.paused"
 
+    # Order events
+    ORDER_CREATED = "order.created"
+    ORDER_UPDATED = "order.updated"
+
     # Dispatch events
     DISPATCH_RECOMMENDED = "dispatch.recommended"
     DISPATCH_ASSIGNED = "dispatch.assigned"
@@ -195,6 +199,25 @@ def publish_driver_event(
         aggregate_id=driver_id,
         actor_id=driver_id,
         actor_type="DRIVER",
+        data=data or {},
+    )
+    _global_bus.publish(event)
+    return event
+
+
+def publish_order_event(
+    event_type: EventType,
+    order_codigo: str,
+    tenant_id: str,
+    data: Optional[Dict] = None,
+):
+    """Publish an order lifecycle event (created, updated/status changed)."""
+    event = DomainEvent(
+        type=event_type,
+        tenant_id=tenant_id,
+        aggregate_id=order_codigo,
+        actor_id="",
+        actor_type="OPERATOR",
         data=data or {},
     )
     _global_bus.publish(event)

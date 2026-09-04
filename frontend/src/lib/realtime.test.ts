@@ -21,6 +21,13 @@ describe('realtimeQueryKeys', () => {
     expect(realtimeQueryKeys('driver.location_updated')).toEqual([])
   })
 
+  it('maps order events to the orders list + dashboard', () => {
+    const keys = realtimeQueryKeys('order.created')
+    expect(keys).toContainEqual(['orders'])
+    expect(keys).toContainEqual(['dashboard'])
+    expect(realtimeQueryKeys('order.updated')).toContainEqual(['orders'])
+  })
+
   it('ignores unrelated events', () => {
     expect(realtimeQueryKeys('payment.confirmed')).toEqual([])
     expect(realtimeQueryKeys('')).toEqual([])

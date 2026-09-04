@@ -17,11 +17,14 @@ Authentication:
 import json
 import asyncio
 import logging
-from typing import Dict, Set, Optional
+from typing import TYPE_CHECKING, Dict, Set, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from datetime import datetime
 
 from app.domain.events.event_bus import get_event_bus, EventType, DomainEvent
+
+if TYPE_CHECKING:
+    from app.infrastructure.realtime.pubsub import RedisPubSub
 
 logger = logging.getLogger("gasflow.realtime")
 
@@ -44,6 +47,14 @@ class ConnectionManager:
         # Stats
         self._total_connected = 0
         self._total_events_sent = 0
+        # Optional cross-worker transport (Redis pub/sub). When set, every
+        # broadcast is also published so other uvicorn workers can relay it
+        # to their own clients (see app/infrastructure/realtime/pubsub.py).
+        self._pubsub: Optional["RedisPubSub"] = None
+
+    def enable_pubsub(self, pubsub: "RedisPubSub"):
+        """Enable cross-worker propagation via Redis pub/sub."""
+        self._pubsub = pubsub
 
     async def connect(self, websocket: WebSocket, channel: str, metadata: dict):
         """Accept and register a WebSocket connection."""
@@ -92,37 +103,55 @@ class ConnectionManager:
             self.disconnect(ws)
 
     async def broadcast_event(self, event: DomainEvent):
-        """Route an Event Bus event to appropriate WebSocket channels."""
+        """Route an Event Bus event locally and (if enabled) cross-worker."""
         event_data = {
             "type": "event",
             "event": event.to_dict(),
         }
-        
+
+        # Propagate to other workers first so clients connected to them get
+        # the event promptly even if a local channel is slow.
+        if self._pubsub is not None:
+            await self._pubsub.publish_event(event_data)
+
+        await self._route_event(event_data)
+
+    async def broadcast_event_dict(self, event_data: dict):
+        """Route a remote (other-worker) event to local channels only."""
+        await self._route_event(event_data)
+
+    async def _route_event(self, event_data: dict):
+        """Route an event envelope to the local WebSocket channels."""
+        event = event_data.get("event") or {}
+        event_type = str(event.get("type", ""))
+        tenant_id = str(event.get("tenant_id", ""))
+        aggregate_id = str(event.get("aggregate_id", ""))
+        data = event.get("data") or {}
+
         # 1. Tenant channel (admin dashboard)
-        if event.tenant_id:
-            await self.broadcast_to_channel(f"tenant:{event.tenant_id}", event_data)
-        
+        if tenant_id:
+            await self.broadcast_to_channel(f"tenant:{tenant_id}", event_data)
+
         # 2. Delivery channel (if delivery-related)
-        delivery_id = event.aggregate_id if event.type.value.startswith("delivery.") else ""
-        if delivery_id:
+        if event_type.startswith("delivery.") and aggregate_id:
             await self.broadcast_to_channel(
-                f"delivery:{delivery_id}", event_data
+                f"delivery:{aggregate_id}", event_data
             )
-        
+
         # 3. Driver channel (if driver-related)
-        driver_id = event.data.get("driver_id", "") or (
-            event.aggregate_id if event.type.value.startswith("driver.") else ""
+        driver_id = data.get("driver_id", "") or (
+            aggregate_id if event_type.startswith("driver.") else ""
         )
         if driver_id:
             await self.broadcast_to_channel(
                 f"driver:{driver_id}", event_data
             )
-        
+
         # 4. Operations channel (for admin map / alerts)
-        if event.type.value.startswith("driver.location"):
-            if event.tenant_id:
+        if event_type.startswith("driver.location"):
+            if tenant_id:
                 await self.broadcast_to_channel(
-                    f"operations:{event.tenant_id}", event_data
+                    f"operations:{tenant_id}", event_data
                 )
 
     def get_stats(self) -> dict:
@@ -169,12 +198,36 @@ def setup_realtime_bridge():
     """Subscribe the WebSocket manager to the Event Bus."""
     bus = get_event_bus()
     
-    # Subscribe to all delivery events
+    # Subscribe to delivery, driver and order events
     for event_type in EventType:
-        if event_type.value.startswith("delivery.") or event_type.value.startswith("driver."):
+        prefix = event_type.value.split(".", 1)[0]
+        if prefix in ("delivery", "driver", "order"):
             bus.subscribe(event_type, _event_to_ws)
     
     logger.info("Realtime bridge: Event Bus → WebSocket connected")
+
+
+def start_cross_worker_listener(url: Optional[str] = None):
+    """Start the Redis pub/sub listener that relays other workers' events.
+
+    Called from the FastAPI lifespan when settings.realtime_backend == "redis"
+    (multi-worker deployments). Returns the task and the pubsub object so the
+    caller can cancel the task on shutdown. In single-worker mode this is
+    never invoked — the in-process bus is sufficient.
+    """
+    from app.infrastructure.realtime.pubsub import RedisPubSub
+
+    manager = get_ws_manager()
+    pubsub = RedisPubSub(url=url)
+    manager.enable_pubsub(pubsub)
+    task = asyncio.create_task(
+        pubsub.listen_forever(manager.broadcast_event_dict)
+    )
+    logger.info(
+        "Cross-worker realtime: Redis pub/sub listener started (%s)",
+        pubsub.worker_id,
+    )
+    return task, pubsub
 
 
 # ── WebSocket Endpoints ─────────────────────────────────
