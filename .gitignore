@@ -11,6 +11,7 @@ venv/
 # Environment Files
 .env
 .env.local
+.env.production
 
 # VS Code
 .vscode/

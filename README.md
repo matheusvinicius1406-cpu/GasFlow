@@ -87,12 +87,40 @@ Mensagem → Bot → Banco de Dados → Pedido
 git clone https://github.com/matheusvinicius1406-cpu/GasFlow.git
 cd GasFlow
 
-# Iniciar todos os serviços
+# Iniciar todos os serviços (ambiente de dev)
 docker-compose up -d
 
 # Verificar status
 docker-compose ps
 ```
+
+### Produção
+
+```bash
+# 1. Ambiente de produção (Postgres + migrations + nginx)
+cp .env.production.example .env.production   # preencha as variáveis
+
+# 2. Subir a stack de produção
+#    O backend aplica `alembic upgrade head` automaticamente no boot.
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+
+# 3. Validar a instalação
+./scripts/smoke-test.sh
+```
+
+Consulte **[DEPLOY.md](DEPLOY.md)** para deploy, atualização, rollback,
+imagens GHCR e troubleshooting. CI/CD em `.github/workflows/`.
+
+### Serviços (dev)
+
+| Serviço | URL | Descrição |
+|---------|-----|-----------|
+| API Backend | http://localhost:8000 | FastAPI - API principal |
+| Docs API | http://localhost:8000/docs | Swagger UI |
+| WhatsApp | http://localhost:3001 | Serviço WhatsApp |
+| WhatsApp Connect | http://localhost:3001/connect | QR Code de conexão |
+| PostgreSQL | localhost:5432 | Banco de dados |
+
 
 ### Serviços
 

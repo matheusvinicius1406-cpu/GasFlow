@@ -1,0 +1,140 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow — Produção
+# Diferenças vs docker-compose.yml (dev):
+#   - Sem bind mount de source (imagens buildadas são a fonte)
+#   - ENVIRONMENT=production por padrão
+#   - Backend roda `alembic upgrade head` antes de subir a API
+#   - Postgres e backend sem portas expostas (rede interna)
+#   - Frontend (nginx) é a única porta pública (80); whatsapp 3001
+#     fica exposto apenas para parear QR quando necessário
+#
+# Uso:
+#   cp .env.production.example .env.production   # preencha os valores
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gasflow-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gasflow}
+      POSTGRES_USER: ${POSTGRES_USER:-gasflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gasflow} -d ${POSTGRES_DB:-gasflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gasflow-backend
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=false
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-gasflow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gasflow}}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      - WHATSAPP_SERVICE_URL=${WHATSAPP_SERVICE_URL:-http://whatsapp:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
+      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+    # Aplica migrations antes de servir — o schema em prod é do Alembic,
+    # não do create_all do boot (que segue disponível p/ dev/tests).
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backups_data:/app/backups
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+    container_name: gasflow-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - internal
+
+  whatsapp:
+    build:
+      context: ./whatsapp
+      dockerfile: Dockerfile
+    container_name: gasflow-whatsapp
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+    ports:
+      - "${WHATSAPP_PORT:-3001}:3000"
+    volumes:
+      - whatsapp_data:/app/data
+      - whatsapp_auth:/app/wwebjs_auth
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  whatsapp_data:
+    driver: local
+  whatsapp_auth:
+    driver: local
+  backups_data:
+    driver: local
