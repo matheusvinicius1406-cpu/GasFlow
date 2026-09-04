@@ -205,7 +205,13 @@ class WhatsAppWebJsProvider implements WhatsAppProvider {
       puppeteer: {
         headless: HEADLESS,
         executablePath: resolveBrowserExecutable(),
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          // Docker padroniza /dev/shm em 64M — sem essa flag o Chromium falha
+          // ao lançar e o whatsapp-web.js nunca chega ao estado qr_pending.
+          '--disable-dev-shm-usage',
+        ],
       },
     });
     this.client = client;

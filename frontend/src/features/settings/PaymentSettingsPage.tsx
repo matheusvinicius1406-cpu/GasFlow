@@ -67,6 +67,7 @@ function PaymentMethodsTab() {
     try {
       const { data } = await apiClient.get('/payments/methods')
       setMethods(data.methods || [])
+      setError(false)
     } catch {
       setError(true)
     } finally {
@@ -192,6 +193,7 @@ function PixConfigTab() {
     try {
       const { data } = await apiClient.get('/payments/pix')
       setConfigs(data.configs || [])
+      setError(false)
     } catch {
       setError(true)
     } finally {

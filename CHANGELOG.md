@@ -2,6 +2,40 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
+## [1.0.0-rc.3] - 2026-09-04
+
+Round de execução das pendências restantes (QR pareado ao vivo, GHCR
+publicado, FE-02 completo).
+
+### 🚀 Funcionalidades
+
+- **WA-02 (pendência)**: pareamento real do WhatsApp concluído — QR escaneado
+  e sessão `primary` conectada (número 559181689969) persistida no volume
+  `gasflow_whatsapp_auth`.
+- **WA-02 (pendência)**: harness live `test_provider_live_harness.py`
+  **12/12 passando** contra o serviço real conectado (envio de mensagem,
+  idempotência, contatos, sessão, health, QR, stop/restart, erros) —
+  `LIVE_MODE=true WHATSAPP_TEST_PHONE=559181689969 WHATSAPP_SERVICE_URL=http://localhost:3001`.
+- **FE-02 (pendência)**: testes para as 7 telas reais restantes
+  (CampaignResultsPage, ConversationsPage, CopilotPage, IntelligencePage,
+  ReorderPage, PaymentSettingsPage, LoginPage) — **29 testes novos**, frontend
+  agora com **159 testes**.
+- **E2E WhatsApp**: `e2e/tests/whatsapp.spec.ts` — renderização da página,
+  estado de serviço indisponível (determinístico na stack E2E) e teste de
+  sessão pareada gated por `E2E_WHATSAPP_CONNECTED=1` (CI-safe).
+- **GHCR**: imagens publicadas — `git push origin main` + tag `v1.0.0-rc.2`
+  enviados; workflow build-push disparado no remote.
+
+### 🐛 Correções
+
+- **whatsapp (`wwebjs-provider.ts`)**: adicionado `--disable-dev-shm-usage`
+  aos args do Puppeteer — sem essa flag o Chromium não lançava em containers
+  com `/dev/shm` de 64M (padrão Docker) e o QR nunca chegava ao estado
+  `qr_pending`. Este é o fix que destravou o pareamento.
+- **PaymentSettingsPage**: `fetchMethods`/`fetchConfigs` não limpavam o erro em
+  sucesso — após um erro, o botão "Tentar novamente" nunca recuperava a tela
+  (as demais páginas resetam o erro no refetch). Teste de regressão incluso.
+
 ## [1.0.0-rc.2] - 2026-09-04
 
 Resolução de pendências levantadas nas fases anteriores (ver

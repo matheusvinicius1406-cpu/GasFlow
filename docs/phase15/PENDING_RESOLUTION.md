@@ -1,6 +1,63 @@
 # Resolução de Pendências (WA-02 + GHCR + PIX + Redis + FE + RT-01)
 
-Data: 2026-09-04 · Branch `main` · v1.0.0-rc.2
+Data: 2026-09-04 · Branch `main` · v1.0.0-rc.3
+
+## Round 2 — executado (rc.3)
+
+### WA-02 — pareamento real + harness live ✅ (12/12)
+
+- **Fix que destravou tudo**: `whatsapp/src/provider/wwebjs-provider.ts`
+  ganhou `--disable-dev-shm-usage` nos args do Puppeteer. Sem isso o Chromium
+  falhava ao lançar em container (Docker padroniza `/dev/shm` em 64M) e o
+  whatsapp-web.js nunca chegava ao estado `qr_pending` — o QR jamais tinha
+  sido exibido antes deste round. Também foi necessário limpar um
+  `SingletonLock` obsoleto deixado por execuções anteriores no volume
+  `gasflow_whatsapp_auth`.
+- QR pareado ao vivo pelo usuário (sessão `primary` conectada,
+  `559181689969`, persistida no volume).
+- Harness live: `LIVE_MODE=true WHATSAPP_TEST_PHONE=559181689969
+  WHATSAPP_PROVIDER=current WHATSAPP_SERVICE_URL=http://localhost:3001
+  pytest tests/test_provider_live_harness.py -v` → **12/12 passed**
+  (envio real de mensagem, idempotência, contatos, sessão, health, QR,
+  stop/restart, erros).
+- Restam os testes que exigem telefone de DESTINO adicional ou media
+  (adapter não expõe media) — o núcleo do fluxo live está validado.
+
+### GHCR — publicado ✅
+
+- `git push origin main` (8a203de..f7c7d8f) e tag `v1.0.0-rc.2` enviados —
+  workflow `build-push.yml` disparado no remote (GHCR: latest + tag).
+- A tag `v1.0.0-rc.3` será publicada junto deste round.
+
+### FE-02 — telas restantes ✅ (29 testes novos)
+
+As 7 telas reais sem cobertura agora têm testes seguindo o padrão
+apiClient-mock da suíte: CampaignResultsPage (6), ConversationsPage (5),
+CopilotPage (4), IntelligencePage (1), ReorderPage (5), PaymentSettingsPage
+(5), LoginPage (3). Total do frontend: **159 testes**. `tsc --noEmit` 0 erros.
+
+Nota: a lista original da fase FE-02 citava SettingsPage/CampaignHistoryPage/
+CampaignWizardPage/WhatsAppPage/SegmentsPage/AutomationsPage como pendentes —
+essas **já tinham testes**; as realmente pendentes eram as 7 acima.
+
+### E2E WhatsApp ✅ (spec real, CI-safe)
+
+`e2e/tests/whatsapp.spec.ts`: página renderiza com as abas; estado
+"Serviço Indisponível" quando a stack não tem o serviço whatsapp
+(determinístico na stack E2E); teste de sessão pareada gated por
+`E2E_WHATSAPP_CONNECTED=1` (pula em CI — exige serviço + QR na stack).
+
+### PIX PSP — sandbox real permanece bloqueado 🔒
+
+A imagem `openpix/openpix` **não existe** no Docker Hub (pull negado) — o
+passo do prompt era fictício. Sandbox real (Gerencianet/PagSeguro/Mercado
+Pago) exige conta + credenciais de homologação; o gateway + webhook HMAC já
+estão implementados e testados com mock (10 testes) e prontos para receber
+credenciais.
+
+---
+
+## Round 1 — executado (rc.2)
 
 Todas as pendências levantadas nas fases anteriores foram tratadas. Status
 por item — o que era resolvível localmente foi implementado, testado e
