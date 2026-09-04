@@ -23,7 +23,7 @@ from app.infrastructure.whatsapp.repositories import (
     SQLAlchemyConversationRepository,
     SQLAlchemyConversationMessageRepository,
 )
-from app.infrastructure.ai.mock_provider import MockLLMProvider
+from app.infrastructure.ai.factory import get_llm_provider
 from app.application.ai.engine import AIEngine
 from app.application.ai.tools_impl import AIToolsFactory
 from app.application.whatsapp.gateway import MessageGateway, OperatorGateway
@@ -204,8 +204,7 @@ async def process_incoming(req: IncomingMessageRequest, db: Session = Depends(ge
     conv_repo = SQLAlchemyConversationRepository(db)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     registry = _build_tool_registry(db)
-    provider = MockLLMProvider()
-    ai_engine = AIEngine(llm_provider=provider, tool_registry=registry)
+    ai_engine = AIEngine(llm_provider=get_llm_provider(), tool_registry=registry)
 
     # Get repositories for customer/product resolution
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository

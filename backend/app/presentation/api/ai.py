@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
 from app.infrastructure.database.dependencies import get_db
-from app.infrastructure.ai.mock_provider import MockLLMProvider
+from app.infrastructure.ai.factory import get_llm_provider
 from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository, SQLAlchemyMessageRepository
 from app.application.ai.engine import AIEngine
 from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
@@ -176,7 +176,7 @@ def _get_engine():
     if _engine is None:
         _tool_registry = _build_tool_registry()
         _engine = AIEngine(
-            llm_provider=MockLLMProvider(),
+            llm_provider=get_llm_provider(),
             tool_registry=_tool_registry,
         )
     return _engine

@@ -25,10 +25,17 @@ from app.domain.whatsapp_provider.models import (
 # ── Check if service is running ────────────────────────
 
 def is_whatsapp_service_running() -> bool:
-    """Check if WhatsApp Node.js service is available."""
+    """Check if the real WhatsApp Node.js service is available.
+
+    Exige o marcador `whatsapp` no body do /api/health: só o serviço do
+    GasFlow responde assim. Um outro processo na porta 3000 (ex.: twenty)
+    devolve 200 mas NÃO é o WhatsApp — evita falso positivo.
+    """
     try:
         resp = httpx.get("http://localhost:3000/api/health", timeout=3)
-        return resp.status_code == 200
+        if resp.status_code != 200:
+            return False
+        return "whatsapp" in resp.json()
     except Exception:
         return False
 

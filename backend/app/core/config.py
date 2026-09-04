@@ -35,6 +35,27 @@ class Settings(BaseModel):
     # External Services
     whatsapp_service_url: str = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000")
 
+    # ── AI (LLM) ────────────────────────────────────────────
+    # Provider ativo: mock | ollama | openai. Mock é o default seguro
+    # (dev/testes); produção define ollama (ou openai via API key).
+    ai_provider: str = os.getenv("AI_PROVIDER", "mock")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    ai_timeout_seconds: int = int(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    ai_max_tokens: int = int(os.getenv("AI_MAX_TOKENS", "2048"))
+    ai_temperature: float = float(os.getenv("AI_TEMPERATURE", "0.3"))
+
+    # ── Speech-to-Text / Text-to-Speech ─────────────────────
+    # STT: mock | whisper (CLI). TTS: mock | piper (CLI).
+    stt_provider: str = os.getenv("STT_PROVIDER", "mock")
+    tts_provider: str = os.getenv("TTS_PROVIDER", "mock")
+    whisper_model: str = os.getenv("WHISPER_MODEL", "base")
+    piper_voice: str = os.getenv("PIPER_VOICE", "pt_BR-faber-medium")
+    piper_executable: str = os.getenv("PIPER_EXECUTABLE", "/usr/local/bin/piper")
+    piper_models_dir: str = os.getenv("PIPER_MODELS_DIR", "/models")
+
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

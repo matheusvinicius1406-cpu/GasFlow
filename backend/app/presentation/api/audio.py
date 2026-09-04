@@ -15,7 +15,7 @@ from typing import Optional
 
 from app.domain.audio.media import AudioMessage
 from app.domain.audio.provider import SpeechToTextProvider, TextToSpeechProvider
-from app.infrastructure.audio.mock_providers import MockSTTProvider, MockTTSProvider
+from app.infrastructure.audio.factory import get_stt_provider, get_tts_provider
 from app.application.audio.gateway import AudioGateway
 
 router = APIRouter(prefix="/audio", tags=["audio"])
@@ -30,14 +30,14 @@ _audio_gateway: Optional[AudioGateway] = None
 def _get_stt() -> SpeechToTextProvider:
     global _stt_provider
     if _stt_provider is None:
-        _stt_provider = MockSTTProvider()
+        _stt_provider = get_stt_provider()
     return _stt_provider
 
 
 def _get_tts() -> TextToSpeechProvider:
     global _tts_provider
     if _tts_provider is None:
-        _tts_provider = MockTTSProvider()
+        _tts_provider = get_tts_provider()
     return _tts_provider
 
 
