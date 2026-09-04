@@ -34,9 +34,10 @@ Resolução de pendências levantadas nas fases anteriores (ver
 
 - PSP real (Gerencianet/PagSeguro/Mercado Pago) aguarda credenciais para
   validação ao vivo (mock cobre o fluxo completo).
-- WA-02 (live WhatsApp): 15 testes do serviço real prontos — dependem da
-  porta 3000 livre (projeto `twenty` do usuário a ocupa) e de telefone pareado
-  (QR) para a suíte completa.
+- WA-02 (live WhatsApp): 15 testes executados contra o serviço Node real
+  (15/15 ✓, contas desconectadas — sem pareamento); a suíte completa
+  (enviar/receber mensagens, 13 testes do harness) continua dependendo de
+  telefone real pareado via QR.
 - GHCR/E2E WhatsApp: aguardam push autenticado / pareamento (workflows e
   specs prontos).
 

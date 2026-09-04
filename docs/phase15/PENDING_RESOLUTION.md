@@ -78,32 +78,33 @@ conectar conta, criar regra). Frontend total: **130 testes**.
 Restantes (P2/baixa prioridade, sem mudança de comportamento): CampaignResults,
 Conversations, Copilot, Intelligence, Reorder, PaymentSettings, LoginPage.
 
-## 5. WA-02 — Testes live WhatsApp ⚠️ BLOQUEADO por ambiente (instruções prontas)
+## 5. WA-02 — Testes live WhatsApp ✅ parcial (15/15) / 🔒 completa exige QR
 
-O que existe e é real:
+**Executado nesta máquina** (com aprovação do usuário para parar o `twenty`
+temporariamente e liberar a porta 3000):
 
-- `tests/test_provider_live_real.py` (15 testes): health, accounts (2),
-  estrutura de status, adapters, envio falha com `NOT_CONNECTED` — **não
-  precisam de telefone pareado**, apenas do serviço Node do GasFlow em
-  `localhost:3000`.
-- `tests/test_provider_live_harness.py` (13 testes): precisam de
-  `LIVE_MODE=true` + `WHATSAPP_TEST_PHONE` + sessão pareada (QR).
+- Subiu o serviço Node real do GasFlow em `:3000` (imagem `gasflow-whatsapp`,
+  volumes vazios → contas `primary`/`secondary` em estado `disconnected`, sem
+  sessão — sem risco de enviar mensagens reais).
+- `pytest tests/test_provider_live_real.py -v` → **15 passed** contra o serviço
+  real (sem mocks): health/uptime/memory, accounts (2), estrutura de status,
+  criação de adapter, connection state/info/session, envio falha graciosamente
+  com `NOT_CONNECTED`, isolamento multi-conta e latências.
+- `twenty` religado em seguida (health `healthy`; o container original havia
+  sido criado com ENCRYPTION_KEY que não estava em `.env`/shell — o usuário
+  optou por gerar uma chave nova; sessões de login resetam e secrets de
+  integrações criptografados com a chave antiga precisam ser reconectados).
 
-**Bloqueio atual nesta máquina**: a porta 3000 está ocupada pelo projeto
-`twenty` do usuário (docker `twenty-server-1`), e os testes live apontam para
-`localhost:3000`. Além disso, a parte de enviar/receber mensagens exige
-parear um telefone real (QR).
+**Bloqueio restante — suíte completa (`test_provider_live_harness.py`, 13
+testes)**: exige `LIVE_MODE=true` + `WHATSAPP_TEST_PHONE` + **telefone real
+pareado via QR** (escaneamento manual). Não há como automatizar o pareamento.
 
-Execução quando o ambiente permitir:
+Para reproduzir:
 
 ```bash
-# (a) parar o twenty temporariamente OU rodar o whatsapp do GasFlow em :3000
-docker compose -f docker-compose.prod.yml up -d whatsapp   # prod mapeia 3001
-#    → ajustar o mapeamento para 3000, ou usar a stack de dev (docker-compose.yml)
-
+# (a) com o twenty parado (ou porta 3000 livre), whatsapp do GasFlow em :3000
 # (b) sem pareamento — valida o serviço real (15 testes)
 cd backend && pytest tests/test_provider_live_real.py -v
-
 # (c) com telefone pareado (QR) — suíte completa
 LIVE_MODE=true WHATSAPP_TEST_PHONE=5511XXXXXXXXX \
   WHATSAPP_PROVIDER=current pytest tests/ -m live -v
@@ -140,6 +141,6 @@ tela (WhatsAppPage/ConversationsPage).
 | Redis pub/sub multi-worker | ✅ implementado + testado + validado live |
 | PIX PSP (gateway + webhook) | ✅ mock completo + webhook seguro; real aguarda credenciais |
 | FE-02 telas restantes | ✅ 3 telas novas (14 testes); total FE 130 |
-| WA-02 live WhatsApp | 🔒 15 testes prontos, aguardam porta 3000 + QR/telefone |
+| WA-02 live WhatsApp | ✅ 15/15 executados contra o serviço real; suíte completa 🔒 aguarda QR/telefone |
 | GHCR | 🔒 workflow pronto; aguarda `git push` autenticado |
 | E2E WhatsApp | 🔒 depende do WA-02 |
