@@ -16,5 +16,9 @@ bcrypt
 # Relatórios (PDF — relatório diário/impressão)
 reportlab
 
+# PIX (BR Code + QR Code)
+qrcode
+Pillow
+
 # Rate limiting distribuído (Redis — produção multi-worker; opcional)
 redis

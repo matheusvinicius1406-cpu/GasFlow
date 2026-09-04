@@ -11,10 +11,14 @@ Architecture:
 from typing import Dict, List, Optional
 from datetime import datetime
 import threading
+import time
 
 from app.domain.payment.models import (
     Payment, PaymentMethod, PixConfig,
     PaymentStatus, PaymentType, PixKeyType,
+)
+from app.domain.payment.pix_service import (
+    PixService, _sanitize_txid,
 )
 
 
@@ -206,18 +210,34 @@ class PaymentService:
             return [self._pix_model_to_domain(m) for m in models]
         return [pc for pc in self._pix_configs.values() if pc.tenant_id == tenant_id]
 
+    def _static_copy_paste(self, key: str, key_type: str,
+                           holder_name: str = "", city: str = "") -> str:
+        """BR Code estático (sem valor) para a config — '' se chave inválida."""
+        if not key:
+            return ""
+        try:
+            from app.domain.payment.pix_service import build_pix_copy_paste
+            return build_pix_copy_paste(
+                key=key, key_type=key_type,
+                merchant_name=holder_name or "GasFlow",
+                merchant_city=city or "SAO PAULO",
+            )
+        except ValueError:
+            return ""
+
     def create_pix_config(self, tenant_id: str, key: str, key_type: str = "RANDOM",
                           holder_name: str = "", **kwargs) -> PixConfig:
         """Create PIX configuration for a tenant."""
+        copy_paste = self._static_copy_paste(key, key_type, holder_name, kwargs.get("city", ""))
         if self._use_db:
             model = self._get_pix_repo().create(
                 tenant_id=tenant_id, key=key, key_type=key_type,
-                holder_name=holder_name, **kwargs,
+                holder_name=holder_name, copy_paste_code=copy_paste, **kwargs,
             )
             return self._pix_model_to_domain(model)
         config = PixConfig(
             tenant_id=tenant_id, key=key, key_type=PixKeyType(key_type),
-            holder_name=holder_name, **kwargs,
+            holder_name=holder_name, copy_paste_code=copy_paste, **kwargs,
         )
         with self._lock:
             self._pix_configs[config.id] = config
@@ -229,6 +249,14 @@ class PaymentService:
             model = self._get_pix_repo().get_by_id(config_id)
             if not model or model.tenant_id != tenant_id:
                 return None
+            # Recompute static BR Code when key/holder/city changed.
+            new_key = kwargs.get("key", model.key)
+            new_type = kwargs.get("key_type", model.key_type)
+            new_holder = kwargs.get("holder_name", model.holder_name)
+            new_city = kwargs.get("city", model.city)
+            kwargs["copy_paste_code"] = self._static_copy_paste(
+                new_key, new_type, new_holder, new_city,
+            )
             updated = self._get_pix_repo().update(config_id, **kwargs)
             return self._pix_model_to_domain(updated) if updated else None
         config = self._pix_configs.get(config_id)
@@ -238,6 +266,9 @@ class PaymentService:
             for key, value in kwargs.items():
                 if hasattr(config, key):
                     setattr(config, key, value)
+            config.copy_paste_code = self._static_copy_paste(
+                config.key, config.key_type.value, config.holder_name, config.city,
+            )
             config.updated_at = datetime.utcnow().isoformat()
         return config
 
@@ -257,6 +288,37 @@ class PaymentService:
 
     # ── Payments ───────────────────────────────────────
 
+    def _pix_txid(self, order_codigo: str) -> str:
+        """TXID determinístico para um pedido (máx 25 alfanumérico)."""
+        if order_codigo:
+            txid = _sanitize_txid(f"GAS{order_codigo}")
+            if txid:
+                return txid
+        return _sanitize_txid(f"GAS{int(time.time() * 1000)}")
+
+    def generate_pix_payload(self, tenant_id: str, amount: float,
+                             description: str = "", order_codigo: str = "") -> Optional[dict]:
+        """Gera payload PIX (BR Code + QR) com a config ativa do tenant.
+
+        Retorna None se o tenant não tem chave PIX ativa configurada.
+        Lança ValueError se amount <= 0.
+        """
+        if amount <= 0:
+            raise ValueError("Valor do PIX deve ser maior que zero")
+        config = self.get_pix_config(tenant_id)
+        if not config or not config.key:
+            return None
+        service = PixService()
+        return service.generate_payload(
+            amount=amount,
+            description=description,
+            key=config.key,
+            key_type=config.key_type.value,
+            merchant_name=config.holder_name or "GasFlow",
+            merchant_city=config.city or "SAO PAULO",
+            txid=self._pix_txid(order_codigo),
+        )
+
     def create_payment(self, tenant_id: str, order_id: str, order_codigo: str,
                        customer_codigo: str, amount: float, method_code: str,
                        **kwargs) -> Payment:
@@ -268,7 +330,17 @@ class PaymentService:
         pix_copy_paste = ""
         if method_code in ("PIX", "PIX_DYNAMIC"):
             pix_config = self.get_pix_config(tenant_id)
-            if pix_config:
+            if pix_config and pix_config.key:
+                pix_key_used = pix_config.key
+                try:
+                    payload = self.generate_pix_payload(
+                        tenant_id, amount, order_codigo=order_codigo,
+                    )
+                    if payload:
+                        pix_copy_paste = payload["br_code"]
+                except ValueError:
+                    pass
+            elif pix_config:
                 pix_key_used = pix_config.key
                 pix_copy_paste = pix_config.copy_paste_code
 

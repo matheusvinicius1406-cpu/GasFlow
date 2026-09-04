@@ -120,10 +120,18 @@ frontend, whatsapp, IA e PIX com placeholders para fases futuras).
 
 ## Escala horizontal
 
-O backend é stateless (sessões e rate limit em memória **por worker**):
+O backend é stateless (sessões em memória **por worker**):
 - Aumente `BACKEND_WORKERS` (workers uvicorn por contêiner).
-- Rate limiting em memória: com múltiplos workers/instâncias, o limite é por
-  processo. Para N instâncias com limite global, mova o rate limiter para um
-  store compartilhado (Redis) — ver branch `claude/gas-flow-scalability-plan`.
+- O rate limiter usa Redis compartilhado em produção (`RATE_LIMIT_MODE=redis`,
+  default no `docker-compose.prod.yml`) — contadores globais entre workers;
+  se o Redis cair, degrada para in-memory (fail-open, não derruba a API).
 - O volume `whatsapp_auth` (sessão do WhatsApp) não é compartilhável entre
   réplicas: rode o whatsapp como 1 instância.
+
+## PIX
+
+- A chave PIX é configurada por tenant via API/UI (`/payments/pix`); o BR Code
+  (copia-e-cola) e o QR Code são gerados pelo backend (`POST /payments/pix/payload`
+  para um valor/pedido). Status por TXID: `GET /payments/pix/{txid}/status` —
+  retorna `NOT_FOUND` até existir integração com PSP/webhook (confirmação é
+  manual em `POST /payments/{id}/confirm`).

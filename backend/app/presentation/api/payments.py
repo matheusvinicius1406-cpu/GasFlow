@@ -86,6 +86,11 @@ class CreatePaymentRequest(BaseModel):
 class ConfirmPaymentRequest(BaseModel):
     notes: str = ""
 
+class GeneratePixPayloadRequest(BaseModel):
+    amount: float
+    description: str = ""
+    order_codigo: str = ""
+
 
 # ── Payment Methods ──────────────────────────────────
 
@@ -198,6 +203,47 @@ async def delete_pix(config_id: str,
     if not service.delete_pix_config(config_id, ctx.tenant_id):
         raise HTTPException(404, "PIX configuration not found")
     return {"success": True}
+
+
+# ── PIX Payload (BR Code + QR) ────────────────────────
+
+@router.post("/pix/payload")
+async def generate_pix_payload(req: GeneratePixPayloadRequest,
+                               ctx: TenantContext = Depends(get_tenant_context)):
+    """Generate a PIX payment payload (BR Code + QR Code) for the tenant.
+
+    Uses the tenant's active PIX config (key, holder, city). Returns 409 if
+    no active PIX key is configured.
+    """
+    service = get_payment_service()
+    try:
+        result = service.generate_pix_payload(
+            tenant_id=ctx.tenant_id,
+            amount=req.amount,
+            description=req.description,
+            order_codigo=req.order_codigo,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not result:
+        raise HTTPException(409, "Nenhuma chave PIX ativa configurada para este tenant")
+    return result
+
+
+@router.get("/pix/{txid}/status")
+async def pix_status(txid: str,
+                     ctx: TenantContext = Depends(get_tenant_context)):
+    """Check PIX payment status by TXID (tenant-scoped).
+
+    Looks up payments whose external_id or copy-paste references the TXID.
+    Returns NOT_FOUND until a PSP/webhook integration records the payment.
+    """
+    service = get_payment_service()
+    payments = service.get_payments_for_tenant(ctx.tenant_id, limit=200)
+    for p in payments:
+        if p.external_id == txid or (p.pix_copy_paste and txid in p.pix_copy_paste):
+            return {"txid": txid, "payment_id": p.id, "status": p.status.value}
+    return {"txid": txid, "payment_id": None, "status": "NOT_FOUND"}
 
 
 # ── Payments ─────────────────────────────────────────
