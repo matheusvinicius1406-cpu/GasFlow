@@ -10,7 +10,6 @@ Plans and executes agent runs with:
 """
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 from app.domain.automation.agents import (
     AgentDefinition, AgentRun, AgentStep, AgentStatus, AgentScope,
     AGENT_SCOPE_CONFIGS,

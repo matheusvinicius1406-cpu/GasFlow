@@ -16,7 +16,6 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel
-from typing import Optional
 
 from app.infrastructure.printing.print_agent import get_print_agent, PrintJobStatus
 

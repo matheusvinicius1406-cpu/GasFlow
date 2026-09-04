@@ -11,10 +11,10 @@ from decimal import Decimal
 from typing import Optional, List, Tuple
 
 from app.domain.financial.payment import Payment, PaymentStatus
-from app.domain.financial.receivable import Receivable, ReceivableStatus
+from app.domain.financial.receivable import Receivable
 from app.domain.financial.expense import Expense, ExpenseStatus
 from app.domain.financial.cash_movement import CashMovement, CashMovementType
-from app.domain.financial.ledger import FinancialLedgerEntry
+from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 
 
 class PaymentRepository(ABC):

@@ -20,7 +20,6 @@ from app.infrastructure.database.dependencies import get_db
 from app.infrastructure.ai.mock_provider import MockLLMProvider
 from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository, SQLAlchemyMessageRepository
 from app.application.ai.engine import AIEngine
-from app.application.ai.tools_impl import AIToolsFactory
 from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
 
 router = APIRouter(prefix="/ai", tags=["ai"])

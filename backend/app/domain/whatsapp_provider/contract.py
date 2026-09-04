@@ -14,7 +14,7 @@ Providers:
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Callable, Awaitable
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, WhatsAppMessage, WhatsAppMedia, ConnectionInfo,
+    WhatsAppContact, ConnectionInfo,
     SendOptions, SendResult, WhatsAppEvent, ConnectionState, ProviderType,
 )
 

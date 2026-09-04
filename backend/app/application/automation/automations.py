@@ -11,12 +11,9 @@ Pre-built automation recipes:
 Each automation has: trigger → condition → action → idempotency → audit → failure handling.
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
-from app.domain.automation.events import DomainEvent, EventType
+from app.domain.automation.events import EventType
 from app.domain.automation.workflows import WorkflowDefinition, WorkflowStepDef, WorkflowStatus
 from app.domain.automation.policy import PolicyEngine, RiskLevel, ActionPolicy
-from app.domain.automation.agents import AgentDefinition, AgentScope, AGENT_SCOPE_CONFIGS
 
 
 # ── Automation Recipes ──────────────────────────────────

@@ -8,7 +8,6 @@ Tests real CRUD operations against the actual database.
 """
 
 import pytest
-from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 

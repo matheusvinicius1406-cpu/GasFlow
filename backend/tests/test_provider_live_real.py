@@ -15,7 +15,6 @@ import pytest
 import asyncio
 import time
 import httpx
-from datetime import datetime
 
 from app.infrastructure.whatsapp_provider.current_adapter import WhatsAppWebAdapter
 from app.domain.whatsapp_provider.models import (

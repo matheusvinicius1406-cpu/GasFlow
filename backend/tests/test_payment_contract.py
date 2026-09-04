@@ -44,9 +44,7 @@ def _unique():
 
 def _create_receivable(client, headers, order_codigo, customer_codigo, total):
     """Create a receivable for an order via the use case (no API endpoint)."""
-    from app.infrastructure.database.dependencies import get_db
     from app.infrastructure.repositories.financial_repositories import SQLAlchemyReceivableRepository, SQLAlchemyFinancialLedgerRepository
-    from app.presentation.dependencies import get_tenant_context
     from app.application.financial.use_cases import CreateReceivableUseCase
     from decimal import Decimal
 

@@ -16,10 +16,8 @@ Real database tests for:
 """
 
 import pytest
-import base64
 import threading
 import time
-from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
@@ -28,15 +26,13 @@ from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.inventory_model import InventoryModel
-from app.infrastructure.repositories.whatsapp_model import WhatsAppConversationModel, WhatsAppMessageModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 from app.infrastructure.whatsapp.repositories import (
     SQLAlchemyConversationRepository, SQLAlchemyConversationMessageRepository,
 )
-from app.domain.audio.media import AudioMessage, AudioProcessingStatus
-from app.domain.audio.provider import TranscriptionResult, SpeechResult
+from app.domain.audio.media import AudioMessage
 from app.infrastructure.audio.mock_providers import MockSTTProvider, MockTTSProvider
 from app.application.audio.gateway import AudioGateway
 

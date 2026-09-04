@@ -193,11 +193,11 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
     capacity_score = sum(capacity_scores) / max(len(capacity_scores), 1)
 
     if capacity_score >= 80:
-        explanation.append(f"✓ Ample capacity")
+        explanation.append("✓ Ample capacity")
     elif capacity_score >= 50:
-        explanation.append(f"Adequate capacity")
+        explanation.append("Adequate capacity")
     else:
-        explanation.append(f"⚠ Limited capacity")
+        explanation.append("⚠ Limited capacity")
 
     # ── Route synergy (20% weight) ───────────────────────
     route_score = 0.0

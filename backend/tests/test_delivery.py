@@ -13,23 +13,20 @@ Tests for:
 """
 
 import pytest
-import time
 import threading
-from datetime import datetime, timedelta
 
 from app.domain.delivery.delivery import (
     Delivery, DeliveryStatus, DeliveryFailureReason,
-    DeliveryProof, DeliveryTimeline, AddressSnapshot, ProofType,
+    DeliveryProof, AddressSnapshot, ProofType,
     DELIVERY_TRANSITIONS,
 )
-from app.domain.delivery.driver import Driver, DriverStatus, DriverLocation
+from app.domain.delivery.driver import Driver, DriverStatus
 from app.domain.delivery.vehicle import Vehicle, VehicleStatus
 from app.domain.delivery.route import (
-    Route, RouteStatus, RouteStop, StopStatus,
-    ROUTE_TRANSITIONS, STOP_TRANSITIONS,
+    Route, RouteStatus,
 )
 from app.domain.delivery.routing import (
-    MockRoutingProvider, GeoPoint, RouteInfo,
+    MockRoutingProvider, GeoPoint,
 )
 
 

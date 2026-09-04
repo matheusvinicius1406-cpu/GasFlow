@@ -6,7 +6,7 @@ Never couple domain to specific provider (Whisper, OpenAI, Google, etc.)
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
 

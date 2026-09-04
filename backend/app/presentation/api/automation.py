@@ -20,12 +20,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
-from app.domain.automation.events import EventBus, DomainEvent, EventType
-from app.domain.automation.workflows import WorkflowDefinition, WorkflowStatus
+from app.domain.automation.events import EventBus
+from app.domain.automation.workflows import WorkflowDefinition
 from app.domain.automation.policy import PolicyEngine, ApprovalEngine
-from app.domain.automation.agents import AgentDefinition, AgentScope
 from app.application.automation.workflow_engine import WorkflowEngine
 from app.application.automation.agent_engine import AgentEngine
 from app.application.automation.automations import (

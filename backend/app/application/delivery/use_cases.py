@@ -12,9 +12,7 @@ from app.domain.delivery.delivery import (
     Delivery, DeliveryStatus, DeliveryFailureReason, DeliveryProof,
     ProofType, AddressSnapshot,
 )
-from app.domain.delivery.driver import Driver, DriverStatus
-from app.domain.delivery.vehicle import Vehicle
-from app.domain.delivery.route import Route, RouteStop
+from app.domain.delivery.route import Route
 from app.domain.delivery.routing import RoutingProvider, MockRoutingProvider
 from app.domain.delivery.repository import (
     DeliveryRepository, DriverRepository, VehicleRepository, RouteRepository,

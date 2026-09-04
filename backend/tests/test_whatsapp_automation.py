@@ -10,7 +10,6 @@ Tests cover:
 - Metrics
 """
 
-import pytest
 from datetime import datetime, timedelta
 from app.domain.whatsapp_automation.entity import (
     AutomationRule, AutomationStatus, AutomationTriggerType,

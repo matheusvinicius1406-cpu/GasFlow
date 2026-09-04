@@ -22,7 +22,7 @@ from app.domain.whatsapp_provider.models import (
     ConnectionState, ProviderType,
 )
 from app.domain.whatsapp_provider.errors import (
-    WhatsAppConnectionError, WhatsAppProviderUnavailable,
+    WhatsAppConnectionError,
 )
 
 logger = logging.getLogger("gasflow.whatsapp.baileys")

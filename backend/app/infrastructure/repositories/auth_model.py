@@ -14,7 +14,7 @@ Models:
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON, Index, UniqueConstraint
+    Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
 )
 from datetime import datetime
 from app.infrastructure.database.base import Base

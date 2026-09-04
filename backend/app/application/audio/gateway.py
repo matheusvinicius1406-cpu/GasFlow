@@ -19,13 +19,10 @@ Never: Audio → LLM directly
 import time
 import threading
 from typing import Dict, Any, Optional
-from datetime import datetime
 
 from app.domain.audio.provider import SpeechToTextProvider, TextToSpeechProvider, TranscriptionResult
 from app.domain.audio.media import (
-    AudioMessage, AudioProcessingStatus,
-    MAX_AUDIO_SIZE_MB, MAX_AUDIO_DURATION_SECONDS,
-    STT_TIMEOUT_SECONDS, LOW_CONFIDENCE_THRESHOLD,
+    AudioMessage, MAX_AUDIO_SIZE_MB, MAX_AUDIO_DURATION_SECONDS,
 )
 
 
@@ -220,7 +217,7 @@ class AudioGateway:
             with self._metrics_lock:
                 self._total_stt_latency += latency
             return result
-        except Exception as e:
+        except Exception:
             return TranscriptionResult(
                 text="", confidence=0.0,
                 provider=self.stt.provider_name,

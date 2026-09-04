@@ -13,7 +13,7 @@ from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from app.domain.audio.media import AudioMessage, AudioProcessingStatus
+from app.domain.audio.media import AudioMessage
 from app.domain.audio.provider import SpeechToTextProvider, TextToSpeechProvider
 from app.infrastructure.audio.mock_providers import MockSTTProvider, MockTTSProvider
 from app.application.audio.gateway import AudioGateway

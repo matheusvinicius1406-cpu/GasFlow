@@ -16,16 +16,12 @@ Tests for:
 """
 
 import pytest
-import time
 import uuid
 from datetime import datetime
 
 from app.domain.delivery.delivery import (
-    Delivery, DeliveryStatus, AddressSnapshot,
+    Delivery, DeliveryStatus,
 )
-from app.domain.delivery.driver import Driver, DriverStatus
-from app.domain.delivery.route import Route, RouteStop
-from app.domain.delivery.routing import MockRoutingProvider
 
 
 # ═══════════════════════════════════════════════════════════
@@ -116,7 +112,6 @@ def _login_driver(store, driver_id="drv-a"):
 
 class TestDriverAuth:
     def test_login_success(self, store, setup_data):
-        from app.presentation.api.driver_api import _authenticate_driver
         token = _login_driver(store, "drv-a")
         assert token in store["sessions"]
 
@@ -686,7 +681,6 @@ class TestAdversarial:
 
     """44. No pagination?"""
     def test_44_pagination(self):
-        from app.presentation.api.driver_api import DriverDeliverySummary
         # API supports limit/offset
         assert True
 

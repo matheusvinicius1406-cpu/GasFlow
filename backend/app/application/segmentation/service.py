@@ -10,10 +10,10 @@ Architecture:
 - Returns matching customer IDs
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 
-from app.domain.segmentation.entity import Segment, SegmentRule
+from app.domain.segmentation.entity import Segment
 
 
 class SegmentService:

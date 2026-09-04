@@ -26,7 +26,7 @@ from app.infrastructure.repositories.delivery_persistence_repository import (
     SQLAlchemyDeliveryPersistenceRepository,
 )
 from app.infrastructure.repositories.delivery_persistence_model import (
-    DriverSessionRecord, IdempotencyKeyRecord, DeliveryRecord
+    IdempotencyKeyRecord
 )
 
 

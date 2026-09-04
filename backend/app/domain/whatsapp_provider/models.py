@@ -10,7 +10,7 @@ The GasFlow domain should ONLY use these models.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
 
 class ConnectionState(str, Enum):

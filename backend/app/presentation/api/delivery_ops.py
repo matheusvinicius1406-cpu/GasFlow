@@ -6,11 +6,10 @@ All state is backed by the database — no in-memory stores.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.presentation.dependencies import get_tenant_context, require_admin, require_role
+from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
 
 router = APIRouter(prefix="/delivery", tags=["delivery-ops"])
 

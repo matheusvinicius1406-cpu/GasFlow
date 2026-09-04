@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.delivery_persistence_model import (
-    DeliveryRecord, DriverLocationRecord, OutboxEntry,
+    DriverLocationRecord, OutboxEntry,
 )
 from app.infrastructure.repositories.delivery_persistence_repository import (
     SQLAlchemyDeliveryPersistenceRepository,
@@ -243,7 +243,6 @@ class TestGPSLocation:
         # Create old location
         repo.upsert_location("default", "driver1", -23.55, -46.63)
         # Manually age it
-        from app.infrastructure.repositories.delivery_persistence_model import DriverLocationRecord
         loc = db.query(DriverLocationRecord).first()
         loc.timestamp = datetime.utcnow() - timedelta(seconds=600)
         db.commit()

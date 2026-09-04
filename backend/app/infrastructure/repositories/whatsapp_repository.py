@@ -12,7 +12,6 @@ from app.domain.whatsapp.entity import (
 )
 from app.domain.whatsapp.repository import WhatsAppRepository
 from app.infrastructure.repositories.whatsapp_model import (
-from app.infrastructure.repositories.tenant_mixin import TenantMixin
     WhatsAppConversationModel,
     WhatsAppMessageModel,
 )

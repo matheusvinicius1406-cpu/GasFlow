@@ -11,18 +11,18 @@ Atomic transactions for all financial operations.
 
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List, Tuple
+from typing import Optional
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
-from app.domain.financial.expense import Expense, ExpenseStatus, ExpenseCategory
+from app.domain.financial.expense import Expense, ExpenseCategory
 from app.domain.financial.cash_movement import CashMovement, CashMovementType
 from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 from app.domain.financial.repository import (
     PaymentRepository, ReceivableRepository, ExpenseRepository,
     CashMovementRepository, FinancialLedgerRepository
 )
-from app.domain.order.entity import Order, PaymentStatus as OrderPaymentStatus
+from app.domain.order.entity import PaymentStatus as OrderPaymentStatus
 from app.domain.order.repository import OrderRepository
 
 

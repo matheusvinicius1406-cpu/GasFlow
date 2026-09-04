@@ -8,11 +8,11 @@ PATCH /api/v1/communication/templates/{event} → Update template
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from pydantic import BaseModel
+from typing import Dict, Optional
 
 from app.domain.communication.templates import (
-    CommunicationService, CommunicationEvent, CommunicationChannel,
+    CommunicationEvent, CommunicationChannel,
     get_communication_service, DEFAULT_TEMPLATES,
 )
 from app.presentation.dependencies import get_tenant_context, require_admin

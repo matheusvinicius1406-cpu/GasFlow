@@ -7,7 +7,7 @@ Usage:
             super().__init__(db, tenant_id)
 """
 
-from typing import Optional, TypeVar, Type
+from typing import TypeVar
 from sqlalchemy.orm import Session, Query
 
 ModelType = TypeVar("ModelType")

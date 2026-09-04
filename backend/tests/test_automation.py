@@ -21,7 +21,6 @@ import gc
 import pytest
 import threading
 import time
-from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
@@ -32,24 +31,22 @@ from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.inventory_model import InventoryModel
 from app.domain.automation.events import DomainEvent, EventType, EventBus, OutboxStore
 from app.domain.automation.workflows import (
-    WorkflowDefinition, WorkflowRun, WorkflowStepDef, WorkflowStatus, StepStatus,
+    WorkflowDefinition, WorkflowStepDef, WorkflowStatus,
 )
 from app.domain.automation.triggers import (
     Trigger, TriggerType, Condition, ConditionOperator,
     evaluate_condition, evaluate_conditions,
 )
 from app.domain.automation.policy import (
-    PolicyEngine, ApprovalEngine, ActionPolicy, RiskLevel, ApprovalStatus,
+    PolicyEngine, ApprovalEngine, ApprovalStatus,
 )
 from app.domain.automation.agents import (
-    AgentDefinition, AgentRun, AgentStep, AgentStatus, AgentScope,
-    AGENT_SCOPE_CONFIGS,
+    AgentStatus, AgentScope,
 )
 from app.application.automation.workflow_engine import WorkflowEngine
 from app.application.automation.agent_engine import AgentEngine
 from app.application.automation.automations import (
-    register_default_policies, create_default_agents,
-    create_low_stock_workflow, create_receivable_overdue_workflow,
+    register_default_policies, create_low_stock_workflow, create_receivable_overdue_workflow,
     create_customer_reactivation_workflow,
 )
 
@@ -114,8 +111,6 @@ def workflow_engine(policy_engine, approval_engine):
 @pytest.fixture
 def agent_engine(policy_engine, approval_engine):
     from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
-    from app.infrastructure.ai.mock_provider import MockLLMProvider
-    from app.application.ai.engine import AIEngine
     from app.application.ai.tools_impl import AIToolsFactory
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)

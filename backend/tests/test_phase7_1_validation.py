@@ -8,8 +8,6 @@ No fake repositories. No mocks for DB operations.
 import pytest
 import os
 import tempfile
-import threading
-import time
 from datetime import datetime
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
@@ -17,8 +15,6 @@ from sqlalchemy.orm import sessionmaker
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
 from app.infrastructure.repositories.client_model import ClientModel
-from app.infrastructure.repositories.order_model import OrderModel
-from app.infrastructure.repositories.order_item_model import OrderItemModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 

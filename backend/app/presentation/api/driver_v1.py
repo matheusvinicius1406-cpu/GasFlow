@@ -34,16 +34,11 @@ from app.presentation.api.driver_api import (
     DriverLoginRequest,
     DriverLoginResponse,
     DriverMeResponse,
-    DriverDeliverySummary,
     DriverDeliveryDetail,
-    DriverRouteSummary,
-    DriverRouteDetail,
-    DriverStopSummary,
     ActionRequest,
     LocationUpdate,
     AvailabilityRequest,
     SyncRequest,
-    SyncResponse,
 )
 
 # Official v1 router: /api/v1/driver/*

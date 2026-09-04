@@ -5,7 +5,7 @@ FASE 6: Adicionado search, pagination, Customer 360 e CRM metrics.
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from app.domain.client.entity import Client, normalize_phone
 from app.domain.client.repository import ClientRepository
 
@@ -146,7 +146,6 @@ class Customer360UseCase:
 
     def execute(self, codigo: str) -> Optional[Dict[str, Any]]:
         """Retorna visão 360 do cliente com métricas derivadas dos pedidos."""
-        from decimal import Decimal
         client = self.client_repository.buscar_por_codigo(codigo)
         if not client:
             return None

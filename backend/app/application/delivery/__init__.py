@@ -5,3 +5,10 @@ from app.application.delivery.use_cases import (
     ListDriversUseCase,
     DisableDriverUseCase,
 )
+
+__all__ = [
+    "CreateDriverUseCase",
+    "GetDriverUseCase",
+    "ListDriversUseCase",
+    "DisableDriverUseCase",
+]

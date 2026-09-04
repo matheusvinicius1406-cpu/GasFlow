@@ -5,10 +5,8 @@ Tests with real in-memory SQLite + Mock LLM Provider.
 Covers: Provider, Intent, Tools, Engine, Safety, Grounding, Adversarial.
 """
 
-import json
 import pytest
 from datetime import datetime
-from decimal import Decimal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -16,14 +14,12 @@ from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.order_model import OrderModel
-from app.infrastructure.repositories.order_item_model import OrderItemModel
-from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
-from app.infrastructure.repositories.financial_models import ReceivableModel
+from app.infrastructure.repositories.inventory_model import InventoryModel
 
-from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole, LLMResponse, LLMUsage
+from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole
 from app.domain.ai.intent import Intent, IntentType, Confidence
-from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission, ToolResult
-from app.domain.ai.conversation import Conversation, Message, MessageRole
+from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
+from app.domain.ai.conversation import Conversation, MessageRole
 
 from app.infrastructure.ai.mock_provider import MockLLMProvider
 from app.application.ai.engine import AIEngine

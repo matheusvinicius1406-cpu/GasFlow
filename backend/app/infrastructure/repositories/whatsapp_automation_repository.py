@@ -5,7 +5,7 @@ CRUD for automation rules and executions.
 Tenant-scoped for security.
 """
 
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.domain.whatsapp_automation.entity import (

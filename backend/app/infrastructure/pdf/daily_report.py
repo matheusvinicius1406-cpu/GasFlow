@@ -12,7 +12,7 @@ Report sections:
 - Footer (page numbers, generation time)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from datetime import datetime
 from io import BytesIO
 
@@ -70,7 +70,7 @@ class DailyReportPDF:
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
@@ -241,7 +241,7 @@ class DailyReportPDF:
         # Simple PDF generation without external dependencies
         lines = []
         lines.append(f"{self.company_name}")
-        lines.append(f"RELATORIO DIARIO")
+        lines.append("RELATORIO DIARIO")
         lines.append(f"Data: {_format_date(report_data.get('date', date))}")
         lines.append("")
 

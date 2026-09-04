@@ -26,7 +26,6 @@ Comprehensive tests covering:
 """
 
 import pytest
-import json
 import threading
 import time
 from datetime import datetime, timedelta
@@ -37,13 +36,7 @@ from sqlalchemy.orm import sessionmaker
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
-from app.infrastructure.repositories.order_model import OrderModel
-from app.infrastructure.repositories.order_item_model import OrderItemModel
-from app.infrastructure.repositories.whatsapp_model import WhatsAppConversationModel, WhatsAppMessageModel
-from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
-from app.infrastructure.repositories.financial_models import (
-    PaymentModel, ReceivableModel, ExpenseModel, CashMovementModel, FinancialLedgerModel,
-)
+from app.infrastructure.repositories.inventory_model import InventoryModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
 from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository

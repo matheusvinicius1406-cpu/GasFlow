@@ -5,11 +5,8 @@ Orchestrates delivery assignment, routing, and driver management.
 """
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
-from app.domain.delivery.delivery import Delivery, DeliveryStatus
-from app.domain.delivery.driver import Driver, DriverStatus
-from app.domain.delivery.vehicle import Vehicle
+from app.domain.delivery.delivery import DeliveryStatus
 from app.domain.delivery.route import Route
 from app.domain.delivery.repository import (
     DeliveryRepository, DriverRepository, VehicleRepository, RouteRepository,

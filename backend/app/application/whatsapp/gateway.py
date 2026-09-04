@@ -17,10 +17,9 @@ Architecture: WhatsApp → Message Gateway → Conversation → AI Core → Tool
 """
 
 import json
-import hashlib
 import time
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from collections import defaultdict
 import threading
@@ -30,7 +29,6 @@ from app.domain.whatsapp.conversation import (
     Conversation, ConversationState, ConversationDraft, ConversationMessage,
 )
 from app.domain.whatsapp.repository import ConversationRepository, ConversationMessageRepository
-from app.domain.ai.tools import ToolRegistry
 from app.application.ai.engine import AIEngine
 
 
@@ -509,7 +507,7 @@ class MessageGateway:
                 conversation_id=f"wa_{conversation.account_id}_{conversation.customer_phone}",
                 permission_level="OPERATOR",
             )
-        except Exception as e:
+        except Exception:
             self._inc_metric("ai_failures")
             return self._build_outbound(
                 conversation.id, message.sender_phone,

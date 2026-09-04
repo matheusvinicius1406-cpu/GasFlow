@@ -6,7 +6,6 @@ by using the database as single source of truth.
 """
 
 import pytest
-from datetime import datetime
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool

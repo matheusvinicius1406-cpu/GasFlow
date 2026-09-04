@@ -5,7 +5,7 @@ Represents an audio message in the system.
 Audio is UNTRUSTED INPUT — same security rules as text.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 from enum import Enum

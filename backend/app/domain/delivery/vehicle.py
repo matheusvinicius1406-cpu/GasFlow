@@ -12,7 +12,7 @@ Supports:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from enum import Enum
 import uuid
 

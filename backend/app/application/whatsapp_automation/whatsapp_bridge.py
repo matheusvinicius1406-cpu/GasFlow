@@ -10,7 +10,6 @@ FastAPI AutomationService → WhatsAppSendBridge → HTTP POST → Node.js /send
 
 import httpx
 import hashlib
-import time
 from datetime import datetime
 from typing import Dict, Any, Optional
 from app.core.config import settings

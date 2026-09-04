@@ -4,7 +4,6 @@ Vehicle Repository — SQLAlchemy implementation for vehicle persistence.
 
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from app.infrastructure.repositories.vehicle_model import VehicleModel, VehicleCapacityModel, VehicleLoadModel
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
@@ -168,7 +167,7 @@ class VehicleRepository(TenantMixin):
         """Get complete load summary for a vehicle."""
         capacities = self.get_capacities(vehicle_id)
         loads = self.get_all_loads(vehicle_id)
-        load_map = {l.product_codigo: l for l in loads}
+        load_map = {ld.product_codigo: ld for ld in loads}
 
         summary = {}
         for cap in capacities:

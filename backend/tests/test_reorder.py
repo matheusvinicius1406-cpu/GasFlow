@@ -14,9 +14,7 @@ import pytest
 from datetime import datetime, timedelta
 from app.domain.reorder.entity import ReorderOpportunity, ReorderStatus, ConfidenceLevel, ReorderSummary
 from app.application.reorder.service import (
-    ReorderService, WEIGHT_RECENCY, WEIGHT_FREQUENCY, WEIGHT_REGULARITY, WEIGHT_PRODUCT,
-    HIGH_CONFIDENCE_MIN_ORDERS, MEDIUM_CONFIDENCE_MIN_ORDERS,
-    LOW_CV_THRESHOLD, MEDIUM_CV_THRESHOLD,
+    ReorderService,
 )
 
 

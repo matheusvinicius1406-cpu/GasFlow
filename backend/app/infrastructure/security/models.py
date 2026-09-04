@@ -6,7 +6,7 @@ SQLAlchemy models for identity, sessions, tenants, roles, audit.
 
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Index, UniqueConstraint,
+    Column, Integer, String, Text, DateTime, ForeignKey, Index, UniqueConstraint,
 )
 from app.infrastructure.database.base import Base
 

@@ -5,7 +5,7 @@ FASE 6: Adicionado search, pagination, phone normalization.
 """
 
 from typing import Optional, List, Tuple
-from sqlalchemy import or_, func
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.domain.client.entity import Client, normalize_phone
 from app.domain.client.repository import ClientRepository

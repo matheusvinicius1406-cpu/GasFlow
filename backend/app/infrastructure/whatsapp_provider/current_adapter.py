@@ -15,12 +15,11 @@ from datetime import datetime
 
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, WhatsAppMessage, ConnectionInfo, SendOptions, SendResult,
-    WhatsAppEvent, ConnectionState, ProviderType, MediaType, MessageStatus,
+    WhatsAppContact, ConnectionInfo, SendOptions, SendResult,
+    ConnectionState, ProviderType,
 )
 from app.domain.whatsapp_provider.errors import (
-    WhatsAppConnectionError, WhatsAppSendError, WhatsAppProviderUnavailable,
-    WhatsAppError,
+    WhatsAppConnectionError,
 )
 
 logger = logging.getLogger("gasflow.whatsapp.current")

@@ -9,12 +9,11 @@ SessionManager → WhatsAppProvider → WhatsApp Service (Node.js)
 """
 
 from typing import Dict, Optional, List
-from datetime import datetime
 import logging
 
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.models import (
-    ConnectionState, ConnectionInfo, ProviderType, WhatsAppEvent,
+    ConnectionState, ConnectionInfo, WhatsAppEvent,
 )
 
 logger = logging.getLogger("gasflow.whatsapp.session")

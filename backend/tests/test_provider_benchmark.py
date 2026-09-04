@@ -9,21 +9,17 @@ Usage:
     pytest tests/test_provider_benchmark.py -v
 """
 
-import pytest
 import asyncio
 import time
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domain.whatsapp_provider.models import (
     WhatsAppContact, ConnectionInfo, SendOptions, SendResult,
-    ConnectionState, ProviderType, MediaType, WhatsAppEvent,
+    ConnectionState, ProviderType, WhatsAppEvent,
 )
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.session import WhatsAppSessionManager
 from app.domain.whatsapp_provider.errors import (
-    WhatsAppError, WhatsAppConnectionError, WhatsAppSendError,
-    WhatsAppAuthError, WhatsAppRateLimitError,
+    WhatsAppConnectionError,
 )
 from app.domain.whatsapp_provider.retry import RetryPolicy
 from app.infrastructure.whatsapp_provider.factory import create_provider

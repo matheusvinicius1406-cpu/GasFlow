@@ -11,9 +11,8 @@ Handles:
 No LLM dependency — deterministic template rendering.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional, Dict, Any
-import re
 
 from app.domain.whatsapp_automation.entity import (
     AutomationRule, AutomationStatus, AutomationTriggerType,
@@ -215,7 +214,7 @@ class WhatsAppAutomationService:
     def _find_reorder_eligible(self, rule: AutomationRule) -> List[Dict[str, Any]]:
         """Find customers with reorder opportunities matching the rule criteria."""
         from app.application.reorder.service import ReorderService
-        from app.domain.reorder.entity import ReorderStatus, ConfidenceLevel
+        from app.domain.reorder.entity import ReorderStatus
 
         reorder_svc = ReorderService(self.client_repo, self.order_repo)
         min_score = rule.min_score or 50.0

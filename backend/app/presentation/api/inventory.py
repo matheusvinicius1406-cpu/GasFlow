@@ -20,14 +20,12 @@ from app.application.inventory.use_cases import (
     AddStockUseCase,
     AdjustStockUseCase,
     LossStockUseCase,
-    ReturnStockUseCase,
     SetMinimumUseCase,
     ReconciliationService,
 )
 from app.presentation.schemas.inventory import (
     InventoryResponse,
     InventoryListResponse,
-    ProductInventoryResponse,
     StockMovementResponse,
     StockMovementListResponse,
     StockEntryRequest,

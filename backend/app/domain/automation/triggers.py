@@ -6,10 +6,8 @@ Conditions: deterministic, no eval/exec.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 from enum import Enum
-import re
 
 
 # ── Trigger ─────────────────────────────────────────────

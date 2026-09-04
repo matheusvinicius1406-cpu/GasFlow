@@ -6,9 +6,6 @@ All 20 adversarial items tested.
 """
 
 import pytest
-import threading
-import time
-from datetime import datetime
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
@@ -16,8 +13,6 @@ from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
-from app.infrastructure.repositories.order_model import OrderModel
-from app.infrastructure.repositories.order_item_model import OrderItemModel
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 
 
@@ -409,13 +404,15 @@ def test_adv03_unique_inventory(db):
     seed_product(db)
     db.add(InventoryModel(product_codigo="P00001", quantity=10, minimum_quantity=0)); db.commit()
     db.add(InventoryModel(product_codigo="P00001", quantity=20, minimum_quantity=0))
-    with pytest.raises(Exception): db.commit()
+    with pytest.raises(Exception):
+        db.commit()
 
 def test_adv04_no_negative_stock(db):
     """4. Stock cannot go negative."""
     seed_product(db); repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 5, reason="Init")
-    with pytest.raises(ValueError): repo.deduct_stock_atomic("P00001", 6, reason="Sale")
+    with pytest.raises(ValueError):
+        repo.deduct_stock_atomic("P00001", 6, reason="Sale")
     assert db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first().quantity == 5
 
 def test_adv05_no_sale_duplicate(db):
@@ -523,7 +520,7 @@ def test_adv13_movement_immutable(db):
 
 def test_adv14_frontend_cannot_invent_balance(db):
     """14. Frontend cannot invent balance."""
-    from app.presentation.schemas.inventory import StockEntryRequest, StockAdjustRequest
+    from app.presentation.schemas.inventory import StockEntryRequest
     assert "balance_before" not in StockEntryRequest.model_fields
     assert "balance_after" not in StockEntryRequest.model_fields
 

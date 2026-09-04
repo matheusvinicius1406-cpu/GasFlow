@@ -9,14 +9,12 @@ GET  /api/v1/dispatch/status     → Dispatch dashboard summary
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
-from datetime import datetime
 
 from app.domain.delivery.dispatch_engine import (
     DispatchEngine, DispatchMode, OrderRequest, DriverCandidate, OrderItem,
 )
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
-from app.domain.events.event_bus import publish_delivery_event, publish_driver_event, EventType
 
 router = APIRouter(prefix="/dispatch", tags=["dispatch"])
 

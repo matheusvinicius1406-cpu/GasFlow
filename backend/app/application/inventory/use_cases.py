@@ -9,7 +9,6 @@ On error: automatic ROLLBACK.
 from datetime import datetime
 from typing import Optional, List
 from app.domain.inventory.entity import Inventory
-from app.domain.inventory.stock_movement import StockMovement
 from app.domain.inventory.repository import InventoryRepository
 
 

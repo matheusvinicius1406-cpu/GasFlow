@@ -454,7 +454,6 @@ class SQLAlchemyDriverSessionRepository:
         self.db.commit()
 
     def cleanup_expired(self):
-        from datetime import timedelta
         now = datetime.utcnow()
         self.db.query(DriverSessionRecord).filter(
             DriverSessionRecord.status == "ACTIVE",

@@ -15,7 +15,6 @@ If any step fails: ROLLBACK entire operation.
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository

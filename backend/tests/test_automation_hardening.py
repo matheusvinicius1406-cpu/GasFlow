@@ -14,12 +14,9 @@ Tests cover:
 10. Status transitions: valid state machine
 """
 
-import pytest
 from datetime import datetime, timedelta
 from app.domain.whatsapp_automation.entity import (
-    AutomationRule, AutomationStatus, AutomationTriggerType,
-    AutomationExecution, ExecutionStatus, AutomationMetrics,
-    AutomationTriggerType,
+    AutomationRule, AutomationExecution, ExecutionStatus,
 )
 
 

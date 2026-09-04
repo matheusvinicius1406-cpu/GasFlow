@@ -7,7 +7,7 @@ Constraints: amount > 0, remaining >= 0, FK relationships.
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, Numeric,
-    Index, UniqueConstraint
+    Index
 )
 from datetime import datetime
 from decimal import Decimal

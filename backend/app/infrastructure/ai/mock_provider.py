@@ -5,9 +5,8 @@ Deterministic mock for testing without external API.
 """
 
 import json
-import time
 from typing import List, Dict, Any, Optional
-from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole, LLMResponse, LLMUsage
+from app.domain.ai.provider import LLMProvider, LLMMessage, LLMResponse, LLMUsage
 
 
 class MockLLMProvider(LLMProvider):

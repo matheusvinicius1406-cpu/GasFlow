@@ -16,7 +16,6 @@ Usage in router:
 """
 
 from typing import Optional
-from functools import wraps
 
 from fastapi import Depends, Header, HTTPException
 

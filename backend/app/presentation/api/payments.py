@@ -28,7 +28,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 
 from app.domain.payment.service import get_payment_service
 from app.domain.payment.models import PaymentStatus

@@ -10,11 +10,11 @@ GET /auth/roles — List roles
 GET /auth/audit — Audit log (admin)
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 
-from app.domain.security.models import TenantContext, SystemRole
+from app.domain.security.models import TenantContext
 from app.presentation.dependencies import get_auth_service, get_tenant_context, require_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])

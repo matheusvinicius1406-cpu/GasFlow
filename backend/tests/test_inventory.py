@@ -4,15 +4,12 @@ Real database tests for: constraints, transactions, rollback, idempotency, concu
 """
 
 import pytest
-import threading
-import time
 from datetime import datetime
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
-from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 
@@ -354,7 +351,7 @@ def test_schema_stock_adjust_negative_rejected():
         StockAdjustRequest(new_quantity=-5)
 
 def test_schema_mass_assignment():
-    from app.presentation.schemas.inventory import StockEntryRequest, StockAdjustRequest
+    from app.presentation.schemas.inventory import StockEntryRequest
     entry = StockEntryRequest(quantity=10, reason="Test")
     assert "balance_before" not in entry.model_dump()
     assert "balance_after" not in entry.model_dump()

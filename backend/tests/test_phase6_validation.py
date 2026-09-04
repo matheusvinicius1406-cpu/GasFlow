@@ -7,7 +7,6 @@ Tests real database constraints, not just in-memory fakes.
 
 import pytest
 import threading
-import time
 from datetime import datetime
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
@@ -371,9 +370,7 @@ def test_favorite_product_implemented():
     from sqlalchemy.orm import sessionmaker
     from app.infrastructure.database.base import Base
     from app.infrastructure.repositories.client_model import ClientModel
-    from app.infrastructure.repositories.product_model import ProductModel
     from app.infrastructure.repositories.order_model import OrderModel
-    from app.infrastructure.repositories.order_item_model import OrderItemModel
     from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
     from datetime import datetime
 

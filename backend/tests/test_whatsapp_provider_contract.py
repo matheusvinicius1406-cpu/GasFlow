@@ -10,7 +10,7 @@ These tests run WITHOUT a real WhatsApp connection.
 import pytest
 from datetime import datetime
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, WhatsAppMessage, ConnectionInfo, SendOptions, SendResult,
+    WhatsAppContact, ConnectionInfo, SendResult,
     WhatsAppEvent, ConnectionState, ProviderType, MediaType, MessageStatus,
 )
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
@@ -18,7 +18,6 @@ from app.domain.whatsapp_provider.session import WhatsAppSessionManager
 from app.domain.whatsapp_provider.errors import (
     WhatsAppError, WhatsAppErrorType, WhatsAppConnectionError,
     WhatsAppSendError, WhatsAppAuthError, WhatsAppRateLimitError,
-    WhatsAppProviderUnavailable, WhatsAppSessionLost, WhatsAppTimeoutError,
 )
 from app.domain.whatsapp_provider.retry import RetryPolicy
 

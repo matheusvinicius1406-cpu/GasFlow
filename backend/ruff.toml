@@ -1,0 +1,15 @@
+# Ruff — linter do backend GasFlow (gate de CI).
+# Select padrão do ruff: E4 (imports), E7 (statements), E9 (runtime), F (pyflakes).
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+# Ignorados com justificativa:
+# - E402: imports tardios intencionais para evitar import circular (ex.: realtime em main.py)
+# - E702: múltiplos statements na mesma linha em código legado/testes
+# - E712: `col == True/False` em filtros SQLAlchemy é o padrão correto (coluna não é bool Python;
+#         `col:` trataria NULL como False, mudando semântica de queries)
+# - F841: variáveis "atribuídas e não usadas" — muitas preservam chamadas com efeito;
+#         autofix unsafe removeria calls com side effects
+ignore = ["E402", "E702", "E712", "F841"]

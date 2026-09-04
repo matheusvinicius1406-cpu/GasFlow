@@ -11,10 +11,10 @@ Architecture:
 - AutomationAction: what happens when triggered
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
 
 class AutomationTriggerType(str, Enum):

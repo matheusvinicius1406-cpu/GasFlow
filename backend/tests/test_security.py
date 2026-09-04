@@ -29,10 +29,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.database.base import Base
 from app.domain.security.models import (
-    User, UserStatus, Session, SessionStatus, Tenant, TenantMembership,
-    Role, SystemRole, AuditRecord, TenantContext, RateLimiter,
+    UserStatus, SystemRole, TenantContext, RateLimiter,
     hash_password, verify_password, generate_token,
-    ROLE_PERMISSIONS, DEFAULT_PERMISSIONS,
 )
 from app.application.security.auth_service import AuthService
 
@@ -507,7 +505,6 @@ class TestDatabaseIntegrity:
             assert t in tables, f"Missing table: {t}"
 
     def test_user_model_persistence(self, db):
-        import app.infrastructure.security.models  # register tables
         from app.infrastructure.security.models import UserModel
         user = UserModel(
             id="test-001", username="testuser", email="test@test.com",
@@ -520,7 +517,6 @@ class TestDatabaseIntegrity:
         assert fetched.username == "testuser"
 
     def test_session_unique_token(self, db):
-        import app.infrastructure.security.models  # register tables
         from app.infrastructure.security.models import UserModel, SessionModel
         user = UserModel(id="u1", username="u1", email="u1@test.com",
                          password_hash="salt:hash", status="ACTIVE")
@@ -540,7 +536,6 @@ class TestDatabaseIntegrity:
             db.commit()
 
     def test_audit_index(self, db):
-        import app.infrastructure.security.models  # register tables
         from app.infrastructure.security.models import AuditRecordModel
         record = AuditRecordModel(
             id="a1", actor_id="admin", actor_type="USER",
@@ -751,7 +746,7 @@ class TestAdversarial:
 
     """27. Approval replay? PASS (approval is one-time)"""
     def test_27_approval_replay(self, auth_service):
-        from app.domain.automation.policy import ApprovalEngine, ApprovalStatus
+        from app.domain.automation.policy import ApprovalEngine
         engine = ApprovalEngine()
         approval = engine.create_approval(
             action="create_order", arguments={"total": 100},
@@ -762,7 +757,7 @@ class TestAdversarial:
 
     """28. Approval expired? PASS (approval has TTL)"""
     def test_28_approval_expired(self, auth_service):
-        from app.domain.automation.policy import ApprovalEngine, ApprovalStatus
+        from app.domain.automation.policy import ApprovalEngine
         engine = ApprovalEngine(ttl_minutes=0)
         approval = engine.create_approval(
             action="create_order", arguments={"total": 100},
@@ -773,7 +768,7 @@ class TestAdversarial:
 
     """29. Kill switch? PASS (automation can be paused globally)"""
     def test_29_kill_switch(self, auth_service):
-        from app.domain.automation.policy import PolicyEngine, RiskLevel
+        from app.domain.automation.policy import PolicyEngine
         engine = PolicyEngine()
         assert not engine.is_kill_switch_active
         engine.activate_kill_switch()

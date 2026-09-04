@@ -5,7 +5,7 @@ SQLAlchemy implementation for segment persistence and evaluation.
 """
 
 import json
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from datetime import datetime
 
 from sqlalchemy.orm import Session

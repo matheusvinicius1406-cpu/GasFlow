@@ -8,15 +8,14 @@ Never allows LLM → Database directly.
 import json
 import hashlib
 import time
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole, LLMResponse
+from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole
 from app.domain.ai.intent import Intent, IntentType, Confidence
-from app.domain.ai.tools import ToolRegistry, ToolResult, ToolType
+from app.domain.ai.tools import ToolRegistry, ToolResult
 from app.application.ai.prompts import (
-    SYSTEM_PROMPT, INTENT_CLASSIFICATION_PROMPT, TOOL_SELECTION_PROMPT,
-    RESPONSE_FORMATTING_PROMPT, CONFIRMATION_PROMPT,
+    SYSTEM_PROMPT, INTENT_CLASSIFICATION_PROMPT, RESPONSE_FORMATTING_PROMPT,
 )
 from app.application.ai.context import ContextBuilder
 

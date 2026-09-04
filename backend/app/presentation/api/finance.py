@@ -6,7 +6,6 @@ All derived values calculated by backend.
 """
 
 from datetime import datetime
-from decimal import Decimal
 from math import ceil
 from typing import Optional
 

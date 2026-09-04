@@ -13,10 +13,9 @@ Repository pattern:
 - SQLAlchemyAuditRepository: audit log
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.infrastructure.repositories.auth_model import (
     AuthUserModel, AuthSessionModel, AuthTenantModel,

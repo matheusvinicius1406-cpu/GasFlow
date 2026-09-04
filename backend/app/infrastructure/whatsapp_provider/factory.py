@@ -16,7 +16,6 @@ import logging
 from typing import Optional
 
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
-from app.domain.whatsapp_provider.models import ProviderType
 
 logger = logging.getLogger("gasflow.whatsapp.factory")
 

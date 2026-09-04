@@ -27,11 +27,10 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
-from enum import Enum
 import uuid
 import bcrypt
 from app.domain.events.event_bus import (
-    get_event_bus, publish_delivery_event, publish_driver_event, EventType
+    publish_delivery_event, publish_driver_event, EventType
 )
 from sqlalchemy.orm import Session as DBSession
 from app.infrastructure.database.init_db import engine

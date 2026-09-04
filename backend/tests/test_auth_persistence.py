@@ -31,13 +31,9 @@ from app.infrastructure.repositories.auth_repository import (
     SQLAlchemyMembershipRepository,
     SQLAlchemyAuditRepository,
 )
-from app.infrastructure.repositories.auth_model import (
-    AuthUserModel, AuthSessionModel, AuthTenantModel,
-    AuthRoleModel, AuthMembershipModel, AuthAuditModel,
-)
 from app.application.security.auth_service import AuthService
 from app.domain.security.models import (
-    UserStatus, SessionStatus, SystemRole, ROLE_PERMISSIONS,
+    SystemRole,
 )
 
 

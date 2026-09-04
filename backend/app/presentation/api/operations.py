@@ -10,10 +10,10 @@ Endpoints for real-time operational view:
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 
-from app.presentation.dependencies import get_tenant_context, require_admin
+from app.presentation.dependencies import require_admin
 from app.domain.security.models import TenantContext
 
 router = APIRouter(prefix="/operations", tags=["operations"])

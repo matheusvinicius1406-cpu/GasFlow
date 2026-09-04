@@ -2,7 +2,7 @@
 Vehicle SQLAlchemy Models — Persistent vehicle, capacity, and load data.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 

@@ -17,7 +17,7 @@ Confidence levels:
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from app.domain.reorder.entity import ReorderOpportunity, ReorderStatus, ConfidenceLevel, ReorderSummary
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository

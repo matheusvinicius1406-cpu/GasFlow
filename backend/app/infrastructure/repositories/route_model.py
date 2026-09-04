@@ -6,7 +6,7 @@ Routes represent the operational plan for a driver's delivery sequence.
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON, Index
+    Column, Integer, String, DateTime, Text, Index
 )
 from datetime import datetime
 from app.infrastructure.database.base import Base

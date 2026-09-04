@@ -8,10 +8,9 @@ Covers: Money, Payment, Receivable, Expense, Cash, Ledger,
 
 import pytest
 import threading
-import time
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,10 +18,8 @@ from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.order_model import OrderModel
-from app.infrastructure.repositories.order_item_model import OrderItemModel
-from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
 from app.infrastructure.repositories.financial_models import (
-    PaymentModel, ReceivableModel, ExpenseModel,
+    PaymentModel, ExpenseModel,
     CashMovementModel, FinancialLedgerModel
 )
 from app.infrastructure.repositories.financial_repositories import (
@@ -30,7 +27,6 @@ from app.infrastructure.repositories.financial_repositories import (
     SQLAlchemyExpenseRepository, SQLAlchemyCashMovementRepository,
     SQLAlchemyFinancialLedgerRepository,
 )
-from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 from app.application.financial.use_cases import (
     RegisterPaymentUseCase, RegisterExpenseUseCase,
     RefundPaymentUseCase, FinancialReportsUseCase,
@@ -38,7 +34,7 @@ from app.application.financial.use_cases import (
 )
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
-from app.domain.financial.expense import Expense, ExpenseStatus, ExpenseCategory
+from app.domain.financial.expense import Expense, ExpenseStatus
 from app.domain.financial.cash_movement import CashMovement, CashMovementType
 from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 

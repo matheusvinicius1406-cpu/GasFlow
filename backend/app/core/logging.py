@@ -11,7 +11,6 @@ import sys
 import time
 import uuid
 from datetime import datetime
-from typing import Optional
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -84,7 +83,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response: Response = await call_next(request)
-        except Exception as exc:
+        except Exception:
             duration_ms = round((time.time() - start_time) * 1000, 1)
             logger.error(
                 f"Request failed: {request.method} {request.url.path}",

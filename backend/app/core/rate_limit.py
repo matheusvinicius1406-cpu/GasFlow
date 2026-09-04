@@ -16,8 +16,8 @@ Categories:
 
 import time
 import threading
-from typing import Dict, Tuple, Optional
-from fastapi import Request, HTTPException
+from typing import Dict, Tuple
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 

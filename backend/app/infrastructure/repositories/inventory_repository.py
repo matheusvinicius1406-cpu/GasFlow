@@ -12,7 +12,7 @@ Concurrency: Atomic UPDATE with WHERE quantity >= N prevents negative stock.
 from datetime import datetime
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import text
 from app.domain.inventory.entity import Inventory
 from app.domain.inventory.stock_movement import StockMovement, MovementType
 from app.domain.inventory.repository import InventoryRepository

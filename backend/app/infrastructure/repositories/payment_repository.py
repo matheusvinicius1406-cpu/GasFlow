@@ -5,7 +5,7 @@ Replaces in-memory PaymentService storage with database persistence.
 Single source of truth for payment methods, PIX config, and payments.
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -181,7 +181,6 @@ class SQLAlchemyServicePaymentRepository:
         return float(result or 0.0)
 
     def summary_by_tenant(self, tenant_id: str) -> Dict:
-        from sqlalchemy import func
         all_payments = self.db.query(PaymentServiceRecord).filter(
             PaymentServiceRecord.tenant_id == tenant_id
         ).all()
