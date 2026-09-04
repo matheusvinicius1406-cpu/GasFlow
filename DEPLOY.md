@@ -98,8 +98,9 @@ docker compose -f docker-compose.prod.yml up -d
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`): em todo PR/push para `main` roda
-  backend (ruff + pytest), frontend (tsc + build + vitest) e whatsapp
-  (typecheck + build + testes).
+  backend (ruff + pytest), frontend (tsc + build + vitest), whatsapp
+  (typecheck + build + testes) e E2E (Playwright contra o stack completo em
+  `docker-compose.e2e.yml`).
 - **Imagens** (`.github/workflows/build-push.yml`): em push para `main` e
   tags `v*`, builda e publica as 3 imagens no GHCR.
 
@@ -154,3 +155,18 @@ workers, usar Redis pub/sub para espalhar eventos entre processos (P2).
   para um valor/pedido). Status por TXID: `GET /payments/pix/{txid}/status` —
   retorna `NOT_FOUND` até existir integração com PSP/webhook (confirmação é
   manual em `POST /payments/{id}/confirm`).
+
+## Testes E2E
+
+- Suíte Playwright (`e2e/`) roda contra o stack **completo e real** em
+  `docker-compose.e2e.yml` (postgres + redis + backend + frontend/nginx em
+  `:8080`), sem o serviço whatsapp.
+- Cobre os fluxos críticos pela UI + API real: login/rotas protegidas,
+  cliente, produto, motorista, pedido (criação + confirmação de status) e
+  PIX (configuração da chave + payload BR Code/QR).
+- Rodar:
+  ```bash
+  docker compose -f docker-compose.e2e.yml up -d --build
+  cd e2e && npm ci && npx playwright install chromium && npx playwright test
+  ```
+- Detalhes, decisões e bugs encontrados: `docs/phase15/E2E.md`.

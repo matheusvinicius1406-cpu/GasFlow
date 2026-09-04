@@ -1,0 +1,16 @@
+{
+  "name": "gasflow-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "End-to-end tests (Playwright) for GasFlow — run against docker-compose.e2e.yml",
+  "scripts": {
+    "test": "playwright test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

@@ -245,8 +245,18 @@ cd whatsapp && npm run typecheck
 ### Testes
 
 ```bash
+# Backend
+cd backend && python -m pytest -q          # ruff check app tests
+
+# Frontend
+cd frontend && npm test                     # npx tsc --noEmit
+
 # WhatsApp
 cd whatsapp && npm test
+
+# E2E (stack completo real em Docker — ver docs/phase15/E2E.md)
+docker compose -f docker-compose.e2e.yml up -d --build
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
 
 ## Licença

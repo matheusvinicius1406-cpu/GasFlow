@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "cd ../e2e && npx playwright test",
+    "test:e2e:headed": "cd ../e2e && npx playwright test --headed",
+    "test:e2e:debug": "cd ../e2e && npx playwright test --debug",
+    "test:e2e:report": "cd ../e2e && npx playwright show-report"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

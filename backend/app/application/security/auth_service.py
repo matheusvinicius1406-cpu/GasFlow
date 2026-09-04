@@ -10,6 +10,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 import threading
+import functools
 
 from app.domain.security.models import (
     User, UserStatus, Session, SessionStatus, Tenant, TenantMembership,
@@ -18,6 +19,33 @@ from app.domain.security.models import (
     ROLE_PERMISSIONS, RateLimiter,
 )
 from app.core.config import settings
+
+
+def _db_synchronized(fn):
+    """Serialize DB-touching operations on the shared singleton session.
+
+    The service is instantiated once per process (get_auth_service) and holds
+    a single SQLAlchemy Session. FastAPI serves requests from a threadpool
+    (plus the async WebSocket loop), so concurrent requests otherwise run
+    queries/commits on the same Session from different threads — SQLAlchemy
+    Sessions are not thread-safe and interleaved transactions corrupt the
+    internal transaction state (e.g. raises "session is in 'prepared' state",
+    returning 500 for every subsequent request). Holding a lock per operation
+    and rolling back on error keeps the shared session consistent.
+    """
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            try:
+                return fn(self, *args, **kwargs)
+            except Exception:
+                if self._use_db:
+                    try:
+                        self._db.rollback()
+                    except Exception:
+                        pass
+                raise
+    return wrapper
 
 
 class AuthService:
@@ -47,7 +75,9 @@ class AuthService:
         self._roles: Dict[str, Role] = {}
         self._audit_log: List[AuditRecord] = []
         self._rate_limiter = RateLimiter()
-        self._lock = threading.Lock()
+        # RLock: _db_synchronized decorates the public methods; in-memory paths
+        # also take self._lock internally, so reentrancy must be allowed.
+        self._lock = threading.RLock()
 
         # Initialize defaults
         self._init_defaults()
@@ -220,6 +250,7 @@ class AuthService:
 
     # ── Authentication ───────────────────────────────────
 
+    @_db_synchronized
     def login(self, username: str, password: str, ip_address: str = "",
               user_agent: str = "") -> Dict[str, Any]:
         """Authenticate user and create session.
@@ -345,6 +376,7 @@ class AuthService:
             "expires_at": session.expires_at.isoformat(),
         }
 
+    @_db_synchronized
     def logout(self, token: str) -> bool:
         """Revoke a session."""
         if self._use_db:
@@ -368,6 +400,7 @@ class AuthService:
                         result="SUCCESS")
             return True
 
+    @_db_synchronized
     def validate_token(self, token: str) -> Optional[TenantContext]:
         """Validate token and return tenant context."""
         if not token:
@@ -445,6 +478,7 @@ class AuthService:
 
     # ── User Management ──────────────────────────────────
 
+    @_db_synchronized
     def create_user(self, username: str, email: str, password: str,
                     display_name: str = "", role_name: str = "OPERATOR",
                     tenant_id: str = "default") -> Dict[str, Any]:
@@ -490,6 +524,7 @@ class AuthService:
             self._audit(user.id, tenant_id, AuditAction.USER_CREATED.value, result="SUCCESS")
             return {"success": True, "user_id": user.id}
 
+    @_db_synchronized
     def change_password(self, user_id: str, old_password: str, new_password: str) -> Dict[str, Any]:
         """Change user password. Rehashes to bcrypt."""
         if self._use_db:
@@ -512,6 +547,7 @@ class AuthService:
             self._audit(user_id, "default", AuditAction.PASSWORD_CHANGED.value, result="SUCCESS")
             return {"success": True}
 
+    @_db_synchronized
     def get_user_context(self, user_id: str, tenant_id: str = "default") -> Optional[TenantContext]:
         """Get tenant context for a user."""
         user = self._users.get(user_id)
@@ -556,6 +592,7 @@ class AuthService:
             with self._lock:
                 self._audit_log.append(record)
 
+    @_db_synchronized
     def get_audit_log(self, tenant_id: Optional[str] = None, limit: int = 50) -> List[AuditRecord]:
         if self._use_db:
             models = self._get_audit_repo().list_for_tenant(tenant_id or "", limit)
@@ -592,12 +629,14 @@ class AuthService:
                     return m
             return None
 
+    @_db_synchronized
     def get_user(self, user_id: str) -> Optional[User]:
         if self._use_db:
             user_model = self._get_user_repo().get_by_id(user_id)
             return self._db_user_to_domain(user_model) if user_model else None
         return self._users.get(user_id)
 
+    @_db_synchronized
     def get_users(self, tenant_id: str = "default") -> List[User]:
         if self._use_db:
             models = self._get_user_repo().list_by_tenant(tenant_id)
@@ -605,12 +644,14 @@ class AuthService:
         member_ids = {m.user_id for m in self._memberships if m.tenant_id == tenant_id}
         return [u for uid, u in self._users.items() if uid in member_ids]
 
+    @_db_synchronized
     def get_roles(self) -> List[Role]:
         if self._use_db:
             models = self._get_role_repo().list_all()
             return [self._db_role_to_domain(m) for m in models]
         return list(self._roles.values())
 
+    @_db_synchronized
     def create_tenant(self, tenant_id: str, name: str, creator_user_id: str = "") -> Dict[str, Any]:
         """Create a new tenant and optionally add creator as ADMIN."""
         if self._use_db:
@@ -646,6 +687,7 @@ class AuthService:
                         AuditAction.TENANT_CREATED.value, result="SUCCESS")
             return {"success": True, "tenant_id": tenant_id}
 
+    @_db_synchronized
     def get_tenants(self) -> List[Tenant]:
         """List all tenants."""
         if self._use_db:
@@ -653,6 +695,7 @@ class AuthService:
             return [self._db_tenant_to_domain(m) for m in models]
         return list(self._tenants.values())
 
+    @_db_synchronized
     def get_active_sessions(self, user_id: str) -> List[Session]:
         if self._use_db:
             models = self._get_session_repo().list_active_for_user(user_id)
@@ -660,6 +703,7 @@ class AuthService:
         return [s for s in self._sessions.values()
                 if s.user_id == user_id and s.status == SessionStatus.ACTIVE]
 
+    @_db_synchronized
     def revoke_all_sessions(self, user_id: str) -> int:
         if self._use_db:
             return self._get_session_repo().revoke_all_for_user(user_id)
@@ -670,6 +714,7 @@ class AuthService:
                 count += 1
         return count
 
+    @_db_synchronized
     def expire_old_sessions(self) -> int:
         if self._use_db:
             return self._get_session_repo().expire_old()

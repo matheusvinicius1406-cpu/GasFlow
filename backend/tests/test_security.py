@@ -219,6 +219,57 @@ class TestSessionManagement:
 
 
 # ═══════════════════════════════════════════════════════════
+# 3b. CONCURRENT ACCESS — SHARED SINGLETON SESSION
+# ═══════════════════════════════════════════════════════════
+# Regression: get_auth_service() returns a process-wide singleton AuthService
+# bound to ONE SQLAlchemy Session. FastAPI runs sync deps/endpoints in a
+# threadpool (and WS auth on the event loop), so concurrent requests used to
+# interleave commit()/queries on that Session from different threads. That
+# corrupts the Session's internal transaction state and every subsequent
+# request 500'd with "session is in 'prepared' state".
+
+class TestConcurrentSharedSession:
+    def test_concurrent_validate_token_db_backed(self, db):
+        """Concurrent validate_token on one DB-backed AuthService must not
+        corrupt the shared session (thread-safety regression)."""
+        import app.infrastructure.security.models  # noqa: F401
+        # DB-backed service sharing a single session — same shape as the
+        # get_auth_service() singleton in app/presentation/dependencies.py.
+        from app.infrastructure.database.init_db import engine  # noqa: F401
+        auth = AuthService(db=db)
+
+        # Default admin password from env, matching AuthService defaults.
+        result = auth.login("admin", "test_password_123")
+        assert result["success"], result.get("error")
+        token = result["token"]
+
+        errors: list = []
+        results: list = []
+        barrier = threading.Barrier(6)
+
+        def worker():
+            try:
+                barrier.wait()
+                for _ in range(10):
+                    ctx = auth.validate_token(token)
+                    results.append(ctx is not None)
+            except Exception as exc:  # pragma: no cover - failure path
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not errors, f"Concurrent validate_token raised: {errors[0]}"
+        assert len(results) == 60 and all(results)
+        # Session still usable after the storm (was getting poisoned before).
+        ctx = auth.validate_token(token)
+        assert ctx is not None and ctx.tenant_id == "default"
+
+
+# ═══════════════════════════════════════════════════════════
 # 4. RBAC
 # ═══════════════════════════════════════════════════════════
 

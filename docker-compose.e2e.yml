@@ -1,0 +1,95 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow — Ambiente E2E (Playwright)
+# Baseado no docker-compose.prod.yml, sem o serviço whatsapp (os fluxos
+# E2E não dependem dele e ele exige pareamento manual/QR).
+# Credenciais fixas e conhecidas apenas deste ambiente.
+#
+# Uso:
+#   docker compose -f docker-compose.e2e.yml up -d --build
+#   cd e2e && npm ci && npx playwright install chromium
+#   npx playwright test
+#   docker compose -f docker-compose.e2e.yml down
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gasflow-e2e-postgres
+    environment:
+      POSTGRES_DB: gasflow_e2e
+      POSTGRES_USER: gasflow
+      POSTGRES_PASSWORD: e2e_password
+    volumes:
+      - e2e_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gasflow -d gasflow_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: gasflow-e2e-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gasflow-e2e-backend
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+psycopg2://gasflow:e2e_password@postgres:5432/gasflow_e2e
+      - ADMIN_PASSWORD=admin123
+      - CORS_ORIGINS=http://localhost:8080
+      - LOG_LEVEL=INFO
+      - WHATSAPP_SERVICE_URL=http://whatsapp:3000
+      - RATE_LIMIT_MODE=memory
+      - SESSION_TTL_MINUTES=120
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gasflow-e2e-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  e2e_postgres_data:
