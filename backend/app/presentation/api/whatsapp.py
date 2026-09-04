@@ -272,3 +272,21 @@ async def cancel_campaign(campaign_id: int):
 @router.get("/campaigns/{campaign_id}/results")
 async def get_campaign_results(campaign_id: int):
     return await _proxy_get(f"/campaigns/{campaign_id}/results")
+
+
+@router.get("/campaigns/{campaign_id}")
+async def get_campaign(campaign_id: int):
+    """Proxy: detalhe de campanha (o FE consome em CampaignResultsPage)."""
+    return await _proxy_get(f"/campaigns/{campaign_id}")
+
+
+@router.get("/campaigns/{campaign_id}/recipients")
+async def get_campaign_recipients(campaign_id: int):
+    """Proxy: destinatários de campanha (o FE consome em CampaignResultsPage)."""
+    return await _proxy_get(f"/campaigns/{campaign_id}/recipients")
+
+
+@router.get("/lists/{list_id}")
+async def get_list_detail(list_id: int):
+    """Proxy: detalhe de lista (o FE consome no wizard de campanha)."""
+    return await _proxy_get(f"/lists/{list_id}")
