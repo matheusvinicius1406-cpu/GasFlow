@@ -27,6 +27,13 @@ from app.infrastructure.repositories.payment_model import (
     PaymentMethodRecord, PixConfigRecord, PaymentServiceRecord
 )
 from app.infrastructure.repositories.route_model import RouteRecord, RouteStopRecord
+# Models adicionais usados em runtime (importados via routers em main.py).
+# Mantidos aqui explicitamente para que init_db() e as migrations Alembic
+# reflitam o MESMO conjunto de tabelas do app (evita drift de schema).
+from app.infrastructure.repositories.whatsapp_automation_model import (
+    AutomationRuleModel, AutomationExecutionModel
+)
+from app.infrastructure.repositories.segmentation_model import SegmentModel
 
 
 
