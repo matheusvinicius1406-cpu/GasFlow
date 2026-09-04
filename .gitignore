@@ -26,6 +26,8 @@ venv/
 # Coverage
 .coverage
 htmlcov/
+coverage/
+frontend/coverage/
 
 # Pytest
 .pytest_cache/

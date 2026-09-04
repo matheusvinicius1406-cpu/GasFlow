@@ -28,13 +28,13 @@ export function ReportsPage() {
     setLoading(true)
     setError(false)
     try {
-      const [summaryRes, balanceRes] = await Promise.allSettled([
+      const [summaryRes, balanceRes] = await Promise.all([
         apiClient.get('/finance/reports/daily'),
         apiClient.get('/finance/cash/balance'),
       ])
 
-      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data)
-      if (balanceRes.status === 'fulfilled') setBalance(Number(balanceRes.value.data.balance) || 0)
+      setSummary(summaryRes.data)
+      setBalance(Number(balanceRes.data.balance) || 0)
     } catch {
       setError(true)
     } finally {
