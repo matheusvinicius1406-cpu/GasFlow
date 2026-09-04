@@ -128,6 +128,25 @@ O backend é stateless (sessões em memória **por worker**):
 - O volume `whatsapp_auth` (sessão do WhatsApp) não é compartilhável entre
   réplicas: rode o whatsapp como 1 instância.
 
+## Realtime (WebSocket)
+
+O backend expõe `/ws` (canal por tenant, token na query string `?token=…`) e
+empurra eventos de ciclo de vida de entregas/motoristas via Event Bus → WS
+(ver `docs/phase15/RT01_DECISION.md`). O frontend conecta no `DashboardLayout`
+e invalida as queries do React Query ao receber eventos `delivery.*`/`driver.*`
+(entregas e dashboard reagem em segundos; polling de 30s permanece como
+fallback).
+
+Requisitos de proxy (já configurados):
+
+| Camada | Config | Nota |
+|---|---|---|
+| Dev (Vite) | `server.proxy['/ws']` com `ws: true` em `frontend/vite.config.ts` | sem rewrite — o backend serve `/ws` na raiz |
+| Prod (nginx) | `location /ws` com `Upgrade`/`Connection` + `proxy_http_version 1.1` em `frontend/nginx.conf` | timeouts de 3600s para conexões longas |
+
+Escala: o `ConnectionManager` é in-process (1 worker/proc). Para múltiplos
+workers, usar Redis pub/sub para espalhar eventos entre processos (P2).
+
 ## PIX
 
 - A chave PIX é configurada por tenant via API/UI (`/payments/pix`); o BR Code

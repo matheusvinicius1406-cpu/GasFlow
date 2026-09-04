@@ -3,12 +3,14 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { MobileSidebar } from './MobileSidebar'
+import { RealtimeBridge } from '@/components/realtime/RealtimeBridge'
 
 export function DashboardLayout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <RealtimeBridge />
       {/* Skip Link */}
       <a href="#main-content" className="skip-link">
         Pular para o conteúdo
