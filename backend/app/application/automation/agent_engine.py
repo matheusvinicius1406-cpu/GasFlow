@@ -207,7 +207,7 @@ class AgentEngine:
 
         return plan
 
-    def _execute_tool(self, tool_name: Optional[str, None], arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_tool(self, tool_name: Optional[str], arguments: Dict[str, Any]) -> Dict[str, Any]:
         if not tool_name:
             return {"success": False, "error": "No tool specified"}
         tool = self.tools.get(tool_name)

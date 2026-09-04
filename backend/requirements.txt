@@ -9,3 +9,9 @@ python-dotenv
 
 httpx
 alembic
+
+# Auth (hash de senha)
+bcrypt
+
+# Relatórios (PDF — relatório diário/impressão)
+reportlab

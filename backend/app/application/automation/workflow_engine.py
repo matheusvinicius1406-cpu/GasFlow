@@ -190,7 +190,7 @@ class WorkflowEngine:
 
         return step_run
 
-    def _execute_tool(self, tool_name: Optional[str, None], arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_tool(self, tool_name: Optional[str], arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a tool through the tool registry."""
         if not tool_name or not self.tools:
             return {"success": False, "error": "No tool registry available"}

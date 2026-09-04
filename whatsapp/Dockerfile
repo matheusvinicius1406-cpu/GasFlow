@@ -1,4 +1,7 @@
-FROM node:20-slim
+FROM node:24-slim
+
+# Node >= 24: src/db.ts usa node:sqlite (nativo só a partir do Node 22.5+,
+# estável no 24). Node 20 quebra com ERR_UNKNOWN_BUILTIN_MODULE.
 
 # Instala Chromium, curl (healthcheck) e dependências do Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,6 +37,10 @@ RUN npm ci
 
 # Copia o código
 COPY . .
+
+# Compila TypeScript -> dist (dist/ é gitignored, então o build é
+# obrigatório na imagem; sem isso `node dist/server.js` falharia)
+RUN npm run build
 
 # Cria diretórios de dados
 RUN mkdir -p data wwebjs_auth
