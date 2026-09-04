@@ -63,7 +63,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # node:sqlite (src/db.ts) exige Node >= 22.5; imagem prod usa 24
+          node-version: "24"
           cache: npm
           cache-dependency-path: whatsapp/package-lock.json
       - name: Install dependencies
