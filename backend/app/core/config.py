@@ -56,6 +56,12 @@ class Settings(BaseModel):
     piper_executable: str = os.getenv("PIPER_EXECUTABLE", "/usr/local/bin/piper")
     piper_models_dir: str = os.getenv("PIPER_MODELS_DIR", "/models")
 
+    # ── Scaling / Rate Limiting ─────────────────────────────
+    # backend do rate limiter: memory (default, single worker) |
+    # redis (compartilhado entre workers/instâncias — produção).
+    rate_limit_mode: str = os.getenv("RATE_LIMIT_MODE", "memory")
+    rate_limit_redis_url: str = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0")
+
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

@@ -26,6 +26,25 @@ services:
     networks:
       - gasflow
 
+  # ── Redis (rate limit distribuído — opcional em dev) ─────
+  redis:
+    image: redis:7-alpine
+    container_name: gasflow-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - gasflow
+
   # ── Backend (FastAPI) ───────────────────────────────────
   backend:
     build:
@@ -41,6 +60,8 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:8080}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
+      - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-memory}
+      - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

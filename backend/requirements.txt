@@ -15,3 +15,6 @@ bcrypt
 
 # Relatórios (PDF — relatório diário/impressão)
 reportlab
+
+# Rate limiting distribuído (Redis — produção multi-worker; opcional)
+redis

@@ -2,8 +2,10 @@
 Rate Limiting Middleware — FastAPI
 
 Configurable rate limiting per endpoint category.
-Uses in-memory sliding window (adequate for single-worker dev;
-multi-worker production should use Redis-backed implementation).
+Backends:
+- memory (default): thread-safe sliding window — adequate for single worker
+- redis: shared sliding window via RATE_LIMIT_MODE=redis — required for
+  multiple workers/instances (production)
 
 Categories:
 - LOGIN: 5 requests / 5 minutes (brute force protection)
@@ -14,12 +16,18 @@ Categories:
 - PUBLIC: 120 requests / minute (health, root)
 """
 
+import logging
 import time
 import threading
 from typing import Dict, Tuple
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
+from app.core.config import settings
+from app.core.rate_limit_redis import RedisSlidingWindowRateLimiter
+
+logger = logging.getLogger("app.core.rate_limit")
 
 
 class SlidingWindowRateLimiter:
@@ -57,8 +65,13 @@ class SlidingWindowRateLimiter:
             }
 
 
-# Global rate limiter instance
-_limiter = SlidingWindowRateLimiter()
+# Global rate limiter instance.
+# Backend escolhido por RATE_LIMIT_MODE: memory (default, single worker) ou
+# redis (compartilhado entre workers/instâncias — produção).
+_limiter = RedisSlidingWindowRateLimiter() if settings.rate_limit_mode == "redis" else SlidingWindowRateLimiter()
+_limiter_backend = "redis" if settings.rate_limit_mode == "redis" else "memory"
+# Fallback in-memory quando o Redis está indisponível (degrada, não quebra).
+_fallback_limiter = SlidingWindowRateLimiter()
 
 # Rate limit policies: (max_requests, window_seconds)
 RATE_LIMIT_POLICIES = {
@@ -92,6 +105,7 @@ PATH_POLICIES = {
     "/clients": "read",
     "/orders": "read",
     "/health": "public",
+    "/ready": "public",
 }
 
 
@@ -123,7 +137,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         max_requests, window = _get_policy(path)
         key = f"{client_id}:{path.split('/')[1] if '/' in path else 'root'}"
 
-        allowed, info = _limiter.check(key, max_requests, window)
+        # Redis backend: se o Redis estiver fora, degrada para in-memory
+        # (rate limit local ainda vale) em vez de derrubar a API. E, em
+        # último caso, nunca deixe o rate limiter quebrar a requisição.
+        try:
+            if _limiter_backend == "redis" and not _limiter.available:
+                allowed, info = _fallback_limiter.check(key, max_requests, window)
+            else:
+                allowed, info = _limiter.check(key, max_requests, window)
+        except Exception:
+            logger.exception("Rate limiter failed — allowing request")
+            allowed, info = True, {}
 
         if not allowed:
             return Response(

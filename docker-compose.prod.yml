@@ -38,6 +38,24 @@ services:
     networks:
       - internal
 
+  redis:
+    image: redis:7-alpine
+    container_name: gasflow-redis
+    # Sem volume: contadores de rate limit são efêmeros por natureza — perder
+    # janelas num restart é aceitável e não vale custo de persistência.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - internal
+
   backend:
     build:
       context: ./backend
@@ -53,6 +71,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-redis}
+      - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
     # Aplica migrations antes de servir — o schema em prod é do Alembic,
     # não do create_all do boot (que segue disponível p/ dev/tests).
     command: >
@@ -60,6 +80,8 @@ services:
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - backups_data:/app/backups
