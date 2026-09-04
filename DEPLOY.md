@@ -169,4 +169,54 @@ workers, usar Redis pub/sub para espalhar eventos entre processos (P2).
   docker compose -f docker-compose.e2e.yml up -d --build
   cd e2e && npm ci && npx playwright install chromium && npx playwright test
   ```
+
+## Deploy em Produção (Checklist)
+
+### Pré-deploy
+- [ ] `git checkout main && git pull`
+- [ ] `git tag` — conferir versão atual (ex.: `v1.0.0-rc.1`)
+- [ ] `docker compose -f docker-compose.prod.yml config -q` (valida sintaxe/env)
+- [ ] Variáveis definidas (`.env.production`): `POSTGRES_PASSWORD`,
+      `ADMIN_PASSWORD`, `CORS_ORIGINS`, `MARCOS_GAS_API_KEY` (se IA real)
+- [ ] Imagens: `docker compose -f docker-compose.prod.yml pull` (GHCR) ou
+      `build` local
+
+### Deploy
+- [ ] `docker compose -f docker-compose.prod.yml --env-file .env.production up -d`
+- [ ] Healthchecks: `docker compose ps` (postgres, redis, backend, frontend,
+      whatsapp em `healthy`)
+- [ ] Migrations: `docker compose logs backend` — `alembic upgrade head` sem erro
+- [ ] Smoke: `./scripts/smoke-test.sh http://localhost` (5/5)
+
+### Pós-deploy
+- [ ] `GET /api/ready` → `database`, `redis` e `whatsapp` ok
+- [ ] Login admin na UI
+- [ ] Rate limiter em Redis: 6+ logins errados → `429` e chave no Redis
+      (`redis-cli --scan`); se DBSIZE=0 o Redis não está sendo usado — o
+      `RATE_LIMIT_REDIS_URL` no container deve apontar para o host `redis`
+      (não `localhost`; ver `docs/phase15/GOLDEN.md`)
+- [ ] WebSocket: `ws://host/ws?token=<jwt>` → `welcome` + `ping`→`pong`
+- [ ] PIX: `PATCH /api/payments/pix` (chave) → `POST /api/payments/pix/payload`
+      → BR Code `000201…` + QR
+- [ ] E2E: `docker compose -f docker-compose.e2e.yml up -d --build && cd e2e &&
+      npx playwright test` (contra o stack de teste)
+
+### Rollback
+- [ ] `docker compose -f docker-compose.prod.yml down`
+- [ ] Subir a tag anterior: troque a tag das imagens no compose (ou
+      `git checkout <tag-anterior>` + `up -d --build`)
+- [ ] O banco é compatível com migrations: rode `alembic downgrade -1` apenas
+      se a versão anterior exigir (migrations são forward-only por padrão)
+
+## Release
+
+- Versão do frontend/whatsapp/e2e em `package.json` (o backend usa a tag Git
+  como versão).
+- `CHANGELOG.md` no root lista o que entrou em cada release.
+- Tag semântica `v*` dispara `build-push.yml`, que publica as 3 imagens no
+  GHCR com `latest` + tag da versão.
+  ```bash
+  git tag -a v1.0.0-rc.1 -m "Release Candidate 1"
+  git push origin v1.0.0-rc.1
+  ```
 - Detalhes, decisões e bugs encontrados: `docs/phase15/E2E.md`.

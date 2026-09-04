@@ -68,7 +68,11 @@ class SlidingWindowRateLimiter:
 # Global rate limiter instance.
 # Backend escolhido por RATE_LIMIT_MODE: memory (default, single worker) ou
 # redis (compartilhado entre workers/instâncias — produção).
-_limiter = RedisSlidingWindowRateLimiter() if settings.rate_limit_mode == "redis" else SlidingWindowRateLimiter()
+_limiter = (
+    RedisSlidingWindowRateLimiter(url=settings.rate_limit_redis_url)
+    if settings.rate_limit_mode == "redis"
+    else SlidingWindowRateLimiter()
+)
 _limiter_backend = "redis" if settings.rate_limit_mode == "redis" else "memory"
 # Fallback in-memory quando o Redis está indisponível (degrada, não quebra).
 _fallback_limiter = SlidingWindowRateLimiter()

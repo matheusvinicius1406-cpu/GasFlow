@@ -193,3 +193,51 @@ class TestMiddlewareFallback:
         # Rate limiter exploding must not break the API request.
         r = client.get("/ping")
         assert r.status_code == 200
+
+
+class TestRedisLimiterWiring:
+    """GOLDEN — o limiter Redis de produção deve apontar para o Redis
+    configurado (RATE_LIMIT_REDIS_URL), não para o default localhost.
+
+    Regressão: rate_limit.py construía ``RedisSlidingWindowRateLimiter()``
+    sem URL — o default ``redis://localhost:6379/0`` não alcançava o Redis
+    em container (host ``redis``), o circuit breaker caía sempre no fallback
+    in-memory e o rate limit compartilhado entre workers nunca existia.
+    """
+
+    def test_module_limiter_uses_configured_url(self, monkeypatch):
+        import importlib
+
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "rate_limit_mode", "redis")
+        monkeypatch.setattr(
+            settings, "rate_limit_redis_url", "redis://my-redis:7777/3"
+        )
+        importlib.reload(rate_limit_module)
+        try:
+            assert rate_limit_module._limiter_backend == "redis"
+            assert isinstance(
+                rate_limit_module._limiter, RedisSlidingWindowRateLimiter
+            )
+            assert rate_limit_module._limiter._url == "redis://my-redis:7777/3"
+        finally:
+            # Restaura o estado do módulo para os demais testes.
+            monkeypatch.setattr(settings, "rate_limit_mode", "memory")
+            importlib.reload(rate_limit_module)
+
+    def test_module_limiter_is_memory_when_mode_memory(self, monkeypatch):
+        import importlib
+
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "rate_limit_mode", "memory")
+        importlib.reload(rate_limit_module)
+        try:
+            assert rate_limit_module._limiter_backend == "memory"
+            assert isinstance(
+                rate_limit_module._limiter,
+                rate_limit_module.SlidingWindowRateLimiter,
+            )
+        finally:
+            importlib.reload(rate_limit_module)
