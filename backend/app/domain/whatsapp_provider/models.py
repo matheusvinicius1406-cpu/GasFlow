@@ -15,6 +15,7 @@ from typing import Optional, Dict, Any
 
 class ConnectionState(str, Enum):
     """Normalized connection states across all providers."""
+
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     QR_PENDING = "qr_pending"
@@ -25,6 +26,7 @@ class ConnectionState(str, Enum):
 
 class MessageStatus(str, Enum):
     """Normalized message delivery status."""
+
     PENDING = "pending"
     SENT = "sent"
     DELIVERED = "delivered"
@@ -34,6 +36,7 @@ class MessageStatus(str, Enum):
 
 class MediaType(str, Enum):
     """Normalized media types."""
+
     TEXT = "text"
     IMAGE = "image"
     AUDIO = "audio"
@@ -45,15 +48,17 @@ class MediaType(str, Enum):
 
 class ProviderType(str, Enum):
     """Supported provider types."""
-    CURRENT = "current"        # whatsapp-web.js
-    EVOLUTION = "evolution"    # Evolution API
-    BAILEYS = "baileys"        # Baileys
-    META = "meta"              # Meta Cloud API (future)
+
+    CURRENT = "current"  # whatsapp-web.js
+    EVOLUTION = "evolution"  # Evolution API
+    BAILEYS = "baileys"  # Baileys
+    META = "meta"  # Meta Cloud API (future)
 
 
 @dataclass
 class WhatsAppContact:
     """Normalized contact — same structure for all providers."""
+
     jid: str
     phone: Optional[str] = None
     name: Optional[str] = None
@@ -77,6 +82,7 @@ class WhatsAppContact:
 @dataclass
 class WhatsAppMessage:
     """Normalized message — provider-independent."""
+
     id: str
     provider_message_id: str
     account_id: str
@@ -107,6 +113,7 @@ class WhatsAppMessage:
 @dataclass
 class WhatsAppMedia:
     """Normalized media attachment."""
+
     url: Optional[str] = None
     mimetype: Optional[str] = None
     filename: Optional[str] = None
@@ -117,6 +124,7 @@ class WhatsAppMedia:
 @dataclass
 class ConnectionInfo:
     """Normalized connection health info."""
+
     connected: bool = False
     authenticated: bool = False
     ready: bool = False
@@ -144,6 +152,7 @@ class ConnectionInfo:
 @dataclass
 class SendOptions:
     """Options for sending a message."""
+
     recipient: str
     text: str = ""
     media: Optional[WhatsAppMedia] = None
@@ -156,6 +165,7 @@ class SendOptions:
 @dataclass
 class SendResult:
     """Result of sending a message."""
+
     success: bool
     message_id: Optional[str] = None
     error: Optional[str] = None
@@ -174,9 +184,11 @@ class SendResult:
 
 # ── Normalized Events ──────────────────────────────────
 
+
 @dataclass
 class WhatsAppEvent:
     """Normalized event from any provider."""
+
     event_type: str  # message.received, message.status, connection.changed, etc.
     account_id: str
     provider_type: ProviderType

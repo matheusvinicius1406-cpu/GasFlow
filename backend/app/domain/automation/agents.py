@@ -14,6 +14,7 @@ import uuid
 
 # ── Agent States ────────────────────────────────────────
 
+
 class AgentStatus(str, Enum):
     IDLE = "IDLE"
     PLANNING = "PLANNING"
@@ -34,9 +35,11 @@ class AgentScope(str, Enum):
 
 # ── Agent Definition ────────────────────────────────────
 
+
 @dataclass
 class AgentDefinition:
     """Agent blueprint — defines capabilities and limits."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     description: str = ""
@@ -63,9 +66,11 @@ class AgentDefinition:
 
 # ── Agent Run ───────────────────────────────────────────
 
+
 @dataclass
 class AgentRun:
     """Instance of an agent execution."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     agent_id: str = ""
     agent_version: int = 1
@@ -107,9 +112,11 @@ class AgentRun:
 
 # ── Agent Step ──────────────────────────────────────────
 
+
 @dataclass
 class AgentStep:
     """Single step in an agent execution."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     run_id: str = ""
     step_number: int = 0
@@ -146,8 +153,15 @@ AGENT_SCOPE_CONFIGS = {
         "description": "Customer lookup and 360 view",
     },
     AgentScope.SALES_AGENT: {
-        "allowed_tools": ["get_customer", "search_customers", "get_customer_360",
-                          "get_inventory", "search_products", "get_order", "create_order"],
+        "allowed_tools": [
+            "get_customer",
+            "search_customers",
+            "get_customer_360",
+            "get_inventory",
+            "search_products",
+            "get_order",
+            "create_order",
+        ],
         "risk_ceiling": "MEDIUM",
         "description": "Sales assistance and order creation",
     },

@@ -37,13 +37,15 @@ from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepo
 from app.infrastructure.repositories.order_item_repository import SQLAlchemyOrderItemRepository
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
 from app.infrastructure.whatsapp.repositories import (
-    SQLAlchemyConversationRepository, SQLAlchemyConversationMessageRepository,
+    SQLAlchemyConversationRepository,
+    SQLAlchemyConversationMessageRepository,
 )
 from app.domain.whatsapp.conversation import ConversationState
 from app.application.whatsapp.gateway import MessageGateway, OperatorGateway
 
 
 # ── Fixtures ─────────────────────────────────────────────
+
 
 @pytest.fixture(scope="function")
 def db():
@@ -65,9 +67,15 @@ def sample_data(db):
     """Create sample data for tests."""
     # Customer
     client = ClientModel(
-        codigo="000001", nome="Maria Silva", telefone="5511999887766",
-        email="maria@test.com", tipo="PF", ativo=True,
-        rua="Rua A", numero="100", bairro="Centro",
+        codigo="000001",
+        nome="Maria Silva",
+        telefone="5511999887766",
+        email="maria@test.com",
+        tipo="PF",
+        ativo=True,
+        rua="Rua A",
+        numero="100",
+        bairro="Centro",
     )
     db.add(client)
     db.commit()
@@ -120,41 +128,169 @@ def gateway(repos, db):
 
     # Register all tools
     for name, desc, tt, perm, handler, schema, conf in [
-        ("get_customer", "Buscar cliente", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer,
-         {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}}}, False),
-        ("search_customers", "Buscar clientes", ToolType.READ, ToolPermission.READ_ONLY, factory.search_customers,
-         {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, False),
-        ("get_customer_360", "Customer 360", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer_360,
-         {"type": "object", "properties": {"customer_codigo": {"type": "string"}}, "required": ["customer_codigo"]}, False),
-        ("get_order", "Buscar pedido", ToolType.READ, ToolPermission.READ_ONLY, factory.get_order,
-         {"type": "object", "properties": {"order_codigo": {"type": "string"}}, "required": ["order_codigo"]}, False),
-        ("get_inventory", "Estoque", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory,
-         {"type": "object", "properties": {"product_codigo": {"type": "string"}}, "required": ["product_codigo"]}, False),
-        ("get_low_stock", "Estoque baixo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_low_stock,
-         {"type": "object", "properties": {}}, False),
-        ("get_inventory_summary", "Resumo estoque", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory_summary,
-         {"type": "object", "properties": {}}, False),
-        ("get_payments", "Pagamentos", ToolType.READ, ToolPermission.READ_ONLY, factory.get_payments,
-         {"type": "object", "properties": {}}, False),
-        ("get_receivables", "A receber", ToolType.READ, ToolPermission.READ_ONLY, factory.get_receivables,
-         {"type": "object", "properties": {}}, False),
-        ("get_financial_summary", "Resumo financeiro", ToolType.READ, ToolPermission.READ_ONLY, factory.get_financial_summary,
-         {"type": "object", "properties": {}}, False),
-        ("get_sales_summary", "Resumo vendas", ToolType.READ, ToolPermission.READ_ONLY, factory.get_sales_summary,
-         {"type": "object", "properties": {}}, False),
-        ("search_products", "Buscar produtos", ToolType.READ, ToolPermission.READ_ONLY, factory.search_products,
-         {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, False),
-        ("create_order", "Criar pedido", ToolType.WRITE, ToolPermission.OPERATOR, factory.create_order,
-         {"type": "object", "properties": {"client_codigo": {"type": "string"}, "items": {"type": "array"}}, "required": ["client_codigo", "items"]}, True),
-        ("add_stock", "Estoque", ToolType.WRITE, ToolPermission.OPERATOR, factory.add_stock,
-         {"type": "object", "properties": {"product_codigo": {"type": "string"}, "quantity": {"type": "number"}}, "required": ["product_codigo", "quantity"]}, True),
-        ("register_payment", "Pagamento", ToolType.WRITE, ToolPermission.OPERATOR, factory.register_payment,
-         {"type": "object", "properties": {"order_codigo": {"type": "string"}, "amount": {"type": "number"}, "method": {"type": "string"}}, "required": ["order_codigo", "amount", "method"]}, True),
+        (
+            "get_customer",
+            "Buscar cliente",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_customer,
+            {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}}},
+            False,
+        ),
+        (
+            "search_customers",
+            "Buscar clientes",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.search_customers,
+            {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            False,
+        ),
+        (
+            "get_customer_360",
+            "Customer 360",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_customer_360,
+            {"type": "object", "properties": {"customer_codigo": {"type": "string"}}, "required": ["customer_codigo"]},
+            False,
+        ),
+        (
+            "get_order",
+            "Buscar pedido",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_order,
+            {"type": "object", "properties": {"order_codigo": {"type": "string"}}, "required": ["order_codigo"]},
+            False,
+        ),
+        (
+            "get_inventory",
+            "Estoque",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_inventory,
+            {"type": "object", "properties": {"product_codigo": {"type": "string"}}, "required": ["product_codigo"]},
+            False,
+        ),
+        (
+            "get_low_stock",
+            "Estoque baixo",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_low_stock,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "get_inventory_summary",
+            "Resumo estoque",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_inventory_summary,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "get_payments",
+            "Pagamentos",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_payments,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "get_receivables",
+            "A receber",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_receivables,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "get_financial_summary",
+            "Resumo financeiro",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_financial_summary,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "get_sales_summary",
+            "Resumo vendas",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.get_sales_summary,
+            {"type": "object", "properties": {}},
+            False,
+        ),
+        (
+            "search_products",
+            "Buscar produtos",
+            ToolType.READ,
+            ToolPermission.READ_ONLY,
+            factory.search_products,
+            {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            False,
+        ),
+        (
+            "create_order",
+            "Criar pedido",
+            ToolType.WRITE,
+            ToolPermission.OPERATOR,
+            factory.create_order,
+            {
+                "type": "object",
+                "properties": {"client_codigo": {"type": "string"}, "items": {"type": "array"}},
+                "required": ["client_codigo", "items"],
+            },
+            True,
+        ),
+        (
+            "add_stock",
+            "Estoque",
+            ToolType.WRITE,
+            ToolPermission.OPERATOR,
+            factory.add_stock,
+            {
+                "type": "object",
+                "properties": {"product_codigo": {"type": "string"}, "quantity": {"type": "number"}},
+                "required": ["product_codigo", "quantity"],
+            },
+            True,
+        ),
+        (
+            "register_payment",
+            "Pagamento",
+            ToolType.WRITE,
+            ToolPermission.OPERATOR,
+            factory.register_payment,
+            {
+                "type": "object",
+                "properties": {
+                    "order_codigo": {"type": "string"},
+                    "amount": {"type": "number"},
+                    "method": {"type": "string"},
+                },
+                "required": ["order_codigo", "amount", "method"],
+            },
+            True,
+        ),
     ]:
-        registry.register(ToolDefinition(
-            name=name, description=desc, tool_type=tt, permission=perm,
-            handler=handler, input_schema=schema, requires_confirmation=conf,
-        ))
+        registry.register(
+            ToolDefinition(
+                name=name,
+                description=desc,
+                tool_type=tt,
+                permission=perm,
+                handler=handler,
+                input_schema=schema,
+                requires_confirmation=conf,
+            )
+        )
 
     provider = MockLLMProvider()
     ai_engine = AIEngine(llm_provider=provider, tool_registry=registry)
@@ -185,6 +321,7 @@ def _make_msg(phone="5511999887766", text="Olá", account="primary", msg_id=None
 # 1. MESSAGE NORMALIZATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestMessageNormalization:
     def test_valid_message(self, gateway):
         result = gateway.process_incoming(_make_msg(text="Olá"))
@@ -209,6 +346,7 @@ class TestMessageNormalization:
 # 2. IDEMPOTENCY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestIdempotency:
     def test_duplicate_message_skipped(self, gateway, sample_data):
         msg = _make_msg(text="Olá", msg_id="DUPLICATE_001")
@@ -222,6 +360,7 @@ class TestIdempotency:
 # ═══════════════════════════════════════════════════════════
 # 3. CONVERSATION CREATION
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConversationCreation:
     def test_creates_conversation(self, gateway, sample_data):
@@ -238,6 +377,7 @@ class TestConversationCreation:
 # 4. ACCOUNT ISOLATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAccountIsolation:
     def test_different_accounts_different_conversations(self, gateway, sample_data):
         r1 = gateway.process_incoming(_make_msg(text="Olá", account="primary"))
@@ -248,6 +388,7 @@ class TestAccountIsolation:
 # ═══════════════════════════════════════════════════════════
 # 5. CUSTOMER RESOLUTION
 # ═══════════════════════════════════════════════════════════
+
 
 class TestCustomerResolution:
     def test_customer_resolved_by_phone(self, gateway, sample_data, repos):
@@ -265,6 +406,7 @@ class TestCustomerResolution:
 # 6. CONVERSATION STATE MACHINE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestStateMachine:
     def test_initial_state_is_idle(self, gateway, sample_data):
         result = gateway.process_incoming(_make_msg(text="Olá"))
@@ -274,6 +416,7 @@ class TestStateMachine:
 
     def test_valid_transitions(self):
         from app.domain.whatsapp.conversation import Conversation
+
         conv = Conversation(state=ConversationState.IDLE)
         assert conv.transition_to(ConversationState.BROWSING)
         assert conv.state == ConversationState.BROWSING
@@ -282,6 +425,7 @@ class TestStateMachine:
 
     def test_invalid_transition(self):
         from app.domain.whatsapp.conversation import Conversation
+
         conv = Conversation(state=ConversationState.IDLE)
         # IDLE -> ORDER_CREATED is not valid (must go through BUILDING_ORDER)
         assert not conv.transition_to(ConversationState.ORDER_CREATED)
@@ -291,6 +435,7 @@ class TestStateMachine:
 # ═══════════════════════════════════════════════════════════
 # 7. HUMAN HANDOFF
 # ═══════════════════════════════════════════════════════════
+
 
 class TestHumanHandoff:
     def test_human_request_transitions(self, gateway, sample_data):
@@ -317,6 +462,7 @@ class TestHumanHandoff:
 # 8. MEDIA HANDLING
 # ═══════════════════════════════════════════════════════════
 
+
 class TestMediaHandling:
     def test_image_returns_fallback(self, gateway, sample_data):
         msg = _make_msg(text="")
@@ -331,6 +477,7 @@ class TestMediaHandling:
 # 9. ANTI-LOOP
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAntiLoop:
     def test_from_me_skipped(self, gateway, sample_data):
         result = gateway.process_incoming(_make_msg(text="AI response", from_me=True))
@@ -340,6 +487,7 @@ class TestAntiLoop:
 # ═══════════════════════════════════════════════════════════
 # 10. CONVERSATION ISOLATION
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConversationIsolation:
     def test_different_phones_different_conversations(self, gateway, sample_data):
@@ -351,6 +499,7 @@ class TestConversationIsolation:
 # ═══════════════════════════════════════════════════════════
 # 11. OPERATOR ACTIONS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestOperatorActions:
     def test_takeover(self, gateway, sample_data):
@@ -385,6 +534,7 @@ class TestOperatorActions:
 # 12. MESSAGE PERSISTENCE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPersistence:
     def test_messages_persisted(self, gateway, sample_data, repos):
         result = gateway.process_incoming(_make_msg(text="Olá"))
@@ -406,6 +556,7 @@ class TestPersistence:
 # 13. AI ROUTING
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAIRouting:
     def test_greeting_returns_response(self, gateway, sample_data):
         result = gateway.process_incoming(_make_msg(text="Olá"))
@@ -424,6 +575,7 @@ class TestAIRouting:
 # 14. RESET
 # ═══════════════════════════════════════════════════════════
 
+
 class TestReset:
     def test_reset_clears_state(self, gateway, sample_data):
         gateway.process_incoming(_make_msg(text="Olá"))
@@ -434,6 +586,7 @@ class TestReset:
 # ═══════════════════════════════════════════════════════════
 # 15. CONCURRENCY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConcurrency:
     def test_concurrent_same_phone_same_account(self, gateway, sample_data, db):
@@ -465,32 +618,112 @@ class TestConcurrency:
                     registry = ToolRegistry()
                     factory = AIToolsFactory(db_session=thread_session)
                     tools_config = [
-                        ("get_customer", "Buscar cliente", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer,
-                         {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}}}),
-                        ("search_customers", "Buscar", ToolType.READ, ToolPermission.READ_ONLY, factory.search_customers,
-                         {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
-                        ("get_customer_360", "360", ToolType.READ, ToolPermission.READ_ONLY, factory.get_customer_360,
-                         {"type": "object", "properties": {"customer_codigo": {"type": "string"}}, "required": ["customer_codigo"]}),
-                        ("get_order", "Pedido", ToolType.READ, ToolPermission.READ_ONLY, factory.get_order,
-                         {"type": "object", "properties": {"order_codigo": {"type": "string"}}, "required": ["order_codigo"]}),
-                        ("get_inventory", "Estoque", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory,
-                         {"type": "object", "properties": {"product_codigo": {"type": "string"}}, "required": ["product_codigo"]}),
-                        ("get_low_stock", "Baixo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_low_stock,
-                         {"type": "object", "properties": {}}),
-                        ("get_inventory_summary", "Resumo", ToolType.READ, ToolPermission.READ_ONLY, factory.get_inventory_summary,
-                         {"type": "object", "properties": {}}),
-                        ("create_order", "Criar", ToolType.WRITE, ToolPermission.WRITE, factory.create_order,
-                         {"type": "object", "properties": {"customer_codigo": {"type": "string"}, "items": {"type": "array"}}, "required": ["customer_codigo", "items"]}),
+                        (
+                            "get_customer",
+                            "Buscar cliente",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_customer,
+                            {
+                                "type": "object",
+                                "properties": {"customer_codigo": {"type": "string"}, "phone": {"type": "string"}},
+                            },
+                        ),
+                        (
+                            "search_customers",
+                            "Buscar",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.search_customers,
+                            {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+                        ),
+                        (
+                            "get_customer_360",
+                            "360",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_customer_360,
+                            {
+                                "type": "object",
+                                "properties": {"customer_codigo": {"type": "string"}},
+                                "required": ["customer_codigo"],
+                            },
+                        ),
+                        (
+                            "get_order",
+                            "Pedido",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_order,
+                            {
+                                "type": "object",
+                                "properties": {"order_codigo": {"type": "string"}},
+                                "required": ["order_codigo"],
+                            },
+                        ),
+                        (
+                            "get_inventory",
+                            "Estoque",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_inventory,
+                            {
+                                "type": "object",
+                                "properties": {"product_codigo": {"type": "string"}},
+                                "required": ["product_codigo"],
+                            },
+                        ),
+                        (
+                            "get_low_stock",
+                            "Baixo",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_low_stock,
+                            {"type": "object", "properties": {}},
+                        ),
+                        (
+                            "get_inventory_summary",
+                            "Resumo",
+                            ToolType.READ,
+                            ToolPermission.READ_ONLY,
+                            factory.get_inventory_summary,
+                            {"type": "object", "properties": {}},
+                        ),
+                        (
+                            "create_order",
+                            "Criar",
+                            ToolType.WRITE,
+                            ToolPermission.WRITE,
+                            factory.create_order,
+                            {
+                                "type": "object",
+                                "properties": {"customer_codigo": {"type": "string"}, "items": {"type": "array"}},
+                                "required": ["customer_codigo", "items"],
+                            },
+                        ),
                     ]
                     for name, desc, tt, perm, handler, schema, conf in tools_config:
-                        registry.register(ToolDefinition(name=name, description=desc, tool_type=tt, permission=perm, handler=handler, parameters=schema))
+                        registry.register(
+                            ToolDefinition(
+                                name=name,
+                                description=desc,
+                                tool_type=tt,
+                                permission=perm,
+                                handler=handler,
+                                parameters=schema,
+                            )
+                        )
                     llm = MockLLMProvider()
                     ai_engine = AIEngine(llm_provider=llm, tool_registry=registry)
                     thread_gw = MessageGateway(
-                        conversation_repo=conv_repo, message_repo=msg_repo,
-                        client_repo=client_repo, product_repo=product_repo,
-                        order_repo=order_repo, item_repo=item_repo,
-                        inventory_repo=inventory_repo, ai_engine=ai_engine,
+                        conversation_repo=conv_repo,
+                        message_repo=msg_repo,
+                        client_repo=client_repo,
+                        product_repo=product_repo,
+                        order_repo=order_repo,
+                        item_repo=item_repo,
+                        inventory_repo=inventory_repo,
+                        ai_engine=ai_engine,
                     )
                     r = thread_gw.process_incoming(_make_msg(text=f"Msg {idx}", msg_id=f"CONC_{idx}"))
                     results.append(r)
@@ -513,6 +746,7 @@ class TestConcurrency:
 # 16. EDGE CASES
 # ═══════════════════════════════════════════════════════════
 
+
 class TestEdgeCases:
     def test_very_long_message(self, gateway, sample_data):
         long_text = "A" * 4000
@@ -526,3 +760,74 @@ class TestEdgeCases:
     def test_unicode_message(self, gateway, sample_data):
         result = gateway.process_incoming(_make_msg(text="Óla, quero café"))
         assert result["status"] == "processed"
+
+
+# ═══════════════════════════════════════════════════════════
+# 17. HTTP ENDPOINT AUTH (service-to-service + usuário)
+# ═══════════════════════════════════════════════════════════
+
+
+@pytest.fixture(scope="module")
+def incoming_client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture(scope="module")
+def incoming_admin_token(incoming_client):
+    res = incoming_client.post("/auth/login", json={"username": "admin", "password": "test_password_123"})
+    assert res.status_code == 200
+    return res.json()["token"]
+
+
+class TestIncomingEndpointAuth:
+    """POST /whatsapp/incoming — autenticação do bridge whatsapp → backend."""
+
+    def _payload(self, phone: str = "5511987654321") -> dict:
+        return {
+            "account_id": "primary",
+            "sender_phone": phone,
+            "provider_message_id": f"http-test-{int(time.time() * 1000)}",
+            "text": "Olá",
+            "message_type": "TEXT",
+            "from_me": False,
+        }
+
+    def test_no_auth_rejected(self, incoming_client):
+        res = incoming_client.post("/whatsapp/incoming", json=self._payload("5511911111111"))
+        assert res.status_code == 401
+
+    def test_invalid_service_key_rejected(self, incoming_client, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "whatsapp_service_key", "test-service-key")
+        res = incoming_client.post(
+            "/whatsapp/incoming",
+            headers={"X-GasFlow-Key": "wrong-key"},
+            json=self._payload("5511922222222"),
+        )
+        assert res.status_code == 401
+
+    def test_service_key_accepted(self, incoming_client, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "whatsapp_service_key", "test-service-key")
+        res = incoming_client.post(
+            "/whatsapp/incoming",
+            headers={"X-GasFlow-Key": "test-service-key"},
+            json=self._payload("5511933333333"),
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "processed"
+
+    def test_user_token_accepted(self, incoming_client, incoming_admin_token):
+        res = incoming_client.post(
+            "/whatsapp/incoming",
+            headers={"Authorization": f"Bearer {incoming_admin_token}"},
+            json=self._payload("5511944444444"),
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "processed"

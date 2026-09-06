@@ -16,8 +16,9 @@ class VehicleRepository(TenantMixin):
 
     # ── Vehicle CRUD ───────────────────────────────────
 
-    def create_vehicle(self, plate: str, model: str, vehicle_type: str = "VAN",
-                       capacity_total: int = 0) -> VehicleModel:
+    def create_vehicle(
+        self, plate: str, model: str, vehicle_type: str = "VAN", capacity_total: int = 0
+    ) -> VehicleModel:
         vehicle = VehicleModel(
             tenant_id=self.tenant_id,
             plate=plate,
@@ -31,14 +32,10 @@ class VehicleRepository(TenantMixin):
         return vehicle
 
     def get_vehicle(self, vehicle_id: int) -> Optional[VehicleModel]:
-        return self._filter_by_tenant(VehicleModel).filter(
-            VehicleModel.id == vehicle_id
-        ).first()
+        return self._filter_by_tenant(VehicleModel).filter(VehicleModel.id == vehicle_id).first()
 
     def get_vehicle_by_plate(self, plate: str) -> Optional[VehicleModel]:
-        return self._filter_by_tenant(VehicleModel).filter(
-            VehicleModel.plate == plate
-        ).first()
+        return self._filter_by_tenant(VehicleModel).filter(VehicleModel.plate == plate).first()
 
     def list_vehicles(self, status: Optional[str] = None) -> List[VehicleModel]:
         q = self._filter_by_tenant(VehicleModel).filter(VehicleModel.active == True)
@@ -66,12 +63,17 @@ class VehicleRepository(TenantMixin):
 
     # ── Capacity ───────────────────────────────────────
 
-    def set_capacity(self, vehicle_id: int, product_codigo: str,
-                     max_capacity: int, product_name: str = "", unit: str = "UNITS"):
-        existing = self._filter_by_tenant(VehicleCapacityModel).filter(
-            VehicleCapacityModel.vehicle_id == vehicle_id,
-            VehicleCapacityModel.product_codigo == product_codigo,
-        ).first()
+    def set_capacity(
+        self, vehicle_id: int, product_codigo: str, max_capacity: int, product_name: str = "", unit: str = "UNITS"
+    ):
+        existing = (
+            self._filter_by_tenant(VehicleCapacityModel)
+            .filter(
+                VehicleCapacityModel.vehicle_id == vehicle_id,
+                VehicleCapacityModel.product_codigo == product_codigo,
+            )
+            .first()
+        )
         if existing:
             existing.max_capacity = max_capacity
             existing.product_name = product_name
@@ -89,29 +91,33 @@ class VehicleRepository(TenantMixin):
         self.db.commit()
 
     def get_capacities(self, vehicle_id: int) -> List[VehicleCapacityModel]:
-        return self._filter_by_tenant(VehicleCapacityModel).filter(
-            VehicleCapacityModel.vehicle_id == vehicle_id
-        ).all()
+        return self._filter_by_tenant(VehicleCapacityModel).filter(VehicleCapacityModel.vehicle_id == vehicle_id).all()
 
     # ── Load ───────────────────────────────────────────
 
     def get_load(self, vehicle_id: int, product_codigo: str) -> Optional[VehicleLoadModel]:
-        return self._filter_by_tenant(VehicleLoadModel).filter(
-            VehicleLoadModel.vehicle_id == vehicle_id,
-            VehicleLoadModel.product_codigo == product_codigo,
-        ).first()
+        return (
+            self._filter_by_tenant(VehicleLoadModel)
+            .filter(
+                VehicleLoadModel.vehicle_id == vehicle_id,
+                VehicleLoadModel.product_codigo == product_codigo,
+            )
+            .first()
+        )
 
     def get_all_loads(self, vehicle_id: int) -> List[VehicleLoadModel]:
-        return self._filter_by_tenant(VehicleLoadModel).filter(
-            VehicleLoadModel.vehicle_id == vehicle_id
-        ).all()
+        return self._filter_by_tenant(VehicleLoadModel).filter(VehicleLoadModel.vehicle_id == vehicle_id).all()
 
     def can_carry(self, vehicle_id: int, product_codigo: str, quantity: int) -> bool:
         """Check if vehicle has capacity for the given product and quantity."""
-        cap = self._filter_by_tenant(VehicleCapacityModel).filter(
-            VehicleCapacityModel.vehicle_id == vehicle_id,
-            VehicleCapacityModel.product_codigo == product_codigo,
-        ).first()
+        cap = (
+            self._filter_by_tenant(VehicleCapacityModel)
+            .filter(
+                VehicleCapacityModel.vehicle_id == vehicle_id,
+                VehicleCapacityModel.product_codigo == product_codigo,
+            )
+            .first()
+        )
         if not cap:
             return False
 

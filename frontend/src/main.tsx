@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider } from '@/features/auth'
 import { ThemeProvider } from '@/lib/theme'
 import { ToastProvider } from '@/components/ui/Toast'
@@ -29,6 +30,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           </ToastProvider>
         </ThemeProvider>
       </BrowserRouter>
+      {/* Devtools apenas em desenvolvimento — não entra no bundle de produção */}
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   </React.StrictMode>,
 )

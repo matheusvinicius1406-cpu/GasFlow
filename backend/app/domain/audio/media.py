@@ -23,6 +23,7 @@ class AudioProcessingStatus(str, Enum):
 @dataclass
 class AudioMessage:
     """Audio message received from WhatsApp."""
+
     id: Optional[int] = None
     provider_message_id: str = ""
     account_id: str = "primary"

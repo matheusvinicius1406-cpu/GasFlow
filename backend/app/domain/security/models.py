@@ -18,6 +18,7 @@ import bcrypt
 
 # ── User ────────────────────────────────────────────────
 
+
 class UserStatus(str, Enum):
     ACTIVE = "ACTIVE"
     DISABLED = "DISABLED"
@@ -49,6 +50,7 @@ class User:
 
 
 # ── Session ─────────────────────────────────────────────
+
 
 class SessionStatus(str, Enum):
     ACTIVE = "ACTIVE"
@@ -85,6 +87,7 @@ class Session:
 
 # ── Tenant ──────────────────────────────────────────────
 
+
 @dataclass
 class Tenant:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -103,6 +106,7 @@ class TenantMembership:
 
 
 # ── Role ────────────────────────────────────────────────
+
 
 class SystemRole(str, Enum):
     ADMIN = "ADMIN"
@@ -124,6 +128,7 @@ class Role:
 
 # ── Permission ──────────────────────────────────────────
 
+
 @dataclass
 class Permission:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -137,6 +142,7 @@ class Permission:
 
 
 # ── Audit ───────────────────────────────────────────────
+
 
 class AuditAction(str, Enum):
     AUTH_SUCCESS = "AUTH_SUCCESS"
@@ -162,6 +168,7 @@ class AuditAction(str, Enum):
 @dataclass
 class AuditRecord:
     """Immutable audit record — append-only."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     actor_id: str = ""
     actor_type: str = "USER"  # USER, AGENT, WORKFLOW, SYSTEM
@@ -179,9 +186,11 @@ class AuditRecord:
 
 # ── Tenant Context ──────────────────────────────────────
 
+
 @dataclass
 class TenantContext:
     """Request-scoped tenant context — never global mutable."""
+
     user_id: str = ""
     tenant_id: str = ""
     role: SystemRole = SystemRole.OPERATOR
@@ -203,27 +212,45 @@ class TenantContext:
 
 DEFAULT_PERMISSIONS = [
     # Customer
-    ("customer", "read"), ("customer", "write"), ("customer", "create"),
+    ("customer", "read"),
+    ("customer", "write"),
+    ("customer", "create"),
     # Order
-    ("order", "read"), ("order", "create"), ("order", "update"), ("order", "cancel"),
+    ("order", "read"),
+    ("order", "create"),
+    ("order", "update"),
+    ("order", "cancel"),
     # Product
-    ("product", "read"), ("product", "write"), ("product", "create"),
+    ("product", "read"),
+    ("product", "write"),
+    ("product", "create"),
     # Inventory
-    ("inventory", "read"), ("inventory", "adjust"),
+    ("inventory", "read"),
+    ("inventory", "adjust"),
     # Finance
-    ("finance", "read"), ("finance", "receive"), ("finance", "refund"),
+    ("finance", "read"),
+    ("finance", "receive"),
+    ("finance", "refund"),
     # WhatsApp
-    ("whatsapp", "read"), ("whatsapp", "send"), ("whatsapp", "takeover"),
+    ("whatsapp", "read"),
+    ("whatsapp", "send"),
+    ("whatsapp", "takeover"),
     # Conversation
-    ("conversation", "read"), ("conversation", "takeover"),
+    ("conversation", "read"),
+    ("conversation", "takeover"),
     # Workflow
-    ("workflow", "read"), ("workflow", "execute"),
+    ("workflow", "read"),
+    ("workflow", "execute"),
     # Agent
-    ("agent", "read"), ("agent", "execute"),
+    ("agent", "read"),
+    ("agent", "execute"),
     # Automation
-    ("automation", "read"), ("automation", "pause"),
+    ("automation", "read"),
+    ("automation", "pause"),
     # User Management
-    ("user", "read"), ("user", "create"), ("user", "update"),
+    ("user", "read"),
+    ("user", "create"),
+    ("user", "update"),
     # Admin
     ("admin", "*"),
 ]
@@ -234,26 +261,49 @@ DEFAULT_PERMISSIONS = [
 ROLE_PERMISSIONS = {
     SystemRole.ADMIN: ["admin.*"],
     SystemRole.MANAGER: [
-        "customer.*", "order.*", "product.*", "inventory.*",
-        "finance.*", "whatsapp.*", "conversation.*",
-        "workflow.*", "agent.*", "automation.*", "user.read",
+        "customer.*",
+        "order.*",
+        "product.*",
+        "inventory.*",
+        "finance.*",
+        "whatsapp.*",
+        "conversation.*",
+        "workflow.*",
+        "agent.*",
+        "automation.*",
+        "user.read",
     ],
     SystemRole.OPERATOR: [
-        "customer.read", "customer.write",
-        "order.read", "order.create", "order.update",
-        "product.read", "inventory.read",
+        "customer.read",
+        "customer.write",
+        "order.read",
+        "order.create",
+        "order.update",
+        "product.read",
+        "inventory.read",
         "finance.read",
-        "whatsapp.read", "whatsapp.send", "whatsapp.takeover",
-        "conversation.read", "conversation.takeover",
+        "whatsapp.read",
+        "whatsapp.send",
+        "whatsapp.takeover",
+        "conversation.read",
+        "conversation.takeover",
     ],
     SystemRole.DRIVER: [
-        "customer.read", "order.read",
-        "delivery.read.assigned", "delivery.accept", "delivery.start",
-        "delivery.arrive", "delivery.complete", "delivery.fail",
-        "route.read.assigned", "location.write.self", "proof.write.assigned",
+        "customer.read",
+        "order.read",
+        "delivery.read.assigned",
+        "delivery.accept",
+        "delivery.start",
+        "delivery.arrive",
+        "delivery.complete",
+        "delivery.fail",
+        "route.read.assigned",
+        "location.write.self",
+        "proof.write.assigned",
     ],
     SystemRole.CUSTOMER: [
-        "order.read", "product.read",
+        "order.read",
+        "product.read",
     ],
     SystemRole.SYSTEM: ["admin.*"],
 }
@@ -261,11 +311,12 @@ ROLE_PERMISSIONS = {
 
 # ── Password Security ───────────────────────────────────
 
+
 def hash_password(password: str) -> str:
     """Hash password using bcrypt.
     Returns bcrypt hash string.
     Detects legacy SHA-256 hashes (contain ':') and rehashes transparently."""
-    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
     return f"bcrypt:{hashed.decode('utf-8')}"
 
 
@@ -273,7 +324,7 @@ def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against hash. Supports bcrypt and legacy SHA-256."""
     if password_hash.startswith("bcrypt:"):
         actual_hash = password_hash[7:]  # Remove 'bcrypt:' prefix
-        return bcrypt.checkpw(password.encode('utf-8'), actual_hash.encode('utf-8'))
+        return bcrypt.checkpw(password.encode("utf-8"), actual_hash.encode("utf-8"))
     # Legacy SHA-256 migration path
     if ":" in password_hash:
         salt, hashed = password_hash.split(":", 1)
@@ -288,6 +339,7 @@ def needs_rehash(password_hash: str) -> bool:
 
 # ── Token Generation ────────────────────────────────────
 
+
 def generate_token(user_id: str, tenant_id: str, expires_minutes: int = 60) -> str:
     """Generate a cryptographically secure session token."""
     random_part = secrets.token_hex(32)  # 256 bits of entropy
@@ -296,6 +348,7 @@ def generate_token(user_id: str, tenant_id: str, expires_minutes: int = 60) -> s
 
 
 # ── Rate Limiting ───────────────────────────────────────
+
 
 class RateLimiter:
     """In-memory rate limiter."""

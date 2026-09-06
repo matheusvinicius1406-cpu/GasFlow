@@ -9,17 +9,23 @@ from typing import Any, Dict, List, Optional
 from app.domain.delivery.delivery import DeliveryStatus
 from app.domain.delivery.route import Route
 from app.domain.delivery.repository import (
-    DeliveryRepository, DriverRepository, VehicleRepository, RouteRepository,
+    DeliveryRepository,
+    DriverRepository,
+    VehicleRepository,
+    RouteRepository,
 )
 
 
 class DispatchService:
     """Orchestration service for dispatch operations."""
 
-    def __init__(self, delivery_repo: DeliveryRepository,
-                 driver_repo: DriverRepository,
-                 vehicle_repo: Optional[VehicleRepository] = None,
-                 route_repo: Optional[RouteRepository] = None):
+    def __init__(
+        self,
+        delivery_repo: DeliveryRepository,
+        driver_repo: DriverRepository,
+        vehicle_repo: Optional[VehicleRepository] = None,
+        route_repo: Optional[RouteRepository] = None,
+    ):
         self._delivery_repo = delivery_repo
         self._driver_repo = driver_repo
         self._vehicle_repo = vehicle_repo
@@ -67,8 +73,9 @@ class DispatchService:
         self._delivery_repo.save(delivery)
         return {"success": True, "delivery": delivery.to_dict(), "driver": driver.to_dict()}
 
-    def create_batch_route(self, tenant_id: str, delivery_ids: List[str],
-                           driver_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_batch_route(
+        self, tenant_id: str, delivery_ids: List[str], driver_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Create a route from multiple deliveries."""
         if not self._route_repo:
             return {"success": False, "error": "Route repository not available"}

@@ -31,27 +31,39 @@ from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.inventory_model import InventoryModel
 from app.domain.automation.events import DomainEvent, EventType, EventBus, OutboxStore
 from app.domain.automation.workflows import (
-    WorkflowDefinition, WorkflowStepDef, WorkflowStatus,
+    WorkflowDefinition,
+    WorkflowStepDef,
+    WorkflowStatus,
 )
 from app.domain.automation.triggers import (
-    Trigger, TriggerType, Condition, ConditionOperator,
-    evaluate_condition, evaluate_conditions,
+    Trigger,
+    TriggerType,
+    Condition,
+    ConditionOperator,
+    evaluate_condition,
+    evaluate_conditions,
 )
 from app.domain.automation.policy import (
-    PolicyEngine, ApprovalEngine, ApprovalStatus,
+    PolicyEngine,
+    ApprovalEngine,
+    ApprovalStatus,
 )
 from app.domain.automation.agents import (
-    AgentStatus, AgentScope,
+    AgentStatus,
+    AgentScope,
 )
 from app.application.automation.workflow_engine import WorkflowEngine
 from app.application.automation.agent_engine import AgentEngine
 from app.application.automation.automations import (
-    register_default_policies, create_low_stock_workflow, create_receivable_overdue_workflow,
+    register_default_policies,
+    create_low_stock_workflow,
+    create_receivable_overdue_workflow,
     create_customer_reactivation_workflow,
 )
 
 
 # ── Fixtures ─────────────────────────────────────────────
+
 
 @pytest.fixture(scope="function")
 def db():
@@ -71,7 +83,9 @@ def db():
 
 @pytest.fixture
 def sample_data(db):
-    client = ClientModel(codigo="000001", nome="Maria", telefone="5511999887766", tipo="PF", ativo=True, rua="A", numero="1", bairro="B")
+    client = ClientModel(
+        codigo="000001", nome="Maria", telefone="5511999887766", tipo="PF", ativo=True, rua="A", numero="1", bairro="B"
+    )
     p13 = ProductModel(codigo="P13", nome="Gas P13", tipo="Gas", preco=Decimal("120.00"), ativo=True)
     db.add_all([client, p13])
     db.commit()
@@ -137,14 +151,19 @@ def agent_engine(policy_engine, approval_engine):
         ("add_stock", "Estoque", factory.add_stock),
         ("register_payment", "Pgto", factory.register_payment),
     ]:
-        registry.register(ToolDefinition(
-            name=name, description=desc,
-            tool_type=ToolType.READ if name.startswith("get") or name.startswith("search") else ToolType.WRITE,
-            permission=ToolPermission.READ_ONLY if name.startswith("get") or name.startswith("search") else ToolPermission.OPERATOR,
-            handler=handler,
-            input_schema={"type": "object", "properties": {}},
-            requires_confirmation=(name in ["create_order", "add_stock", "register_payment"]),
-        ))
+        registry.register(
+            ToolDefinition(
+                name=name,
+                description=desc,
+                tool_type=ToolType.READ if name.startswith("get") or name.startswith("search") else ToolType.WRITE,
+                permission=ToolPermission.READ_ONLY
+                if name.startswith("get") or name.startswith("search")
+                else ToolPermission.OPERATOR,
+                handler=handler,
+                input_schema={"type": "object", "properties": {}},
+                requires_confirmation=(name in ["create_order", "add_stock", "register_payment"]),
+            )
+        )
 
     return AgentEngine(policy_engine, approval_engine, registry)
 
@@ -152,6 +171,7 @@ def agent_engine(policy_engine, approval_engine):
 # ═══════════════════════════════════════════════════════════
 # 1. EVENTS + EVENT BUS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestEvents:
     def test_event_creation(self):
@@ -196,6 +216,7 @@ class TestEvents:
 # 2. OUTBOX
 # ═══════════════════════════════════════════════════════════
 
+
 class TestOutbox:
     def test_add_and_dispatch(self, outbox):
         event = DomainEvent(event_type=EventType.ORDER_CREATED)
@@ -223,6 +244,7 @@ class TestOutbox:
 # ═══════════════════════════════════════════════════════════
 # 3. CONDITIONS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConditions:
     def test_condition_lt(self):
@@ -253,6 +275,7 @@ class TestConditions:
 # ═══════════════════════════════════════════════════════════
 # 4. POLICY ENGINE
 # ═══════════════════════════════════════════════════════════
+
 
 class TestPolicyEngine:
     def test_low_risk_no_approval(self, policy_engine):
@@ -296,10 +319,13 @@ class TestPolicyEngine:
 # 5. APPROVAL ENGINE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestApprovalEngine:
     def test_create_and_approve(self, approval_engine):
         approval = approval_engine.create_approval(
-            action="create_order", arguments={"items": []}, actor="agent:1",
+            action="create_order",
+            arguments={"items": []},
+            actor="agent:1",
         )
         assert approval.status == ApprovalStatus.PENDING
         assert approval_engine.approve(approval.id, "operator")
@@ -307,7 +333,9 @@ class TestApprovalEngine:
 
     def test_reject(self, approval_engine):
         approval = approval_engine.create_approval(
-            action="create_order", arguments={}, actor="agent:1",
+            action="create_order",
+            arguments={},
+            actor="agent:1",
         )
         assert approval_engine.reject(approval.id, "operator")
         assert not approval_engine.is_valid(approval.id)
@@ -342,15 +370,14 @@ class TestApprovalEngine:
 # 6. WORKFLOW ENGINE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestWorkflowEngine:
     def test_simple_workflow(self, workflow_engine):
         wf = WorkflowDefinition(
             name="Test",
             steps=[
-                WorkflowStepDef(id="s1", name="Step 1", action_type="condition_check",
-                                next_step_on_success="s2"),
-                WorkflowStepDef(id="s2", name="Step 2", action_type="notification",
-                                arguments={"msg": "done"}),
+                WorkflowStepDef(id="s1", name="Step 1", action_type="condition_check", next_step_on_success="s2"),
+                WorkflowStepDef(id="s2", name="Step 2", action_type="notification", arguments={"msg": "done"}),
             ],
             status=WorkflowStatus.ACTIVE,
         )
@@ -361,11 +388,14 @@ class TestWorkflowEngine:
         wf = WorkflowDefinition(
             name="Conditional",
             steps=[
-                WorkflowStepDef(id="s1", name="Check", action_type="condition_check",
-                                condition="quantity lt 5",
-                                next_step_on_success="alert"),
-                WorkflowStepDef(id="alert", name="Alert", action_type="notification",
-                                arguments={"msg": "Low stock"}),
+                WorkflowStepDef(
+                    id="s1",
+                    name="Check",
+                    action_type="condition_check",
+                    condition="quantity lt 5",
+                    next_step_on_success="alert",
+                ),
+                WorkflowStepDef(id="alert", name="Alert", action_type="notification", arguments={"msg": "Low stock"}),
             ],
             status=WorkflowStatus.ACTIVE,
         )
@@ -377,11 +407,14 @@ class TestWorkflowEngine:
         wf = WorkflowDefinition(
             name="Conditional",
             steps=[
-                WorkflowStepDef(id="s1", name="Check", action_type="condition_check",
-                                condition="quantity lt 5",
-                                next_step_on_success="alert"),
-                WorkflowStepDef(id="alert", name="Alert", action_type="notification",
-                                arguments={"msg": "Low stock"}),
+                WorkflowStepDef(
+                    id="s1",
+                    name="Check",
+                    action_type="condition_check",
+                    condition="quantity lt 5",
+                    next_step_on_success="alert",
+                ),
+                WorkflowStepDef(id="alert", name="Alert", action_type="notification", arguments={"msg": "Low stock"}),
             ],
             status=WorkflowStatus.ACTIVE,
         )
@@ -393,8 +426,7 @@ class TestWorkflowEngine:
         wf = WorkflowDefinition(
             name="Fail",
             steps=[
-                WorkflowStepDef(id="s1", name="Fail", action_type="tool_call",
-                                tool_name="nonexistent_tool"),
+                WorkflowStepDef(id="s1", name="Fail", action_type="tool_call", tool_name="nonexistent_tool"),
             ],
             status=WorkflowStatus.ACTIVE,
         )
@@ -405,8 +437,13 @@ class TestWorkflowEngine:
         wf = WorkflowDefinition(
             name="DryRun",
             steps=[
-                WorkflowStepDef(id="s1", name="Tool", action_type="tool_call",
-                                tool_name="get_customer", arguments={"customer_codigo": "001"}),
+                WorkflowStepDef(
+                    id="s1",
+                    name="Tool",
+                    action_type="tool_call",
+                    tool_name="get_customer",
+                    arguments={"customer_codigo": "001"},
+                ),
             ],
             status=WorkflowStatus.ACTIVE,
         )
@@ -424,9 +461,13 @@ class TestWorkflowEngine:
         assert run.status == WorkflowStatus.COMPLETED
 
     def test_workflow_metrics(self, workflow_engine):
-        wf = WorkflowDefinition(name="M", steps=[
-            WorkflowStepDef(id="s1", name="N", action_type="notification", arguments={}),
-        ], status=WorkflowStatus.ACTIVE)
+        wf = WorkflowDefinition(
+            name="M",
+            steps=[
+                WorkflowStepDef(id="s1", name="N", action_type="notification", arguments={}),
+            ],
+            status=WorkflowStatus.ACTIVE,
+        )
         workflow_engine.execute_workflow(wf, {})
         m = workflow_engine.get_metrics()
         assert m["workflows_started"] >= 1
@@ -436,6 +477,7 @@ class TestWorkflowEngine:
 # ═══════════════════════════════════════════════════════════
 # 7. AGENT ENGINE
 # ═══════════════════════════════════════════════════════════
+
 
 class TestAgentEngine:
     def test_create_default_agents(self, agent_engine):
@@ -487,6 +529,7 @@ class TestAgentEngine:
 # 8. BUSINESS AUTOMATIONS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestBusinessAutomations:
     def test_low_stock_workflow(self, workflow_engine):
         wf = create_low_stock_workflow()
@@ -511,13 +554,23 @@ class TestBusinessAutomations:
 # 9. KILL SWITCH
 # ═══════════════════════════════════════════════════════════
 
+
 class TestKillSwitch:
     def test_kill_switch_blocks_workflow(self, policy_engine, workflow_engine):
         policy_engine.activate_kill_switch()
-        wf = WorkflowDefinition(name="Test", steps=[
-            WorkflowStepDef(id="s1", name="Tool", action_type="tool_call",
-                            tool_name="get_customer", arguments={"customer_codigo": "001"}),
-        ], status=WorkflowStatus.ACTIVE)
+        wf = WorkflowDefinition(
+            name="Test",
+            steps=[
+                WorkflowStepDef(
+                    id="s1",
+                    name="Tool",
+                    action_type="tool_call",
+                    tool_name="get_customer",
+                    arguments={"customer_codigo": "001"},
+                ),
+            ],
+            status=WorkflowStatus.ACTIVE,
+        )
         run = workflow_engine.execute_workflow(wf, {})
         # Tool call should fail due to kill switch
         steps = workflow_engine.get_step_runs(run.id)
@@ -528,6 +581,7 @@ class TestKillSwitch:
 # ═══════════════════════════════════════════════════════════
 # 10. IDEMPOTENCY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestIdempotency:
     def test_event_idempotency_key_unique(self):
@@ -546,9 +600,11 @@ class TestIdempotency:
 # 11. CONCURRENCY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestConcurrency:
     def test_concurrent_approvals(self, approval_engine):
         results = []
+
         def approve(approval_id):
             results.append(approval_engine.approve(approval_id, "op"))
 
@@ -564,6 +620,7 @@ class TestConcurrency:
     def test_concurrent_event_publish(self, event_bus):
         count = []
         event_bus.subscribe(EventType.CUSTOM, lambda e: count.append(1))
+
         def publish():
             event_bus.publish(DomainEvent(event_type=EventType.CUSTOM))
 
@@ -578,6 +635,7 @@ class TestConcurrency:
 # ═══════════════════════════════════════════════════════════
 # 12. SECURITY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestSecurity:
     def test_agent_tool_allowlist(self, agent_engine):
@@ -607,6 +665,7 @@ class TestSecurity:
 # ═══════════════════════════════════════════════════════════
 # 13. TRIGGER TYPES
 # ═══════════════════════════════════════════════════════════
+
 
 class TestTriggers:
     def test_event_trigger(self):

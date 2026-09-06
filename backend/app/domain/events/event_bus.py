@@ -59,11 +59,12 @@ class EventType(str, Enum):
 @dataclass
 class DomainEvent:
     """Immutable domain event."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     type: EventType = EventType.DELIVERY_CREATED
     tenant_id: str = ""
     aggregate_id: str = ""  # delivery_id, driver_id, etc.
-    actor_id: str = ""      # who triggered
+    actor_id: str = ""  # who triggered
     actor_type: str = "SYSTEM"  # OPERATOR, DRIVER, SYSTEM
     timestamp: datetime = field(default_factory=datetime.utcnow)
     data: Dict[str, Any] = field(default_factory=dict)
@@ -118,9 +119,7 @@ class EventBus:
         """Unsubscribe from an event type."""
         with self._lock:
             if event_type in self._handlers:
-                self._handlers[event_type] = [
-                    h for h in self._handlers[event_type] if h != handler
-                ]
+                self._handlers[event_type] = [h for h in self._handlers[event_type] if h != handler]
 
     def publish(self, event: DomainEvent):
         """Publish an event to all subscribers."""
@@ -128,7 +127,7 @@ class EventBus:
         with self._lock:
             self._history.append(event)
             if len(self._history) > self._max_history:
-                self._history = self._history[-self._max_history:]
+                self._history = self._history[-self._max_history :]
 
         # Notify handlers (copy list to avoid modification during iteration)
         handlers = list(self._handlers.get(event.type, []))
@@ -139,8 +138,7 @@ class EventBus:
                 # Don't let handler errors break the bus
                 pass
 
-    def get_history(self, event_type: Optional[EventType] = None,
-                    limit: int = 50) -> List[DomainEvent]:
+    def get_history(self, event_type: Optional[EventType] = None, limit: int = 50) -> List[DomainEvent]:
         """Get recent events, optionally filtered by type."""
         with self._lock:
             events = self._history
@@ -165,6 +163,7 @@ def get_event_bus() -> EventBus:
 
 
 # ── Convenience functions ────────────────────────────────
+
 
 def publish_delivery_event(
     event_type: EventType,

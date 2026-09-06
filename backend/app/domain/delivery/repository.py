@@ -21,8 +21,9 @@ class DeliveryRepository(ABC):
     @abstractmethod
     def find_by_order_id(self, order_id: str, tenant_id: str) -> Optional[Delivery]: ...
     @abstractmethod
-    def list_by_tenant(self, tenant_id: str, status: Optional[DeliveryStatus] = None,
-                       limit: int = 50, offset: int = 0) -> List[Delivery]: ...
+    def list_by_tenant(
+        self, tenant_id: str, status: Optional[DeliveryStatus] = None, limit: int = 50, offset: int = 0
+    ) -> List[Delivery]: ...
     @abstractmethod
     def list_by_driver(self, driver_id: str, tenant_id: str) -> List[Delivery]: ...
     @abstractmethod
@@ -59,8 +60,7 @@ class RouteRepository(ABC):
     @abstractmethod
     def find_by_id(self, route_id: str, tenant_id: str) -> Optional[Route]: ...
     @abstractmethod
-    def list_by_tenant(self, tenant_id: str, status: Optional[RouteStatus] = None,
-                       limit: int = 50) -> List[Route]: ...
+    def list_by_tenant(self, tenant_id: str, status: Optional[RouteStatus] = None, limit: int = 50) -> List[Route]: ...
     @abstractmethod
     def list_by_driver(self, driver_id: str, tenant_id: str) -> List[Route]: ...
 
@@ -68,6 +68,7 @@ class RouteRepository(ABC):
 # Legacy interface — used by orders/assign driver flow
 class DeliveryDriverRepository(ABC):
     """Legacy interface for DeliveryDriver (entregador) management."""
+
     @abstractmethod
     def criar(self, driver: DeliveryDriver) -> DeliveryDriver: ...
     @abstractmethod

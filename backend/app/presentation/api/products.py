@@ -19,10 +19,7 @@ from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 
 
-router = APIRouter(
-    prefix="/products",
-    tags=["Products"]
-)
+router = APIRouter(prefix="/products", tags=["Products"])
 
 
 def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):

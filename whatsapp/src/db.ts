@@ -97,6 +97,31 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   PRIMARY KEY (campaign_id, customer_id) -- idempotência: campaign+customer único
 );
 
+-- Histórico de envios — base para rate limiting (janelas por conta) e
+-- cooldown por destinatário. Indexes cobrem as duas consultas do limiter.
+CREATE TABLE IF NOT EXISTS send_history (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id          TEXT NOT NULL,
+  recipient           TEXT NOT NULL,
+  sent_at_ms          INTEGER NOT NULL,
+  provider_message_id TEXT,
+  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_send_history_account_time
+  ON send_history (account_id, sent_at_ms);
+
+CREATE INDEX IF NOT EXISTS idx_send_history_recipient
+  ON send_history (account_id, recipient, sent_at_ms);
+
+-- Contadores diários para warmup progressivo.
+CREATE TABLE IF NOT EXISTS send_counters (
+  account_id TEXT NOT NULL,
+  day        TEXT NOT NULL,
+  sent_count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (account_id, day)
+);
+
 -- Migration: add new columns if they don't exist (safe for existing data)
 CREATE TABLE IF NOT EXISTS _migration_tracking (
   version INTEGER PRIMARY KEY,

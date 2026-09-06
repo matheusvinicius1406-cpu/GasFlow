@@ -29,6 +29,7 @@ class VehicleStatus(str, Enum):
 @dataclass
 class VehicleLocation:
     """Last known GPS location of vehicle."""
+
     lat: float = 0.0
     lng: float = 0.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -40,6 +41,7 @@ class VehicleLocation:
 @dataclass
 class Vehicle:
     """Delivery vehicle with per-product capacity."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = ""
     plate: str = ""
@@ -99,8 +101,9 @@ class Vehicle:
         self.load.unload_order(items)
         self.updated_at = datetime.utcnow()
 
-    def add_product_capacity(self, product_codigo: str, product_name: str,
-                             max_capacity: int, unit: str = "UN") -> ProductCapacity:
+    def add_product_capacity(
+        self, product_codigo: str, product_name: str, max_capacity: int, unit: str = "UN"
+    ) -> ProductCapacity:
         """Add or update product capacity."""
         cap = self.load.add_product(product_codigo, product_name, max_capacity, unit)
         self.updated_at = datetime.utcnow()
@@ -133,11 +136,20 @@ class Vehicle:
         self.status = VehicleStatus.MAINTENANCE
         self.updated_at = datetime.utcnow()
 
-    def update_location(self, lat: float, lng: float, accuracy: Optional[float] = None,
-                        speed: Optional[float] = None, heading: Optional[float] = None):
+    def update_location(
+        self,
+        lat: float,
+        lng: float,
+        accuracy: Optional[float] = None,
+        speed: Optional[float] = None,
+        heading: Optional[float] = None,
+    ):
         self.location = VehicleLocation(
-            lat=lat, lng=lng, accuracy_meters=accuracy,
-            speed_kmh=speed, heading=heading,
+            lat=lat,
+            lng=lng,
+            accuracy_meters=accuracy,
+            speed_kmh=speed,
+            heading=heading,
         )
         self.updated_at = datetime.utcnow()
 

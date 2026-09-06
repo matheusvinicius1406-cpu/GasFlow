@@ -2,6 +2,44 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
+## [1.0.0-rc.4] - 2026-09-05
+
+Resiliência do WhatsApp + integração com o app do entregador
+(ver `docs/phase16/PHASE16_WHATSAPP_RESILIENCE_INTEGRATION.md`).
+
+### 🐛 Correções
+
+- **`--disable-dev-shm-usage` no arquivo errado (rc.3)**: o fix que destravou
+  o QR em Docker estava em `wwebjs-provider.ts` (código morto); o runtime usa
+  `provider-manager.ts`, que não tinha a flag. Movido para o caminho real.
+- **Bridge de mensagens recebidas inexistente**: o serviço WhatsApp nunca
+  enviava mensagens ao backend — o `POST /whatsapp/incoming` (IA + conversas)
+  existia mas nada o chamava. Bot não funcionava ponta a ponta.
+
+### 🚀 Funcionalidades
+
+- **Heartbeat de presença** (`sendPresenceAvailable` a cada 5 min por padrão,
+  `WA_HEARTBEAT_INTERVAL_MIN`) para manter a sessão ativa.
+- **Reconexão endurecida**: 10 tentativas com backoff exponencial (5s→80s +
+  jitter) e alerta webhook (`WA_CRITICAL_WEBHOOK_URL`) ao esgotar.
+- **Envio de mídia**: `sendMedia` no contrato do provider + endpoint
+  `POST /api/whatsapp/accounts/:id/media` (base64 ou mediaPath, idempotente).
+- **Bridge de entrada whatsapp → backend**: mensagens recebidas são
+  encaminhadas para `/whatsapp/incoming` (autenticadas via `X-GasFlow-Key`),
+  e a resposta da IA é enviada de volta automaticamente (loop fechado).
+- **Pacing humano de campanhas**: intervalo aleatório 2–10s entre envios
+  (`WA_SEND_MIN/MAX_INTERVAL_MS`) no lugar do fixo de 2s.
+- **Logs estruturados** (JSON lines) no serviço WhatsApp.
+- **Auth service-to-service no backend**: `/whatsapp/incoming` aceita
+  `X-GasFlow-Key` = `WHATSAPP_SERVICE_KEY`/`MARCOS_GAS_API_KEY`.
+- **CI/CD do entregadorGasFlow**: workflow GitHub Actions (typecheck + build +
+  testes) no repositório do app do entregador.
+
+### 🧪 Testes
+
+- WhatsApp: 38 → **53** (bridge de entrada + mídia).
+- Backend: +4 testes HTTP de auth do `/whatsapp/incoming`.
+
 ## [1.0.0-rc.3] - 2026-09-04
 
 Round de execução das pendências restantes (QR pareado ao vivo, GHCR

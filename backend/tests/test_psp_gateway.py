@@ -26,12 +26,11 @@ from app.presentation.api.payments import router as payments_router
 
 # ── Gateway unit tests ─────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_mock_provider_lifecycle():
     provider = MockPixProvider()
-    created = await provider.create_pix(
-        amount=100.0, txid="GASTEST1", key="test@key", description="Pedido 1"
-    )
+    created = await provider.create_pix(amount=100.0, txid="GASTEST1", key="test@key", description="Pedido 1")
     assert created["status"] == "PENDING"
     assert created["external_id"] == "GASTEST1"
 
@@ -52,8 +51,7 @@ async def test_http_provider_requires_credentials():
     with pytest.raises(PspNotConfigured):
         await provider.get_status("X")
 
-    provider = HttpPixProvider(api_url="https://api.example.com",
-                               api_key="k", provider="gerencianet")
+    provider = HttpPixProvider(api_url="https://api.example.com", api_key="k", provider="gerencianet")
     # Credentials present — would attempt HTTP (no network in tests).
     assert provider.api_url == "https://api.example.com"
     assert provider.provider_name == "gerencianet"
@@ -95,6 +93,7 @@ def test_factory_rejects_unknown_provider(monkeypatch):
 
 # ── Signature helpers ──────────────────────────────────
 
+
 def test_signature_roundtrip():
     body = json.dumps({"txid": "GAS000001", "status": "CONFIRMED"}).encode()
     sig = compute_webhook_signature(body, "segredo")
@@ -130,8 +129,12 @@ def _inject_service(monkeypatch, service: PaymentService):
 def _create_pix_payment(service: PaymentService, txid: str):
     """Create a PENDING PIX payment whose external_id is the txid."""
     return service.create_payment(
-        tenant_id="t1", order_id="ord-1", order_codigo="000001",
-        customer_codigo="000001", amount=150.0, method_code="PIX",
+        tenant_id="t1",
+        order_id="ord-1",
+        order_codigo="000001",
+        customer_codigo="000001",
+        amount=150.0,
+        method_code="PIX",
         external_id=txid,
     )
 

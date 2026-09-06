@@ -15,6 +15,7 @@ import hashlib
 
 # ── Risk Levels ─────────────────────────────────────────
 
+
 class RiskLevel(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
@@ -24,9 +25,11 @@ class RiskLevel(str, Enum):
 
 # ── Action Policy ───────────────────────────────────────
 
+
 @dataclass
 class ActionPolicy:
     """Policy for a specific action type."""
+
     action: str = ""
     risk_level: RiskLevel = RiskLevel.LOW
     requires_approval: bool = False
@@ -39,6 +42,7 @@ class ActionPolicy:
 
 
 # ── Policy Engine ───────────────────────────────────────
+
 
 class PolicyEngine:
     """Central policy engine for authorization and risk assessment."""
@@ -60,35 +64,59 @@ class PolicyEngine:
         Returns: {"allowed": bool, "requires_approval": bool, "risk_level": str, "reason": str}
         """
         if self._kill_switch:
-            return {"allowed": False, "requires_approval": False, "risk_level": "BLOCKED",
-                    "reason": "Kill switch is active — all automations paused"}
+            return {
+                "allowed": False,
+                "requires_approval": False,
+                "risk_level": "BLOCKED",
+                "reason": "Kill switch is active — all automations paused",
+            }
 
         if action in self._disabled_actions:
-            return {"allowed": False, "requires_approval": False, "risk_level": "BLOCKED",
-                    "reason": f"Action '{action}' is disabled"}
+            return {
+                "allowed": False,
+                "requires_approval": False,
+                "risk_level": "BLOCKED",
+                "reason": f"Action '{action}' is disabled",
+            }
 
         policy = self._policies.get(action)
         if not policy:
-            return {"allowed": False, "requires_approval": False, "risk_level": "UNKNOWN",
-                    "reason": f"No policy defined for action '{action}'"}
+            return {
+                "allowed": False,
+                "requires_approval": False,
+                "risk_level": "UNKNOWN",
+                "reason": f"No policy defined for action '{action}'",
+            }
 
         if policy.allowed_roles and role not in policy.allowed_roles:
-            return {"allowed": False, "requires_approval": False, "risk_level": policy.risk_level.value,
-                    "reason": f"Role '{role}' not permitted for action '{action}'"}
+            return {
+                "allowed": False,
+                "requires_approval": False,
+                "risk_level": policy.risk_level.value,
+                "reason": f"Role '{role}' not permitted for action '{action}'",
+            }
 
         # Check time restrictions
         if policy.allowed_hours_start is not None and policy.allowed_hours_end is not None:
             hour = datetime.utcnow().hour
             if not (policy.allowed_hours_start <= hour <= policy.allowed_hours_end):
-                return {"allowed": False, "requires_approval": False, "risk_level": policy.risk_level.value,
-                        "reason": f"Action '{action}' not allowed at current hour ({hour})"}
+                return {
+                    "allowed": False,
+                    "requires_approval": False,
+                    "risk_level": policy.risk_level.value,
+                    "reason": f"Action '{action}' not allowed at current hour ({hour})",
+                }
 
         # Check amount limits
         if policy.max_amount and context:
             amount = context.get("amount", 0)
             if isinstance(amount, (int, float)) and amount > policy.max_amount:
-                return {"allowed": False, "requires_approval": True, "risk_level": policy.risk_level.value,
-                        "reason": f"Amount {amount} exceeds limit {policy.max_amount}"}
+                return {
+                    "allowed": False,
+                    "requires_approval": True,
+                    "risk_level": policy.risk_level.value,
+                    "reason": f"Amount {amount} exceeds limit {policy.max_amount}",
+                }
 
         return {
             "allowed": True,
@@ -118,6 +146,7 @@ class PolicyEngine:
 
 # ── Approval ────────────────────────────────────────────
 
+
 class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -128,6 +157,7 @@ class ApprovalStatus(str, Enum):
 @dataclass
 class Approval:
     """One-time, bound, expiring approval for an action."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     action: str = ""
     arguments_hash: str = ""  # Hash of action arguments for binding
@@ -165,15 +195,19 @@ class ApprovalEngine:
         self._ttl = timedelta(minutes=ttl_minutes)
         self._lock = __import__("threading").Lock()
 
-    def create_approval(self, action: str, arguments: Dict[str, Any], actor: str,
-                        risk_level: str = "LOW", reason: str = "",
-                        workflow_id: Optional[str] = None,
-                        run_id: Optional[str] = None,
-                        step_id: Optional[str] = None) -> Approval:
+    def create_approval(
+        self,
+        action: str,
+        arguments: Dict[str, Any],
+        actor: str,
+        risk_level: str = "LOW",
+        reason: str = "",
+        workflow_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        step_id: Optional[str] = None,
+    ) -> Approval:
         """Create a new approval request."""
-        args_hash = hashlib.md5(
-            str(sorted(arguments.items())).encode()
-        ).hexdigest()[:16]
+        args_hash = hashlib.md5(str(sorted(arguments.items())).encode()).hexdigest()[:16]
 
         approval = Approval(
             action=action,
@@ -228,8 +262,7 @@ class ApprovalEngine:
 
     def get_pending(self) -> List[Approval]:
         with self._lock:
-            return [a for a in self._approvals.values()
-                    if a.status == ApprovalStatus.PENDING and not a.is_expired]
+            return [a for a in self._approvals.values() if a.status == ApprovalStatus.PENDING and not a.is_expired]
 
     def get_all(self) -> List[Approval]:
         with self._lock:

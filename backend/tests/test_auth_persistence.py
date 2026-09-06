@@ -62,6 +62,7 @@ def auth_service(db):
 # 1. RESTART TEST — SESSION SURVIVES
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAuthRestart:
     def test_login_and_validate_token(self, db, auth_service):
         """Login → validate token → still works."""
@@ -104,12 +105,16 @@ class TestAuthRestart:
 # 2. USER CREATION PERSISTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestUserPersistence:
     def test_create_user_persists(self, db, auth_service):
         """Create user → new instance → user exists."""
         result = auth_service.create_user(
-            "testuser", "test@example.com", "password123",
-            display_name="Test User", role_name="OPERATOR",
+            "testuser",
+            "test@example.com",
+            "password123",
+            display_name="Test User",
+            role_name="OPERATOR",
         )
         assert result["success"] is True
         user_id = result["user_id"]
@@ -123,7 +128,9 @@ class TestUserPersistence:
     def test_login_new_user(self, db, auth_service):
         """Create user → login → works."""
         auth_service.create_user(
-            "testuser", "test@example.com", "password123",
+            "testuser",
+            "test@example.com",
+            "password123",
         )
         result = auth_service.login("testuser", "password123")
         assert result["success"] is True
@@ -132,11 +139,11 @@ class TestUserPersistence:
     def test_password_change_persists(self, db, auth_service):
         """Change password → new instance → new password works."""
         auth_service.create_user(
-            "testuser", "test@example.com", "oldpassword",
+            "testuser",
+            "test@example.com",
+            "oldpassword",
         )
-        user = auth_service.get_user(
-            next(iter(auth_service._users.keys())) if not auth_service._use_db else None
-        )
+        user = auth_service.get_user(next(iter(auth_service._users.keys())) if not auth_service._use_db else None)
         # Get user by username
         user_repo = auth_service._get_user_repo()
         user_model = user_repo.get_by_username("testuser")
@@ -156,6 +163,7 @@ class TestUserPersistence:
 # ═══════════════════════════════════════════════════════════
 # 3. TENANT CREATION PERSISTS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestTenantPersistence:
     def test_create_tenant_persists(self, db, auth_service):
@@ -179,6 +187,7 @@ class TestTenantPersistence:
 # 4. AUDIT LOG PERSISTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAuditPersistence:
     def test_audit_log_persists(self, db, auth_service):
         """Login generates audit → new instance → audit visible."""
@@ -194,6 +203,7 @@ class TestAuditPersistence:
 # 5. MULTI-TENANT ISOLATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAuthMultiTenant:
     def test_users_isolated_by_tenant(self, db, auth_service):
         """User created in tenant A not visible in tenant B."""
@@ -201,7 +211,10 @@ class TestAuthMultiTenant:
         auth_service.create_tenant("tenant-b", "Tenant B")
 
         auth_service.create_user(
-            "userA", "a@test.com", "pass", tenant_id="tenant-a",
+            "userA",
+            "a@test.com",
+            "pass",
+            tenant_id="tenant-a",
         )
 
         users_a = auth_service.get_users("tenant-a")
@@ -215,6 +228,7 @@ class TestAuthMultiTenant:
 # ═══════════════════════════════════════════════════════════
 # 6. REPOSITORY DIRECT TESTS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestRepositories:
     def test_user_repo_crud(self, db):
@@ -230,8 +244,7 @@ class TestRepositories:
 
     def test_session_repo_crud(self, db):
         repo = SQLAlchemySessionRepository(db)
-        repo.create("s1", "u1", "default", "token-abc",
-                     expires_at=datetime.utcnow() + timedelta(hours=1))
+        repo.create("s1", "u1", "default", "token-abc", expires_at=datetime.utcnow() + timedelta(hours=1))
         found = repo.get_by_token("token-abc")
         assert found is not None
         assert found.user_id == "u1"

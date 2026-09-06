@@ -10,19 +10,30 @@ These tests run WITHOUT a real WhatsApp connection.
 import pytest
 from datetime import datetime
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, ConnectionInfo, SendResult,
-    WhatsAppEvent, ConnectionState, ProviderType, MediaType, MessageStatus,
+    WhatsAppContact,
+    ConnectionInfo,
+    SendResult,
+    WhatsAppEvent,
+    ConnectionState,
+    ProviderType,
+    MediaType,
+    MessageStatus,
 )
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.session import WhatsAppSessionManager
 from app.domain.whatsapp_provider.errors import (
-    WhatsAppError, WhatsAppErrorType, WhatsAppConnectionError,
-    WhatsAppSendError, WhatsAppAuthError, WhatsAppRateLimitError,
+    WhatsAppError,
+    WhatsAppErrorType,
+    WhatsAppConnectionError,
+    WhatsAppSendError,
+    WhatsAppAuthError,
+    WhatsAppRateLimitError,
 )
 from app.domain.whatsapp_provider.retry import RetryPolicy
 
 
 # ── Model Tests ─────────────────────────────────────────
+
 
 class TestWhatsAppContact:
     def test_creation(self):
@@ -70,6 +81,7 @@ class TestMessageStatus:
 
 # ── SendResult Tests ────────────────────────────────────
 
+
 class TestSendResult:
     def test_success(self):
         r = SendResult(success=True, message_id="msg_123", provider=ProviderType.CURRENT)
@@ -85,6 +97,7 @@ class TestSendResult:
 
 
 # ── ConnectionInfo Tests ────────────────────────────────
+
 
 class TestConnectionInfo:
     def test_default(self):
@@ -105,6 +118,7 @@ class TestConnectionInfo:
 
 
 # ── Error Tests ─────────────────────────────────────────
+
 
 class TestErrors:
     def test_base_error(self):
@@ -136,6 +150,7 @@ class TestErrors:
 
 # ── Retry Tests ─────────────────────────────────────────
 
+
 class TestRetryPolicy:
     def test_success_no_retry(self):
         policy = RetryPolicy(max_retries=3)
@@ -147,6 +162,7 @@ class TestRetryPolicy:
             return "ok"
 
         import asyncio
+
         result = asyncio.run(policy.execute_with_retry(success_op))
         assert result == "ok"
         assert call_count == 1
@@ -164,6 +180,7 @@ class TestRetryPolicy:
             return "ok"
 
         import asyncio
+
         result = asyncio.run(policy.execute_with_retry(fail_then_succeed))
         assert result == "ok"
         assert call_count == 3
@@ -178,6 +195,7 @@ class TestRetryPolicy:
             raise WhatsAppAuthError("permanent")
 
         import asyncio
+
         with pytest.raises(WhatsAppAuthError):
             asyncio.run(policy.execute_with_retry(permanent_fail))
         assert call_count == 1  # No retry for permanent failures
@@ -189,6 +207,7 @@ class TestRetryPolicy:
             raise WhatsAppConnectionError("always fails")
 
         import asyncio
+
         with pytest.raises(WhatsAppConnectionError):
             asyncio.run(policy.execute_with_retry(always_fail))
         assert policy.get_metrics()["total_failures"] == 1
@@ -204,29 +223,61 @@ class TestRetryPolicy:
 
 # ── Session Manager Tests ───────────────────────────────
 
+
 class TestSessionManager:
     def test_register_provider(self):
         mgr = WhatsAppSessionManager()
 
         class MockProvider(WhatsAppProvider):
             @property
-            def provider_type(self): return ProviderType.CURRENT
+            def provider_type(self):
+                return ProviderType.CURRENT
+
             @property
-            def account_id(self): return "test"
-            async def start(self): pass
-            async def stop(self): pass
-            async def logout(self): pass
-            async def get_connection_state(self): return ConnectionState.DISCONNECTED
-            async def get_connection_info(self): return ConnectionInfo()
-            def is_connected(self): return False
-            async def get_qr_code(self): return None
-            async def send_text(self, opts): return SendResult(success=False)
-            async def send_media(self, opts): return SendResult(success=False)
-            async def send_typing(self, r): return False
-            async def mark_as_read(self, m): return False
-            async def get_contacts(self): return []
-            async def get_contact(self, j): return None
-            async def get_session_info(self): return {}
+            def account_id(self):
+                return "test"
+
+            async def start(self):
+                pass
+
+            async def stop(self):
+                pass
+
+            async def logout(self):
+                pass
+
+            async def get_connection_state(self):
+                return ConnectionState.DISCONNECTED
+
+            async def get_connection_info(self):
+                return ConnectionInfo()
+
+            def is_connected(self):
+                return False
+
+            async def get_qr_code(self):
+                return None
+
+            async def send_text(self, opts):
+                return SendResult(success=False)
+
+            async def send_media(self, opts):
+                return SendResult(success=False)
+
+            async def send_typing(self, r):
+                return False
+
+            async def mark_as_read(self, m):
+                return False
+
+            async def get_contacts(self):
+                return []
+
+            async def get_contact(self, j):
+                return None
+
+            async def get_session_info(self):
+                return {}
 
         provider = MockProvider()
         mgr.register_provider("primary", provider)
@@ -240,30 +291,36 @@ class TestSessionManager:
 
 # ── Factory Tests ───────────────────────────────────────
 
+
 class TestFactory:
     def test_create_current(self):
         from app.infrastructure.whatsapp_provider.factory import create_provider
+
         provider = create_provider("primary", "current")
         assert provider.provider_type == ProviderType.CURRENT
         assert provider.account_id == "primary"
 
     def test_create_evolution(self):
         from app.infrastructure.whatsapp_provider.factory import create_provider
+
         provider = create_provider("primary", "evolution")
         assert provider.provider_type == ProviderType.EVOLUTION
 
     def test_create_baileys(self):
         from app.infrastructure.whatsapp_provider.factory import create_provider
+
         provider = create_provider("primary", "baileys")
         assert provider.provider_type == ProviderType.BAILEYS
 
     def test_unknown_falls_back_to_current(self):
         from app.infrastructure.whatsapp_provider.factory import create_provider
+
         provider = create_provider("primary", "unknown")
         assert provider.provider_type == ProviderType.CURRENT
 
 
 # ── Event Normalization Tests ───────────────────────────
+
 
 class TestEventNormalization:
     def test_event_creation(self):
@@ -291,6 +348,7 @@ class TestEventNormalization:
 
 
 # ── MediaType Tests ─────────────────────────────────────
+
 
 class TestMediaType:
     def test_all_types(self):

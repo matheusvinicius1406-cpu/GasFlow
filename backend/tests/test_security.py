@@ -29,13 +29,19 @@ from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.database.base import Base
 from app.domain.security.models import (
-    UserStatus, SystemRole, TenantContext, RateLimiter,
-    hash_password, verify_password, generate_token,
+    UserStatus,
+    SystemRole,
+    TenantContext,
+    RateLimiter,
+    hash_password,
+    verify_password,
+    generate_token,
 )
 from app.application.security.auth_service import AuthService
 
 
 # ── Fixtures ─────────────────────────────────────────────
+
 
 @pytest.fixture
 def auth_service():
@@ -46,6 +52,7 @@ def auth_service():
 def db():
     # Import security models to register them with Base
     import app.infrastructure.security.models  # noqa: F401
+
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -97,6 +104,7 @@ def manager_user(auth_service):
 # 1. PASSWORD SECURITY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPasswordSecurity:
     def test_hash_and_verify(self):
         hashed = hash_password("mypassword")
@@ -122,6 +130,7 @@ class TestPasswordSecurity:
 # 2. AUTHENTICATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAuthentication:
     def test_login_success(self, auth_service):
         result = auth_service.login("admin", "test_password_123")
@@ -140,9 +149,7 @@ class TestAuthentication:
 
     def test_login_disabled_user(self, auth_service):
         auth_service.create_user("disabled", "d@test.com", "pass123")
-        user = auth_service.get_user(
-            list(auth_service._users.keys())[-1]
-        )
+        user = auth_service.get_user(list(auth_service._users.keys())[-1])
         if user:
             user.status = UserStatus.DISABLED
         result = auth_service.login("disabled", "pass123")
@@ -171,6 +178,7 @@ class TestAuthentication:
 # ═══════════════════════════════════════════════════════════
 # 3. SESSION MANAGEMENT
 # ═══════════════════════════════════════════════════════════
+
 
 class TestSessionManagement:
     def test_session_valid(self, auth_service):
@@ -228,14 +236,17 @@ class TestSessionManagement:
 # corrupts the Session's internal transaction state and every subsequent
 # request 500'd with "session is in 'prepared' state".
 
+
 class TestConcurrentSharedSession:
     def test_concurrent_validate_token_db_backed(self, db):
         """Concurrent validate_token on one DB-backed AuthService must not
         corrupt the shared session (thread-safety regression)."""
         import app.infrastructure.security.models  # noqa: F401
+
         # DB-backed service sharing a single session — same shape as the
         # get_auth_service() singleton in app/presentation/dependencies.py.
         from app.infrastructure.database.init_db import engine  # noqa: F401
+
         auth = AuthService(db=db)
 
         # Default admin password from env, matching AuthService defaults.
@@ -272,6 +283,7 @@ class TestConcurrentSharedSession:
 # ═══════════════════════════════════════════════════════════
 # 4. RBAC
 # ═══════════════════════════════════════════════════════════
+
 
 class TestRBAC:
     def test_admin_permissions(self, auth_service):
@@ -326,6 +338,7 @@ class TestRBAC:
 # 5. TENANT ISOLATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestTenantIsolation:
     def test_tenant_context(self, auth_service):
         ctx = auth_service.get_user_context("admin-001", "default")
@@ -347,6 +360,7 @@ class TestTenantIsolation:
 # ═══════════════════════════════════════════════════════════
 # 6. RATE LIMITING
 # ═══════════════════════════════════════════════════════════
+
 
 class TestRateLimiting:
     def test_rate_limit_blocks(self):
@@ -381,6 +395,7 @@ class TestRateLimiting:
 # 7. BRUTE FORCE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestBruteForce:
     def test_lockout_after_failed_attempts(self, auth_service):
         for _ in range(5):
@@ -392,6 +407,7 @@ class TestBruteForce:
 # ═══════════════════════════════════════════════════════════
 # 8. AUDIT LOG
 # ═══════════════════════════════════════════════════════════
+
 
 class TestAuditLog:
     def test_login_audited(self, auth_service):
@@ -431,6 +447,7 @@ class TestAuditLog:
 # 9. USER MANAGEMENT
 # ═══════════════════════════════════════════════════════════
 
+
 class TestUserManagement:
     def test_create_user(self, auth_service):
         result = auth_service.create_user("newuser", "new@test.com", "pass123")
@@ -452,6 +469,7 @@ class TestUserManagement:
 # 10. PERMISSION CHECK
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPermissionCheck:
     def test_has_permission(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
@@ -469,6 +487,7 @@ class TestPermissionCheck:
 # ═══════════════════════════════════════════════════════════
 # 11. EDGE CASES
 # ═══════════════════════════════════════════════════════════
+
 
 class TestEdgeCases:
     def test_empty_token(self, auth_service):
@@ -494,6 +513,7 @@ class TestEdgeCases:
 # ═══════════════════════════════════════════════════════════
 # 12. PRIVILEGE ESCALATION PREVENTION
 # ═══════════════════════════════════════════════════════════
+
 
 class TestPrivilegeEscalation:
     def test_customer_cannot_become_admin(self, auth_service, customer_user):
@@ -524,6 +544,7 @@ class TestPrivilegeEscalation:
 # 13. RESOURCE OWNERSHIP / IDOR
 # ═══════════════════════════════════════════════════════════
 
+
 class TestResourceOwnership:
     def test_idor_cross_tenant_blocked(self, auth_service):
         """User in tenant A cannot access tenant B resources."""
@@ -539,17 +560,23 @@ class TestResourceOwnership:
 # 14. DATABASE INTEGRITY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestDatabaseIntegrity:
     def test_security_tables_created(self, db):
         """All security tables exist in real DB."""
         # Import security models to register them with Base
         import app.infrastructure.security.models  # noqa: F401
         from sqlalchemy import inspect
+
         inspector = inspect(db.get_bind())
         tables = inspector.get_table_names()
         expected = [
-            "security_users", "security_sessions", "security_tenants",
-            "security_memberships", "security_roles", "security_role_permissions",
+            "security_users",
+            "security_sessions",
+            "security_tenants",
+            "security_memberships",
+            "security_roles",
+            "security_role_permissions",
             "security_audit",
         ]
         for t in expected:
@@ -557,9 +584,13 @@ class TestDatabaseIntegrity:
 
     def test_user_model_persistence(self, db):
         from app.infrastructure.security.models import UserModel
+
         user = UserModel(
-            id="test-001", username="testuser", email="test@test.com",
-            password_hash="salt:hash", status="ACTIVE",
+            id="test-001",
+            username="testuser",
+            email="test@test.com",
+            password_hash="salt:hash",
+            status="ACTIVE",
         )
         db.add(user)
         db.commit()
@@ -569,28 +600,43 @@ class TestDatabaseIntegrity:
 
     def test_session_unique_token(self, db):
         from app.infrastructure.security.models import UserModel, SessionModel
-        user = UserModel(id="u1", username="u1", email="u1@test.com",
-                         password_hash="salt:hash", status="ACTIVE")
+
+        user = UserModel(id="u1", username="u1", email="u1@test.com", password_hash="salt:hash", status="ACTIVE")
         db.add(user)
         db.commit()
-        s1 = SessionModel(id="s1", user_id="u1", tenant_id="t1",
-                          token="tok_abc", status="ACTIVE",
-                          expires_at=datetime.utcnow() + timedelta(hours=1))
+        s1 = SessionModel(
+            id="s1",
+            user_id="u1",
+            tenant_id="t1",
+            token="tok_abc",
+            status="ACTIVE",
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        )
         db.add(s1)
         db.commit()
         # Duplicate token should fail
-        s2 = SessionModel(id="s2", user_id="u1", tenant_id="t1",
-                          token="tok_abc", status="ACTIVE",
-                          expires_at=datetime.utcnow() + timedelta(hours=1))
+        s2 = SessionModel(
+            id="s2",
+            user_id="u1",
+            tenant_id="t1",
+            token="tok_abc",
+            status="ACTIVE",
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        )
         db.add(s2)
         with pytest.raises(Exception):
             db.commit()
 
     def test_audit_index(self, db):
         from app.infrastructure.security.models import AuditRecordModel
+
         record = AuditRecordModel(
-            id="a1", actor_id="admin", actor_type="USER",
-            tenant_id="default", action="AUTH_SUCCESS", result="SUCCESS",
+            id="a1",
+            actor_id="admin",
+            actor_type="USER",
+            tenant_id="default",
+            action="AUTH_SUCCESS",
+            result="SUCCESS",
         )
         db.add(record)
         db.commit()
@@ -601,6 +647,7 @@ class TestDatabaseIntegrity:
 # ═══════════════════════════════════════════════════════════
 # 15. CONCURRENT ACCESS
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConcurrency:
     def test_concurrent_logins(self, auth_service):
@@ -640,6 +687,7 @@ class TestConcurrency:
 # 16. ADVERSARIAL SCENARIOS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAdversarial:
     """1. Duplicate login → token reuse? PASS (each login creates new session)"""
 
@@ -649,22 +697,26 @@ class TestAdversarial:
         assert r1["token"] != r2["token"]
 
     """2. Cross-customer data? PASS (ownership enforced)"""
+
     def test_02_cross_customer_blocked(self, auth_service, customer_user):
         ctx = auth_service.get_user_context(customer_user["user_id"])
         assert not ctx.has_permission("order.create")
         assert not ctx.has_permission("finance.read")
 
     """3. Cross-order? PASS (tenant check)"""
+
     def test_03_cross_tenant_blocked(self, auth_service):
         ctx = auth_service.get_user_context("admin-001", "default")
         assert not auth_service.check_resource_access(ctx, "other_tenant")
 
     """4. Cross-account? PASS (tenant scoping)"""
+
     def test_04_cross_account_blocked(self, auth_service):
         ctx = auth_service.get_user_context("admin-001", "default")
         assert not auth_service.check_resource_access(ctx, "secondary_tenant")
 
     """5. Prompt injection? PASS (text enters Conversation Gateway, not policy)"""
+
     def test_05_prompt_injection_no_policy_override(self, auth_service, customer_user):
         ctx = auth_service.get_user_context(customer_user["user_id"])
         # Customer role cannot gain admin permissions via prompt injection
@@ -673,6 +725,7 @@ class TestAdversarial:
         assert not ctx.has_permission("finance.refund")
 
     """6. Tool injection? PASS (tools validated by registry, not user text)"""
+
     def test_06_tool_injection_blocked(self, auth_service, customer_user):
         ctx = auth_service.get_user_context(customer_user["user_id"])
         # Customer cannot call refund tool even if prompt requests it
@@ -680,88 +733,104 @@ class TestAdversarial:
         assert not ctx.has_permission("inventory.adjust")
 
     """7. SQL injection? PASS (no raw SQL in auth path)"""
+
     def test_07_sql_injection_in_login(self, auth_service):
         result = auth_service.login("admin' OR 1=1--", "password")
         assert not result["success"]
 
     """8. Secret extraction? PASS (secrets not in responses)"""
+
     def test_08_no_secret_in_login_response(self, auth_service):
         result = auth_service.login("admin", "test_password_123")
         assert "password" not in str(result).lower() or "password_hash" not in str(result)
 
     """9. Human bypass? PASS (human takeover does not bypass auth)"""
+
     def test_09_human_bypass_blocked(self, auth_service):
         unauthed = TenantContext()
         assert not unauthed.is_authenticated
         assert not unauthed.has_permission("conversation.takeover")
 
     """10. AI during human takeover? PASS (AI checks conversation state)"""
+
     def test_10_ai_during_human_check(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.is_authenticated
 
     """11. Stock race? PASS (domain enforces atomic stock)"""
+
     def test_11_stock_race_prevented(self, auth_service):
         # Stock adjustment requires permission
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("inventory.adjust")
 
     """12. Price race? PASS (price always read from Product, not cached)"""
+
     def test_12_price_authority(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("product.read")
 
     """13. Conversation race? PASS (gateway validates state transitions)"""
+
     def test_13_conversation_state_check(self, auth_service):
         # State transitions validated in gateway
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("conversation.read")
 
     """14. Outbound duplication? PASS (idempotency key in gateway)"""
+
     def test_14_outbound_idempotency(self, auth_service):
         # Gateway handles dedup
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("whatsapp.send")
 
     """15. fromMe loop? PASS (gateway filters fromMe messages)"""
+
     def test_15_fromme_loop(self, auth_service):
         # Gateway checks fromMe
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("whatsapp.read")
 
     """16. AI outage? PASS (fallback message sent)"""
+
     def test_16_ai_outage_fallback(self, auth_service):
         # Auth service is independent of AI
         result = auth_service.login("admin", "test_password_123")
         assert result["success"]
 
     """17. WhatsApp outage? PASS (returns error, no crash)"""
+
     def test_17_whatsapp_outage(self, auth_service):
         # Auth works independently
         ctx = auth_service.get_user_context("admin-001")
         assert ctx is not None
 
     """18. CRM outage? PASS (graceful degradation)"""
+
     def test_18_crm_outage(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("customer.read")
 
     """19. Inventory outage? PASS (graceful degradation)"""
+
     def test_19_inventory_outage(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("inventory.read")
 
     """20. Finance outage? PASS (graceful degradation)"""
+
     def test_20_finance_outage(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("finance.read")
 
     """21. Draft corruption? PASS (state machine in gateway)"""
+
     def test_21_draft_integrity(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("order.create")
 
     """22. Context leakage? PASS (tenant context isolated)"""
+
     def test_22_context_leakage(self, auth_service):
         ctx_a = auth_service.get_user_context("admin-001", "default")
         ctx_b = auth_service.get_user_context("admin-001", "nonexistent")
@@ -769,6 +838,7 @@ class TestAdversarial:
         assert ctx_a.tenant_id == "default"
 
     """23. PII leakage? PASS (audit logs don't store passwords)"""
+
     def test_23_pii_in_audit(self, auth_service):
         auth_service.login("admin", "test_password_123")
         log = auth_service.get_audit_log("default")
@@ -777,6 +847,7 @@ class TestAdversarial:
             assert "admin123" not in str(record.details)
 
     """24. Session token replay? PASS (revoked token rejected)"""
+
     def test_24_session_token_replay(self, auth_service):
         result = auth_service.login("admin", "test_password_123")
         auth_service.logout(result["token"])
@@ -784,6 +855,7 @@ class TestAdversarial:
         assert ctx is None
 
     """25. Agent escalation? PASS (agent has explicit role+permissions)"""
+
     def test_25_agent_escalation_prevented(self, auth_service, customer_user):
         ctx = auth_service.get_user_context(customer_user["user_id"])
         # Agent/automation can't exceed role
@@ -791,35 +863,46 @@ class TestAdversarial:
         assert not ctx.has_permission("admin.*")
 
     """26. Workflow permission? PASS (workflow uses domain tools with policy)"""
+
     def test_26_workflow_permission(self, auth_service):
         ctx = auth_service.get_user_context("admin-001")
         assert ctx.has_permission("workflow.execute")
 
     """27. Approval replay? PASS (approval is one-time)"""
+
     def test_27_approval_replay(self, auth_service):
         from app.domain.automation.policy import ApprovalEngine
+
         engine = ApprovalEngine()
         approval = engine.create_approval(
-            action="create_order", arguments={"total": 100},
-            actor="user1", risk_level="MEDIUM",
+            action="create_order",
+            arguments={"total": 100},
+            actor="user1",
+            risk_level="MEDIUM",
         )
         assert engine.approve(approval.id, "admin") == True
         assert engine.approve(approval.id, "admin") == False  # Already used
 
     """28. Approval expired? PASS (approval has TTL)"""
+
     def test_28_approval_expired(self, auth_service):
         from app.domain.automation.policy import ApprovalEngine
+
         engine = ApprovalEngine(ttl_minutes=0)
         approval = engine.create_approval(
-            action="create_order", arguments={"total": 100},
-            actor="user1", risk_level="MEDIUM",
+            action="create_order",
+            arguments={"total": 100},
+            actor="user1",
+            risk_level="MEDIUM",
         )
         time.sleep(0.01)
         assert engine.approve(approval.id, "admin") == False
 
     """29. Kill switch? PASS (automation can be paused globally)"""
+
     def test_29_kill_switch(self, auth_service):
         from app.domain.automation.policy import PolicyEngine
+
         engine = PolicyEngine()
         assert not engine.is_kill_switch_active
         engine.activate_kill_switch()
@@ -828,6 +911,7 @@ class TestAdversarial:
         assert not engine.is_kill_switch_active
 
     """30. All previous phases pass? PASS (full regression)"""
+
     def test_30_previous_phases_still_work(self, auth_service):
         # Auth service works alongside all other services
         result = auth_service.login("admin", "test_password_123")

@@ -38,10 +38,7 @@ from app.domain.events.event_bus import (
 )
 
 
-router = APIRouter(
-    prefix="/orders",
-    tags=["Orders"]
-)
+router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
 def _get_repositories(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):

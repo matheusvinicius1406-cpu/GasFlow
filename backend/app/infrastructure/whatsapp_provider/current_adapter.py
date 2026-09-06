@@ -15,8 +15,12 @@ from datetime import datetime
 
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, ConnectionInfo, SendOptions, SendResult,
-    ConnectionState, ProviderType,
+    WhatsAppContact,
+    ConnectionInfo,
+    SendOptions,
+    SendResult,
+    ConnectionState,
+    ProviderType,
 )
 from app.domain.whatsapp_provider.errors import (
     WhatsAppConnectionError,

@@ -45,6 +45,7 @@ class PixKeyType(str, Enum):
 @dataclass
 class PaymentMethod:
     """Configurable payment method per tenant."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = "default"
     code: str = ""  # e.g., "PIX", "CASH"
@@ -105,6 +106,7 @@ class PaymentMethod:
 @dataclass
 class PixConfig:
     """PIX configuration per tenant."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = "default"
     key: str = ""  # PIX key value
@@ -139,6 +141,7 @@ class PixConfig:
 @dataclass
 class Payment:
     """Payment record for an order."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = "default"
     order_id: str = ""

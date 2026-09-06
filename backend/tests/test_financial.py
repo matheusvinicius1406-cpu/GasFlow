@@ -19,17 +19,23 @@ from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.product_model import ProductModel
 from app.infrastructure.repositories.order_model import OrderModel
 from app.infrastructure.repositories.financial_models import (
-    PaymentModel, ExpenseModel,
-    CashMovementModel, FinancialLedgerModel
+    PaymentModel,
+    ExpenseModel,
+    CashMovementModel,
+    FinancialLedgerModel,
 )
 from app.infrastructure.repositories.financial_repositories import (
-    SQLAlchemyPaymentRepository, SQLAlchemyReceivableRepository,
-    SQLAlchemyExpenseRepository, SQLAlchemyCashMovementRepository,
+    SQLAlchemyPaymentRepository,
+    SQLAlchemyReceivableRepository,
+    SQLAlchemyExpenseRepository,
+    SQLAlchemyCashMovementRepository,
     SQLAlchemyFinancialLedgerRepository,
 )
 from app.application.financial.use_cases import (
-    RegisterPaymentUseCase, RegisterExpenseUseCase,
-    RefundPaymentUseCase, FinancialReportsUseCase,
+    RegisterPaymentUseCase,
+    RegisterExpenseUseCase,
+    RefundPaymentUseCase,
+    FinancialReportsUseCase,
     CreateReceivableUseCase,
 )
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
@@ -42,6 +48,7 @@ from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 # ═══════════════════════════════════════════════════════════
 # FIXTURES
 # ═══════════════════════════════════════════════════════════
+
 
 @pytest.fixture
 def db():
@@ -61,22 +68,28 @@ def db():
     engine.dispose()
 
 
-def _seed_order(db, order_codigo="ORD001", client_codigo="000001",
-                product_codigo="P00001", total=Decimal("100.00")):
+def _seed_order(db, order_codigo="ORD001", client_codigo="000001", product_codigo="P00001", total=Decimal("100.00")):
     """Seed a complete order with all dependencies."""
-    c = ClientModel(codigo=client_codigo, nome="Test Client",
-                    telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
+    c = ClientModel(
+        codigo=client_codigo, nome="Test Client", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro"
+    )
     db.add(c)
-    p = ProductModel(codigo=product_codigo, nome="GLP P13",
-                     tipo="GAS", preco=float(total), estoque=0)
+    p = ProductModel(codigo=product_codigo, nome="GLP P13", tipo="GAS", preco=float(total), estoque=0)
     db.add(p)
     o = OrderModel(
-        codigo=order_codigo, client_codigo=client_codigo,
-        subtotal=float(total), delivery_fee=0.0, discount=0.0,
-        total=float(total), payment_method="CASH",
-        payment_status="PENDING", status="CONFIRMED",
-        source="MANUAL", address_snapshot="Rua A, 1",
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        codigo=order_codigo,
+        client_codigo=client_codigo,
+        subtotal=float(total),
+        delivery_fee=0.0,
+        discount=0.0,
+        total=float(total),
+        payment_method="CASH",
+        payment_status="PENDING",
+        status="CONFIRMED",
+        source="MANUAL",
+        address_snapshot="Rua A, 1",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     db.add(o)
     db.commit()
@@ -86,6 +99,7 @@ def _seed_order(db, order_codigo="ORD001", client_codigo="000001",
 # ═══════════════════════════════════════════════════════════
 # 1. MONEY MODEL (Decimal)
 # ═══════════════════════════════════════════════════════════
+
 
 class TestMoneyModel:
     def test_decimal_precision(self):
@@ -122,14 +136,13 @@ class TestMoneyModel:
 
     def test_receivable_rejects_zero(self):
         with pytest.raises(ValueError, match="must be > 0"):
-            Receivable(order_codigo="X", customer_codigo="C",
-                       original_amount=Decimal("0.00"))
+            Receivable(order_codigo="X", customer_codigo="C", original_amount=Decimal("0.00"))
 
     def test_receivable_rejects_negative_paid(self):
         with pytest.raises(ValueError, match="cannot be negative"):
-            Receivable(order_codigo="X", customer_codigo="C",
-                       original_amount=Decimal("100.00"),
-                       paid_amount=Decimal("-10.00"))
+            Receivable(
+                order_codigo="X", customer_codigo="C", original_amount=Decimal("100.00"), paid_amount=Decimal("-10.00")
+            )
 
     def test_expense_rejects_negative(self):
         with pytest.raises(ValueError, match="must be > 0"):
@@ -143,6 +156,7 @@ class TestMoneyModel:
 # ═══════════════════════════════════════════════════════════
 # 2. PAYMENT
 # ═══════════════════════════════════════════════════════════
+
 
 class TestPayment:
     def test_full_payment(self, db):
@@ -159,10 +173,13 @@ class TestPayment:
 
         # Full payment
         uc = RegisterPaymentUseCase(repo, recv_repo, cash_repo, ledger_repo)
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("100.00"),
-            "method": "CASH",
-        })
+        result = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("100.00"),
+                "method": "CASH",
+            }
+        )
         assert result["payment"].status == PaymentStatus.PAID
         assert result["receivable"].status == ReceivableStatus.PAID
         assert result["receivable"].remaining_amount == Decimal("0.00")
@@ -179,10 +196,13 @@ class TestPayment:
         uc_recv.execute("ORD001", "000001", Decimal("100.00"))
 
         uc = RegisterPaymentUseCase(repo, recv_repo, cash_repo, ledger_repo)
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("40.00"),
-            "method": "PIX",
-        })
+        result = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("40.00"),
+                "method": "PIX",
+            }
+        )
         assert result["receivable"].status == ReceivableStatus.PARTIAL
         assert result["receivable"].remaining_amount == Decimal("60.00")
 
@@ -232,16 +252,24 @@ class TestPayment:
         uc_recv.execute("ORD001", "000001", Decimal("100.00"))
 
         uc = RegisterPaymentUseCase(repo, recv_repo, cash_repo, ledger_repo)
-        r1 = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("50.00"),
-            "method": "PIX", "idempotency_key": "key-001",
-        })
+        r1 = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("50.00"),
+                "method": "PIX",
+                "idempotency_key": "key-001",
+            }
+        )
         assert r1["status"] == "created"
 
-        r2 = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("50.00"),
-            "method": "PIX", "idempotency_key": "key-001",
-        })
+        r2 = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("50.00"),
+                "method": "PIX",
+                "idempotency_key": "key-001",
+            }
+        )
         assert r2["status"] == "already_exists"
 
         # Only 1 payment
@@ -272,14 +300,16 @@ class TestPayment:
         cash_repo = SQLAlchemyCashMovementRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
 
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("99.99"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("99.99"))
 
         uc = RegisterPaymentUseCase(repo, recv_repo, cash_repo, ledger_repo)
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("99.99"),
-            "method": "CASH",
-        })
+        result = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("99.99"),
+                "method": "CASH",
+            }
+        )
         assert result["payment"].amount == Decimal("99.99")
         # Verify in DB as Decimal
         model = db.query(PaymentModel).filter(PaymentModel.id == result["payment"].id).first()
@@ -289,6 +319,7 @@ class TestPayment:
 # ═══════════════════════════════════════════════════════════
 # 3. RECEIVABLE
 # ═══════════════════════════════════════════════════════════
+
 
 class TestReceivable:
     def test_receivable_open(self, db):
@@ -329,8 +360,7 @@ class TestReceivable:
         repo = SQLAlchemyReceivableRepository(db)
         ledger = SQLAlchemyFinancialLedgerRepository(db)
         r = CreateReceivableUseCase(repo, ledger).execute(
-            "ORD001", "000001", Decimal("100.00"),
-            due_date=datetime.utcnow() - timedelta(days=5)
+            "ORD001", "000001", Decimal("100.00"), due_date=datetime.utcnow() - timedelta(days=5)
         )
         # Update overdue
         count = repo.update_overdue_status(datetime.utcnow())
@@ -351,8 +381,7 @@ class TestReceivable:
         _seed_order(db)
         repo = SQLAlchemyReceivableRepository(db)
         ledger = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(repo, ledger).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(repo, ledger).execute("ORD001", "000001", Decimal("100.00"))
         outstanding = repo.total_outstanding_for_customer("000001")
         assert outstanding == Decimal("100.00")
 
@@ -361,17 +390,20 @@ class TestReceivable:
 # 4. EXPENSE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestExpense:
     def test_create_expense(self, db):
         repo = SQLAlchemyExpenseRepository(db)
         cash = SQLAlchemyCashMovementRepository(db)
         ledger = SQLAlchemyFinancialLedgerRepository(db)
         uc = RegisterExpenseUseCase(repo, cash, ledger)
-        result = uc.execute({
-            "description": "Diesel refill",
-            "amount": Decimal("250.00"),
-            "category": "FUEL",
-        })
+        result = uc.execute(
+            {
+                "description": "Diesel refill",
+                "amount": Decimal("250.00"),
+                "category": "FUEL",
+            }
+        )
         assert result["expense"].amount == Decimal("250.00")
         assert result["expense"].status == ExpenseStatus.ACTIVE
 
@@ -386,18 +418,14 @@ class TestExpense:
 
     def test_cancel_expense(self, db):
         repo = SQLAlchemyExpenseRepository(db)
-        uc = RegisterExpenseUseCase(
-            repo, SQLAlchemyCashMovementRepository(db),
-            SQLAlchemyFinancialLedgerRepository(db))
+        uc = RegisterExpenseUseCase(repo, SQLAlchemyCashMovementRepository(db), SQLAlchemyFinancialLedgerRepository(db))
         result = uc.execute({"description": "Test", "amount": Decimal("50.00")})
         expense = repo.cancel(result["expense"].id)
         assert expense.status == ExpenseStatus.CANCELLED
 
     def test_expense_by_period(self, db):
         repo = SQLAlchemyExpenseRepository(db)
-        uc = RegisterExpenseUseCase(
-            repo, SQLAlchemyCashMovementRepository(db),
-            SQLAlchemyFinancialLedgerRepository(db))
+        uc = RegisterExpenseUseCase(repo, SQLAlchemyCashMovementRepository(db), SQLAlchemyFinancialLedgerRepository(db))
         uc.execute({"description": "A", "amount": Decimal("100.00")})
         uc.execute({"description": "B", "amount": Decimal("200.00")})
 
@@ -408,9 +436,7 @@ class TestExpense:
 
     def test_expense_stores_decimal(self, db):
         repo = SQLAlchemyExpenseRepository(db)
-        uc = RegisterExpenseUseCase(
-            repo, SQLAlchemyCashMovementRepository(db),
-            SQLAlchemyFinancialLedgerRepository(db))
+        uc = RegisterExpenseUseCase(repo, SQLAlchemyCashMovementRepository(db), SQLAlchemyFinancialLedgerRepository(db))
         result = uc.execute({"description": "Test", "amount": Decimal("99.99")})
         model = db.query(ExpenseModel).filter(ExpenseModel.id == result["expense"].id).first()
         assert isinstance(model.amount, Decimal)
@@ -420,43 +446,58 @@ class TestExpense:
 # 5. CASH MOVEMENTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestCashMovement:
     def test_receipt_increases_balance(self, db):
         repo = SQLAlchemyCashMovementRepository(db)
-        m = repo.create(CashMovement(
-            type=CashMovementType.RECEIPT,
-            amount=Decimal("100.00"),
-            description="Test receipt",
-            balance_after=Decimal("100.00"),
-        ))
+        m = repo.create(
+            CashMovement(
+                type=CashMovementType.RECEIPT,
+                amount=Decimal("100.00"),
+                description="Test receipt",
+                balance_after=Decimal("100.00"),
+            )
+        )
         assert repo.current_balance() == Decimal("100.00")
 
     def test_expense_decreases_balance(self, db):
         repo = SQLAlchemyCashMovementRepository(db)
-        repo.create(CashMovement(
-            type=CashMovementType.RECEIPT,
-            amount=Decimal("100.00"), description="In",
-            balance_after=Decimal("100.00"),
-        ))
-        repo.create(CashMovement(
-            type=CashMovementType.EXPENSE,
-            amount=Decimal("30.00"), description="Out",
-            balance_after=Decimal("70.00"),
-        ))
+        repo.create(
+            CashMovement(
+                type=CashMovementType.RECEIPT,
+                amount=Decimal("100.00"),
+                description="In",
+                balance_after=Decimal("100.00"),
+            )
+        )
+        repo.create(
+            CashMovement(
+                type=CashMovementType.EXPENSE,
+                amount=Decimal("30.00"),
+                description="Out",
+                balance_after=Decimal("70.00"),
+            )
+        )
         assert repo.current_balance() == Decimal("70.00")
 
     def test_refund_decreases_balance(self, db):
         repo = SQLAlchemyCashMovementRepository(db)
-        repo.create(CashMovement(
-            type=CashMovementType.RECEIPT,
-            amount=Decimal("100.00"), description="In",
-            balance_after=Decimal("100.00"),
-        ))
-        repo.create(CashMovement(
-            type=CashMovementType.REFUND,
-            amount=Decimal("25.00"), description="Refund",
-            balance_after=Decimal("75.00"),
-        ))
+        repo.create(
+            CashMovement(
+                type=CashMovementType.RECEIPT,
+                amount=Decimal("100.00"),
+                description="In",
+                balance_after=Decimal("100.00"),
+            )
+        )
+        repo.create(
+            CashMovement(
+                type=CashMovementType.REFUND,
+                amount=Decimal("25.00"),
+                description="Refund",
+                balance_after=Decimal("75.00"),
+            )
+        )
         assert repo.current_balance() == Decimal("75.00")
 
     def test_balance_starts_zero(self, db):
@@ -466,21 +507,30 @@ class TestCashMovement:
     def test_cash_flow_full_cycle(self, db):
         """Receipt - Expense + Refund."""
         repo = SQLAlchemyCashMovementRepository(db)
-        repo.create(CashMovement(
-            type=CashMovementType.RECEIPT,
-            amount=Decimal("500.00"), description="Sales",
-            balance_after=Decimal("500.00"),
-        ))
-        repo.create(CashMovement(
-            type=CashMovementType.EXPENSE,
-            amount=Decimal("100.00"), description="Fuel",
-            balance_after=Decimal("400.00"),
-        ))
-        repo.create(CashMovement(
-            type=CashMovementType.REFUND,
-            amount=Decimal("50.00"), description="Refund",
-            balance_after=Decimal("350.00"),
-        ))
+        repo.create(
+            CashMovement(
+                type=CashMovementType.RECEIPT,
+                amount=Decimal("500.00"),
+                description="Sales",
+                balance_after=Decimal("500.00"),
+            )
+        )
+        repo.create(
+            CashMovement(
+                type=CashMovementType.EXPENSE,
+                amount=Decimal("100.00"),
+                description="Fuel",
+                balance_after=Decimal("400.00"),
+            )
+        )
+        repo.create(
+            CashMovement(
+                type=CashMovementType.REFUND,
+                amount=Decimal("50.00"),
+                description="Refund",
+                balance_after=Decimal("350.00"),
+            )
+        )
         assert repo.current_balance() == Decimal("350.00")
 
 
@@ -488,41 +538,56 @@ class TestCashMovement:
 # 6. LEDGER
 # ═══════════════════════════════════════════════════════════
 
+
 class TestLedger:
     def test_ledger_immutable(self, db):
         repo = SQLAlchemyFinancialLedgerRepository(db)
-        entry = repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.PAYMENT_CREATED,
-            amount=Decimal("100.00"),
-            description="Test",
-        ))
+        entry = repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.PAYMENT_CREATED,
+                amount=Decimal("100.00"),
+                description="Test",
+            )
+        )
         # No update/delete methods — immutable by design
-        assert not hasattr(repo, 'update')
-        assert not hasattr(repo, 'delete')
+        assert not hasattr(repo, "update")
+        assert not hasattr(repo, "delete")
 
     def test_ledger_consistent(self, db):
         """Ledger entries are consistently created."""
         repo = SQLAlchemyFinancialLedgerRepository(db)
-        repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.PAYMENT_CREATED,
-            amount=Decimal("100.00"), description="P1",
-            reference_type="PAYMENT", reference_id="1",
-        ))
-        repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.EXPENSE_CREATED,
-            amount=Decimal("50.00"), description="E1",
-            reference_type="EXPENSE", reference_id="1",
-        ))
+        repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.PAYMENT_CREATED,
+                amount=Decimal("100.00"),
+                description="P1",
+                reference_type="PAYMENT",
+                reference_id="1",
+            )
+        )
+        repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.EXPENSE_CREATED,
+                amount=Decimal("50.00"),
+                description="E1",
+                reference_type="EXPENSE",
+                reference_id="1",
+            )
+        )
         items, total = repo.list_all()
         assert total == 2
 
     def test_ledger_exists(self, db):
         repo = SQLAlchemyFinancialLedgerRepository(db)
-        repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.PAYMENT_CREATED,
-            amount=Decimal("100.00"), description="P1",
-            reference_type="PAYMENT", reference_id="1",
-        ))
+        repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.PAYMENT_CREATED,
+                amount=Decimal("100.00"),
+                description="P1",
+                reference_type="PAYMENT",
+                reference_id="1",
+            )
+        )
         assert repo.exists("PAYMENT", "1", LedgerEventType.PAYMENT_CREATED)
         assert not repo.exists("PAYMENT", "999", LedgerEventType.PAYMENT_CREATED)
 
@@ -531,14 +596,14 @@ class TestLedger:
 # 7. TRANSACTIONS + ROLLBACK
 # ═══════════════════════════════════════════════════════════
 
+
 class TestTransactions:
     def test_payment_creates_all_records(self, db):
         """Payment creates: payment + cash + ledger."""
         _seed_order(db)
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("100.00"))
 
         uc = RegisterPaymentUseCase(
             SQLAlchemyPaymentRepository(db),
@@ -546,10 +611,13 @@ class TestTransactions:
             SQLAlchemyCashMovementRepository(db),
             ledger_repo,
         )
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("100.00"),
-            "method": "CASH",
-        })
+        result = uc.execute(
+            {
+                "order_codigo": "ORD001",
+                "amount": Decimal("100.00"),
+                "method": "CASH",
+            }
+        )
 
         # All records exist
         assert result["payment"].id is not None
@@ -573,6 +641,7 @@ class TestTransactions:
 # 8. CONCURRENCY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestConcurrency:
     def test_concurrent_payments_dont_overpay(self, db):
         """Two threads paying 100 each on a 100 order.
@@ -580,8 +649,7 @@ class TestConcurrency:
         _seed_order(db, total=Decimal("100.00"))
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("100.00"))
         db.close()  # close main session before threading
 
         # Use a shared engine for thread safety
@@ -590,25 +658,39 @@ class TestConcurrency:
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
+
         @event.listens_for(shared_engine, "connect")
         def set_pragma(c, _):
             cur = c.cursor()
             cur.execute("PRAGMA foreign_keys = ON")
             cur.close()
+
         Base.metadata.create_all(bind=shared_engine)
         Sess = sessionmaker(bind=shared_engine)
 
         # Seed data into shared engine using ORM
         seed_s = Sess()
-        seed_s.add(ClientModel(codigo="000001", nome="Test", telefone="11999999999",
-                               rua="Rua A", numero="1", bairro="Centro"))
-        seed_s.add(ProductModel(codigo="P00001", nome="GLP", tipo="GAS",
-                                preco=100.0, estoque=0))
-        seed_s.add(OrderModel(codigo="ORD001", client_codigo="000001",
-                               subtotal=100.0, delivery_fee=0.0, discount=0.0, total=100.0,
-                               payment_method="CASH", payment_status="PENDING", status="CONFIRMED",
-                               source="MANUAL", address_snapshot="Rua A",
-                               created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+        seed_s.add(
+            ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
+        )
+        seed_s.add(ProductModel(codigo="P00001", nome="GLP", tipo="GAS", preco=100.0, estoque=0))
+        seed_s.add(
+            OrderModel(
+                codigo="ORD001",
+                client_codigo="000001",
+                subtotal=100.0,
+                delivery_fee=0.0,
+                discount=0.0,
+                total=100.0,
+                payment_method="CASH",
+                payment_status="PENDING",
+                status="CONFIRMED",
+                source="MANUAL",
+                address_snapshot="Rua A",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
         seed_s.commit()
         seed_s.close()
 
@@ -625,10 +707,13 @@ class TestConcurrency:
                         SQLAlchemyCashMovementRepository(s),
                         SQLAlchemyFinancialLedgerRepository(s),
                     )
-                    r = uc.execute({
-                        "order_codigo": "ORD001", "amount": Decimal("100.00"),
-                        "method": "CASH",
-                    })
+                    r = uc.execute(
+                        {
+                            "order_codigo": "ORD001",
+                            "amount": Decimal("100.00"),
+                            "method": "CASH",
+                        }
+                    )
                     results.append(r["status"])
                 except ValueError as e:
                     errors.append(str(e))
@@ -658,20 +743,18 @@ class TestConcurrency:
 # 9. REFUND
 # ═══════════════════════════════════════════════════════════
 
+
 class TestRefund:
     def test_refund_payment(self, db):
         _seed_order(db)
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("100.00"))
 
         pay_repo = SQLAlchemyPaymentRepository(db)
         cash_repo = SQLAlchemyCashMovementRepository(db)
         uc = RegisterPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo)
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"
-        })
+        result = uc.execute({"order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"})
 
         refund_uc = RefundPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo)
         refund_result = refund_uc.execute(result["payment"].id, "Customer request")
@@ -682,15 +765,12 @@ class TestRefund:
         _seed_order(db)
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("100.00"))
 
         pay_repo = SQLAlchemyPaymentRepository(db)
         cash_repo = SQLAlchemyCashMovementRepository(db)
         uc = RegisterPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo)
-        result = uc.execute({
-            "order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"
-        })
+        result = uc.execute({"order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"})
 
         refund_uc = RefundPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo)
         refund_uc.execute(result["payment"].id)
@@ -702,6 +782,7 @@ class TestRefund:
 # 10. DATABASE CONSTRAINTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestDatabaseConstraints:
     def test_payment_decimal_in_db(self, db):
         """Payment stores NUMERIC(10,2) not float."""
@@ -709,10 +790,11 @@ class TestDatabaseConstraints:
         repo = SQLAlchemyPaymentRepository(db)
         recv_repo = SQLAlchemyReceivableRepository(db)
         CreateReceivableUseCase(recv_repo, SQLAlchemyFinancialLedgerRepository(db)).execute(
-            "ORD001", "000001", Decimal("100.00"))
-        uc = RegisterPaymentUseCase(repo, recv_repo,
-            SQLAlchemyCashMovementRepository(db),
-            SQLAlchemyFinancialLedgerRepository(db))
+            "ORD001", "000001", Decimal("100.00")
+        )
+        uc = RegisterPaymentUseCase(
+            repo, recv_repo, SQLAlchemyCashMovementRepository(db), SQLAlchemyFinancialLedgerRepository(db)
+        )
         r = uc.execute({"order_codigo": "ORD001", "amount": Decimal("99.99"), "method": "CASH"})
 
         model = db.query(PaymentModel).filter(PaymentModel.id == r["payment"].id).first()
@@ -720,9 +802,7 @@ class TestDatabaseConstraints:
 
     def test_expense_decimal_in_db(self, db):
         repo = SQLAlchemyExpenseRepository(db)
-        uc = RegisterExpenseUseCase(repo,
-            SQLAlchemyCashMovementRepository(db),
-            SQLAlchemyFinancialLedgerRepository(db))
+        uc = RegisterExpenseUseCase(repo, SQLAlchemyCashMovementRepository(db), SQLAlchemyFinancialLedgerRepository(db))
         r = uc.execute({"description": "Test", "amount": Decimal("42.50")})
         model = db.query(ExpenseModel).filter(ExpenseModel.id == r["expense"].id).first()
         assert type(model.amount).__name__ == "Decimal"
@@ -731,17 +811,25 @@ class TestDatabaseConstraints:
         """UNIQUE(idempotency_key) enforced."""
         _seed_order(db)
         repo = SQLAlchemyPaymentRepository(db)
-        repo.create(Payment(
-            order_codigo="ORD001", amount=Decimal("10.00"),
-            method=PaymentMethod.CASH, status=PaymentStatus.PAID,
-            idempotency_key="dup-key-001",
-        ))
-        with pytest.raises(Exception):
-            repo.create(Payment(
-                order_codigo="ORD001", amount=Decimal("20.00"),
-                method=PaymentMethod.CASH, status=PaymentStatus.PAID,
+        repo.create(
+            Payment(
+                order_codigo="ORD001",
+                amount=Decimal("10.00"),
+                method=PaymentMethod.CASH,
+                status=PaymentStatus.PAID,
                 idempotency_key="dup-key-001",
-            ))
+            )
+        )
+        with pytest.raises(Exception):
+            repo.create(
+                Payment(
+                    order_codigo="ORD001",
+                    amount=Decimal("20.00"),
+                    method=PaymentMethod.CASH,
+                    status=PaymentStatus.PAID,
+                    idempotency_key="dup-key-001",
+                )
+            )
             db.commit()
 
 
@@ -749,45 +837,69 @@ class TestDatabaseConstraints:
 # 11. FRESH DATABASE E2E
 # ═══════════════════════════════════════════════════════════
 
+
 class TestFreshDatabaseE2E:
     def test_full_flow(self, db):
         """Customer → Order → Payment → Receivable → Cash → Ledger."""
         # 1. Customer
-        db.add(ClientModel(
-            codigo="C001", nome="João", telefone="11988887777",
-            rua="Rua B", numero="42", bairro="Vila",
-        ))
-        db.add(ProductModel(
-            codigo="GAS13", nome="GLP P13", tipo="GAS", preco=120.0, estoque=0,
-        ))
+        db.add(
+            ClientModel(
+                codigo="C001",
+                nome="João",
+                telefone="11988887777",
+                rua="Rua B",
+                numero="42",
+                bairro="Vila",
+            )
+        )
+        db.add(
+            ProductModel(
+                codigo="GAS13",
+                nome="GLP P13",
+                tipo="GAS",
+                preco=120.0,
+                estoque=0,
+            )
+        )
         db.commit()
 
         # 2. Order
-        db.add(OrderModel(
-            codigo="O001", client_codigo="C001",
-            subtotal=120.0, delivery_fee=10.0, discount=0.0,
-            total=130.0, payment_method="PIX",
-            payment_status="PENDING", status="CONFIRMED",
-            source="MANUAL", address_snapshot="Rua B, 42",
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
-        ))
+        db.add(
+            OrderModel(
+                codigo="O001",
+                client_codigo="C001",
+                subtotal=120.0,
+                delivery_fee=10.0,
+                discount=0.0,
+                total=130.0,
+                payment_method="PIX",
+                payment_status="PENDING",
+                status="CONFIRMED",
+                source="MANUAL",
+                address_snapshot="Rua B, 42",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
         db.commit()
 
         # 3. Receivable
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger = SQLAlchemyFinancialLedgerRepository(db)
-        r = CreateReceivableUseCase(recv_repo, ledger).execute(
-            "O001", "C001", Decimal("130.00"))
+        r = CreateReceivableUseCase(recv_repo, ledger).execute("O001", "C001", Decimal("130.00"))
         assert r.status == ReceivableStatus.OPEN
 
         # 4. Payment (partial)
         pay_repo = SQLAlchemyPaymentRepository(db)
         cash_repo = SQLAlchemyCashMovementRepository(db)
         uc = RegisterPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger)
-        result = uc.execute({
-            "order_codigo": "O001", "amount": Decimal("80.00"),
-            "method": "PIX",
-        })
+        result = uc.execute(
+            {
+                "order_codigo": "O001",
+                "amount": Decimal("80.00"),
+                "method": "PIX",
+            }
+        )
         assert result["receivable"].status == ReceivableStatus.PARTIAL
         assert result["receivable"].remaining_amount == Decimal("50.00")
 
@@ -796,10 +908,13 @@ class TestFreshDatabaseE2E:
         assert balance == Decimal("80.00")
 
         # 6. Second payment
-        result2 = uc.execute({
-            "order_codigo": "O001", "amount": Decimal("50.00"),
-            "method": "CASH",
-        })
+        result2 = uc.execute(
+            {
+                "order_codigo": "O001",
+                "amount": Decimal("50.00"),
+                "method": "CASH",
+            }
+        )
         assert result2["receivable"].status == ReceivableStatus.PAID
         assert cash_repo.current_balance() == Decimal("130.00")
 
@@ -812,24 +927,24 @@ class TestFreshDatabaseE2E:
 # 12. REPORTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestReports:
     def test_daily_summary(self, db):
         _seed_order(db)
         recv_repo = SQLAlchemyReceivableRepository(db)
         ledger_repo = SQLAlchemyFinancialLedgerRepository(db)
-        CreateReceivableUseCase(recv_repo, ledger_repo).execute(
-            "ORD001", "000001", Decimal("100.00"))
+        CreateReceivableUseCase(recv_repo, ledger_repo).execute("ORD001", "000001", Decimal("100.00"))
 
         pay_repo = SQLAlchemyPaymentRepository(db)
         cash_repo = SQLAlchemyCashMovementRepository(db)
-        RegisterPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo).execute({
-            "order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"
-        })
+        RegisterPaymentUseCase(pay_repo, recv_repo, cash_repo, ledger_repo).execute(
+            {"order_codigo": "ORD001", "amount": Decimal("100.00"), "method": "CASH"}
+        )
 
         exp_repo = SQLAlchemyExpenseRepository(db)
-        RegisterExpenseUseCase(exp_repo, cash_repo, ledger_repo).execute({
-            "description": "Fuel", "amount": Decimal("30.00"), "category": "FUEL"
-        })
+        RegisterExpenseUseCase(exp_repo, cash_repo, ledger_repo).execute(
+            {"description": "Fuel", "amount": Decimal("30.00"), "category": "FUEL"}
+        )
 
         uc = FinancialReportsUseCase(pay_repo, recv_repo, exp_repo, cash_repo)
         report = uc.daily_summary(datetime.utcnow())

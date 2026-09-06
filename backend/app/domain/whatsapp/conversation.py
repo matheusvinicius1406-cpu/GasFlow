@@ -25,6 +25,7 @@ class ConversationState(str, Enum):
 @dataclass
 class ConversationMessage:
     """A single message in a conversation."""
+
     id: Optional[int] = None
     conversation_id: Optional[int] = None
     direction: str = "INCOMING"  # INCOMING / OUTGOING
@@ -42,6 +43,7 @@ class ConversationMessage:
 @dataclass
 class ConversationDraft:
     """Order draft built during conversation."""
+
     customer_codigo: Optional[str] = None
     customer_name: Optional[str] = None
     items: List[Dict[str, Any]] = field(default_factory=list)
@@ -73,6 +75,7 @@ class ConversationDraft:
 @dataclass
 class Conversation:
     """WhatsApp conversation entity."""
+
     id: Optional[int] = None
     account_id: str = ""
     customer_phone: str = ""

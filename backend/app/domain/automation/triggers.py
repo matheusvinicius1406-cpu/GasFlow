@@ -12,6 +12,7 @@ from enum import Enum
 
 # ── Trigger ─────────────────────────────────────────────
 
+
 class TriggerType(str, Enum):
     EVENT_TRIGGER = "EVENT_TRIGGER"
     SCHEDULE_TRIGGER = "SCHEDULE_TRIGGER"
@@ -22,6 +23,7 @@ class TriggerType(str, Enum):
 @dataclass
 class Trigger:
     """Workflow trigger definition."""
+
     id: str = ""
     trigger_type: TriggerType = TriggerType.EVENT_TRIGGER
     event_type: Optional[str] = None  # EventType value for event triggers
@@ -32,6 +34,7 @@ class Trigger:
 
 
 # ── Condition Engine ────────────────────────────────────
+
 
 class ConditionOperator(str, Enum):
     LT = "lt"
@@ -47,6 +50,7 @@ class ConditionOperator(str, Enum):
 @dataclass
 class Condition:
     """Deterministic condition — no LLM, no eval."""
+
     field: str = ""
     operator: ConditionOperator = ConditionOperator.EQ
     value: Any = None

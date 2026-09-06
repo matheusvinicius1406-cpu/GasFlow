@@ -38,6 +38,7 @@ def payment_service(db):
 # PAYMENT METHOD TESTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPaymentMethodPersistence:
     def test_create_method_persists(self, db, payment_service):
         method = payment_service.create_method("t1", "PIX", "PIX", "PIX")
@@ -74,6 +75,7 @@ class TestPaymentMethodPersistence:
 # PIX CONFIG TESTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPixConfigPersistence:
     def test_create_pix_config_persists(self, db, payment_service):
         config = payment_service.create_pix_config("t1", "key-123", "EMAIL", "Test")
@@ -95,11 +97,17 @@ class TestPixConfigPersistence:
 # PAYMENT TESTS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPaymentPersistence:
     def test_create_payment_persists(self, db, payment_service):
         payment_service.create_method("t1", "CASH", "Dinheiro", "CASH")
         payment = payment_service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 100.0, "CASH",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            100.0,
+            "CASH",
         )
         assert payment.status == PaymentStatus.PENDING
         ps2 = PaymentService(db=db)
@@ -110,7 +118,12 @@ class TestPaymentPersistence:
     def test_confirm_payment_persists(self, db, payment_service):
         payment_service.create_method("t1", "CASH", "Dinheiro", "CASH")
         payment = payment_service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 50.0, "CASH",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            50.0,
+            "CASH",
         )
         payment_service.confirm_payment(payment.id, "t1", confirmed_by="admin")
         ps2 = PaymentService(db=db)
@@ -121,7 +134,12 @@ class TestPaymentPersistence:
     def test_cancel_payment_persists(self, db, payment_service):
         payment_service.create_method("t1", "CASH", "Dinheiro", "CASH")
         payment = payment_service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 50.0, "CASH",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            50.0,
+            "CASH",
         )
         payment_service.cancel_payment(payment.id, "t1", reason="Changed mind")
         ps2 = PaymentService(db=db)
@@ -131,7 +149,12 @@ class TestPaymentPersistence:
     def test_refund_payment_persists(self, db, payment_service):
         payment_service.create_method("t1", "CASH", "Dinheiro", "CASH")
         payment = payment_service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 75.0, "CASH",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            75.0,
+            "CASH",
         )
         payment_service.confirm_payment(payment.id, "t1")
         payment_service.refund_payment(payment.id, "t1", reason="Defect")
@@ -173,7 +196,12 @@ class TestPaymentPersistence:
         payment_service.create_method("t1", "PIX", "PIX", "PIX")
         payment_service.create_pix_config("t1", "key-abc", "EMAIL", "Test")
         payment = payment_service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 150.0, "PIX",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            150.0,
+            "PIX",
         )
         payment_service.confirm_payment(payment.id, "t1", confirmed_by="admin")
 

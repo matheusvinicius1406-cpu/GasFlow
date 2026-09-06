@@ -18,11 +18,12 @@ from typing import Optional
 
 class MovementType(str, Enum):
     """Tipos de movimentação de estoque."""
-    ENTRY = "ENTRY"                    # Compra / reposição
-    SALE = "SALE"                      # Baixa por pedido
-    ADJUSTMENT = "ADJUSTMENT"          # Ajuste de inventário (contagem física)
-    LOSS = "LOSS"                      # Perda / quebra
-    RETURN = "RETURN"                  # Devolução (cancelamento de pedido)
+
+    ENTRY = "ENTRY"  # Compra / reposição
+    SALE = "SALE"  # Baixa por pedido
+    ADJUSTMENT = "ADJUSTMENT"  # Ajuste de inventário (contagem física)
+    LOSS = "LOSS"  # Perda / quebra
+    RETURN = "RETURN"  # Devolução (cancelamento de pedido)
     INITIAL_BALANCE = "INITIAL_BALANCE"  # Saldo inicial (migração)
 
 
@@ -37,7 +38,7 @@ class StockMovement:
     reason: str
 
     reference_type: Optional[str] = None  # "ORDER", "ADJUSTMENT", etc.
-    reference_id: Optional[str] = None     # código do pedido, etc.
+    reference_id: Optional[str] = None  # código do pedido, etc.
 
     balance_before: int = 0
     balance_after: int = 0

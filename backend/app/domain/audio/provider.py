@@ -22,9 +22,11 @@ class AudioFormat(str, Enum):
 
 # ── STT ─────────────────────────────────────────────────
 
+
 @dataclass
 class TranscriptionResult:
     """Result of speech-to-text transcription."""
+
     text: str
     confidence: float = 0.0  # 0.0 to 1.0
     language: str = "pt-BR"
@@ -50,8 +52,9 @@ class SpeechToTextProvider(ABC):
         pass
 
     @abstractmethod
-    def transcribe(self, audio_bytes: bytes, mime_type: str = "audio/ogg",
-                   language: str = "pt-BR") -> TranscriptionResult:
+    def transcribe(
+        self, audio_bytes: bytes, mime_type: str = "audio/ogg", language: str = "pt-BR"
+    ) -> TranscriptionResult:
         """Transcribe audio to text."""
         pass
 
@@ -67,9 +70,11 @@ class SpeechToTextProvider(ABC):
 
 # ── TTS ─────────────────────────────────────────────────
 
+
 @dataclass
 class SpeechResult:
     """Result of text-to-speech synthesis."""
+
     audio_bytes: bytes = b""
     mime_type: str = "audio/ogg"
     duration_seconds: float = 0.0

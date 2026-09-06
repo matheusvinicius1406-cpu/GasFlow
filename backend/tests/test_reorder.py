@@ -159,9 +159,9 @@ class TestIntervalCalculation:
         svc = ReorderService.__new__(ReorderService)
         now = datetime.utcnow()
         orders = [
-            type('Order', (), {'created_at': now - timedelta(days=60)})(),
-            type('Order', (), {'created_at': now - timedelta(days=30)})(),
-            type('Order', (), {'created_at': now})(),
+            type("Order", (), {"created_at": now - timedelta(days=60)})(),
+            type("Order", (), {"created_at": now - timedelta(days=30)})(),
+            type("Order", (), {"created_at": now})(),
         ]
         intervals = svc._calculate_intervals(orders)
         assert len(intervals) == 2
@@ -171,7 +171,7 @@ class TestIntervalCalculation:
     def test_intervals_single_order(self):
         svc = ReorderService.__new__(ReorderService)
         now = datetime.utcnow()
-        orders = [type('Order', (), {'created_at': now})()]
+        orders = [type("Order", (), {"created_at": now})()]
         intervals = svc._calculate_intervals(orders)
         assert intervals == []
 

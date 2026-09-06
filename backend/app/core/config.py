@@ -34,6 +34,10 @@ class Settings(BaseModel):
 
     # External Services
     whatsapp_service_url: str = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000")
+    # Chave compartilhada service-to-service (whatsapp → backend). Aceita
+    # MARCOS_GAS_API_KEY (legado) ou WHATSAPP_SERVICE_KEY. Vazio = chamadas
+    # de serviço desabilitadas (apenas usuários autenticados via Bearer).
+    whatsapp_service_key: str = os.getenv("WHATSAPP_SERVICE_KEY", os.getenv("MARCOS_GAS_API_KEY", ""))
 
     # ── AI (LLM) ────────────────────────────────────────────
     # Provider ativo: mock | ollama | openai. Mock é o default seguro

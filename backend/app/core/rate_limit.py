@@ -79,12 +79,12 @@ _fallback_limiter = SlidingWindowRateLimiter()
 
 # Rate limit policies: (max_requests, window_seconds)
 RATE_LIMIT_POLICIES = {
-    "login": (5, 300),        # 5 per 5 minutes
-    "mutation": (60, 60),     # 60 per minute
-    "read": (120, 60),        # 120 per minute
-    "admin": (30, 60),        # 30 per minute
-    "driver": (30, 60),       # 30 per minute
-    "public": (120, 60),      # 120 per minute
+    "login": (5, 300),  # 5 per 5 minutes
+    "mutation": (60, 60),  # 60 per minute
+    "read": (120, 60),  # 120 per minute
+    "admin": (30, 60),  # 30 per minute
+    "driver": (30, 60),  # 30 per minute
+    "public": (120, 60),  # 120 per minute
 }
 
 # Path → policy mapping

@@ -12,11 +12,15 @@ Executes workflow definitions step by step with:
 
 from typing import Any, Dict, List, Optional
 from app.domain.automation.workflows import (
-    WorkflowDefinition, WorkflowRun, WorkflowStepRun,
-    WorkflowStatus, StepStatus,
+    WorkflowDefinition,
+    WorkflowRun,
+    WorkflowStepRun,
+    WorkflowStatus,
+    StepStatus,
 )
 from app.domain.automation.triggers import (
-    Condition, evaluate_condition,
+    Condition,
+    evaluate_condition,
 )
 from app.domain.automation.policy import PolicyEngine, ApprovalEngine
 
@@ -217,10 +221,14 @@ class WorkflowEngine:
             field_name, op_str, value = parts
             try:
                 from app.domain.automation.triggers import ConditionOperator
+
                 op_map = {
-                    "lt": ConditionOperator.LT, "le": ConditionOperator.LE,
-                    "gt": ConditionOperator.GT, "ge": ConditionOperator.GE,
-                    "eq": ConditionOperator.EQ, "ne": ConditionOperator.NE,
+                    "lt": ConditionOperator.LT,
+                    "le": ConditionOperator.LE,
+                    "gt": ConditionOperator.GT,
+                    "ge": ConditionOperator.GE,
+                    "eq": ConditionOperator.EQ,
+                    "ne": ConditionOperator.NE,
                 }
                 op = op_map.get(op_str)
                 if op:
@@ -237,7 +245,9 @@ class WorkflowEngine:
 
     def _skip_step(self, run_id: str, step_def) -> WorkflowStepRun:
         step_run = WorkflowStepRun(
-            run_id=run_id, step_id=step_def.id, step_name=step_def.name,
+            run_id=run_id,
+            step_id=step_def.id,
+            step_name=step_def.name,
         )
         step_run.skip()
         return step_run

@@ -21,6 +21,7 @@ from app.infrastructure.audio.whisper_provider import WhisperSTTProvider
 
 # ── Factory LLM ─────────────────────────────────────────────
 
+
 def test_factory_default_returns_mock():
     assert isinstance(get_llm_provider(), MockLLMProvider)
 
@@ -46,6 +47,7 @@ def test_factory_unknown_falls_back_to_mock(monkeypatch):
 
 # ── OllamaProvider (httpx stubado) ──────────────────────────
 
+
 class _FakeResponse:
     def __init__(self, payload=None, ok=True):
         self._payload = payload or {}
@@ -55,7 +57,8 @@ class _FakeResponse:
     def raise_for_status(self):
         if not self._ok:
             raise httpx.HTTPStatusError(
-                "boom", request=httpx.Request("POST", "http://x"),
+                "boom",
+                request=httpx.Request("POST", "http://x"),
                 response=httpx.Response(500, request=httpx.Request("POST", "http://x")),
             )
 
@@ -79,12 +82,14 @@ class _FakeClient:
         self.post_payload = json
         if getattr(self, "raise_connect", False):
             raise httpx.ConnectError("connection refused")
-        return _FakeResponse({
-            "message": {"content": "Olá, GasFlow!"},
-            "prompt_eval_count": 12,
-            "eval_count": 5,
-            "done_reason": "stop",
-        })
+        return _FakeResponse(
+            {
+                "message": {"content": "Olá, GasFlow!"},
+                "prompt_eval_count": 12,
+                "eval_count": 5,
+                "done_reason": "stop",
+            }
+        )
 
     def get(self, url):
         self.get_url = url
@@ -95,6 +100,7 @@ class _FakeClient:
 
 def _patch_httpx(monkeypatch, client=None):
     import app.infrastructure.ai.ollama_provider as mod
+
     fake = client or _FakeClient()
     monkeypatch.setattr(mod.httpx, "Client", lambda *a, **k: fake)
     return fake
@@ -139,6 +145,7 @@ def test_ollama_health_check(monkeypatch):
 
 # ── Factory áudio ───────────────────────────────────────────
 
+
 def test_audio_factories_default_are_mock():
     assert isinstance(get_stt_provider(), MockSTTProvider)
     assert isinstance(get_tts_provider(), MockTTSProvider)
@@ -156,6 +163,7 @@ def test_audio_factories_select_real(monkeypatch):
 
 
 # ── Whisper / Piper (health e caminhos de erro, subprocess stubado) ──
+
 
 def test_whisper_health_check_false_when_binary_missing(monkeypatch):
     import subprocess

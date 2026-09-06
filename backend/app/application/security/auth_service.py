@@ -13,10 +13,23 @@ import threading
 import functools
 
 from app.domain.security.models import (
-    User, UserStatus, Session, SessionStatus, Tenant, TenantMembership,
-    Role, SystemRole, AuditRecord, AuditAction, TenantContext,
-    hash_password, verify_password, generate_token, needs_rehash,
-    ROLE_PERMISSIONS, RateLimiter,
+    User,
+    UserStatus,
+    Session,
+    SessionStatus,
+    Tenant,
+    TenantMembership,
+    Role,
+    SystemRole,
+    AuditRecord,
+    AuditAction,
+    TenantContext,
+    hash_password,
+    verify_password,
+    generate_token,
+    needs_rehash,
+    ROLE_PERMISSIONS,
+    RateLimiter,
 )
 from app.core.config import settings
 
@@ -33,6 +46,7 @@ def _db_synchronized(fn):
     returning 500 for every subsequent request). Holding a lock per operation
     and rolling back on error keeps the shared session consistent.
     """
+
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         with self._lock:
@@ -45,12 +59,13 @@ def _db_synchronized(fn):
                     except Exception:
                         pass
                 raise
+
     return wrapper
 
 
 class AuthService:
     """Core authentication and authorization service.
-    
+
     Supports two modes:
     - DB mode: when db session is provided, uses SQLAlchemy repositories
     - In-memory mode: fallback for tests and backward compatibility
@@ -109,9 +124,13 @@ class AuthService:
         )
         self._users[admin.id] = admin
         self._users_by_username["admin"] = admin.id
-        self._memberships.append(TenantMembership(
-            user_id=admin.id, tenant_id="default", role_id=admin_role.id,
-        ))
+        self._memberships.append(
+            TenantMembership(
+                user_id=admin.id,
+                tenant_id="default",
+                role_id=admin_role.id,
+            )
+        )
 
         # Persist to DB if available
         if self._use_db:
@@ -122,9 +141,12 @@ class AuthService:
     def _persist_defaults_to_db(self):
         """Persist default tenant, roles, and admin user to DB."""
         from app.infrastructure.repositories.auth_repository import (
-            SQLAlchemyTenantRepository, SQLAlchemyRoleRepository,
-            SQLAlchemyUserRepository, SQLAlchemyMembershipRepository,
+            SQLAlchemyTenantRepository,
+            SQLAlchemyRoleRepository,
+            SQLAlchemyUserRepository,
+            SQLAlchemyMembershipRepository,
         )
+
         tenant_repo = SQLAlchemyTenantRepository(self._db)
         role_repo = SQLAlchemyRoleRepository(self._db)
         user_repo = SQLAlchemyUserRepository(self._db)
@@ -159,26 +181,32 @@ class AuthService:
 
     def _get_user_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyUserRepository
+
         return SQLAlchemyUserRepository(self._db)
 
     def _get_session_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemySessionRepository
+
         return SQLAlchemySessionRepository(self._db)
 
     def _get_tenant_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyTenantRepository
+
         return SQLAlchemyTenantRepository(self._db)
 
     def _get_role_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyRoleRepository
+
         return SQLAlchemyRoleRepository(self._db)
 
     def _get_membership_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyMembershipRepository
+
         return SQLAlchemyMembershipRepository(self._db)
 
     def _get_audit_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyAuditRepository
+
         return SQLAlchemyAuditRepository(self._db)
 
     def _db_user_to_domain(self, model) -> User:
@@ -251,16 +279,14 @@ class AuthService:
     # ── Authentication ───────────────────────────────────
 
     @_db_synchronized
-    def login(self, username: str, password: str, ip_address: str = "",
-              user_agent: str = "") -> Dict[str, Any]:
+    def login(self, username: str, password: str, ip_address: str = "", user_agent: str = "") -> Dict[str, Any]:
         """Authenticate user and create session.
         Generic error messages prevent user enumeration."""
         GENERIC_ERROR = "Invalid credentials."
 
         # Rate limit check
         if not self._rate_limiter.check(f"login:{username}", 5, 300):
-            self._audit(username, "default", AuditAction.AUTH_FAILURE.value, result="RATE_LIMITED",
-                        ip=ip_address)
+            self._audit(username, "default", AuditAction.AUTH_FAILURE.value, result="RATE_LIMITED", ip=ip_address)
             return {"success": False, "error": "Too many login attempts. Try again later."}
 
         # Find user
@@ -273,10 +299,12 @@ class AuthService:
             user = self._users.get(user_id) if user_id else None
 
         if not user:
-            self._audit(username or "unknown", "default", AuditAction.AUTH_FAILURE.value,
-                        result="USER_NOT_FOUND", ip=ip_address)
+            self._audit(
+                username or "unknown", "default", AuditAction.AUTH_FAILURE.value, result="USER_NOT_FOUND", ip=ip_address
+            )
             # Constant-time: run bcrypt to prevent timing attacks
             import bcrypt as _bcrypt
+
             _bcrypt.hashpw(b"dummy", _bcrypt.gensalt())
             return {"success": False, "error": GENERIC_ERROR}
 
@@ -292,13 +320,12 @@ class AuthService:
             if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS:
                 user.status = UserStatus.LOCKED
                 user.locked_until = datetime.utcnow() + timedelta(minutes=self.LOCKOUT_MINUTES)
-                self._audit(user.id, "default", AuditAction.AUTH_LOCKOUT.value, result="LOCKED",
-                            ip=ip_address)
-            self._audit(user.id, "default", AuditAction.AUTH_FAILURE.value, result="WRONG_PASSWORD",
-                        ip=ip_address)
+                self._audit(user.id, "default", AuditAction.AUTH_LOCKOUT.value, result="LOCKED", ip=ip_address)
+            self._audit(user.id, "default", AuditAction.AUTH_FAILURE.value, result="WRONG_PASSWORD", ip=ip_address)
             # Persist failed attempts to DB
             if self._use_db:
-                self._get_user_repo().update(user.id,
+                self._get_user_repo().update(
+                    user.id,
                     failed_login_attempts=user.failed_login_attempts,
                     status=user.status.value,
                     locked_until=user.locked_until,
@@ -344,23 +371,24 @@ class AuthService:
                 user_agent=user_agent,
             )
             # Update user's failed attempts
-            self._get_user_repo().update(user.id,
+            self._get_user_repo().update(
+                user.id,
                 failed_login_attempts=0,
                 locked_until=None,
                 password_hash=user.password_hash,
             )
         else:
             with self._lock:
-                user_sessions = [s for s in self._sessions.values()
-                                 if s.user_id == user.id and s.status == SessionStatus.ACTIVE]
+                user_sessions = [
+                    s for s in self._sessions.values() if s.user_id == user.id and s.status == SessionStatus.ACTIVE
+                ]
                 if len(user_sessions) >= self.MAX_SESSIONS_PER_USER:
                     oldest = user_sessions[0]
                     oldest.revoke()
                 self._sessions[session.id] = session
                 self._sessions_by_token[token] = session.id
 
-        self._audit(user.id, tenant_id, AuditAction.AUTH_SUCCESS.value, result="SUCCESS",
-                    ip=ip_address)
+        self._audit(user.id, tenant_id, AuditAction.AUTH_SUCCESS.value, result="SUCCESS", ip=ip_address)
 
         return {
             "success": True,
@@ -385,8 +413,9 @@ class AuthService:
             if not session_model:
                 return False
             session_repo.revoke(session_model.id)
-            self._audit(session_model.user_id, session_model.tenant_id,
-                        AuditAction.SESSION_REVOKED.value, result="SUCCESS")
+            self._audit(
+                session_model.user_id, session_model.tenant_id, AuditAction.SESSION_REVOKED.value, result="SUCCESS"
+            )
             return True
         else:
             session_id = self._sessions_by_token.get(token)
@@ -396,8 +425,7 @@ class AuthService:
             if not session:
                 return False
             session.revoke()
-            self._audit(session.user_id, session.tenant_id, AuditAction.SESSION_REVOKED.value,
-                        result="SUCCESS")
+            self._audit(session.user_id, session.tenant_id, AuditAction.SESSION_REVOKED.value, result="SUCCESS")
             return True
 
     @_db_synchronized
@@ -479,9 +507,15 @@ class AuthService:
     # ── User Management ──────────────────────────────────
 
     @_db_synchronized
-    def create_user(self, username: str, email: str, password: str,
-                    display_name: str = "", role_name: str = "OPERATOR",
-                    tenant_id: str = "default") -> Dict[str, Any]:
+    def create_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        display_name: str = "",
+        role_name: str = "OPERATOR",
+        tenant_id: str = "default",
+    ) -> Dict[str, Any]:
         """Create a new user."""
         if self._use_db:
             user_repo = self._get_user_repo()
@@ -492,6 +526,7 @@ class AuthService:
             if not role:
                 return {"success": False, "error": f"Role '{role_name}' not found"}
             import uuid
+
             user_id = str(uuid.uuid4())
             user_repo.create(
                 user_id=user_id,
@@ -518,9 +553,13 @@ class AuthService:
             with self._lock:
                 self._users[user.id] = user
                 self._users_by_username[username] = user.id
-                self._memberships.append(TenantMembership(
-                    user_id=user.id, tenant_id=tenant_id, role_id=role.id,
-                ))
+                self._memberships.append(
+                    TenantMembership(
+                        user_id=user.id,
+                        tenant_id=tenant_id,
+                        role_id=role.id,
+                    )
+                )
             self._audit(user.id, tenant_id, AuditAction.USER_CREATED.value, result="SUCCESS")
             return {"success": True, "user_id": user.id}
 
@@ -564,9 +603,17 @@ class AuthService:
 
     # ── Audit ────────────────────────────────────────────
 
-    def _audit(self, actor_id: str, tenant_id: str, action: str,
-               result: str = "SUCCESS", resource: str = "", resource_id: str = "",
-               ip: str = "", details: Optional[Dict] = None):
+    def _audit(
+        self,
+        actor_id: str,
+        tenant_id: str,
+        action: str,
+        result: str = "SUCCESS",
+        resource: str = "",
+        resource_id: str = "",
+        ip: str = "",
+        details: Optional[Dict] = None,
+    ):
         if self._use_db:
             self._get_audit_repo().create(
                 actor_id=actor_id,
@@ -596,12 +643,20 @@ class AuthService:
     def get_audit_log(self, tenant_id: Optional[str] = None, limit: int = 50) -> List[AuditRecord]:
         if self._use_db:
             models = self._get_audit_repo().list_for_tenant(tenant_id or "", limit)
-            return [AuditRecord(
-                id=m.id, actor_id=m.actor_id, tenant_id=m.tenant_id,
-                action=m.action, resource=m.resource, result=m.result,
-                timestamp=m.timestamp, ip_address=m.ip_address,
-                details=m.details or {},
-            ) for m in models]
+            return [
+                AuditRecord(
+                    id=m.id,
+                    actor_id=m.actor_id,
+                    tenant_id=m.tenant_id,
+                    action=m.action,
+                    resource=m.resource,
+                    result=m.result,
+                    timestamp=m.timestamp,
+                    ip_address=m.ip_address,
+                    details=m.details or {},
+                )
+                for m in models
+            ]
         with self._lock:
             log = self._audit_log
             if tenant_id:
@@ -665,8 +720,7 @@ class AuthService:
                 admin_role = role_repo.get_by_name("ADMIN")
                 if admin_role:
                     self._get_membership_repo().create(creator_user_id, tenant_id, admin_role.id)
-            self._audit(creator_user_id or "system", tenant_id,
-                        AuditAction.TENANT_CREATED.value, result="SUCCESS")
+            self._audit(creator_user_id or "system", tenant_id, AuditAction.TENANT_CREATED.value, result="SUCCESS")
             return {"success": True, "tenant_id": tenant_id}
         else:
             if tenant_id in self._tenants:
@@ -676,15 +730,16 @@ class AuthService:
             if creator_user_id:
                 user = self._users.get(creator_user_id)
                 if user:
-                    admin_role = next(
-                        (r for r in self._roles.values() if r.system_role == SystemRole.ADMIN), None
-                    )
+                    admin_role = next((r for r in self._roles.values() if r.system_role == SystemRole.ADMIN), None)
                     if admin_role:
-                        self._memberships.append(TenantMembership(
-                            user_id=creator_user_id, tenant_id=tenant_id, role_id=admin_role.id,
-                        ))
-            self._audit(creator_user_id or "system", tenant_id,
-                        AuditAction.TENANT_CREATED.value, result="SUCCESS")
+                        self._memberships.append(
+                            TenantMembership(
+                                user_id=creator_user_id,
+                                tenant_id=tenant_id,
+                                role_id=admin_role.id,
+                            )
+                        )
+            self._audit(creator_user_id or "system", tenant_id, AuditAction.TENANT_CREATED.value, result="SUCCESS")
             return {"success": True, "tenant_id": tenant_id}
 
     @_db_synchronized
@@ -700,8 +755,7 @@ class AuthService:
         if self._use_db:
             models = self._get_session_repo().list_active_for_user(user_id)
             return [self._db_session_to_domain(m) for m in models]
-        return [s for s in self._sessions.values()
-                if s.user_id == user_id and s.status == SessionStatus.ACTIVE]
+        return [s for s in self._sessions.values() if s.user_id == user_id and s.status == SessionStatus.ACTIVE]
 
     @_db_synchronized
     def revoke_all_sessions(self, user_id: str) -> int:

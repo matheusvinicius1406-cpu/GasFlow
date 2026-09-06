@@ -19,6 +19,7 @@ class AIToolsFactory:
         if self.db:
             return self.db
         from app.infrastructure.database.connection import SessionLocal
+
         return SessionLocal()
 
     def _close_session(self, session):
@@ -32,6 +33,7 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+
             repo = SQLAlchemyClientRepository(session)
             codigo = args.get("customer_codigo")
             nome = args.get("customer_name")
@@ -50,17 +52,20 @@ class AIToolsFactory:
             if not client:
                 return ToolResult(success=False, error="Cliente não encontrado")
 
-            return ToolResult(success=True, data={
-                "codigo": client.codigo,
-                "nome": client.nome,
-                "telefone": client.telefone,
-                "email": client.email,
-                "tipo": client.tipo,
-                "ativo": client.ativo,
-                "rua": client.rua,
-                "numero": client.numero,
-                "bairro": client.bairro,
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "codigo": client.codigo,
+                    "nome": client.nome,
+                    "telefone": client.telefone,
+                    "email": client.email,
+                    "tipo": client.tipo,
+                    "ativo": client.ativo,
+                    "rua": client.rua,
+                    "numero": client.numero,
+                    "bairro": client.bairro,
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -69,13 +74,17 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+
             repo = SQLAlchemyClientRepository(session)
             busca = args.get("query", "")
             clients, total = repo.buscar(query=busca)
-            return ToolResult(success=True, data={
-                "total": total,
-                "items": [{"codigo": c.codigo, "nome": c.nome, "telefone": c.telefone} for c in clients[:10]],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "total": total,
+                    "items": [{"codigo": c.codigo, "nome": c.nome, "telefone": c.telefone} for c in clients[:10]],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -122,14 +131,21 @@ class AIToolsFactory:
                 return ToolResult(success=False, error="Pedido não encontrado")
 
             items = item_repo.listar_por_pedido(codigo)
-            return ToolResult(success=True, data={
-                "codigo": order.codigo,
-                "client_codigo": order.client_codigo,
-                "status": order.status.value if hasattr(order.status, 'value') else str(order.status),
-                "total": float(order.total),
-                "payment_status": order.payment_status.value if hasattr(order.payment_status, 'value') else str(order.payment_status),
-                "items": [{"product": i.product_nome, "qty": i.quantity, "price": float(i.unit_price)} for i in items],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "codigo": order.codigo,
+                    "client_codigo": order.client_codigo,
+                    "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+                    "total": float(order.total),
+                    "payment_status": order.payment_status.value
+                    if hasattr(order.payment_status, "value")
+                    else str(order.payment_status),
+                    "items": [
+                        {"product": i.product_nome, "qty": i.quantity, "price": float(i.unit_price)} for i in items
+                    ],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -138,6 +154,7 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+
             repo = SQLAlchemyInventoryRepository(session)
             codigo = args.get("product_codigo")
             if not codigo:
@@ -147,12 +164,17 @@ class AIToolsFactory:
             if not inv:
                 return ToolResult(success=False, error="Produto não encontrado no inventário")
 
-            return ToolResult(success=True, data={
-                "product_codigo": inv.product_codigo,
-                "quantity": inv.quantity,
-                "minimum_quantity": inv.minimum_quantity,
-                "stock_status": inv.stock_status.value if hasattr(inv.stock_status, 'value') else str(inv.stock_status),
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "product_codigo": inv.product_codigo,
+                    "quantity": inv.quantity,
+                    "minimum_quantity": inv.minimum_quantity,
+                    "stock_status": inv.stock_status.value
+                    if hasattr(inv.stock_status, "value")
+                    else str(inv.stock_status),
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -161,18 +183,25 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+
             repo = SQLAlchemyInventoryRepository(session)
             items = repo.list_all()
             low = [i for i in items if i.stock_status.value in ("LOW_STOCK", "OUT_OF_STOCK")]
-            return ToolResult(success=True, data={
-                "count": len(low),
-                "items": [{
-                    "product_codigo": i.product_codigo,
-                    "quantity": i.quantity,
-                    "minimum": i.minimum_quantity,
-                    "status": i.stock_status.value,
-                } for i in low],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "count": len(low),
+                    "items": [
+                        {
+                            "product_codigo": i.product_codigo,
+                            "quantity": i.quantity,
+                            "minimum": i.minimum_quantity,
+                            "status": i.stock_status.value,
+                        }
+                        for i in low
+                    ],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -181,17 +210,21 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+
             repo = SQLAlchemyInventoryRepository(session)
             items = repo.list_all()
             total = len(items)
             low = sum(1 for i in items if i.stock_status.value == "LOW_STOCK")
             out = sum(1 for i in items if i.stock_status.value == "OUT_OF_STOCK")
-            return ToolResult(success=True, data={
-                "total_products": total,
-                "in_stock": total - low - out,
-                "low_stock": low,
-                "out_of_stock": out,
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "total_products": total,
+                    "in_stock": total - low - out,
+                    "low_stock": low,
+                    "out_of_stock": out,
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -200,16 +233,23 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.financial_repositories import SQLAlchemyPaymentRepository
+
             repo = SQLAlchemyPaymentRepository(session)
             order_codigo = args.get("order_codigo")
             if order_codigo:
                 payments = repo.get_by_order(order_codigo)
             else:
                 payments, _ = repo.list_all(page=1, page_size=10)
-            return ToolResult(success=True, data={
-                "count": len(payments),
-                "items": [{"id": p.id, "order": p.order_codigo, "amount": float(p.amount), "status": p.status.value} for p in payments],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "count": len(payments),
+                    "items": [
+                        {"id": p.id, "order": p.order_codigo, "amount": float(p.amount), "status": p.status.value}
+                        for p in payments
+                    ],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -218,20 +258,30 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.financial_repositories import SQLAlchemyReceivableRepository
+
             repo = SQLAlchemyReceivableRepository(session)
             customer = args.get("customer_codigo")
             if customer:
                 items = repo.get_by_customer(customer)
             else:
                 items, _ = repo.list_open(page=1, page_size=10)
-            return ToolResult(success=True, data={
-                "count": len(items),
-                "items": [{
-                    "order": r.order_codigo, "customer": r.customer_codigo,
-                    "original": float(r.original_amount), "paid": float(r.paid_amount),
-                    "remaining": float(r.remaining_amount), "status": r.status.value,
-                } for r in items],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "count": len(items),
+                    "items": [
+                        {
+                            "order": r.order_codigo,
+                            "customer": r.customer_codigo,
+                            "original": float(r.original_amount),
+                            "paid": float(r.paid_amount),
+                            "remaining": float(r.remaining_amount),
+                            "status": r.status.value,
+                        }
+                        for r in items
+                    ],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -240,18 +290,23 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.financial_repositories import (
-                SQLAlchemyPaymentRepository, SQLAlchemyCashMovementRepository,
+                SQLAlchemyPaymentRepository,
+                SQLAlchemyCashMovementRepository,
             )
+
             pay_repo = SQLAlchemyPaymentRepository(session)
             cash_repo = SQLAlchemyCashMovementRepository(session)
             balance = cash_repo.current_balance()
             payments, total = pay_repo.list_all(page=1, page_size=1000)
             total_received = sum(float(p.amount) for p in payments if p.status.value == "PAID")
-            return ToolResult(success=True, data={
-                "cash_balance": float(balance),
-                "total_received": total_received,
-                "total_payments": total,
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "cash_balance": float(balance),
+                    "total_received": total_received,
+                    "total_payments": total,
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -260,14 +315,18 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
+
             repo = SQLAlchemyOrderRepository(session)
             orders = repo.listar_todos()
             total = len(orders)
             total_value = sum(float(o.total or 0) for o in orders)
-            return ToolResult(success=True, data={
-                "total_orders": total,
-                "total_sales_value": total_value,
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "total_orders": total,
+                    "total_sales_value": total_value,
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -276,15 +335,22 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
+
             repo = SQLAlchemyProductRepository(session)
             products = repo.listar_todos()
             busca = args.get("query", "").lower()
             if busca:
                 products = [p for p in products if busca in p.nome.lower() or busca in p.codigo.lower()]
-            return ToolResult(success=True, data={
-                "count": len(products),
-                "items": [{"codigo": p.codigo, "nome": p.nome, "preco": float(p.preco), "tipo": p.tipo} for p in products[:10]],
-            })
+            return ToolResult(
+                success=True,
+                data={
+                    "count": len(products),
+                    "items": [
+                        {"codigo": p.codigo, "nome": p.nome, "preco": float(p.preco), "tipo": p.tipo}
+                        for p in products[:10]
+                    ],
+                },
+            )
         finally:
             self._close_session(session)
 
@@ -327,6 +393,7 @@ class AIToolsFactory:
         session = self._get_session()
         try:
             from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+
             repo = SQLAlchemyInventoryRepository(session)
             result = repo.add_stock_atomic(
                 product_codigo=args["product_codigo"],
@@ -350,9 +417,12 @@ class AIToolsFactory:
         try:
             from app.application.financial.use_cases import RegisterPaymentUseCase
             from app.infrastructure.repositories.financial_repositories import (
-                SQLAlchemyPaymentRepository, SQLAlchemyReceivableRepository,
-                SQLAlchemyCashMovementRepository, SQLAlchemyFinancialLedgerRepository,
+                SQLAlchemyPaymentRepository,
+                SQLAlchemyReceivableRepository,
+                SQLAlchemyCashMovementRepository,
+                SQLAlchemyFinancialLedgerRepository,
             )
+
             uc = RegisterPaymentUseCase(
                 SQLAlchemyPaymentRepository(session),
                 SQLAlchemyReceivableRepository(session),

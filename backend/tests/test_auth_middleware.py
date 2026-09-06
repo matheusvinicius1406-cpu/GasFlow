@@ -27,6 +27,7 @@ def _auth(token: str) -> dict:
 
 # ── Public Endpoints ────────────────────────────────
 
+
 class TestPublicEndpoints:
     def test_health(self, client):
         assert client.get("/health").json()["status"] == "healthy"
@@ -41,6 +42,7 @@ class TestPublicEndpoints:
 
 
 # ── Unauthenticated → 401 ──────────────────────────
+
 
 class TestUnauthenticated:
     def test_clients(self, client):
@@ -70,6 +72,7 @@ class TestUnauthenticated:
 
 # ── Invalid Token → 401 ─────────────────────────────
 
+
 class TestInvalidToken:
     def test_invalid_token(self, client):
         assert client.get("/clients/", headers=_auth("invalid")).status_code == 401
@@ -79,6 +82,7 @@ class TestInvalidToken:
 
 
 # ── Valid Token → 200 ───────────────────────────────
+
 
 class TestValidToken:
     def test_clients(self, client, admin_token):
@@ -105,6 +109,7 @@ class TestValidToken:
 
 
 # ── Authorization / RBAC ────────────────────────────
+
 
 class TestRBAC:
     def test_admin_accesses_users(self, client, admin_token):

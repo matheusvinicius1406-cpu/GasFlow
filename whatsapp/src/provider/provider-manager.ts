@@ -16,8 +16,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { Client, LocalAuth, type Contact } from 'whatsapp-web.js';
-import type { WhatsAppContact, WhatsAppProvider, WhatsAppQr, WhatsAppStatus, MessagePayload, SendResult, WhatsAppConnectionState } from './types';
+import { Client, LocalAuth, MessageMedia, type Contact } from 'whatsapp-web.js';
+import { BaileysEngine } from './baileys-engine';
+import type { WhatsAppContact, WhatsAppProvider, WhatsAppQr, WhatsAppStatus, MessagePayload, SendResult, MediaPayload, SendMediaResult, WhatsAppConnectionState } from './types';
+import { logger } from '../log';
+import { messagesSentTotal, messagesFailedTotal, accountConnected, reconnectAttemptsTotal } from '../metrics';
 
 // ── Types ────────────────────────────────────────────────
 
@@ -38,11 +41,33 @@ export interface AccountStatus {
 // ── Constants ────────────────────────────────────────────
 
 const RECONNECT_BASE_DELAY_MS = 5_000;
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_JITTER_RATIO = 0.3;
+/** Teto por tentativa (5s * 2^4 = 80s) — após isso mantém 80s com jitter. */
+const RECONNECT_MAX_DELAY_MS = 80_000;
 const QR_TTL_MS = 60_000;
+/** Heartbeat de presença (mantém a sessão viva) — env WA_HEARTBEAT_INTERVAL_MIN. */
+const HEARTBEAT_INTERVAL_MIN = Number(process.env.WA_HEARTBEAT_INTERVAL_MIN || 5);
+const HEARTBEAT_INTERVAL_MS = Math.max(1, HEARTBEAT_INTERVAL_MIN) * 60_000;
+/** URL opcional para alertar em falha crítica (ex.: desconexão permanente). */
+const CRITICAL_WEBHOOK_URL = process.env.WA_CRITICAL_WEBHOOK_URL || '';
 
 const HEADLESS = process.env.WHATSAPP_HEADFUL !== 'true';
+
+// ── Engine selection (Baileys migration) ────────────────
+
+export type EngineName = 'wwebjs' | 'baileys';
+
+/**
+ * Motor por conta: WA_ENGINE (global) ou WA_ENGINE_PRIMARY/SECONDARY (override).
+ * Default 'baileys' (WebSocket puro). Rollback: WA_ENGINE=wwebjs — sem rebuild,
+ * a sessão antiga em wwebjs_auth continua válida.
+ */
+function resolveEngineForAccount(accountId: string): EngineName {
+  const perAccount = (process.env[`WA_ENGINE_${accountId.toUpperCase()}`] || '').toLowerCase();
+  const chosen = (perAccount || (process.env.WA_ENGINE || 'baileys')).toLowerCase();
+  return chosen === 'wwebjs' ? 'wwebjs' : 'baileys';
+}
 
 // ── Default Accounts ─────────────────────────────────────
 
@@ -104,12 +129,14 @@ class AccountInstance implements WhatsAppProvider {
   readonly id: string;
   readonly name: string;
   private client: Client | null = null;
+  private baileys: BaileysEngine | null = null;
   private state: WhatsAppConnectionState = 'disconnected';
   private qrString: string | null = null;
   private qrGeneratedAtMs: number | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private intentionallyStopped = false;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
   private phone: string | null = null;
   private lastConnectedAt: string | null = null;
   private messageListeners: Array<(msg: unknown) => void> = [];
@@ -117,7 +144,11 @@ class AccountInstance implements WhatsAppProvider {
   constructor(config: AccountConfig) {
     this.id = config.id;
     this.name = config.name;
+    this.engine = resolveEngineForAccount(config.id);
+    console.log(`[${this.id}] Motor: ${this.engine}.`);
   }
+
+  private engine: EngineName;
 
   getStatus(): WhatsAppStatus {
     return {
@@ -177,14 +208,20 @@ class AccountInstance implements WhatsAppProvider {
   async logout(): Promise<void> {
     this.intentionallyStopped = true;
     this.clearReconnectTimer();
-    const client = this.client;
-    this.client = null;
+    this.stopHeartbeat();
     this.state = 'disconnected';
     this.qrString = null;
     this.qrGeneratedAtMs = null;
     this.reconnectAttempts = 0;
     this.phone = null;
 
+    const engine = this.baileys;
+    this.baileys = null;
+    if (engine) {
+      try { await engine.logout(); } catch { /* session may be invalid */ }
+    }
+    const client = this.client;
+    this.client = null;
     if (client) {
       client.removeAllListeners();
       try { await client.logout(); } catch { /* session may be invalid */ }
@@ -195,6 +232,7 @@ class AccountInstance implements WhatsAppProvider {
 
   async healthCheck(): Promise<boolean> {
     if (!this.isConnected()) return false;
+    if (this.engine === 'baileys') return this.baileys?.healthPing() ?? false;
     try {
       const state = await this.client?.getState();
       return state === 'CONNECTED';
@@ -205,6 +243,18 @@ class AccountInstance implements WhatsAppProvider {
 
   async getContacts(): Promise<WhatsAppContact[]> {
     if (!this.isConnected()) throw new Error('WhatsApp não está conectado.');
+    if (this.engine === 'baileys') {
+      // Baileys não mantém catálogo rico — JIDs 1:1 visíveis no socket.
+      return this.baileys?.getJids().map((jid) => ({
+        jid,
+        phone: jid.split('@')[0] ?? null,
+        name: null,
+        pushName: null,
+        businessName: null,
+        isBusiness: false,
+        isGroup: false,
+      })) ?? [];
+    }
     const contacts = await this.client!.getContacts();
     return contacts
       .filter((c) => {
@@ -224,14 +274,68 @@ class AccountInstance implements WhatsAppProvider {
       return { success: false, error: 'WhatsApp não está conectado.' };
     }
     const chatId = recipient.includes('@') ? recipient : `${recipient}@c.us`;
+    if (this.engine === 'baileys') {
+      try {
+        const sent = await this.baileys!.sendText(chatId, message.text);
+        messagesSentTotal.inc({ account: this.id });
+        return { success: true, messageId: sent.id ?? 'unknown' };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        messagesFailedTotal.inc({ account: this.id, reason: 'send_error' });
+        logger.error('message.send.failed', { account: this.id, to: chatId, error: errorMsg });
+        return { success: false, error: errorMsg };
+      }
+    }
     try {
       const sent = await this.client!.sendMessage(chatId, message.text);
+      messagesSentTotal.inc({ account: this.id });
       return { success: true, messageId: sent.id._serialized };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[${this.id}] Erro ao enviar para ${chatId}:`, errorMsg);
+      logger.error('message.send.failed', { account: this.id, to: chatId, error: errorMsg });
       return { success: false, error: errorMsg };
     }
+  }
+
+  async sendMedia(recipient: string, media: MediaPayload): Promise<SendMediaResult> {
+    if (!this.isConnected()) {
+      return { success: false, error: 'WhatsApp não está conectado.' };
+    }
+    if (!media.data || !media.mimetype) {
+      return { success: false, error: 'Mídia inválida: data e mimetype são obrigatórios.' };
+    }
+    const chatId = recipient.includes('@') ? recipient : `${recipient}@c.us`;
+    if (this.engine === 'baileys') {
+      try {
+        const sent = await this.baileys!.sendMediaBase64(
+          chatId, media.data, media.mimetype, media.filename, media.caption,
+        );
+        messagesSentTotal.inc({ account: this.id });
+        logger.info('message.media.sent', { account: this.id, to: chatId, mimetype: media.mimetype });
+        return { success: true, messageId: sent.id ?? 'unknown' };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        messagesFailedTotal.inc({ account: this.id, reason: 'media_error' });
+        logger.error('message.media.send.failed', { account: this.id, to: chatId, error: errorMsg });
+        return { success: false, error: errorMsg };
+      }
+    }
+    try {
+      const file = new MessageMedia(media.mimetype, media.data, media.filename);
+      const sent = await this.client!.sendMessage(chatId, file, {
+        caption: media.caption || undefined,
+      });
+      logger.info('message.media.sent', { account: this.id, to: chatId, mimetype: media.mimetype });
+      return { success: true, messageId: sent.id._serialized };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      logger.error('message.media.send.failed', { account: this.id, to: chatId, error: errorMsg });
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  getReconnectStats(): { attempts: number; maxAttempts: number; lastAttemptAt: string | null } {
+    return { attempts: this.reconnectAttempts, maxAttempts: MAX_RECONNECT_ATTEMPTS, lastAttemptAt: this.lastReconnectAt };
   }
 
   onMessage(listener: (msg: unknown) => void): void {
@@ -245,12 +349,23 @@ class AccountInstance implements WhatsAppProvider {
     this.qrString = null;
     this.qrGeneratedAtMs = null;
 
+    if (this.engine === 'baileys') {
+      this.createAndInitializeBaileys();
+      return;
+    }
+
     const client = new Client({
       authStrategy: new LocalAuth({ dataPath: this.id === 'primary' ? 'wwebjs_auth/primary' : 'wwebjs_auth/secondary' }),
       puppeteer: {
         headless: HEADLESS,
         executablePath: resolveBrowserExecutable(),
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          // Docker padroniza /dev/shm em 64M — sem essa flag o Chromium falha
+          // ao lançar e o whatsapp-web.js nunca chega ao estado qr_pending.
+          '--disable-dev-shm-usage',
+        ],
       },
     });
     this.client = client;
@@ -279,18 +394,20 @@ class AccountInstance implements WhatsAppProvider {
           this.phone = info.wid.user;
         }
       } catch { /* ignore */ }
-      console.log(`[${this.id}] Conectado e pronto.`);
+      this.startHeartbeat();
+      logger.info('account.connected', { account: this.id, phone: this.phone });
     });
 
     client.on('auth_failure', (message: string) => {
-      console.error(`[${this.id}] Falha de autenticação:`, message);
+      logger.error('account.auth_failed', { account: this.id, message });
       this.state = 'disconnected';
       this.qrString = null;
     });
 
     client.on('disconnected', (reason: string) => {
-      console.warn(`[${this.id}] Desconectado:`, reason);
+      logger.warn('account.disconnected', { account: this.id, reason });
       this.state = 'disconnected';
+      this.stopHeartbeat();
       this.scheduleReconnect();
     });
 
@@ -301,27 +418,147 @@ class AccountInstance implements WhatsAppProvider {
     });
 
     client.initialize().catch((err) => {
-      console.error(`[${this.id}] Erro ao inicializar:`, err);
+      logger.error('account.initialize.failed', { account: this.id, error: err instanceof Error ? err.message : String(err) });
       this.state = 'disconnected';
       this.scheduleReconnect();
     });
   }
 
+  /** Inicialização via Baileys (WebSocket puro, sem Chromium). */
+  private createAndInitializeBaileys(): void {
+    const engine = new BaileysEngine({ accountId: this.id });
+    this.baileys = engine;
+
+    const dispatch = (event: string, payload?: unknown): void => {
+      switch (event) {
+        case 'qr':
+          this.state = 'qr_pending';
+          this.qrString = String(payload ?? '');
+          this.qrGeneratedAtMs = Date.now();
+          console.log(`[${this.id}] QR code gerado (Baileys).`);
+          break;
+        case 'authenticated':
+          console.log(`[${this.id}] Autenticado (Baileys).`);
+          this.reconnectAttempts = 0;
+          break;
+        case 'ready':
+          this.state = 'connected';
+          this.qrString = null;
+          this.qrGeneratedAtMs = null;
+          this.reconnectAttempts = 0;
+          this.lastConnectedAt = new Date().toISOString();
+          this.phone = (payload as { phone?: string | null } | undefined)?.phone ?? null;
+          accountConnected.set({ account: this.id, engine: this.engine }, 1);
+          this.startHeartbeat();
+          logger.info('account.connected', { account: this.id, phone: this.phone, engine: 'baileys' });
+          break;
+        case 'disconnected':
+          logger.warn('account.disconnected', { account: this.id, reason: String(payload ?? 'unknown'), engine: 'baileys' });
+          this.state = 'disconnected';
+          this.stopHeartbeat();
+          this.scheduleReconnect();
+          break;
+        case 'message':
+          for (const listener of this.messageListeners) {
+            try { listener(payload); } catch { /* ignore listener errors */ }
+          }
+          break;
+      }
+    };
+
+    engine.connect(dispatch).catch((err) => {
+      logger.error('account.initialize.failed', {
+        account: this.id,
+        engine: 'baileys',
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.state = 'disconnected';
+      this.scheduleReconnect();
+    });
+  }
+
+  // ── Heartbeat (mantém a sessão ativa) ────────────────
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.state !== 'connected' || !this.client) return;
+      this.client
+        .sendPresenceAvailable()
+        .then(() => logger.debug('account.heartbeat', { account: this.id }))
+        .catch((err: unknown) =>
+          logger.warn('account.heartbeat.failed', {
+            account: this.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+    }, HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref?.();
+    logger.debug('account.heartbeat.started', { account: this.id, intervalMs: HEARTBEAT_INTERVAL_MS });
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  // ── Reconnect ─────────────────────────────────────────
+
+  private lastReconnectAt: string | null = null;
+
   private scheduleReconnect(): void {
-    if (this.intentionallyStopped || this.reconnectTimer || !this.client) return;
+    if (this.intentionallyStopped || this.reconnectTimer) return;
+    // Runtime ativo: client (wwebjs) ou engine (baileys) — sem ele não há o que reconectar.
+    const hasRuntime = this.engine === 'baileys' ? this.baileys !== null : this.client !== null;
+    if (!hasRuntime) return;
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.error(`[${this.id}] Máximo de tentativas de reconexão atingido.`);
+      logger.error('account.reconnect.exhausted', { account: this.id, attempts: this.reconnectAttempts });
       void this.teardownClient();
+      void this.notifyCriticalFailure('max_reconnect_attempts');
       return;
     }
-    const backoff = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts, 80_000);
+    const backoff = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts, RECONNECT_MAX_DELAY_MS);
     const delay = withJitter(backoff);
     this.reconnectAttempts += 1;
-    console.log(`[${this.id}] Reconectando em ${Math.round(delay / 1000)}s (${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}).`);
+    reconnectAttemptsTotal.inc({ account: this.id });
+    this.lastReconnectAt = new Date().toISOString();
+    logger.warn('account.reconnect.scheduled', {
+      account: this.id,
+      attempt: this.reconnectAttempts,
+      maxAttempts: MAX_RECONNECT_ATTEMPTS,
+      delayMs: delay,
+    });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.teardownClient().then(() => this.createAndInitializeClient());
     }, delay);
+  }
+
+  /** Alerta opcional (fire-and-forget) em falha crítica — ex.: webhook/slack. */
+  private async notifyCriticalFailure(kind: string): Promise<void> {
+    if (!CRITICAL_WEBHOOK_URL) return;
+    try {
+      const body = {
+        event: 'whatsapp.critical_failure',
+        account: this.id,
+        kind,
+        state: this.state,
+        at: new Date().toISOString(),
+      };
+      await fetch(CRITICAL_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      logger.info('account.critical_alert.sent', { account: this.id, kind });
+    } catch (err) {
+      logger.error('account.critical_alert.failed', {
+        account: this.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private clearReconnectTimer(): void {
@@ -334,6 +571,12 @@ class AccountInstance implements WhatsAppProvider {
   private async teardownClient(): Promise<void> {
     const client = this.client;
     this.client = null;
+    const engine = this.baileys;
+    this.baileys = null;
+    this.stopHeartbeat();
+    if (engine) {
+      try { await engine.disconnect(); } catch { /* ignore */ }
+    }
     if (!client) return;
     client.removeAllListeners();
     try { await client.destroy(); } catch { /* ignore */ }

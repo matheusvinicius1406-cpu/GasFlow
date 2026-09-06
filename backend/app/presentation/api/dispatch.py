@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 
 from app.domain.delivery.dispatch_engine import (
-    DispatchEngine, DispatchMode, OrderRequest, DriverCandidate, OrderItem,
+    DispatchEngine,
+    DispatchMode,
+    OrderRequest,
+    DriverCandidate,
+    OrderItem,
 )
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
@@ -20,6 +24,7 @@ router = APIRouter(prefix="/dispatch", tags=["dispatch"])
 
 
 # ── Schemas ──────────────────────────────────────────────
+
 
 class DispatchItemRequest(BaseModel):
     product_codigo: str
@@ -50,7 +55,7 @@ class DriverCandidateRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     last_seen: Optional[str] = None
-    capacity: Dict[str, int] = {}    # {product_codigo: available}
+    capacity: Dict[str, int] = {}  # {product_codigo: available}
     current_load: Dict[str, int] = {}  # {product_codigo: loaded}
     active_deliveries: int = 0
     current_route_lat: Optional[float] = None
@@ -68,9 +73,8 @@ class AssignRequest(BaseModel):
     vehicle_id: Optional[str] = None
 
 
-
-
 # ── Endpoints ────────────────────────────────────────────
+
 
 @router.post("/recommend")
 async def get_dispatch_recommendations(

@@ -13,12 +13,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ── Payment ──────────────────────────────────────────
 
+
 class PaymentCreate(BaseModel):
     """Payment creation schema.
 
     Note: order_codigo is taken from the URL path parameter,
     not required in the body.
     """
+
     amount: Decimal = Field(..., gt=0, description="Payment amount > 0")
     method: str = Field("CASH", description="CASH, PIX, CARD, TRANSFER, OTHER")
     reference: Optional[str] = None
@@ -43,6 +45,7 @@ class PaymentResponse(BaseModel):
 
 # ── Receivable ───────────────────────────────────────
 
+
 class ReceivableResponse(BaseModel):
     id: int
     customer_codigo: str
@@ -59,6 +62,7 @@ class ReceivableResponse(BaseModel):
 
 
 # ── Expense ──────────────────────────────────────────
+
 
 class ExpenseCreate(BaseModel):
     description: str = Field(..., min_length=1)
@@ -85,6 +89,7 @@ class ExpenseResponse(BaseModel):
 
 # ── Cash Movement ────────────────────────────────────
 
+
 class CashMovementResponse(BaseModel):
     id: int
     type: str
@@ -100,6 +105,7 @@ class CashMovementResponse(BaseModel):
 
 # ── Financial Reports ────────────────────────────────
 
+
 class DailySummaryResponse(BaseModel):
     date: str
     total_receipts: Decimal
@@ -108,6 +114,7 @@ class DailySummaryResponse(BaseModel):
 
 
 # ── Paginated responses ─────────────────────────────
+
 
 class PaymentListResponse(BaseModel):
     items: List[PaymentResponse]

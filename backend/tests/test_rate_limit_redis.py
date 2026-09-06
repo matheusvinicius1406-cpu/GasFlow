@@ -211,15 +211,11 @@ class TestRedisLimiterWiring:
         from app.core.config import settings
 
         monkeypatch.setattr(settings, "rate_limit_mode", "redis")
-        monkeypatch.setattr(
-            settings, "rate_limit_redis_url", "redis://my-redis:7777/3"
-        )
+        monkeypatch.setattr(settings, "rate_limit_redis_url", "redis://my-redis:7777/3")
         importlib.reload(rate_limit_module)
         try:
             assert rate_limit_module._limiter_backend == "redis"
-            assert isinstance(
-                rate_limit_module._limiter, RedisSlidingWindowRateLimiter
-            )
+            assert isinstance(rate_limit_module._limiter, RedisSlidingWindowRateLimiter)
             assert rate_limit_module._limiter._url == "redis://my-redis:7777/3"
         finally:
             # Restaura o estado do módulo para os demais testes.

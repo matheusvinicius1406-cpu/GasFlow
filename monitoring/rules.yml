@@ -1,0 +1,54 @@
+groups:
+  - name: gasflow_alerts
+    rules:
+      - alert: BackendDown
+        expr: up{job="gasflow-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend GasFlow inacessível"
+          description: "O Prometheus não consegue coletar métricas do backend há mais de 1 minuto."
+
+      - alert: WhatsappDisconnected
+        expr: whatsapp_account_connected{account="primary"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WhatsApp principal desconectado"
+          description: "A conta primary está sem conexão há mais de 2 minutos — pedidos/respostas não fluem."
+
+      - alert: WhatsappHighSendFailureRate
+        expr: |
+          rate(whatsapp_messages_failed_total[10m])
+            / clamp_min(rate(whatsapp_messages_sent_total[10m]) + rate(whatsapp_messages_failed_total[10m]), 0.001)
+            > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taxa de falha de envio WhatsApp > 20%"
+          description: "Possível bloqueio/queda de sessão — verificar logs do serviço e quality rating."
+
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(gasflow_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(gasflow_http_requests_total[5m])), 0.001)
+            > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taxa de erro HTTP 5xx > 5%"
+
+      - alert: HighHttpLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(gasflow_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 de latência HTTP > 2s"

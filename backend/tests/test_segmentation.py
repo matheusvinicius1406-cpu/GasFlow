@@ -6,11 +6,16 @@ Tests for rule evaluation, AND/OR logic, edge cases, and tenant isolation.
 
 import pytest
 from app.domain.segmentation.entity import (
-    Segment, SegmentRule, RuleField, RuleOperator, SegmentStatus,
+    Segment,
+    SegmentRule,
+    RuleField,
+    RuleOperator,
+    SegmentStatus,
 )
 
 
 # ── Rule Evaluation Tests ────────────────────────────────
+
 
 class TestSegmentRuleEvaluation:
     """Test individual rule evaluation against customer metrics."""
@@ -85,6 +90,7 @@ class TestSegmentRuleEvaluation:
 
 # ── Edge Cases ───────────────────────────────────────────
 
+
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
@@ -128,6 +134,7 @@ class TestEdgeCases:
 
 
 # ── AND/OR Logic Tests ───────────────────────────────────
+
 
 class TestSegmentLogic:
     """Test AND/OR rule composition."""
@@ -191,6 +198,7 @@ class TestSegmentLogic:
 
 
 # ── Serialization Tests ──────────────────────────────────
+
 
 class TestSerialization:
     """Test rule and segment serialization."""

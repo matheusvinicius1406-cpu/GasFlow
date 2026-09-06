@@ -152,6 +152,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
         days_since_last_order = None
         if last_order_at:
             from datetime import datetime
+
             delta = datetime.utcnow() - last_order_at
             days_since_last_order = delta.days
 
@@ -160,10 +161,7 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
         order_codes = [m.codigo for m in models]
         if order_codes:
             top_product = (
-                self.db.query(
-                    OrderItemModel.product_nome,
-                    func.sum(OrderItemModel.quantity).label("total_qty")
-                )
+                self.db.query(OrderItemModel.product_nome, func.sum(OrderItemModel.quantity).label("total_qty"))
                 .filter(OrderItemModel.tenant_id == self.tenant_id)
                 .filter(OrderItemModel.order_codigo.in_(order_codes))
                 .group_by(OrderItemModel.product_nome)

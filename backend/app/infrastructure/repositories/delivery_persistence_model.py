@@ -11,15 +11,14 @@ Includes:
 - Outbox entries for event delivery
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Float, Text, JSON, Index, UniqueConstraint
-)
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, JSON, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
 
 class DeliveryRecord(Base):
     """Persistent delivery record — single source of truth."""
+
     __tablename__ = "delivery_records"
 
     __table_args__ = (
@@ -130,11 +129,10 @@ class DeliveryRecord(Base):
 
 class DriverLocationRecord(Base):
     """Persistent driver GPS location — replaces in-memory locations store."""
+
     __tablename__ = "driver_locations"
 
-    __table_args__ = (
-        Index("ix_driver_loc_tenant_driver", "tenant_id", "driver_id"),
-    )
+    __table_args__ = (Index("ix_driver_loc_tenant_driver", "tenant_id", "driver_id"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(String, default="default", nullable=False)
@@ -150,6 +148,7 @@ class DriverLocationRecord(Base):
 
 class OutboxEntry(Base):
     """Event outbox — guarantees at-least-once event delivery."""
+
     __tablename__ = "outbox_entries"
 
     __table_args__ = (
@@ -174,6 +173,7 @@ class OutboxEntry(Base):
 
 class DriverSessionRecord(Base):
     """Persistent driver session — replaces in-memory sessions store."""
+
     __tablename__ = "driver_sessions"
 
     __table_args__ = (
@@ -211,6 +211,7 @@ class DriverSessionRecord(Base):
 
 class IdempotencyKeyRecord(Base):
     """Persistent idempotency key — replaces in-memory idempotency store."""
+
     __tablename__ = "idempotency_keys"
 
     __table_args__ = (

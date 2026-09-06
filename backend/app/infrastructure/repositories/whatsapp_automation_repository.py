@@ -9,11 +9,16 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.domain.whatsapp_automation.entity import (
-    AutomationRule, AutomationStatus, AutomationTriggerType,
-    AutomationExecution, ExecutionStatus, AutomationMetrics,
+    AutomationRule,
+    AutomationStatus,
+    AutomationTriggerType,
+    AutomationExecution,
+    ExecutionStatus,
+    AutomationMetrics,
 )
 from app.infrastructure.repositories.whatsapp_automation_model import (
-    AutomationRuleModel, AutomationExecutionModel,
+    AutomationRuleModel,
+    AutomationExecutionModel,
 )
 
 
@@ -48,10 +53,14 @@ class SQLAlchemyAutomationRepository:
         return self._rule_to_entity(model)
 
     def get_rule(self, rule_id: int) -> Optional[AutomationRule]:
-        model = self.db.query(AutomationRuleModel).filter(
-            AutomationRuleModel.id == rule_id,
-            AutomationRuleModel.tenant_id == self.tenant_id,
-        ).first()
+        model = (
+            self.db.query(AutomationRuleModel)
+            .filter(
+                AutomationRuleModel.id == rule_id,
+                AutomationRuleModel.tenant_id == self.tenant_id,
+            )
+            .first()
+        )
         return self._rule_to_entity(model) if model else None
 
     def list_rules(self, status: Optional[str] = None) -> List[AutomationRule]:
@@ -64,25 +73,33 @@ class SQLAlchemyAutomationRepository:
         return [self._rule_to_entity(m) for m in models]
 
     def update_rule(self, rule_id: int, **kwargs) -> Optional[AutomationRule]:
-        model = self.db.query(AutomationRuleModel).filter(
-            AutomationRuleModel.id == rule_id,
-            AutomationRuleModel.tenant_id == self.tenant_id,
-        ).first()
+        model = (
+            self.db.query(AutomationRuleModel)
+            .filter(
+                AutomationRuleModel.id == rule_id,
+                AutomationRuleModel.tenant_id == self.tenant_id,
+            )
+            .first()
+        )
         if not model:
             return None
         for key, value in kwargs.items():
             if hasattr(model, key):
                 setattr(model, key, value)
-        model.updated_at = func.now() if hasattr(func, 'now') else None
+        model.updated_at = func.now() if hasattr(func, "now") else None
         self.db.commit()
         self.db.refresh(model)
         return self._rule_to_entity(model)
 
     def delete_rule(self, rule_id: int) -> bool:
-        model = self.db.query(AutomationRuleModel).filter(
-            AutomationRuleModel.id == rule_id,
-            AutomationRuleModel.tenant_id == self.tenant_id,
-        ).first()
+        model = (
+            self.db.query(AutomationRuleModel)
+            .filter(
+                AutomationRuleModel.id == rule_id,
+                AutomationRuleModel.tenant_id == self.tenant_id,
+            )
+            .first()
+        )
         if not model:
             return False
         self.db.delete(model)
@@ -110,10 +127,14 @@ class SQLAlchemyAutomationRepository:
         return self._execution_to_entity(model)
 
     def update_execution(self, execution_id: int, **kwargs) -> Optional[AutomationExecution]:
-        model = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.id == execution_id,
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-        ).first()
+        model = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.id == execution_id,
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+            )
+            .first()
+        )
         if not model:
             return None
         for key, value in kwargs.items():
@@ -142,60 +163,102 @@ class SQLAlchemyAutomationRepository:
     def count_recent_sends(self, customer_codigo: str, rule_id: int, days: int = 1) -> int:
         """Count recent sends to a customer for a specific rule (cooldown check)."""
         from datetime import datetime, timedelta
+
         cutoff = datetime.utcnow() - timedelta(days=days)
-        count = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.rule_id == rule_id,
-            AutomationExecutionModel.customer_codigo == customer_codigo,
-            AutomationExecutionModel.status.in_([ExecutionStatus.SENT.value, ExecutionStatus.DELIVERED.value]),
-            AutomationExecutionModel.sent_at >= cutoff,
-        ).count()
+        count = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.rule_id == rule_id,
+                AutomationExecutionModel.customer_codigo == customer_codigo,
+                AutomationExecutionModel.status.in_([ExecutionStatus.SENT.value, ExecutionStatus.DELIVERED.value]),
+                AutomationExecutionModel.sent_at >= cutoff,
+            )
+            .count()
+        )
         return count
 
     def was_recently_contacted(self, customer_codigo: str, cooldown_days: int = 7) -> bool:
         """Check if customer was recently contacted by any automation."""
         from datetime import datetime, timedelta
+
         cutoff = datetime.utcnow() - timedelta(days=cooldown_days)
-        count = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.customer_codigo == customer_codigo,
-            AutomationExecutionModel.status.in_([ExecutionStatus.SENT.value, ExecutionStatus.DELIVERED.value]),
-            AutomationExecutionModel.sent_at >= cutoff,
-        ).count()
+        count = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.customer_codigo == customer_codigo,
+                AutomationExecutionModel.status.in_([ExecutionStatus.SENT.value, ExecutionStatus.DELIVERED.value]),
+                AutomationExecutionModel.sent_at >= cutoff,
+            )
+            .count()
+        )
         return count > 0
 
     def get_metrics(self) -> AutomationMetrics:
         """Get aggregate metrics."""
-        total_rules = self.db.query(AutomationRuleModel).filter(
-            AutomationRuleModel.tenant_id == self.tenant_id,
-        ).count()
-        active_rules = self.db.query(AutomationRuleModel).filter(
-            AutomationRuleModel.tenant_id == self.tenant_id,
-            AutomationRuleModel.status == AutomationStatus.ACTIVE.value,
-        ).count()
-        total_executions = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-        ).count()
-        pending = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.status == ExecutionStatus.PENDING.value,
-        ).count()
-        sent = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.status == ExecutionStatus.SENT.value,
-        ).count()
-        delivered = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.status == ExecutionStatus.DELIVERED.value,
-        ).count()
-        failed = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.status == ExecutionStatus.FAILED.value,
-        ).count()
-        opted_out = self.db.query(AutomationExecutionModel).filter(
-            AutomationExecutionModel.tenant_id == self.tenant_id,
-            AutomationExecutionModel.status == ExecutionStatus.OPTED_OUT.value,
-        ).count()
+        total_rules = (
+            self.db.query(AutomationRuleModel)
+            .filter(
+                AutomationRuleModel.tenant_id == self.tenant_id,
+            )
+            .count()
+        )
+        active_rules = (
+            self.db.query(AutomationRuleModel)
+            .filter(
+                AutomationRuleModel.tenant_id == self.tenant_id,
+                AutomationRuleModel.status == AutomationStatus.ACTIVE.value,
+            )
+            .count()
+        )
+        total_executions = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+            )
+            .count()
+        )
+        pending = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.status == ExecutionStatus.PENDING.value,
+            )
+            .count()
+        )
+        sent = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.status == ExecutionStatus.SENT.value,
+            )
+            .count()
+        )
+        delivered = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.status == ExecutionStatus.DELIVERED.value,
+            )
+            .count()
+        )
+        failed = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.status == ExecutionStatus.FAILED.value,
+            )
+            .count()
+        )
+        opted_out = (
+            self.db.query(AutomationExecutionModel)
+            .filter(
+                AutomationExecutionModel.tenant_id == self.tenant_id,
+                AutomationExecutionModel.status == ExecutionStatus.OPTED_OUT.value,
+            )
+            .count()
+        )
 
         success_rate = 0.0
         if total_executions > 0:

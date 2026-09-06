@@ -86,6 +86,35 @@ Mensagem → Bot → Banco de Dados → Pedido
 - Docker + Docker Compose
 - OU Python 3.12+ e Node.js 20+
 
+### Início rápido (sem Docker — um comando)
+
+```bash
+cd GasFlow
+./start-dev.sh     # sobe backend + WhatsApp + frontend, espera os health checks e abre o navegador
+```
+
+No Windows também dá para dar **duplo clique em `start-dev.cmd`**.
+
+O script:
+- cria o `.env` de dev na primeira execução (login padrão **admin / gasflow-dev**);
+- instala dependências se faltarem;
+- sobe os 3 serviços em background com logs em `logs/`:
+
+| Serviço | URL |
+|---------|-----|
+| Painel (frontend) | http://localhost:5173 |
+| API + Swagger | http://localhost:8000/docs |
+| WhatsApp (QR Code) | http://localhost:3001/connect |
+
+- reaproveita serviços que já estão no ar (rodar de novo é seguro);
+- abre o navegador (Brave se instalado, senão o padrão).
+
+Para parar tudo que o script iniciou:
+
+```bash
+./stop-dev.sh
+```
+
 ### Com Docker (Recomendado)
 
 ```bash

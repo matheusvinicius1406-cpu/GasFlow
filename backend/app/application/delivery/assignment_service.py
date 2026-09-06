@@ -25,7 +25,7 @@ from app.domain.events.event_bus import publish_delivery_event, publish_driver_e
 class AssignmentService:
     """
     Transactional delivery assignment service.
-    
+
     All operations happen within a single database session/transaction.
     If any step fails, the entire operation is rolled back.
     """
@@ -45,17 +45,17 @@ class AssignmentService:
     ) -> Dict[str, Any]:
         """
         Assign a delivery to a driver with vehicle capacity validation.
-        
+
         Args:
             tenant_id: Tenant context
             delivery_id: Delivery to assign
             driver_codigo: Driver codigo (from database)
             vehicle_id: Optional vehicle to use
             order_items: Optional {product_codigo: quantity} for capacity check
-            
+
         Returns:
             Dict with success, delivery, driver info
-            
+
         Raises:
             ValueError if any validation fails (transaction rolls back)
         """
@@ -94,13 +94,14 @@ class AssignmentService:
 
             # 6. Publish events (after commit succeeds)
             publish_delivery_event(
-                EventType.DELIVERY_ASSIGNED, delivery_id, tenant_id,
+                EventType.DELIVERY_ASSIGNED,
+                delivery_id,
+                tenant_id,
                 driver_id=driver_codigo,
-                data={"vehicle_id": vehicle_id, "order_items": order_items or {}}
+                data={"vehicle_id": vehicle_id, "order_items": order_items or {}},
             )
             publish_driver_event(
-                EventType.DRIVER_UNAVAILABLE, driver_codigo, tenant_id,
-                data={"reason": "delivery_assigned"}
+                EventType.DRIVER_UNAVAILABLE, driver_codigo, tenant_id, data={"reason": "delivery_assigned"}
             )
 
             return {
@@ -145,13 +146,14 @@ class AssignmentService:
 
             # Publish events
             publish_delivery_event(
-                EventType.DELIVERY_CANCELLED, delivery_id, tenant_id,
+                EventType.DELIVERY_CANCELLED,
+                delivery_id,
+                tenant_id,
                 driver_id=driver_codigo,
-                data={"vehicle_id": vehicle_id}
+                data={"vehicle_id": vehicle_id},
             )
             publish_driver_event(
-                EventType.DRIVER_AVAILABLE, driver_codigo, tenant_id,
-                data={"reason": "delivery_released"}
+                EventType.DRIVER_AVAILABLE, driver_codigo, tenant_id, data={"reason": "delivery_released"}
             )
 
             return {"success": True, "status": "RELEASED"}

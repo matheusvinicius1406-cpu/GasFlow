@@ -18,15 +18,10 @@ class SQLAlchemyRouteRepository:
         self.db = db
 
     def get_by_id(self, route_id: str) -> Optional[RouteRecord]:
-        return self.db.query(RouteRecord).filter(
-            RouteRecord.id == route_id
-        ).first()
+        return self.db.query(RouteRecord).filter(RouteRecord.id == route_id).first()
 
-    def list_by_tenant(self, tenant_id: str, status: str = None,
-                       driver_id: str = None) -> List[RouteRecord]:
-        q = self.db.query(RouteRecord).filter(
-            RouteRecord.tenant_id == tenant_id
-        )
+    def list_by_tenant(self, tenant_id: str, status: str = None, driver_id: str = None) -> List[RouteRecord]:
+        q = self.db.query(RouteRecord).filter(RouteRecord.tenant_id == tenant_id)
         if status:
             q = q.filter(RouteRecord.status == status)
         if driver_id:
@@ -35,8 +30,9 @@ class SQLAlchemyRouteRepository:
 
     def create(self, **kwargs) -> RouteRecord:
         import uuid as _uuid
-        if 'id' not in kwargs or not kwargs['id']:
-            kwargs['id'] = str(_uuid.uuid4())
+
+        if "id" not in kwargs or not kwargs["id"]:
+            kwargs["id"] = str(_uuid.uuid4())
         model = RouteRecord(**kwargs)
         self.db.add(model)
         self.db.commit()
@@ -57,10 +53,18 @@ class SQLAlchemyRouteRepository:
 
     # ── Stops ──────────────────────────────────────────
 
-    def add_stop(self, route_id: str, delivery_id: str, sequence: int,
-                 status: str = "PENDING", customer_name: str = "",
-                 customer_phone: str = "", address_snapshot: str = "") -> RouteStopRecord:
+    def add_stop(
+        self,
+        route_id: str,
+        delivery_id: str,
+        sequence: int,
+        status: str = "PENDING",
+        customer_name: str = "",
+        customer_phone: str = "",
+        address_snapshot: str = "",
+    ) -> RouteStopRecord:
         import uuid as _uuid
+
         stop = RouteStopRecord(
             id=str(_uuid.uuid4()),
             route_id=route_id,
@@ -77,14 +81,15 @@ class SQLAlchemyRouteRepository:
         return stop
 
     def get_stops(self, route_id: str) -> List[RouteStopRecord]:
-        return self.db.query(RouteStopRecord).filter(
-            RouteStopRecord.route_id == route_id
-        ).order_by(RouteStopRecord.sequence).all()
+        return (
+            self.db.query(RouteStopRecord)
+            .filter(RouteStopRecord.route_id == route_id)
+            .order_by(RouteStopRecord.sequence)
+            .all()
+        )
 
     def update_stop(self, stop_id: str, **kwargs) -> Optional[RouteStopRecord]:
-        model = self.db.query(RouteStopRecord).filter(
-            RouteStopRecord.id == stop_id
-        ).first()
+        model = self.db.query(RouteStopRecord).filter(RouteStopRecord.id == stop_id).first()
         if not model:
             return None
         for key, value in kwargs.items():
@@ -95,7 +100,5 @@ class SQLAlchemyRouteRepository:
         return model
 
     def delete_stops(self, route_id: str):
-        self.db.query(RouteStopRecord).filter(
-            RouteStopRecord.route_id == route_id
-        ).delete()
+        self.db.query(RouteStopRecord).filter(RouteStopRecord.route_id == route_id).delete()
         self.db.commit()

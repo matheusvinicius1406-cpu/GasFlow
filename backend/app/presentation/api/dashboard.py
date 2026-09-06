@@ -35,46 +35,47 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         # ── Orders ──────────────────────────────────────────
         all_orders = db.query(OrderModel).filter(OrderModel.tenant_id == tid).all()
         total_orders = len(all_orders)
-        pending_orders = sum(1 for o in all_orders if o.status == 'PENDING')
-        confirmed_orders = sum(1 for o in all_orders if o.status == 'CONFIRMED')
-        delivering_orders = sum(1 for o in all_orders if o.status == 'DELIVERING')
-        delivered_orders = sum(1 for o in all_orders if o.status == 'DELIVERED')
+        pending_orders = sum(1 for o in all_orders if o.status == "PENDING")
+        confirmed_orders = sum(1 for o in all_orders if o.status == "CONFIRMED")
+        delivering_orders = sum(1 for o in all_orders if o.status == "DELIVERING")
+        delivered_orders = sum(1 for o in all_orders if o.status == "DELIVERED")
 
         today_orders = [o for o in all_orders if o.created_at and o.created_at.date() == today]
-        total_revenue = sum(float(o.total or 0) for o in all_orders if o.payment_status == 'PAID')
-        today_revenue = sum(float(o.total or 0) for o in today_orders if o.payment_status == 'PAID')
-        paid_orders = [o for o in all_orders if o.payment_status == 'PAID']
+        total_revenue = sum(float(o.total or 0) for o in all_orders if o.payment_status == "PAID")
+        today_revenue = sum(float(o.total or 0) for o in today_orders if o.payment_status == "PAID")
+        paid_orders = [o for o in all_orders if o.payment_status == "PAID"]
         avg_ticket = total_revenue / len(paid_orders) if paid_orders else 0
 
         # ── Counts ──────────────────────────────────────────
         total_clients = db.query(func.count(ClientModel.id)).filter(ClientModel.tenant_id == tid).scalar() or 0
         total_products = db.query(func.count(ProductModel.id)).filter(ProductModel.tenant_id == tid).scalar() or 0
-        total_drivers = db.query(func.count(DeliveryDriverModel.id)).filter(DeliveryDriverModel.tenant_id == tid).scalar() or 0
+        total_drivers = (
+            db.query(func.count(DeliveryDriverModel.id)).filter(DeliveryDriverModel.tenant_id == tid).scalar() or 0
+        )
 
         # ── Payments ────────────────────────────────────────
         all_payments = db.query(PaymentModel).filter(PaymentModel.tenant_id == tid).all()
-        total_received = sum(float(p.amount or 0) for p in all_payments if p.status == 'PAID')
-        total_pending_payments = sum(float(p.amount or 0) for p in all_payments if p.status == 'PENDING')
+        total_received = sum(float(p.amount or 0) for p in all_payments if p.status == "PAID")
+        total_pending_payments = sum(float(p.amount or 0) for p in all_payments if p.status == "PENDING")
         today_received = sum(
-            float(p.amount or 0) for p in all_payments
-            if p.status == 'PAID' and p.paid_at and p.paid_at.date() == today
+            float(p.amount or 0) for p in all_payments if p.status == "PAID" and p.paid_at and p.paid_at.date() == today
         )
 
         # ── Expenses ────────────────────────────────────────
         all_expenses = db.query(ExpenseModel).filter(ExpenseModel.tenant_id == tid).all()
-        active_expenses = [e for e in all_expenses if e.status == 'ACTIVE']
+        active_expenses = [e for e in all_expenses if e.status == "ACTIVE"]
         total_expenses = sum(float(e.amount or 0) for e in active_expenses)
-        today_expenses = sum(
-            float(e.amount or 0) for e in active_expenses
-            if e.date and e.date == today
-        )
+        today_expenses = sum(float(e.amount or 0) for e in active_expenses if e.date and e.date == today)
 
         # ── Cash Balance ────────────────────────────────────
         cash_balance = 0
         try:
-            last_cash = db.query(CashMovementModel).filter(
-                CashMovementModel.tenant_id == tid
-            ).order_by(CashMovementModel.id.desc()).first()
+            last_cash = (
+                db.query(CashMovementModel)
+                .filter(CashMovementModel.tenant_id == tid)
+                .order_by(CashMovementModel.id.desc())
+                .first()
+            )
             if last_cash:
                 cash_balance = float(last_cash.balance_after or 0)
         except Exception:
@@ -82,21 +83,22 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
 
         # ── Inventory ───────────────────────────────────────
         inventory_items = db.query(InventoryModel).filter(InventoryModel.tenant_id == tid).all()
-        low_stock = [i for i in inventory_items if i.stock_status == 'LOW_STOCK']
-        out_of_stock = [i for i in inventory_items if i.stock_status == 'OUT_OF_STOCK']
+        low_stock = [i for i in inventory_items if i.stock_status == "LOW_STOCK"]
+        out_of_stock = [i for i in inventory_items if i.stock_status == "OUT_OF_STOCK"]
 
         # ── Yesterday Comparison (Trends) ──────────────────
-        yesterday = today - __import__('datetime').timedelta(days=1)
+        yesterday = today - __import__("datetime").timedelta(days=1)
         yesterday_orders = [o for o in all_orders if o.created_at and o.created_at.date() == yesterday]
-        yesterday_revenue = sum(float(o.total or 0) for o in yesterday_orders if o.payment_status == 'PAID')
-        yesterday_delivered = sum(1 for o in all_orders if o.status == 'DELIVERED' and o.updated_at and o.updated_at.date() == yesterday)
+        yesterday_revenue = sum(float(o.total or 0) for o in yesterday_orders if o.payment_status == "PAID")
+        yesterday_delivered = sum(
+            1 for o in all_orders if o.status == "DELIVERED" and o.updated_at and o.updated_at.date() == yesterday
+        )
 
-        yesterday_payments = db.query(PaymentModel).filter(
-            PaymentModel.tenant_id == tid
-        ).all()
+        yesterday_payments = db.query(PaymentModel).filter(PaymentModel.tenant_id == tid).all()
         yesterday_received = sum(
-            float(p.amount or 0) for p in yesterday_payments
-            if p.status == 'PAID' and p.paid_at and p.paid_at.date() == yesterday
+            float(p.amount or 0)
+            for p in yesterday_payments
+            if p.status == "PAID" and p.paid_at and p.paid_at.date() == yesterday
         )
 
         def _trend(current: float, previous: float) -> dict[str, Any]:
@@ -125,31 +127,36 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         ]
 
         # ── Active Deliveries ──────────────────────────────
-        delivering_list = [o for o in all_orders if o.status == 'DELIVERING']
+        delivering_list = [o for o in all_orders if o.status == "DELIVERING"]
         active_deliveries = []
         for o in delivering_list[:10]:
             driver_name = None
             driver_phone = None
             if o.delivery_driver_codigo:
                 try:
-                    driver = db.query(DeliveryDriverModel).filter(
-                        DeliveryDriverModel.tenant_id == tid,
-                        DeliveryDriverModel.codigo == o.delivery_driver_codigo
-                    ).first()
+                    driver = (
+                        db.query(DeliveryDriverModel)
+                        .filter(
+                            DeliveryDriverModel.tenant_id == tid, DeliveryDriverModel.codigo == o.delivery_driver_codigo
+                        )
+                        .first()
+                    )
                     if driver:
                         driver_name = driver.name
-                        driver_phone = getattr(driver, 'phone', None)
+                        driver_phone = getattr(driver, "phone", None)
                 except Exception:
                     pass
-            active_deliveries.append({
-                "order_codigo": o.codigo,
-                "client_codigo": o.client_codigo,
-                "total": float(o.total or 0),
-                "driver_codigo": o.delivery_driver_codigo,
-                "driver_name": driver_name,
-                "driver_phone": driver_phone,
-                "updated_at": o.updated_at.isoformat() if o.updated_at else None,
-            })
+            active_deliveries.append(
+                {
+                    "order_codigo": o.codigo,
+                    "client_codigo": o.client_codigo,
+                    "total": float(o.total or 0),
+                    "driver_codigo": o.delivery_driver_codigo,
+                    "driver_name": driver_name,
+                    "driver_phone": driver_phone,
+                    "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+                }
+            )
 
         # ── Recent Orders ───────────────────────────────────
         recent = sorted(all_orders, key=lambda o: o.created_at or datetime.min, reverse=True)[:5]
@@ -171,13 +178,41 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         # ── Alerts ──────────────────────────────────────────
         alerts = []
         if pending_orders > 0:
-            alerts.append({"type": "warning", "title": f"{pending_orders} pedido{'s' if pending_orders > 1 else ''} pendente{'s' if pending_orders > 1 else ''}", "description": "Pedidos aguardando processamento", "action": "/orders"})
+            alerts.append(
+                {
+                    "type": "warning",
+                    "title": f"{pending_orders} pedido{'s' if pending_orders > 1 else ''} pendente{'s' if pending_orders > 1 else ''}",
+                    "description": "Pedidos aguardando processamento",
+                    "action": "/orders",
+                }
+            )
         if out_of_stock:
-            alerts.append({"type": "danger", "title": f"{len(out_of_stock)} produto{'s' if len(out_of_stock) > 1 else ''} sem estoque", "description": "Produtos com estoque zerado", "action": "/inventory"})
+            alerts.append(
+                {
+                    "type": "danger",
+                    "title": f"{len(out_of_stock)} produto{'s' if len(out_of_stock) > 1 else ''} sem estoque",
+                    "description": "Produtos com estoque zerado",
+                    "action": "/inventory",
+                }
+            )
         if low_stock:
-            alerts.append({"type": "warning", "title": f"{len(low_stock)} produto{'s' if len(low_stock) > 1 else ''} com estoque baixo", "description": "Considere repor o estoque", "action": "/inventory"})
+            alerts.append(
+                {
+                    "type": "warning",
+                    "title": f"{len(low_stock)} produto{'s' if len(low_stock) > 1 else ''} com estoque baixo",
+                    "description": "Considere repor o estoque",
+                    "action": "/inventory",
+                }
+            )
         if delivering_orders > 0:
-            alerts.append({"type": "info", "title": f"{delivering_orders} entrega{'s' if delivering_orders > 1 else ''} em rota", "description": "Entregas em andamento", "action": "/deliveries"})
+            alerts.append(
+                {
+                    "type": "info",
+                    "title": f"{delivering_orders} entrega{'s' if delivering_orders > 1 else ''} em rota",
+                    "description": "Entregas em andamento",
+                    "action": "/deliveries",
+                }
+            )
 
         return {
             "summary": {

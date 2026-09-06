@@ -45,8 +45,7 @@ class OpenAIProvider(LLMProvider):
 
     # ── Interface LLMProvider ─────────────────────────────
 
-    def generate(self, messages: List[LLMMessage], temperature: float = 0.3,
-                 max_tokens: int = 2048) -> LLMResponse:
+    def generate(self, messages: List[LLMMessage], temperature: float = 0.3, max_tokens: int = 2048) -> LLMResponse:
         if not self._api_key:
             return LLMResponse(content="", error="OPENAI_MISSING_API_KEY")
         client = self._client()
@@ -57,12 +56,14 @@ class OpenAIProvider(LLMProvider):
         try:
             import asyncio  # noqa: PLC0415
 
-            response = asyncio.run(client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": m.role.value, "content": m.content} for m in messages],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            ))
+            response = asyncio.run(
+                client.chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": m.role.value, "content": m.content} for m in messages],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+            )
             latency = (time.time() - start) * 1000
             usage = LLMUsage(
                 input_tokens=response.usage.prompt_tokens if response.usage else 0,
@@ -77,9 +78,9 @@ class OpenAIProvider(LLMProvider):
         except Exception as exc:  # noqa: BLE001 — qualquer falha vira resposta de erro
             return LLMResponse(content="", error=f"OPENAI_ERROR:{type(exc).__name__}")
 
-    def generate_structured(self, messages: List[LLMMessage], schema: Dict[str, Any],
-                            temperature: float = 0.1,
-                            max_tokens: int = 1024) -> LLMResponse:
+    def generate_structured(
+        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+    ) -> LLMResponse:
         return self.generate(messages, temperature=min(temperature, 0.2), max_tokens=max_tokens)
 
     def health_check(self) -> bool:

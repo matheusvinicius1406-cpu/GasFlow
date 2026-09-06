@@ -16,7 +16,7 @@ export function ProductsPage() {
   const [filter, setFilter] = useState<'all' | 'GAS' | 'AGUA'>('all')
 
   const { data: products, isLoading, error, refetch } = useProducts()
-  
+
 
   const filteredProducts = (products ?? []).filter((p) => {
     const matchesSearch =

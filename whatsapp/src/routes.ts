@@ -272,6 +272,103 @@ router.get('/whatsapp/accounts/:id/messages', requireAuth, (req: Request, res: R
   const messages = listSentMessages(accountId, limit, offset);
   res.json({ messages, total: messages.length, limit, offset });
 });
+
+const MAX_MEDIA_BASE64_LENGTH = 25 * 1024 * 1024; // 25MB em base64 (~18MB binário)
+
+/**
+ * POST /api/whatsapp/accounts/:id/media
+ *
+ * Envia mídia (imagem, áudio, documento) via uma conta específica.
+ * Aceita `data` (base64) + `mimetype`, ou `mediaPath` (arquivo no servidor).
+ * Suporta idempotência via idempotency_key (mesma semântica de /messages).
+ */
+router.post('/whatsapp/accounts/:id/media', requireAuth, async (req: Request, res: Response) => {
+  const accountId = req.params.id;
+  const { recipient, caption, data, mimetype, filename, mediaPath, idempotency_key } = req.body ?? {};
+
+  // 1. Validate account exists and is connected
+  const account = providerManager.getAccount(accountId);
+  if (!account) {
+    res.status(404).json({ error: 'ACCOUNT_NOT_FOUND', detail: 'Conta não encontrada.' });
+    return;
+  }
+  if (!account.isConnected()) {
+    res.status(409).json({ error: 'ACCOUNT_NOT_CONNECTED', detail: 'Conta não está conectada.' });
+    return;
+  }
+
+  // 2. Validate recipient
+  const normalizedPhone = normalizePhone(recipient);
+  if (!normalizedPhone) {
+    res.status(400).json({ error: 'INVALID_PHONE', detail: 'Número de telefone inválido.' });
+    return;
+  }
+
+  // 3. Resolve mídia: data+mimetype (base64) OU mediaPath (arquivo no servidor)
+  let mediaData = data;
+  let mediaMime = mimetype;
+  if (mediaPath) {
+    try {
+      const { readFileSync } = await import('node:fs');
+      const buffer = readFileSync(String(mediaPath));
+      mediaData = buffer.toString('base64');
+      mediaMime = mediaMime || 'application/octet-stream';
+    } catch {
+      res.status(400).json({ error: 'MEDIA_PATH_INVALID', detail: 'Não foi possível ler mediaPath.' });
+      return;
+    }
+  }
+  if (!mediaData || typeof mediaData !== 'string' || !mediaMime || typeof mediaMime !== 'string') {
+    res.status(400).json({ error: 'MEDIA_INVALID', detail: 'Forneça data (base64) + mimetype, ou mediaPath.' });
+    return;
+  }
+  if (mediaData.length > MAX_MEDIA_BASE64_LENGTH) {
+    res.status(400).json({ error: 'MEDIA_TOO_LARGE', detail: `Mídia excede o limite de ${MAX_MEDIA_BASE64_LENGTH / 1024 / 1024}MB.` });
+    return;
+  }
+
+  // 4. Idempotency
+  const idempotencyKey = idempotency_key || `${accountId}:media:${normalizedPhone}:${Date.now()}`;
+  const existing = findSentMessageByKey(idempotencyKey);
+  if (existing && existing.status === 'SENT') {
+    res.json({ success: true, messageId: existing.provider_msg_id, idempotencyKey, duplicate: true });
+    return;
+  }
+  if (existing && existing.status === 'PENDING') {
+    res.status(409).json({ error: 'DUPLICATE_IDEMPOTENCY_KEY', detail: 'Mensagem já está sendo processada.' });
+    return;
+  }
+
+  // 5. Insert record (PENDING)
+  const record = insertSentMessage({
+    idempotencyKey,
+    accountId,
+    recipient: normalizedPhone,
+    messageText: caption ? String(caption).slice(0, 4096) : `[media:${mediaMime}]`,
+  });
+
+  // 6. Send via provider
+  try {
+    const result = await account.sendMedia(normalizedPhone, {
+      data: mediaData as string,
+      mimetype: mediaMime as string,
+      filename: filename ? String(filename) : undefined,
+      caption: caption ? String(caption) : undefined,
+    });
+    if (result.success) {
+      markSentMessageSent(record.id, result.messageId || 'unknown');
+      console.log(`[media] Enviado para ${normalizedPhone} via ${accountId} (key: ${idempotencyKey})`);
+      res.json({ success: true, messageId: result.messageId, idempotencyKey });
+    } else {
+      markSentMessageFailed(record.id, result.error || 'Unknown error');
+      res.status(500).json({ error: 'MEDIA_SEND_FAILED', detail: result.error || 'Falha ao enviar mídia.' });
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    markSentMessageFailed(record.id, errorMsg);
+    res.status(500).json({ error: 'SERVICE_UNAVAILABLE', detail: 'Serviço de mensageria temporariamente indisponível.' });
+  }
+});
 // ── Legacy endpoints (backward compat) ──────────────────
 
 router.get('/whatsapp/status', (_req: Request, res: Response) => {

@@ -13,6 +13,7 @@ import uuid
 
 # ── States ──────────────────────────────────────────────
 
+
 class WorkflowStatus(str, Enum):
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
@@ -33,9 +34,11 @@ class StepStatus(str, Enum):
 
 # ── Workflow Definition ─────────────────────────────────
 
+
 @dataclass
 class WorkflowStepDef:
     """Single step definition in a workflow."""
+
     id: str = ""
     name: str = ""
     action_type: str = ""  # tool_call, condition_check, approval_request, notification
@@ -52,6 +55,7 @@ class WorkflowStepDef:
 @dataclass
 class WorkflowDefinition:
     """Workflow definition — the blueprint."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     description: str = ""
@@ -77,9 +81,11 @@ class WorkflowDefinition:
 
 # ── Workflow Run ────────────────────────────────────────
 
+
 @dataclass
 class WorkflowRun:
     """Instance of a running/completed workflow."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     workflow_id: str = ""
     workflow_version: int = 1
@@ -112,9 +118,11 @@ class WorkflowRun:
 
 # ── Workflow Step Run ───────────────────────────────────
 
+
 @dataclass
 class WorkflowStepRun:
     """Instance of a running/completed workflow step."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     run_id: str = ""
     step_id: str = ""

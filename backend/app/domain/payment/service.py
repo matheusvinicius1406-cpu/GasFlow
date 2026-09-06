@@ -14,17 +14,22 @@ import threading
 import time
 
 from app.domain.payment.models import (
-    Payment, PaymentMethod, PixConfig,
-    PaymentStatus, PaymentType, PixKeyType,
+    Payment,
+    PaymentMethod,
+    PixConfig,
+    PaymentStatus,
+    PaymentType,
+    PixKeyType,
 )
 from app.domain.payment.pix_service import (
-    PixService, _sanitize_txid,
+    PixService,
+    _sanitize_txid,
 )
 
 
 class PaymentService:
     """Payment service with database persistence.
-    
+
     Supports two modes:
     - DB mode: when db session is provided, uses SQLAlchemy repositories
     - In-memory mode: fallback for tests
@@ -43,24 +48,33 @@ class PaymentService:
 
     def _get_method_repo(self):
         from app.infrastructure.repositories.payment_repository import SQLAlchemyPaymentMethodRepository
+
         return SQLAlchemyPaymentMethodRepository(self._db)
 
     def _get_pix_repo(self):
         from app.infrastructure.repositories.payment_repository import SQLAlchemyPixConfigRepository
+
         return SQLAlchemyPixConfigRepository(self._db)
 
     def _get_payment_repo(self):
         from app.infrastructure.repositories.payment_repository import SQLAlchemyServicePaymentRepository
+
         return SQLAlchemyServicePaymentRepository(self._db)
 
     def _method_model_to_domain(self, model) -> PaymentMethod:
         return PaymentMethod(
-            id=model.id, tenant_id=model.tenant_id, code=model.code,
-            name=model.name, payment_type=PaymentType(model.payment_type),
-            enabled=model.enabled, display_order=model.display_order,
+            id=model.id,
+            tenant_id=model.tenant_id,
+            code=model.code,
+            name=model.name,
+            payment_type=PaymentType(model.payment_type),
+            enabled=model.enabled,
+            display_order=model.display_order,
             requires_confirmation=model.requires_confirmation,
-            description=model.description, fee_type=model.fee_type,
-            fee_value=model.fee_value, discount_type=model.discount_type,
+            description=model.description,
+            fee_type=model.fee_type,
+            fee_value=model.fee_value,
+            discount_type=model.discount_type,
             discount_value=model.discount_value,
             created_at=model.created_at.isoformat() if model.created_at else "",
             updated_at=model.updated_at.isoformat() if model.updated_at else "",
@@ -68,29 +82,40 @@ class PaymentService:
 
     def _pix_model_to_domain(self, model) -> PixConfig:
         return PixConfig(
-            id=model.id, tenant_id=model.tenant_id, key=model.key,
+            id=model.id,
+            tenant_id=model.tenant_id,
+            key=model.key,
             key_type=PixKeyType(model.key_type),
-            holder_name=model.holder_name, holder_document=model.holder_document,
-            institution=model.institution, city=model.city,
-            copy_paste_code=model.copy_paste_code, active=model.active,
+            holder_name=model.holder_name,
+            holder_document=model.holder_document,
+            institution=model.institution,
+            city=model.city,
+            copy_paste_code=model.copy_paste_code,
+            active=model.active,
             created_at=model.created_at.isoformat() if model.created_at else "",
             updated_at=model.updated_at.isoformat() if model.updated_at else "",
         )
 
     def _payment_model_to_domain(self, model) -> Payment:
         return Payment(
-            id=model.id, tenant_id=model.tenant_id,
-            order_id=model.order_id, order_codigo=model.order_codigo,
-            customer_codigo=model.customer_codigo, amount=model.amount,
-            method_code=model.method_code, method_name=model.method_name,
+            id=model.id,
+            tenant_id=model.tenant_id,
+            order_id=model.order_id,
+            order_codigo=model.order_codigo,
+            customer_codigo=model.customer_codigo,
+            amount=model.amount,
+            method_code=model.method_code,
+            method_name=model.method_name,
             status=PaymentStatus(model.status),
-            pix_key_used=model.pix_key_used, pix_copy_paste=model.pix_copy_paste,
+            pix_key_used=model.pix_key_used,
+            pix_copy_paste=model.pix_copy_paste,
             confirmed_by=model.confirmed_by,
             confirmed_at=model.confirmed_at.isoformat() if model.confirmed_at else None,
             confirmation_notes=model.confirmation_notes,
             refunded_at=model.refunded_at.isoformat() if model.refunded_at else None,
             refund_reason=model.refund_reason,
-            provider=model.provider, external_id=model.external_id,
+            provider=model.provider,
+            external_id=model.external_id,
             provider_status=model.provider_status,
             created_at=model.created_at.isoformat() if model.created_at else "",
             updated_at=model.updated_at.isoformat() if model.updated_at else "",
@@ -134,18 +159,25 @@ class PaymentService:
                 return m
         return None
 
-    def create_method(self, tenant_id: str, code: str, name: str,
-                      payment_type: str = "CUSTOM", **kwargs) -> PaymentMethod:
+    def create_method(
+        self, tenant_id: str, code: str, name: str, payment_type: str = "CUSTOM", **kwargs
+    ) -> PaymentMethod:
         """Create a payment method for a tenant."""
         if self._use_db:
             model = self._get_method_repo().create(
-                tenant_id=tenant_id, code=code, name=name,
-                payment_type=payment_type, **kwargs,
+                tenant_id=tenant_id,
+                code=code,
+                name=name,
+                payment_type=payment_type,
+                **kwargs,
             )
             return self._method_model_to_domain(model)
         method = PaymentMethod(
-            tenant_id=tenant_id, code=code, name=name,
-            payment_type=PaymentType(payment_type), **kwargs,
+            tenant_id=tenant_id,
+            code=code,
+            name=name,
+            payment_type=PaymentType(payment_type),
+            **kwargs,
         )
         with self._lock:
             self._methods[method.id] = method
@@ -210,34 +242,44 @@ class PaymentService:
             return [self._pix_model_to_domain(m) for m in models]
         return [pc for pc in self._pix_configs.values() if pc.tenant_id == tenant_id]
 
-    def _static_copy_paste(self, key: str, key_type: str,
-                           holder_name: str = "", city: str = "") -> str:
+    def _static_copy_paste(self, key: str, key_type: str, holder_name: str = "", city: str = "") -> str:
         """BR Code estático (sem valor) para a config — '' se chave inválida."""
         if not key:
             return ""
         try:
             from app.domain.payment.pix_service import build_pix_copy_paste
+
             return build_pix_copy_paste(
-                key=key, key_type=key_type,
+                key=key,
+                key_type=key_type,
                 merchant_name=holder_name or "GasFlow",
                 merchant_city=city or "SAO PAULO",
             )
         except ValueError:
             return ""
 
-    def create_pix_config(self, tenant_id: str, key: str, key_type: str = "RANDOM",
-                          holder_name: str = "", **kwargs) -> PixConfig:
+    def create_pix_config(
+        self, tenant_id: str, key: str, key_type: str = "RANDOM", holder_name: str = "", **kwargs
+    ) -> PixConfig:
         """Create PIX configuration for a tenant."""
         copy_paste = self._static_copy_paste(key, key_type, holder_name, kwargs.get("city", ""))
         if self._use_db:
             model = self._get_pix_repo().create(
-                tenant_id=tenant_id, key=key, key_type=key_type,
-                holder_name=holder_name, copy_paste_code=copy_paste, **kwargs,
+                tenant_id=tenant_id,
+                key=key,
+                key_type=key_type,
+                holder_name=holder_name,
+                copy_paste_code=copy_paste,
+                **kwargs,
             )
             return self._pix_model_to_domain(model)
         config = PixConfig(
-            tenant_id=tenant_id, key=key, key_type=PixKeyType(key_type),
-            holder_name=holder_name, copy_paste_code=copy_paste, **kwargs,
+            tenant_id=tenant_id,
+            key=key,
+            key_type=PixKeyType(key_type),
+            holder_name=holder_name,
+            copy_paste_code=copy_paste,
+            **kwargs,
         )
         with self._lock:
             self._pix_configs[config.id] = config
@@ -255,7 +297,10 @@ class PaymentService:
             new_holder = kwargs.get("holder_name", model.holder_name)
             new_city = kwargs.get("city", model.city)
             kwargs["copy_paste_code"] = self._static_copy_paste(
-                new_key, new_type, new_holder, new_city,
+                new_key,
+                new_type,
+                new_holder,
+                new_city,
             )
             updated = self._get_pix_repo().update(config_id, **kwargs)
             return self._pix_model_to_domain(updated) if updated else None
@@ -267,7 +312,10 @@ class PaymentService:
                 if hasattr(config, key):
                     setattr(config, key, value)
             config.copy_paste_code = self._static_copy_paste(
-                config.key, config.key_type.value, config.holder_name, config.city,
+                config.key,
+                config.key_type.value,
+                config.holder_name,
+                config.city,
             )
             config.updated_at = datetime.utcnow().isoformat()
         return config
@@ -296,8 +344,9 @@ class PaymentService:
                 return txid
         return _sanitize_txid(f"GAS{int(time.time() * 1000)}")
 
-    def generate_pix_payload(self, tenant_id: str, amount: float,
-                             description: str = "", order_codigo: str = "") -> Optional[dict]:
+    def generate_pix_payload(
+        self, tenant_id: str, amount: float, description: str = "", order_codigo: str = ""
+    ) -> Optional[dict]:
         """Gera payload PIX (BR Code + QR) com a config ativa do tenant.
 
         Retorna None se o tenant não tem chave PIX ativa configurada.
@@ -319,9 +368,16 @@ class PaymentService:
             txid=self._pix_txid(order_codigo),
         )
 
-    def create_payment(self, tenant_id: str, order_id: str, order_codigo: str,
-                       customer_codigo: str, amount: float, method_code: str,
-                       **kwargs) -> Payment:
+    def create_payment(
+        self,
+        tenant_id: str,
+        order_id: str,
+        order_codigo: str,
+        customer_codigo: str,
+        amount: float,
+        method_code: str,
+        **kwargs,
+    ) -> Payment:
         """Create a payment for an order."""
         method = self.get_method_by_code(method_code, tenant_id)
         method_name = method.name if method else method_code
@@ -334,7 +390,9 @@ class PaymentService:
                 pix_key_used = pix_config.key
                 try:
                     payload = self.generate_pix_payload(
-                        tenant_id, amount, order_codigo=order_codigo,
+                        tenant_id,
+                        amount,
+                        order_codigo=order_codigo,
                     )
                     if payload:
                         pix_copy_paste = payload["br_code"]
@@ -346,19 +404,30 @@ class PaymentService:
 
         if self._use_db:
             model = self._get_payment_repo().create(
-                tenant_id=tenant_id, order_id=order_id,
-                order_codigo=order_codigo, customer_codigo=customer_codigo,
-                amount=amount, method_code=method_code, method_name=method_name,
-                status="PENDING", pix_key_used=pix_key_used,
-                pix_copy_paste=pix_copy_paste, **kwargs,
+                tenant_id=tenant_id,
+                order_id=order_id,
+                order_codigo=order_codigo,
+                customer_codigo=customer_codigo,
+                amount=amount,
+                method_code=method_code,
+                method_name=method_name,
+                status="PENDING",
+                pix_key_used=pix_key_used,
+                pix_copy_paste=pix_copy_paste,
+                **kwargs,
             )
             return self._payment_model_to_domain(model)
 
         payment = Payment(
-            tenant_id=tenant_id, order_id=order_id,
-            order_codigo=order_codigo, customer_codigo=customer_codigo,
-            amount=amount, method_code=method_code, method_name=method_name,
-            pix_key_used=pix_key_used, pix_copy_paste=pix_copy_paste,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_codigo=order_codigo,
+            customer_codigo=customer_codigo,
+            amount=amount,
+            method_code=method_code,
+            method_name=method_name,
+            pix_key_used=pix_key_used,
+            pix_copy_paste=pix_copy_paste,
             **kwargs,
         )
         with self._lock:
@@ -382,11 +451,9 @@ class PaymentService:
         if self._use_db:
             models = self._get_payment_repo().list_by_order(order_id, tenant_id)
             return [self._payment_model_to_domain(m) for m in models]
-        return [p for p in self._payments.values()
-                if p.order_id == order_id and p.tenant_id == tenant_id]
+        return [p for p in self._payments.values() if p.order_id == order_id and p.tenant_id == tenant_id]
 
-    def get_payments_for_tenant(self, tenant_id: str, status: str = None,
-                                limit: int = 50) -> List[Payment]:
+    def get_payments_for_tenant(self, tenant_id: str, status: str = None, limit: int = 50) -> List[Payment]:
         """Get payments for a tenant."""
         if self._use_db:
             models = self._get_payment_repo().list_by_tenant(tenant_id, status, limit)
@@ -397,25 +464,28 @@ class PaymentService:
         payments.sort(key=lambda p: p.created_at, reverse=True)
         return payments[:limit]
 
-    def confirm_payment(self, payment_id: str, tenant_id: str,
-                        confirmed_by: str = "", notes: str = "") -> Optional[Payment]:
+    def confirm_payment(
+        self, payment_id: str, tenant_id: str, confirmed_by: str = "", notes: str = ""
+    ) -> Optional[Payment]:
         """Confirm a payment."""
         payment = self.get_payment(payment_id, tenant_id)
         if not payment:
             return None
         if self._use_db:
             now = datetime.utcnow()
-            self._get_payment_repo().update(payment_id,
-                status="CONFIRMED", confirmed_by=confirmed_by,
-                confirmed_at=now, confirmation_notes=notes,
+            self._get_payment_repo().update(
+                payment_id,
+                status="CONFIRMED",
+                confirmed_by=confirmed_by,
+                confirmed_at=now,
+                confirmation_notes=notes,
             )
             return self.get_payment(payment_id, tenant_id)
         with self._lock:
             payment.confirm(by=confirmed_by, notes=notes)
         return payment
 
-    def cancel_payment(self, payment_id: str, tenant_id: str,
-                       reason: str = "") -> Optional[Payment]:
+    def cancel_payment(self, payment_id: str, tenant_id: str, reason: str = "") -> Optional[Payment]:
         """Cancel a payment."""
         payment = self.get_payment(payment_id, tenant_id)
         if not payment:
@@ -427,16 +497,18 @@ class PaymentService:
             payment.cancel(reason)
         return payment
 
-    def refund_payment(self, payment_id: str, tenant_id: str,
-                       reason: str = "") -> Optional[Payment]:
+    def refund_payment(self, payment_id: str, tenant_id: str, reason: str = "") -> Optional[Payment]:
         """Refund a payment."""
         payment = self.get_payment(payment_id, tenant_id)
         if not payment:
             return None
         if self._use_db:
             now = datetime.utcnow()
-            self._get_payment_repo().update(payment_id,
-                status="REFUNDED", refunded_at=now, refund_reason=reason,
+            self._get_payment_repo().update(
+                payment_id,
+                status="REFUNDED",
+                refunded_at=now,
+                refund_reason=reason,
             )
             return self.get_payment(payment_id, tenant_id)
         with self._lock:
@@ -463,9 +535,7 @@ class PaymentService:
             return None
         with self._lock:
             for payment in self._payments.values():
-                if payment.external_id == txid or (
-                    payment.pix_copy_paste and txid in payment.pix_copy_paste
-                ):
+                if payment.external_id == txid or (payment.pix_copy_paste and txid in payment.pix_copy_paste):
                     return payment
         return None
 
@@ -514,6 +584,7 @@ def get_payment_service() -> PaymentService:
             try:
                 from sqlalchemy.orm import Session as DBSession
                 from app.infrastructure.database.init_db import engine
+
                 db = DBSession(bind=engine)
                 _payment_service = PaymentService(db=db)
             except Exception:

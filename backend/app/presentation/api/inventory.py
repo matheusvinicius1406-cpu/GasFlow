@@ -37,10 +37,7 @@ from app.presentation.schemas.inventory import (
 )
 
 
-router = APIRouter(
-    prefix="/inventory",
-    tags=["Inventory"]
-)
+router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
 def _get_inventory_repo(db: Session = Depends(get_db)):
@@ -53,9 +50,12 @@ def _get_product_repo(db: Session = Depends(get_db)):
 
 # ── List Inventory ────────────────────────────────────────
 
+
 @router.get("/", response_model=InventoryListResponse)
 def list_inventory(
-    stock_status: Optional[str] = Query(default=None, description="Filtrar por status: IN_STOCK, LOW_STOCK, OUT_OF_STOCK"),
+    stock_status: Optional[str] = Query(
+        default=None, description="Filtrar por status: IN_STOCK, LOW_STOCK, OUT_OF_STOCK"
+    ),
     product_type: Optional[str] = Query(default=None, description="Filtrar por tipo de produto"),
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
@@ -73,20 +73,23 @@ def list_inventory(
         product = prod_repo.buscar_por_codigo(inv.product_codigo)
         if product and product_type and product.tipo != product_type:
             continue
-        items.append(InventoryResponse(
-            product_codigo=inv.product_codigo,
-            quantity=inv.quantity,
-            minimum_quantity=inv.minimum_quantity,
-            maximum_quantity=inv.maximum_quantity,
-            stock_status=inv.stock_status.value,
-            available_quantity=inv.available_quantity,
-            updated_at=inv.updated_at,
-        ))
+        items.append(
+            InventoryResponse(
+                product_codigo=inv.product_codigo,
+                quantity=inv.quantity,
+                minimum_quantity=inv.minimum_quantity,
+                maximum_quantity=inv.maximum_quantity,
+                stock_status=inv.stock_status.value,
+                available_quantity=inv.available_quantity,
+                updated_at=inv.updated_at,
+            )
+        )
 
     return InventoryListResponse(items=items, total=len(items))
 
 
 # ── Get Inventory by Product ──────────────────────────────
+
 
 @router.get("/{product_codigo}", response_model=InventoryResponse)
 def get_inventory(
@@ -112,6 +115,7 @@ def get_inventory(
 
 # ── Get Movements by Product ──────────────────────────────
 
+
 @router.get("/{product_codigo}/movements", response_model=StockMovementListResponse)
 def get_movements(
     product_codigo: str,
@@ -133,6 +137,7 @@ def get_movements(
 
 
 # ── Add Stock ─────────────────────────────────────────────
+
 
 @router.post("/{product_codigo}/entries", response_model=StockOperationResponse)
 def add_stock(
@@ -168,6 +173,7 @@ def add_stock(
 
 # ── Adjust Stock ──────────────────────────────────────────
 
+
 @router.post("/{product_codigo}/adjustments", response_model=StockOperationResponse)
 def adjust_stock(
     product_codigo: str,
@@ -201,6 +207,7 @@ def adjust_stock(
 
 
 # ── Record Loss ──────────────────────────────────────────
+
 
 @router.post("/{product_codigo}/losses", response_model=StockOperationResponse)
 def record_loss(
@@ -236,6 +243,7 @@ def record_loss(
 
 # ── Reconciliation ───────────────────────────────────────
 
+
 @router.get("/reconciliation/check", response_model=list[ReconciliationResponse])
 def reconciliation_check(
     db: Session = Depends(get_db),
@@ -248,6 +256,7 @@ def reconciliation_check(
 
 
 # ── Set Minimum ───────────────────────────────────────────
+
 
 @router.patch("/{product_codigo}/minimum", response_model=InventoryResponse)
 def set_minimum(

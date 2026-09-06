@@ -24,19 +24,24 @@ from app.domain.security.models import TenantContext
 router = APIRouter(prefix="/automation/whatsapp", tags=["whatsapp-automation"])
 
 
-def _get_service(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)) -> WhatsAppAutomationService:
+def _get_service(
+    db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)
+) -> WhatsAppAutomationService:
     auto_repo = SQLAlchemyAutomationRepository(db, ctx.tenant_id)
     client_repo = SQLAlchemyClientRepository(db, ctx.tenant_id)
     order_repo = SQLAlchemyOrderRepository(db, ctx.tenant_id)
     return WhatsAppAutomationService(auto_repo, client_repo, order_repo)
 
 
-def _get_processor(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)) -> ExecutionProcessor:
+def _get_processor(
+    db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)
+) -> ExecutionProcessor:
     auto_repo = SQLAlchemyAutomationRepository(db, ctx.tenant_id)
     return ExecutionProcessor(auto_repo)
 
 
 # ── Schemas ──────────────────────────────────────────
+
 
 class RuleCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -70,6 +75,7 @@ class PreviewRequest(BaseModel):
 
 
 # ── Rules ────────────────────────────────────────────
+
 
 @router.get("/rules")
 def list_rules(
@@ -161,6 +167,7 @@ def pause_rule(
 
 # ── Execution ────────────────────────────────────────
 
+
 @router.post("/rules/{rule_id}/execute")
 def execute_rule(
     rule_id: int,
@@ -207,6 +214,7 @@ def cancel_execution(
 
 # ── Preview & Metrics ────────────────────────────────
 
+
 @router.post("/preview")
 def preview_template(
     req: PreviewRequest,
@@ -226,6 +234,7 @@ def get_metrics(
 
 
 # ── Execution Processing (FASE 14.5) ─────────────────
+
 
 @router.post("/executions/{execution_id}/process")
 async def process_execution(

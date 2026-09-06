@@ -32,12 +32,12 @@ WEIGHT_PRODUCT = 0.20
 # Confidence thresholds
 HIGH_CONFIDENCE_MIN_ORDERS = 6
 MEDIUM_CONFIDENCE_MIN_ORDERS = 3
-LOW_CV_THRESHOLD = 0.3   # coefficient of variation for HIGH
+LOW_CV_THRESHOLD = 0.3  # coefficient of variation for HIGH
 MEDIUM_CV_THRESHOLD = 0.5  # coefficient of variation for MEDIUM
 
 # Status thresholds (in days relative to expected interval)
-READY_BUFFER_DAYS = 3      # within 3 days before expected
-DUE_BUFFER_DAYS = 7        # within 7 days after expected
+READY_BUFFER_DAYS = 3  # within 3 days before expected
+DUE_BUFFER_DAYS = 7  # within 7 days after expected
 OVERDUE_THRESHOLD_DAYS = 14  # more than 14 days after expected
 DORMANT_THRESHOLD_DAYS = 30  # more than 30 days after expected
 
@@ -195,7 +195,7 @@ class ReorderService:
         if mean == 0:
             return 1.0
         variance = sum((x - mean) ** 2 for x in values) / len(values)
-        std = variance ** 0.5
+        std = variance**0.5
         return std / mean
 
     def _calculate_confidence(self, total_orders: int, cv: float) -> ConfidenceLevel:
@@ -255,10 +255,10 @@ class ReorderService:
 
         # Weighted score
         score = (
-            recency * WEIGHT_RECENCY +
-            frequency * WEIGHT_FREQUENCY +
-            regularity * WEIGHT_REGULARITY +
-            product_factor * WEIGHT_PRODUCT
+            recency * WEIGHT_RECENCY
+            + frequency * WEIGHT_FREQUENCY
+            + regularity * WEIGHT_REGULARITY
+            + product_factor * WEIGHT_PRODUCT
         )
 
         return min(100, max(0, score))

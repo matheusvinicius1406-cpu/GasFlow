@@ -13,13 +13,18 @@ from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.domain.whatsapp.conversation import (
-    Conversation, ConversationMessage, ConversationState, ConversationDraft,
+    Conversation,
+    ConversationMessage,
+    ConversationState,
+    ConversationDraft,
 )
 from app.domain.whatsapp.repository import (
-    ConversationRepository, ConversationMessageRepository,
+    ConversationRepository,
+    ConversationMessageRepository,
 )
 from app.infrastructure.repositories.whatsapp_model import (
-    WhatsAppConversationModel, WhatsAppMessageModel,
+    WhatsAppConversationModel,
+    WhatsAppMessageModel,
 )
 
 
@@ -30,13 +35,18 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         self.session = session
 
     def find_by_phone_and_account(self, customer_phone: str, account_id: str) -> Optional[Conversation]:
-        model = self.session.query(WhatsAppConversationModel).filter(
-            and_(
-                WhatsAppConversationModel.phone_number == customer_phone,
-                WhatsAppConversationModel.account_id == account_id,
-                WhatsAppConversationModel.status.notin_(["CLOSED"]),
+        model = (
+            self.session.query(WhatsAppConversationModel)
+            .filter(
+                and_(
+                    WhatsAppConversationModel.phone_number == customer_phone,
+                    WhatsAppConversationModel.account_id == account_id,
+                    WhatsAppConversationModel.status.notin_(["CLOSED"]),
+                )
             )
-        ).order_by(WhatsAppConversationModel.updated_at.desc()).first()
+            .order_by(WhatsAppConversationModel.updated_at.desc())
+            .first()
+        )
         if not model:
             return None
         return self._to_domain(model)
@@ -93,7 +103,9 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         self.session.commit()
         return True
 
-    def list_active(self, account_id: Optional[str] = None, limit: int = 50, offset: int = 0) -> Tuple[List[Conversation], int]:
+    def list_active(
+        self, account_id: Optional[str] = None, limit: int = 50, offset: int = 0
+    ) -> Tuple[List[Conversation], int]:
         query = self.session.query(WhatsAppConversationModel).filter(
             WhatsAppConversationModel.status.notin_(["CLOSED"])
         )
@@ -211,11 +223,14 @@ class SQLAlchemyConversationMessageRepository(ConversationMessageRepository):
         return [self._to_domain(m) for m in models]
 
     def count_by_conversation(self, conversation_id: int) -> int:
-        return self.session.query(
-            self.session.query(WhatsAppMessageModel)
-            .filter(WhatsAppMessageModel.conversation_id == conversation_id)
-            .exists()
-        ).scalar() or 0
+        return (
+            self.session.query(
+                self.session.query(WhatsAppMessageModel)
+                .filter(WhatsAppMessageModel.conversation_id == conversation_id)
+                .exists()
+            ).scalar()
+            or 0
+        )
 
     def _to_domain(self, model: WhatsAppMessageModel) -> ConversationMessage:
         metadata = {}

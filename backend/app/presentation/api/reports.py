@@ -26,7 +26,9 @@ def _get_order_data_for_date(tenant_id: str, date: str):
     try:
         from sqlalchemy.orm import Session as DBSession
         from app.infrastructure.database.init_db import engine
-        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+        )
 
         orders = []
         payments = []
@@ -39,13 +41,13 @@ def _get_order_data_for_date(tenant_id: str, date: str):
 
             for delivery in deliveries:
                 order_data = {
-                    "codigo": delivery.order_id or '???',
-                    "client_name": delivery.customer_name or '',
-                    "customer_codigo": delivery.customer_codigo or '',
-                    "status": delivery.status or 'PENDING',
+                    "codigo": delivery.order_id or "???",
+                    "client_name": delivery.customer_name or "",
+                    "customer_codigo": delivery.customer_codigo or "",
+                    "status": delivery.status or "PENDING",
                     "total": 0,
                     "items": [],
-                    "created_at": str(delivery.created_at) if delivery.created_at else '',
+                    "created_at": str(delivery.created_at) if delivery.created_at else "",
                     "payment_method": "",
                 }
                 orders.append(order_data)
@@ -64,11 +66,11 @@ async def get_daily_report(
 ):
     """Get daily report summary as JSON."""
     if not date:
-        date = datetime.now().strftime('%Y-%m-%d')
+        date = datetime.now().strftime("%Y-%m-%d")
 
     # Validate date format
     try:
-        datetime.strptime(date, '%Y-%m-%d')
+        datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
 
@@ -88,11 +90,11 @@ async def get_daily_report_pdf(
 ):
     """Download daily report as PDF."""
     if not date:
-        date = datetime.now().strftime('%Y-%m-%d')
+        date = datetime.now().strftime("%Y-%m-%d")
 
     # Validate date format
     try:
-        datetime.strptime(date, '%Y-%m-%d')
+        datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
 
@@ -125,15 +127,17 @@ async def get_business_summary(
     try:
         from sqlalchemy.orm import Session as DBSession
         from app.infrastructure.database.init_db import engine
-        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+        )
 
         db = DBSession(bind=engine)
         try:
             del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
             status_counts = del_repo.count_by_status()
             total_deliveries = sum(status_counts.values())
-            delivered = status_counts.get('DELIVERED', 0)
-            failed = status_counts.get('FAILED', 0)
+            delivered = status_counts.get("DELIVERED", 0)
+            failed = status_counts.get("FAILED", 0)
             pending = total_deliveries - delivered - failed
 
             return {

@@ -5,15 +5,14 @@ Replaces in-memory shared_store["routes"] with database persistence.
 Routes represent the operational plan for a driver's delivery sequence.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Index
-)
+from sqlalchemy import Column, Integer, String, DateTime, Text, Index
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
 
 class RouteRecord(Base):
     """Persistent route record — replaces in-memory store["routes"]."""
+
     __tablename__ = "route_records"
 
     __table_args__ = (
@@ -36,11 +35,10 @@ class RouteRecord(Base):
 
 class RouteStopRecord(Base):
     """Persistent route stop — ordered stop in a route."""
+
     __tablename__ = "route_stop_records"
 
-    __table_args__ = (
-        Index("ix_route_stop_route", "route_id"),
-    )
+    __table_args__ = (Index("ix_route_stop_route", "route_id"),)
 
     id = Column(String(36), primary_key=True)
     route_id = Column(String(36), nullable=False)

@@ -11,7 +11,11 @@ Plans and executes agent runs with:
 
 from typing import Any, Dict, List, Optional
 from app.domain.automation.agents import (
-    AgentDefinition, AgentRun, AgentStep, AgentStatus, AgentScope,
+    AgentDefinition,
+    AgentRun,
+    AgentStep,
+    AgentStatus,
+    AgentScope,
     AGENT_SCOPE_CONFIGS,
 )
 from app.domain.automation.policy import PolicyEngine, ApprovalEngine
@@ -175,7 +179,9 @@ class AgentEngine:
                 continue  # Continue with next step (non-fatal)
 
         if run.status == AgentStatus.EXECUTING:
-            run.complete({"steps_completed": len([s for s in self._steps if s.run_id == run.id and s.status == "COMPLETED"])})
+            run.complete(
+                {"steps_completed": len([s for s in self._steps if s.run_id == run.id and s.status == "COMPLETED"])}
+            )
             self._inc_metric("agents_completed")
 
         return run

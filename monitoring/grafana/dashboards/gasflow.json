@@ -1,0 +1,114 @@
+{
+  "title": "GasFlow — Visão Geral",
+  "uid": "gasflow-overview",
+  "tags": ["gasflow"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Contas WhatsApp conectadas",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(whatsapp_account_connected)",
+          "legendFormat": "conectadas"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Envios WhatsApp (por minuto)",
+      "type": "timeseries",
+      "gridPos": { "h": 5, "w": 9, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(whatsapp_messages_sent_total[5m])) * 60",
+          "legendFormat": "sucessos/min"
+        },
+        {
+          "expr": "sum(rate(whatsapp_messages_failed_total[5m])) * 60",
+          "legendFormat": "falhas/min"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Reconexões WhatsApp (10min)",
+      "type": "timeseries",
+      "gridPos": { "h": 5, "w": 9, "x": 15, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(whatsapp_reconnect_attempts_total[10m]))",
+          "legendFormat": "{{account}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Requisições HTTP backend (req/s por status)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "sum(rate(gasflow_http_requests_total[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Latência p95 backend",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gasflow_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Falhas de envio WhatsApp por motivo",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 11 },
+      "targets": [
+        {
+          "expr": "sum(rate(whatsapp_messages_failed_total[10m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Memória RSS do serviço WhatsApp",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 11 },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"gasflow-whatsapp\"}",
+          "legendFormat": "RSS bytes"
+        }
+      ]
+    }
+  ]
+}

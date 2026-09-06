@@ -13,7 +13,9 @@ import logging
 
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.models import (
-    ConnectionState, ConnectionInfo, WhatsAppEvent,
+    ConnectionState,
+    ConnectionInfo,
+    WhatsAppEvent,
 )
 
 logger = logging.getLogger("gasflow.whatsapp.session")
@@ -101,11 +103,13 @@ class WhatsAppSessionManager:
         statuses = []
         for account_id, provider in self._providers.items():
             info = await provider.get_connection_info()
-            statuses.append({
-                "account_id": account_id,
-                "provider_type": provider.provider_type.value,
-                "status": info.to_dict(),
-            })
+            statuses.append(
+                {
+                    "account_id": account_id,
+                    "provider_type": provider.provider_type.value,
+                    "status": info.to_dict(),
+                }
+            )
         return statuses
 
     async def health_check(self, account_id: str) -> bool:

@@ -100,10 +100,8 @@ class RetryPolicy:
     def _calculate_delay(self, attempt: int) -> int:
         """Calculate delay with exponential backoff and jitter."""
         import random
-        base = min(
-            self.max_delay_ms,
-            self.base_delay_ms * (2 ** attempt)
-        )
+
+        base = min(self.max_delay_ms, self.base_delay_ms * (2**attempt))
         jitter = base * self.jitter_ratio * (random.random() * 2 - 1)
         return max(100, int(base + jitter))
 

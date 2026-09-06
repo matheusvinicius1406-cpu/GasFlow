@@ -34,6 +34,7 @@ def create_auth_dependency(auth_service: AuthService):
             if not ctx.has_permission(permission):
                 raise HTTPException(status_code=403, detail=f"Permission '{permission}' required")
             return ctx
+
         return checker
 
     return require_auth, require_admin, require_permission

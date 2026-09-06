@@ -16,6 +16,7 @@ from typing import Optional
 
 class ConversationStatus(str, Enum):
     """Status possíveis de uma conversa WhatsApp."""
+
     IDLE = "idle"
     AWAITING_PRODUCT = "awaiting_product"
     AWAITING_QUANTITY = "awaiting_quantity"
@@ -26,6 +27,7 @@ class ConversationStatus(str, Enum):
 
 class MessageDirection(str, Enum):
     """Direção da mensagem."""
+
     INBOUND = "inbound"
     OUTBOUND = "outbound"
 

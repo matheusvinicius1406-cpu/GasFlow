@@ -21,6 +21,7 @@ from app.infrastructure.repositories.product_model import ProductModel
 
 # ── Test DB Setup ─────────────────────────────────────────
 
+
 @pytest.fixture
 def test_db():
     """Create a fresh in-memory SQLite database for each test."""
@@ -44,15 +45,14 @@ def test_db():
 # 6. PHONE UNIQUENESS — DATABASE GATE
 # ═══════════════════════════════════════════════════════════
 
+
 def test_unique_telefone_enforced_by_db(test_db):
     """UNIQUE(tenant_id, telefone) constraint prevents duplicates within same tenant."""
     c1 = ClientModel(
-        codigo="000001", nome="A", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", tenant_id="default"
+        codigo="000001", nome="A", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro", tenant_id="default"
     )
     c2 = ClientModel(
-        codigo="000002", nome="B", telefone="11999999999",
-        rua="Rua B", numero="2", bairro="Centro", tenant_id="default"
+        codigo="000002", nome="B", telefone="11999999999", rua="Rua B", numero="2", bairro="Centro", tenant_id="default"
     )
     test_db.add(c1)
     test_db.commit()
@@ -65,12 +65,22 @@ def test_unique_telefone_enforced_by_db(test_db):
 def test_unique_telefone_different_tenants_ok(test_db):
     """Different tenants can have clients with the same phone number."""
     c1 = ClientModel(
-        codigo="000001", nome="A", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", tenant_id="tenant_a"
+        codigo="000001",
+        nome="A",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        tenant_id="tenant_a",
     )
     c2 = ClientModel(
-        codigo="000001", nome="B", telefone="11999999999",
-        rua="Rua B", numero="2", bairro="Centro", tenant_id="tenant_b"
+        codigo="000001",
+        nome="B",
+        telefone="11999999999",
+        rua="Rua B",
+        numero="2",
+        bairro="Centro",
+        tenant_id="tenant_b",
     )
     test_db.add(c1)
     test_db.commit()
@@ -82,14 +92,8 @@ def test_unique_telefone_different_tenants_ok(test_db):
 
 def test_unique_telefone_different_phones_ok(test_db):
     """Different phones should be allowed."""
-    c1 = ClientModel(
-        codigo="000001", nome="A", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
-    c2 = ClientModel(
-        codigo="000002", nome="B", telefone="21988888888",
-        rua="Rua B", numero="2", bairro="Centro"
-    )
+    c1 = ClientModel(codigo="000001", nome="A", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
+    c2 = ClientModel(codigo="000002", nome="B", telefone="21988888888", rua="Rua B", numero="2", bairro="Centro")
     test_db.add(c1)
     test_db.commit()
 
@@ -102,12 +106,18 @@ def test_unique_telefone_different_phones_ok(test_db):
 # 7. PHONE RACE CONDITION
 # ═══════════════════════════════════════════════════════════
 
+
 def test_concurrent_duplicate_phone(test_db):
     """Two concurrent inserts with same phone in same tenant — exactly one succeeds."""
     # Seed with a client using the target phone
     c1 = ClientModel(
-        codigo="000001", nome="Existing", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", tenant_id="default"
+        codigo="000001",
+        nome="Existing",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        tenant_id="default",
     )
     test_db.add(c1)
     test_db.commit()
@@ -128,13 +138,10 @@ def test_concurrent_duplicate_phone(test_db):
         db = Session2()
         try:
             # Simulate check-then-insert
-            existing = db.query(ClientModel).filter(
-                ClientModel.telefone == "11999999999"
-            ).first()
+            existing = db.query(ClientModel).filter(ClientModel.telefone == "11999999999").first()
             if not existing:
                 c = ClientModel(
-                    codigo=codigo, nome=nome, telefone="11999999999",
-                    rua="Rua X", numero="99", bairro="Test"
+                    codigo=codigo, nome=nome, telefone="11999999999", rua="Rua X", numero="99", bairro="Test"
                 )
                 db.add(c)
                 db.commit()
@@ -160,14 +167,22 @@ def test_concurrent_duplicate_phone(test_db):
 # 8. ORDER → CLIENT FK
 # ═══════════════════════════════════════════════════════════
 
+
 def test_order_requires_valid_client(test_db):
     """Per-tenant codigo: FK removed at DB level. App enforces referential integrity."""
     order = OrderModel(
-        codigo="000001", client_codigo="FAKE99",
-        address_snapshot="Rua Test", status="PENDING",
-        subtotal=0, delivery_fee=0, discount=0, total=0,
-        payment_status="PENDING", source="MANUAL",
-        created_at=datetime.utcnow(), tenant_id="default",
+        codigo="000001",
+        client_codigo="FAKE99",
+        address_snapshot="Rua Test",
+        status="PENDING",
+        subtotal=0,
+        delivery_fee=0,
+        discount=0,
+        total=0,
+        payment_status="PENDING",
+        source="MANUAL",
+        created_at=datetime.utcnow(),
+        tenant_id="default",
     )
     test_db.add(order)
     test_db.commit()  # No FK constraint at DB level
@@ -176,18 +191,21 @@ def test_order_requires_valid_client(test_db):
 
 def test_order_with_valid_client_succeeds(test_db):
     """Order with existing client should succeed."""
-    client = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    client = ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     test_db.add(client)
     test_db.commit()
 
     order = OrderModel(
-        codigo="000001", client_codigo="000001",
-        address_snapshot="Rua Test", status="PENDING",
-        subtotal=0, delivery_fee=0, discount=0, total=0,
-        payment_status="PENDING", source="MANUAL",
+        codigo="000001",
+        client_codigo="000001",
+        address_snapshot="Rua Test",
+        status="PENDING",
+        subtotal=0,
+        delivery_fee=0,
+        discount=0,
+        total=0,
+        payment_status="PENDING",
+        source="MANUAL",
         created_at=datetime.utcnow(),
     )
     test_db.add(order)
@@ -198,6 +216,7 @@ def test_order_with_valid_client_succeeds(test_db):
 # ═══════════════════════════════════════════════════════════
 # 9. FOREIGN KEY SQLITE — REAL TEST
 # ═══════════════════════════════════════════════════════════
+
 
 def test_sqlite_fk_enforced(test_db):
     """PRAGMA foreign_keys=ON is working — FK is enforced."""
@@ -210,14 +229,22 @@ def test_sqlite_fk_enforced(test_db):
 # 10. ORPHAN ORDERS
 # ═══════════════════════════════════════════════════════════
 
+
 def test_no_orphan_orders_possible(test_db):
     """Per-tenant codigo: FK removed at DB level. App enforces referential integrity."""
     order = OrderModel(
-        codigo="000001", client_codigo="NONEXISTENT",
-        address_snapshot="Rua X", status="PENDING",
-        subtotal=0, delivery_fee=0, discount=0, total=0,
-        payment_status="PENDING", source="MANUAL",
-        created_at=datetime.utcnow(), tenant_id="default",
+        codigo="000001",
+        client_codigo="NONEXISTENT",
+        address_snapshot="Rua X",
+        status="PENDING",
+        subtotal=0,
+        delivery_fee=0,
+        discount=0,
+        total=0,
+        payment_status="PENDING",
+        source="MANUAL",
+        created_at=datetime.utcnow(),
+        tenant_id="default",
     )
     test_db.add(order)
     test_db.commit()  # No FK constraint at DB level
@@ -228,20 +255,32 @@ def test_no_orphan_orders_possible(test_db):
 # 11. SOFT DELETE
 # ═══════════════════════════════════════════════════════════
 
+
 def test_soft_delete_preserves_orders(test_db):
     """Disabled client should preserve all orders."""
     client = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", ativo=True,
+        codigo="000001",
+        nome="Test",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        ativo=True,
     )
     test_db.add(client)
     test_db.commit()
 
     order = OrderModel(
-        codigo="000001", client_codigo="000001",
-        address_snapshot="Rua Test", status="DELIVERED",
-        subtotal=100, delivery_fee=0, discount=0, total=100,
-        payment_status="PAID", source="MANUAL",
+        codigo="000001",
+        client_codigo="000001",
+        address_snapshot="Rua Test",
+        status="DELIVERED",
+        subtotal=100,
+        delivery_fee=0,
+        discount=0,
+        total=100,
+        payment_status="PAID",
+        source="MANUAL",
         created_at=datetime.utcnow(),
     )
     test_db.add(order)
@@ -252,9 +291,7 @@ def test_soft_delete_preserves_orders(test_db):
     test_db.commit()
 
     # Order should still exist
-    assert test_db.query(OrderModel).filter(
-        OrderModel.client_codigo == "000001"
-    ).count() == 1
+    assert test_db.query(OrderModel).filter(OrderModel.client_codigo == "000001").count() == 1
 
     # Client should still exist
     c = test_db.query(ClientModel).filter(ClientModel.codigo == "000001").first()
@@ -265,8 +302,13 @@ def test_soft_delete_preserves_orders(test_db):
 def test_soft_delete_no_hard_delete(test_db):
     """Disable should set ativo=False, never DELETE the row."""
     client = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", ativo=True,
+        codigo="000001",
+        nome="Test",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        ativo=True,
     )
     test_db.add(client)
     test_db.commit()
@@ -284,26 +326,45 @@ def test_soft_delete_no_hard_delete(test_db):
 # 12-13. CUSTOMER 360 + METRICS
 # ═══════════════════════════════════════════════════════════
 
+
 def test_customer360_no_orders():
     """Customer360 with zero orders returns zeroed metrics."""
     from app.application.client.use_cases import Customer360UseCase
 
     class FakeClientRepo:
         def buscar_por_codigo(self, codigo):
-            return type('Client', (), {
-                'codigo': '000001', 'nome': 'Test', 'telefone': '11999999999',
-                'telefone_secundario': None, 'email': None, 'tipo': None,
-                'ativo': True, 'rua': 'Rua A', 'numero': '1', 'bairro': 'Centro',
-                'complemento': None, 'referencia': None, 'observacoes': None,
-                'created_at': None, 'updated_at': None,
-            })()
+            return type(
+                "Client",
+                (),
+                {
+                    "codigo": "000001",
+                    "nome": "Test",
+                    "telefone": "11999999999",
+                    "telefone_secundario": None,
+                    "email": None,
+                    "tipo": None,
+                    "ativo": True,
+                    "rua": "Rua A",
+                    "numero": "1",
+                    "bairro": "Centro",
+                    "complemento": None,
+                    "referencia": None,
+                    "observacoes": None,
+                    "created_at": None,
+                    "updated_at": None,
+                },
+            )()
 
     class FakeOrderRepo:
         def get_customer_metrics(self, codigo):
             return {
-                'total_orders': 0, 'total_spent': 0.0, 'average_ticket': 0.0,
-                'first_order_at': None, 'last_order_at': None,
-                'days_since_last_order': None, 'favorite_product': None,
+                "total_orders": 0,
+                "total_spent": 0.0,
+                "average_ticket": 0.0,
+                "first_order_at": None,
+                "last_order_at": None,
+                "days_since_last_order": None,
+                "favorite_product": None,
             }
 
     uc = Customer360UseCase(FakeClientRepo(), FakeOrderRepo())
@@ -319,24 +380,38 @@ def test_customer360_metrics_calculation():
 
     class FakeClientRepo:
         def buscar_por_codigo(self, codigo):
-            return type('Client', (), {
-                'codigo': '000001', 'nome': 'Test', 'telefone': '11999999999',
-                'telefone_secundario': None, 'email': None, 'tipo': None,
-                'ativo': True, 'rua': 'Rua A', 'numero': '1', 'bairro': 'Centro',
-                'complemento': None, 'referencia': None, 'observacoes': None,
-                'created_at': None, 'updated_at': None,
-            })()
+            return type(
+                "Client",
+                (),
+                {
+                    "codigo": "000001",
+                    "nome": "Test",
+                    "telefone": "11999999999",
+                    "telefone_secundario": None,
+                    "email": None,
+                    "tipo": None,
+                    "ativo": True,
+                    "rua": "Rua A",
+                    "numero": "1",
+                    "bairro": "Centro",
+                    "complemento": None,
+                    "referencia": None,
+                    "observacoes": None,
+                    "created_at": None,
+                    "updated_at": None,
+                },
+            )()
 
     class FakeOrderRepo:
         def get_customer_metrics(self, codigo):
             return {
-                'total_orders': 3,
-                'total_spent': 600.0,
-                'average_ticket': 200.0,
-                'first_order_at': datetime(2025, 1, 1),
-                'last_order_at': datetime(2025, 6, 1),
-                'days_since_last_order': 60,
-                'favorite_product': 'P13',
+                "total_orders": 3,
+                "total_spent": 600.0,
+                "average_ticket": 200.0,
+                "first_order_at": datetime(2025, 1, 1),
+                "last_order_at": datetime(2025, 6, 1),
+                "days_since_last_order": 60,
+                "favorite_product": "P13",
             }
 
     uc = Customer360UseCase(FakeClientRepo(), FakeOrderRepo())
@@ -364,6 +439,7 @@ def test_customer360_nonexistent():
 # 14. FAVORITE PRODUCT
 # ═══════════════════════════════════════════════════════════
 
+
 def test_favorite_product_implemented():
     """favorite_product is now calculated from order items — FASE 6 FIX."""
     from sqlalchemy import create_engine
@@ -380,32 +456,79 @@ def test_favorite_product_implemented():
     db = Session()
 
     # Seed customer
-    db.add(ClientModel(codigo="C001", nome="João", telefone="11988887777",
-                       rua="Rua B", numero="42", bairro="Vila"))
+    db.add(ClientModel(codigo="C001", nome="João", telefone="11988887777", rua="Rua B", numero="42", bairro="Vila"))
     db.add(ProductModel(codigo="GAS13", nome="GLP P13", tipo="GAS", preco=120.0, estoque=0))
     db.add(ProductModel(codigo="AGUA20", nome="Água 20L", tipo="WATER", preco=10.0, estoque=0))
 
     # Order 1: GLP P13 x 5
-    db.add(OrderModel(codigo="O001", client_codigo="C001",
-                      subtotal=600.0, delivery_fee=0, discount=0, total=600.0,
-                      payment_method="CASH", payment_status="PAID", status="DELIVERED",
-                      source="MANUAL", address_snapshot="Rua B",
-                      created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+    db.add(
+        OrderModel(
+            codigo="O001",
+            client_codigo="C001",
+            subtotal=600.0,
+            delivery_fee=0,
+            discount=0,
+            total=600.0,
+            payment_method="CASH",
+            payment_status="PAID",
+            status="DELIVERED",
+            source="MANUAL",
+            address_snapshot="Rua B",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+    )
     db.commit()
-    db.add(OrderItemModel(order_codigo="O001", product_codigo="GAS13",
-                         product_nome="GLP P13", quantity=5, unit_price=120.0, subtotal=600.0))
+    db.add(
+        OrderItemModel(
+            order_codigo="O001",
+            product_codigo="GAS13",
+            product_nome="GLP P13",
+            quantity=5,
+            unit_price=120.0,
+            subtotal=600.0,
+        )
+    )
 
     # Order 2: GLP P13 x 2 + Água 20L x 10
-    db.add(OrderModel(codigo="O002", client_codigo="C001",
-                      subtotal=340.0, delivery_fee=0, discount=0, total=340.0,
-                      payment_method="PIX", payment_status="PAID", status="DELIVERED",
-                      source="MANUAL", address_snapshot="Rua B",
-                      created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+    db.add(
+        OrderModel(
+            codigo="O002",
+            client_codigo="C001",
+            subtotal=340.0,
+            delivery_fee=0,
+            discount=0,
+            total=340.0,
+            payment_method="PIX",
+            payment_status="PAID",
+            status="DELIVERED",
+            source="MANUAL",
+            address_snapshot="Rua B",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+    )
     db.commit()
-    db.add(OrderItemModel(order_codigo="O002", product_codigo="GAS13",
-                         product_nome="GLP P13", quantity=2, unit_price=120.0, subtotal=240.0))
-    db.add(OrderItemModel(order_codigo="O002", product_codigo="AGUA20",
-                         product_nome="Água 20L", quantity=10, unit_price=10.0, subtotal=100.0))
+    db.add(
+        OrderItemModel(
+            order_codigo="O002",
+            product_codigo="GAS13",
+            product_nome="GLP P13",
+            quantity=2,
+            unit_price=120.0,
+            subtotal=240.0,
+        )
+    )
+    db.add(
+        OrderItemModel(
+            order_codigo="O002",
+            product_codigo="AGUA20",
+            product_nome="Água 20L",
+            quantity=10,
+            unit_price=10.0,
+            subtotal=100.0,
+        )
+    )
     db.commit()
 
     repo = SQLAlchemyOrderRepository(db)
@@ -424,13 +547,13 @@ def test_favorite_product_implemented():
 # 15. SEARCH
 # ═══════════════════════════════════════════════════════════
 
+
 def test_search_by_name(test_db):
     """Search by partial name."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
     c = ClientModel(
-        codigo="000001", nome="João Silva", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
+        codigo="000001", nome="João Silva", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro"
     )
     test_db.add(c)
     test_db.commit()
@@ -445,10 +568,7 @@ def test_search_by_phone(test_db):
     """Search by phone."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
-    c = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    c = ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     test_db.add(c)
     test_db.commit()
 
@@ -461,10 +581,7 @@ def test_search_by_bairro(test_db):
     """Search by bairro."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
-    c = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Vila Nova"
-    )
+    c = ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Vila Nova")
     test_db.add(c)
     test_db.commit()
 
@@ -478,8 +595,7 @@ def test_search_case_insensitive(test_db):
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
     c = ClientModel(
-        codigo="000001", nome="João Silva", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
+        codigo="000001", nome="João Silva", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro"
     )
     test_db.add(c)
     test_db.commit()
@@ -495,9 +611,12 @@ def test_search_empty_returns_all(test_db):
 
     for i in range(3):
         c = ClientModel(
-            codigo=f"00000{i+1}", nome=f"Client {i+1}",
+            codigo=f"00000{i+1}",
+            nome=f"Client {i+1}",
             telefone=f"1199999999{i}",
-            rua="Rua A", numero=str(i+1), bairro="Centro"
+            rua="Rua A",
+            numero=str(i + 1),
+            bairro="Centro",
         )
         test_db.add(c)
     test_db.commit()
@@ -511,10 +630,7 @@ def test_search_special_characters(test_db):
     """Search with special characters doesn't break."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
-    c = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    c = ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     test_db.add(c)
     test_db.commit()
 
@@ -527,15 +643,19 @@ def test_search_special_characters(test_db):
 # 16. PAGINATION
 # ═══════════════════════════════════════════════════════════
 
+
 def test_pagination_basic(test_db):
     """Pagination returns correct page and total."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
     for i in range(25):
         c = ClientModel(
-            codigo=f"{i+1:06d}", nome=f"Client {i+1}",
+            codigo=f"{i+1:06d}",
+            nome=f"Client {i+1}",
             telefone=f"1199999{i:05d}",
-            rua="Rua A", numero=str(i+1), bairro="Centro"
+            rua="Rua A",
+            numero=str(i + 1),
+            bairro="Centro",
         )
         test_db.add(c)
     test_db.commit()
@@ -554,10 +674,7 @@ def test_pagination_invalid_params(test_db):
     """Page 0 or negative should be handled by API layer (ge=1 constraint)."""
     from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
-    c = ClientModel(
-        codigo="000001", nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    c = ClientModel(codigo="000001", nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     test_db.add(c)
     test_db.commit()
 
@@ -573,9 +690,12 @@ def test_pagination_large_page_size(test_db):
 
     for i in range(5):
         c = ClientModel(
-            codigo=f"{i+1:06d}", nome=f"Client {i+1}",
+            codigo=f"{i+1:06d}",
+            nome=f"Client {i+1}",
             telefone=f"1199999{i:05d}",
-            rua="Rua A", numero=str(i+1), bairro="Centro"
+            rua="Rua A",
+            numero=str(i + 1),
+            bairro="Centro",
         )
         test_db.add(c)
     test_db.commit()
@@ -590,17 +710,22 @@ def test_pagination_large_page_size(test_db):
 # 17. MASS ASSIGNMENT
 # ═══════════════════════════════════════════════════════════
 
+
 def test_mass_assignment_create():
     """ClientCreate rejects derived fields."""
     from app.presentation.schemas.client import ClientCreate
 
-    data = ClientCreate(
-        nome="Test", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    data = ClientCreate(nome="Test", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     dumped = data.model_dump()
-    for field in ["total_orders", "total_spent", "average_ticket",
-                  "first_order_at", "last_order_at", "codigo", "ativo"]:
+    for field in [
+        "total_orders",
+        "total_spent",
+        "average_ticket",
+        "first_order_at",
+        "last_order_at",
+        "codigo",
+        "ativo",
+    ]:
         assert field not in dumped, f"Field '{field}' should not be writable via ClientCreate"
 
 
@@ -618,18 +743,20 @@ def test_mass_assignment_update():
 # 18. API CONTRACT
 # ═══════════════════════════════════════════════════════════
 
+
 def test_api_client_response_fields():
     """ClientResponse has all required fields."""
     from app.presentation.schemas.client import ClientResponse
+
     fields = set(ClientResponse.model_fields.keys())
-    required = {"codigo", "nome", "telefone", "rua", "numero", "bairro",
-                "ativo", "created_at", "updated_at"}
+    required = {"codigo", "nome", "telefone", "rua", "numero", "bairro", "ativo", "created_at", "updated_at"}
     assert required.issubset(fields)
 
 
 def test_api_client_list_response():
     """ClientListResponse wraps paginated data."""
     from app.presentation.schemas.client import ClientListResponse
+
     resp = ClientListResponse(items=[], total=0, page=1, page_size=20, total_pages=0)
     assert resp.total == 0
     assert resp.total_pages == 0
@@ -638,16 +765,24 @@ def test_api_client_list_response():
 def test_api_customer360_response_fields():
     """Customer360Response has all metric fields."""
     from app.presentation.schemas.client import Customer360Response
+
     fields = set(Customer360Response.model_fields.keys())
-    required = {"total_orders", "total_spent", "average_ticket",
-                "first_order_at", "last_order_at", "days_since_last_order",
-                "favorite_product"}
+    required = {
+        "total_orders",
+        "total_spent",
+        "average_ticket",
+        "first_order_at",
+        "last_order_at",
+        "days_since_last_order",
+        "favorite_product",
+    }
     assert required.issubset(fields)
 
 
 # ═══════════════════════════════════════════════════════════
 # 19. ERROR CONTRACT
 # ═══════════════════════════════════════════════════════════
+
 
 def test_duplicate_phone_error_message():
     """Duplicate phone raises ValueError with clear message."""
@@ -658,14 +793,17 @@ def test_duplicate_phone_error_message():
         def __init__(self):
             self.clients = []
             self.next_id = 1
+
         def criar(self, client):
             self.clients.append(client)
             return client
+
         def buscar_por_telefone(self, telefone):
             for c in self.clients:
                 if c.telefone == normalize_phone(telefone):
                     return c
             return None
+
         def proximo_codigo(self):
             code = f"{self.next_id:06d}"
             self.next_id += 1
@@ -683,9 +821,11 @@ def test_duplicate_phone_error_message():
 # 22. CUSTOMER ↔ WHATSAPP BOUNDARY
 # ═══════════════════════════════════════════════════════════
 
+
 def test_crm_no_whatsapp_imports():
     """CRM code should not import WhatsApp modules."""
     import os
+
     crm_dirs = [
         "backend/app/domain/client",
         "backend/app/application/client",
@@ -698,13 +838,15 @@ def test_crm_no_whatsapp_imports():
             if f.endswith(".py"):
                 with open(os.path.join(full_path, f)) as fh:
                     content = fh.read()
-                assert "whatsapp" not in content.lower() or "whatsapp" in f.lower(), \
-                    f"CRM file {f} should not reference WhatsApp"
+                assert (
+                    "whatsapp" not in content.lower() or "whatsapp" in f.lower()
+                ), f"CRM file {f} should not reference WhatsApp"
 
 
 def test_frontend_no_secrets():
     """Frontend should not contain secrets."""
     import os
+
     client_path = os.path.join(os.path.dirname(__file__), "../../frontend/src/lib/api/client.ts")
     if os.path.exists(client_path):
         with open(client_path) as f:
@@ -717,6 +859,7 @@ def test_frontend_no_secrets():
 # ═══════════════════════════════════════════════════════════
 # 24. PERFORMANCE — N+1 CHECK
 # ═══════════════════════════════════════════════════════════
+
 
 def test_customer360_no_n_plus_1():
     """Customer360 should not do 1 query per order."""

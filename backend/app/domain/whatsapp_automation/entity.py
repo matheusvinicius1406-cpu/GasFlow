@@ -19,14 +19,16 @@ from typing import Optional, Dict, Any
 
 class AutomationTriggerType(str, Enum):
     """What triggers the automation."""
+
     REORDER_OPPORTUNITY = "REORDER_OPPORTUNITY"  # Customer has reorder potential
-    SEGMENT_MEMBERSHIP = "SEGMENT_MEMBERSHIP"    # Customer belongs to a segment
-    MANUAL = "MANUAL"                            # Operator manually triggers
-    SCHEDULED = "SCHEDULED"                      # Time-based trigger
+    SEGMENT_MEMBERSHIP = "SEGMENT_MEMBERSHIP"  # Customer belongs to a segment
+    MANUAL = "MANUAL"  # Operator manually triggers
+    SCHEDULED = "SCHEDULED"  # Time-based trigger
 
 
 class AutomationStatus(str, Enum):
     """Automation rule lifecycle."""
+
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"
@@ -35,6 +37,7 @@ class AutomationStatus(str, Enum):
 
 class ExecutionStatus(str, Enum):
     """Status of a single execution."""
+
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     SENT = "SENT"
@@ -47,6 +50,7 @@ class ExecutionStatus(str, Enum):
 @dataclass
 class AutomationRule:
     """A rule that defines when and how to send WhatsApp messages."""
+
     id: Optional[int] = None
     name: str = ""
     description: str = ""
@@ -110,6 +114,7 @@ class AutomationRule:
 @dataclass
 class AutomationExecution:
     """Tracks a single execution of an automation rule."""
+
     id: Optional[int] = None
     rule_id: int = 0
     customer_codigo: str = ""
@@ -158,6 +163,7 @@ class AutomationExecution:
 @dataclass
 class AutomationMetrics:
     """Aggregate metrics for automation executions."""
+
     total_rules: int = 0
     active_rules: int = 0
     total_executions: int = 0

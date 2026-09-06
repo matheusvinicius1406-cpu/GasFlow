@@ -16,8 +16,8 @@ import sys
 import io
 
 # Fix Windows console encoding for Unicode output
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -46,19 +46,31 @@ def check_integrity():
     with engine.connect() as conn:
         # 1. Check tenant_id coverage
         print("\n--- Tenant ID Coverage ---")
-        tenant_tables = ['clients', 'orders', 'order_items', 'products',
-                         'delivery_drivers', 'inventory', 'payments',
-                         'receivables', 'expenses', 'cash_movements',
-                         'financial_ledger', 'whatsapp_conversations',
-                         'whatsapp_messages', 'ai_conversations',
-                         'ai_messages', 'ai_audit_log']
+        tenant_tables = [
+            "clients",
+            "orders",
+            "order_items",
+            "products",
+            "delivery_drivers",
+            "inventory",
+            "payments",
+            "receivables",
+            "expenses",
+            "cash_movements",
+            "financial_ledger",
+            "whatsapp_conversations",
+            "whatsapp_messages",
+            "ai_conversations",
+            "ai_messages",
+            "ai_audit_log",
+        ]
 
         for table in tenant_tables:
             if table in tables:
                 try:
-                    result = conn.execute(text(
-                        f"SELECT COUNT(*) FROM [{table}] WHERE tenant_id IS NULL OR tenant_id = ''"
-                    )).scalar()
+                    result = conn.execute(
+                        text(f"SELECT COUNT(*) FROM [{table}] WHERE tenant_id IS NULL OR tenant_id = ''")
+                    ).scalar()
                     total = conn.execute(text(f"SELECT COUNT(*) FROM [{table}]")).scalar()
                     if result > 0:
                         issues.append(f"CRITICAL: {table} has {result}/{total} records without tenant_id")
@@ -70,68 +82,76 @@ def check_integrity():
 
         # 2. Check for orphaned order_items
         print("\n--- Orphaned Records ---")
-        if 'order_items' in tables and 'orders' in tables:
+        if "order_items" in tables and "orders" in tables:
             try:
-                result = conn.execute(text("""
+                result = conn.execute(
+                    text("""
                     SELECT COUNT(*) FROM order_items oi
                     WHERE NOT EXISTS (
                         SELECT 1 FROM orders o WHERE o.codigo = oi.order_codigo
                     )
-                """)).scalar()
+                """)
+                ).scalar()
                 if result > 0:
                     issues.append(f"WARNING: {result} orphaned order_items (no matching order)")
                     print(f"  ❌ order_items: {result} orphaned records")
                 else:
-                    print(f"  ✅ order_items: no orphans")
+                    print("  ✅ order_items: no orphans")
             except Exception as e:
                 print(f"  ⚠️  order_items orphan check: {e}")
 
         # 3. Check for orphaned payments
-        if 'payments' in tables and 'orders' in tables:
+        if "payments" in tables and "orders" in tables:
             try:
-                result = conn.execute(text("""
+                result = conn.execute(
+                    text("""
                     SELECT COUNT(*) FROM payments p
                     WHERE p.order_codigo IS NOT NULL AND p.order_codigo != ''
                     AND NOT EXISTS (
                         SELECT 1 FROM orders o WHERE o.codigo = p.order_codigo
                     )
-                """)).scalar()
+                """)
+                ).scalar()
                 if result > 0:
                     issues.append(f"WARNING: {result} payments with invalid order_codigo")
                     print(f"  ❌ payments: {result} with invalid order reference")
                 else:
-                    print(f"  ✅ payments: all order references valid")
+                    print("  ✅ payments: all order references valid")
             except Exception as e:
                 print(f"  ⚠️  payments orphan check: {e}")
 
         # 4. Check for orphaned inventory
-        if 'inventory' in tables and 'products' in tables:
+        if "inventory" in tables and "products" in tables:
             try:
-                result = conn.execute(text("""
+                result = conn.execute(
+                    text("""
                     SELECT COUNT(*) FROM inventory inv
                     WHERE NOT EXISTS (
                         SELECT 1 FROM products p WHERE p.codigo = inv.product_codigo
                     )
-                """)).scalar()
+                """)
+                ).scalar()
                 if result > 0:
                     issues.append(f"WARNING: {result} inventory records without matching product")
                     print(f"  ❌ inventory: {result} orphaned records")
                 else:
-                    print(f"  ✅ inventory: all product references valid")
+                    print("  ✅ inventory: all product references valid")
             except Exception as e:
                 print(f"  ⚠️  inventory orphan check: {e}")
 
         # 5. Check for duplicate codigo within same tenant
         print("\n--- Duplicate Codigo Check ---")
-        for table in ['clients', 'orders', 'products', 'delivery_drivers']:
+        for table in ["clients", "orders", "products", "delivery_drivers"]:
             if table in tables:
                 try:
-                    result = conn.execute(text(f"""
+                    result = conn.execute(
+                        text(f"""
                         SELECT tenant_id, codigo, COUNT(*) as cnt
                         FROM [{table}]
                         GROUP BY tenant_id, codigo
                         HAVING COUNT(*) > 1
-                    """)).fetchall()
+                    """)
+                    ).fetchall()
                     if result:
                         issues.append(f"CRITICAL: {table} has duplicate codigos within tenants")
                         for row in result:

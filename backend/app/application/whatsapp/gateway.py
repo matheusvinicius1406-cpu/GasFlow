@@ -26,7 +26,10 @@ import threading
 
 from app.domain.whatsapp.message import WhatsAppMessage, WhatsAppOutbound, MessageType
 from app.domain.whatsapp.conversation import (
-    Conversation, ConversationState, ConversationDraft, ConversationMessage,
+    Conversation,
+    ConversationState,
+    ConversationDraft,
+    ConversationMessage,
 )
 from app.domain.whatsapp.repository import ConversationRepository, ConversationMessageRepository
 from app.application.ai.engine import AIEngine
@@ -263,9 +266,7 @@ class MessageGateway:
 
     def _get_or_create_conversation(self, message: WhatsAppMessage) -> Conversation:
         """Find existing conversation or create new one."""
-        existing = self.conversation_repo.find_by_phone_and_account(
-            message.sender_phone, message.account_id
-        )
+        existing = self.conversation_repo.find_by_phone_and_account(message.sender_phone, message.account_id)
         if existing:
             return existing
 
@@ -322,8 +323,10 @@ class MessageGateway:
         if AMBIGUOUS_CONFIRMATION.search(message.text):
             reply = "Preciso de uma confirmação clara. Digite 'sim' para confirmar ou 'não' para cancelar."
             return self._build_outbound(
-                conversation.id, message.sender_phone,
-                message.account_id, reply,
+                conversation.id,
+                message.sender_phone,
+                message.account_id,
+                reply,
             )
 
         if CONFIRMATION_POSITIVE.search(message.text):
@@ -331,8 +334,10 @@ class MessageGateway:
             recheck = self._recheck_draft(conversation)
             if not recheck["ok"]:
                 return self._build_outbound(
-                    conversation.id, conversation.customer_phone,
-                    conversation.account_id, recheck["message"],
+                    conversation.id,
+                    conversation.customer_phone,
+                    conversation.account_id,
+                    recheck["message"],
                 )
             # Execute order creation
             result = self._execute_order_creation(conversation)
@@ -340,16 +345,20 @@ class MessageGateway:
             if result["success"]:
                 self._inc_metric("orders_created")
             return self._build_outbound(
-                conversation.id, conversation.customer_phone,
-                conversation.account_id, result["message"],
+                conversation.id,
+                conversation.customer_phone,
+                conversation.account_id,
+                result["message"],
             )
         elif CONFIRMATION_NEGATIVE.search(message.text):
             return self._cancel_draft(conversation, message)
         else:
             reply = "Não entendi se você confirma ou cancela. Pode digitar 'sim' ou 'não'?"
             return self._build_outbound(
-                conversation.id, message.sender_phone,
-                message.account_id, reply,
+                conversation.id,
+                message.sender_phone,
+                message.account_id,
+                reply,
             )
 
     def _recheck_draft(self, conversation: Conversation) -> Dict[str, Any]:
@@ -405,10 +414,12 @@ class MessageGateway:
         # Build items for CreateOrderUseCase
         items = []
         for item in draft.items:
-            items.append({
-                "product_codigo": item.get("product_codigo"),
-                "quantity": item.get("quantity"),
-            })
+            items.append(
+                {
+                    "product_codigo": item.get("product_codigo"),
+                    "quantity": item.get("quantity"),
+                }
+            )
 
         # Use AI engine's tool to create order
         try:
@@ -452,8 +463,10 @@ class MessageGateway:
         self.conversation_repo.update_state(conversation.id, ConversationState.BROWSING)
         reply = "Pedido cancelado. Posso ajudar com mais alguma coisa?"
         return self._build_outbound(
-            conversation.id, message.sender_phone,
-            message.account_id, reply,
+            conversation.id,
+            message.sender_phone,
+            message.account_id,
+            reply,
         )
 
     def _reset_conversation(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
@@ -464,8 +477,10 @@ class MessageGateway:
         self.conversation_repo.update_state(conversation.id, ConversationState.IDLE)
         reply = "OK, recomeçamos. O que você precisa?"
         return self._build_outbound(
-            conversation.id, message.sender_phone,
-            message.account_id, reply,
+            conversation.id,
+            message.sender_phone,
+            message.account_id,
+            reply,
         )
 
     def _expire_draft(self, conversation: Conversation) -> None:
@@ -510,7 +525,8 @@ class MessageGateway:
         except Exception:
             self._inc_metric("ai_failures")
             return self._build_outbound(
-                conversation.id, message.sender_phone,
+                conversation.id,
+                message.sender_phone,
                 message.account_id,
                 "Desculpe, tive um problema ao processar sua mensagem. Pode tentar novamente?",
             )
@@ -531,8 +547,10 @@ class MessageGateway:
                 # Format confirmation message
                 reply = self._format_draft_confirmation(draft)
                 return self._build_outbound(
-                    conversation.id, message.sender_phone,
-                    conversation.account_id, reply,
+                    conversation.id,
+                    message.sender_phone,
+                    conversation.account_id,
+                    reply,
                 )
 
         # Update conversation state
@@ -544,8 +562,10 @@ class MessageGateway:
         # Normal AI response
         reply = ai_result.get("message", "Posso ajudar com consultas sobre clientes, pedidos, estoque e financeiro.")
         return self._build_outbound(
-            conversation.id, message.sender_phone,
-            conversation.account_id, reply,
+            conversation.id,
+            message.sender_phone,
+            conversation.account_id,
+            reply,
         )
 
     def _build_order_draft(
@@ -577,13 +597,15 @@ class MessageGateway:
             # Look up product price and inventory
             product_info = self._resolve_product(product_codigo)
             if product_info:
-                items.append({
-                    "product_codigo": product_info["codigo"],
-                    "product_nome": product_info["nome"],
-                    "quantity": quantity,
-                    "unit_price": product_info["preco"],
-                    "subtotal": round(product_info["preco"] * quantity, 2),
-                })
+                items.append(
+                    {
+                        "product_codigo": product_info["codigo"],
+                        "product_nome": product_info["nome"],
+                        "quantity": quantity,
+                        "unit_price": product_info["preco"],
+                        "subtotal": round(product_info["preco"] * quantity, 2),
+                    }
+                )
 
         if not items:
             return None
@@ -633,9 +655,7 @@ class MessageGateway:
         lines.append("Confirma o pedido? (sim/não)")
         return "\n".join(lines)
 
-    def _build_outbound(
-        self, conversation_id: int, phone: str, account_id: str, text: str
-    ) -> Dict[str, Any]:
+    def _build_outbound(self, conversation_id: int, phone: str, account_id: str, text: str) -> Dict[str, Any]:
         """Build outbound response with message persistence."""
         # Save outgoing message
         outgoing = ConversationMessage(
@@ -669,6 +689,7 @@ class MessageGateway:
 
 
 # ── Operator Actions ─────────────────────────────────────
+
 
 class OperatorGateway:
     """Handles operator actions on conversations (takeover, release, manual reply)."""

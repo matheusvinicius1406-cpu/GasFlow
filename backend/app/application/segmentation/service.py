@@ -19,8 +19,9 @@ from app.domain.segmentation.entity import Segment
 class SegmentService:
     """Service for evaluating customer segments."""
 
-    def __init__(self, order_repository=None, client_repository=None,
-                 payment_repository=None, receivable_repository=None):
+    def __init__(
+        self, order_repository=None, client_repository=None, payment_repository=None, receivable_repository=None
+    ):
         self.order_repo = order_repository
         self.client_repo = client_repository
         self.payment_repo = payment_repository
@@ -88,8 +89,9 @@ class SegmentService:
                 count += 1
         return count
 
-    def get_segment_members(self, segment: Segment, all_customer_codes: List[str],
-                            limit: int = 100, offset: int = 0) -> List[str]:
+    def get_segment_members(
+        self, segment: Segment, all_customer_codes: List[str], limit: int = 100, offset: int = 0
+    ) -> List[str]:
         """Get customer codes that match a segment."""
         members = []
         for codigo in all_customer_codes:
@@ -98,7 +100,7 @@ class SegmentService:
                 members.append(codigo)
                 if len(members) >= limit + offset:
                     break
-        return members[offset:offset + limit]
+        return members[offset : offset + limit]
 
     def preview_segment(self, segment: Segment, all_customer_codes: List[str]) -> Dict[str, Any]:
         """Preview segment results without persisting."""
@@ -106,10 +108,12 @@ class SegmentService:
         for codigo in all_customer_codes:
             metrics = self.get_customer_metrics(codigo)
             if self.evaluate_segment(segment, metrics):
-                members.append({
-                    "codigo": codigo,
-                    "metrics": metrics,
-                })
+                members.append(
+                    {
+                        "codigo": codigo,
+                        "metrics": metrics,
+                    }
+                )
 
         return {
             "total_evaluated": len(all_customer_codes),

@@ -49,6 +49,7 @@ STOP_TRANSITIONS = {
 @dataclass
 class RouteStop:
     """A single stop in a delivery route."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     route_id: str = ""
     delivery_id: str = ""
@@ -121,6 +122,7 @@ class RouteStop:
 @dataclass
 class Route:
     """A planned route with ordered stops."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = ""
     driver_id: str = ""
@@ -147,9 +149,14 @@ class Route:
             self.completed_at = datetime.utcnow()
         return True
 
-    def add_stop(self, delivery_id: str, sequence: int,
-                 customer_name: str = "", customer_phone: str = "",
-                 address_snapshot: str = "") -> RouteStop:
+    def add_stop(
+        self,
+        delivery_id: str,
+        sequence: int,
+        customer_name: str = "",
+        customer_phone: str = "",
+        address_snapshot: str = "",
+    ) -> RouteStop:
         """Add a stop to the route. Validates sequence uniqueness."""
         # Check sequence uniqueness
         existing_sequences = {s.sequence for s in self.stops}

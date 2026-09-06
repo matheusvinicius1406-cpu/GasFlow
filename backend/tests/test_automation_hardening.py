@@ -16,11 +16,14 @@ Tests cover:
 
 from datetime import datetime, timedelta
 from app.domain.whatsapp_automation.entity import (
-    AutomationRule, AutomationExecution, ExecutionStatus,
+    AutomationRule,
+    AutomationExecution,
+    ExecutionStatus,
 )
 
 
 # ── 1. Idempotency ────────────────────────────────────
+
 
 class TestIdempotency:
     """Prevent duplicate sends for same customer+rule."""
@@ -57,6 +60,7 @@ class TestIdempotency:
 
 
 # ── 2. Dedup / Cooldown ──────────────────────────────
+
 
 class TestDeduplication:
     """Prevent contacting same customer too frequently."""
@@ -96,13 +100,14 @@ class TestDeduplication:
 
 # ── 3. Retry Logic ────────────────────────────────────
 
+
 class TestRetryLogic:
     """Verify retry behavior."""
 
     def test_retry_backoff_exponential(self):
         """Retry delays should increase exponentially."""
         base_delay = 1000
-        delays = [min(10000, base_delay * (2 ** i)) for i in range(3)]
+        delays = [min(10000, base_delay * (2**i)) for i in range(3)]
         assert delays[0] < delays[1] < delays[2]
 
     def test_retry_max_delay_capped(self):
@@ -110,7 +115,7 @@ class TestRetryLogic:
         base_delay = 1000
         max_delay = 10000
         for i in range(10):
-            delay = min(max_delay, base_delay * (2 ** i))
+            delay = min(max_delay, base_delay * (2**i))
             assert delay <= max_delay
 
     def test_retry_count(self):
@@ -123,6 +128,7 @@ class TestRetryLogic:
 
 
 # ── 4. Crash Recovery ─────────────────────────────────
+
 
 class TestCrashRecovery:
     """Verify stale execution recovery."""
@@ -156,18 +162,21 @@ class TestCrashRecovery:
 
 # ── 5. Tenant Isolation ──────────────────────────────
 
+
 class TestTenantIsolation:
     """Automation data must be scoped per tenant."""
 
     def test_execution_has_tenant_id(self):
         """Execution model has tenant_id field."""
         from app.infrastructure.repositories.whatsapp_automation_model import AutomationExecutionModel
-        assert hasattr(AutomationExecutionModel, 'tenant_id')
+
+        assert hasattr(AutomationExecutionModel, "tenant_id")
 
     def test_rule_has_tenant_id(self):
         """Rule model has tenant_id field."""
         from app.infrastructure.repositories.whatsapp_automation_model import AutomationRuleModel
-        assert hasattr(AutomationRuleModel, 'tenant_id')
+
+        assert hasattr(AutomationRuleModel, "tenant_id")
 
     def test_different_tenant_different_data(self):
         """Executions from tenant A should not appear in tenant B."""
@@ -178,6 +187,7 @@ class TestTenantIsolation:
 
 
 # ── 6. Policy Enforcement ─────────────────────────────
+
 
 class TestPolicyEnforcement:
     """Verify all policies are enforced."""
@@ -209,6 +219,7 @@ class TestPolicyEnforcement:
 
 
 # ── 7. Template Edge Cases ────────────────────────────
+
 
 class TestTemplateEdgeCases:
     """Template rendering edge cases."""
@@ -253,6 +264,7 @@ class TestTemplateEdgeCases:
 
 # ── 8. Status Transitions ─────────────────────────────
 
+
 class TestStatusTransitions:
     """Valid state machine for execution status."""
 
@@ -288,6 +300,7 @@ class TestStatusTransitions:
 
 # ── 9. Metrics ────────────────────────────────────────
 
+
 class TestMetrics:
     """Metrics calculation correctness."""
 
@@ -313,6 +326,7 @@ class TestMetrics:
 
 
 # ── 10. Connection Check ──────────────────────────────
+
 
 class TestConnectionCheck:
     """WhatsApp connection validation."""

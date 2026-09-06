@@ -32,6 +32,7 @@ from app.application.ai.prompts import SYSTEM_PROMPT
 # FIXTURES
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -51,24 +52,41 @@ def mock_llm():
 @pytest.fixture
 def tool_registry():
     registry = ToolRegistry()
-    registry.register(ToolDefinition(
-        name="get_customer", description="Get customer",
-        tool_type=ToolType.READ, permission=ToolPermission.READ_ONLY,
-        input_schema={"type": "object", "properties": {"customer_codigo": {"type": "string"}}},
-    ))
-    registry.register(ToolDefinition(
-        name="get_inventory", description="Get inventory",
-        tool_type=ToolType.READ, permission=ToolPermission.READ_ONLY,
-        input_schema={"type": "object", "properties": {"product_codigo": {"type": "string"}}},
-    ))
-    registry.register(ToolDefinition(
-        name="create_order", description="Create order",
-        tool_type=ToolType.WRITE, permission=ToolPermission.OPERATOR,
-        requires_confirmation=True,
-        input_schema={"type": "object", "properties": {
-            "client_codigo": {"type": "string"}, "items": {"type": "array"},
-        }, "required": ["client_codigo", "items"]},
-    ))
+    registry.register(
+        ToolDefinition(
+            name="get_customer",
+            description="Get customer",
+            tool_type=ToolType.READ,
+            permission=ToolPermission.READ_ONLY,
+            input_schema={"type": "object", "properties": {"customer_codigo": {"type": "string"}}},
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="get_inventory",
+            description="Get inventory",
+            tool_type=ToolType.READ,
+            permission=ToolPermission.READ_ONLY,
+            input_schema={"type": "object", "properties": {"product_codigo": {"type": "string"}}},
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="create_order",
+            description="Create order",
+            tool_type=ToolType.WRITE,
+            permission=ToolPermission.OPERATOR,
+            requires_confirmation=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "client_codigo": {"type": "string"},
+                    "items": {"type": "array"},
+                },
+                "required": ["client_codigo", "items"],
+            },
+        )
+    )
     return registry
 
 
@@ -79,8 +97,11 @@ def engine(mock_llm, tool_registry):
 
 def _seed_data(db):
     """Seed test data."""
-    db.add(ClientModel(codigo="000001", nome="Maria Silva", telefone="11999999999",
-                       rua="Rua A", numero="10", bairro="Centro"))
+    db.add(
+        ClientModel(
+            codigo="000001", nome="Maria Silva", telefone="11999999999", rua="Rua A", numero="10", bairro="Centro"
+        )
+    )
     db.add(ProductModel(codigo="P00001", nome="GLP P13", tipo="GAS", preco=120.0, estoque=0))
     db.add(ProductModel(codigo="P00002", nome="Agua 20L", tipo="WATER", preco=10.0, estoque=0))
     db.commit()
@@ -93,6 +114,7 @@ def _seed_data(db):
 # ═══════════════════════════════════════════════════════════
 # 1. PROVIDER
 # ═══════════════════════════════════════════════════════════
+
 
 class TestProvider:
     def test_mock_provider_health(self):
@@ -125,6 +147,7 @@ class TestProvider:
 # ═══════════════════════════════════════════════════════════
 # 2. INTENT
 # ═══════════════════════════════════════════════════════════
+
 
 class TestIntent:
     def test_intent_types_exist(self):
@@ -160,6 +183,7 @@ class TestIntent:
 # ═══════════════════════════════════════════════════════════
 # 3. TOOL REGISTRY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestToolRegistry:
     def test_register_and_get(self, tool_registry):
@@ -203,6 +227,7 @@ class TestToolRegistry:
 # 4. CONTEXT BUILDER
 # ═══════════════════════════════════════════════════════════
 
+
 class TestContextBuilder:
     def test_build_basic(self):
         cb = ContextBuilder()
@@ -231,6 +256,7 @@ class TestContextBuilder:
 # ═══════════════════════════════════════════════════════════
 # 5. AI ENGINE
 # ═══════════════════════════════════════════════════════════
+
 
 class TestAIEngine:
     def test_chat_unavailable_provider(self, tool_registry):
@@ -270,6 +296,7 @@ class TestAIEngine:
 # 6. GROUNDING (No Hallucination)
 # ═══════════════════════════════════════════════════════════
 
+
 class TestGrounding:
     def test_nonexistent_customer(self, db, mock_llm, tool_registry):
         """AI should not fabricate a non-existent customer."""
@@ -298,6 +325,7 @@ class TestGrounding:
 # ═══════════════════════════════════════════════════════════
 # 7. TOOL INTEGRATION (Real DB)
 # ═══════════════════════════════════════════════════════════
+
 
 class TestToolIntegration:
     def test_get_customer_real(self, db):
@@ -352,11 +380,23 @@ class TestToolIntegration:
     def test_get_customer_360_real(self, db):
         _seed_data(db)
         # Need an order for 360 to show metrics
-        db.add(OrderModel(codigo="O001", client_codigo="000001",
-                          subtotal=120.0, delivery_fee=0, discount=0, total=120.0,
-                          payment_method="CASH", payment_status="PENDING", status="PENDING",
-                          source="MANUAL", address_snapshot="Rua A",
-                          created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+        db.add(
+            OrderModel(
+                codigo="O001",
+                client_codigo="000001",
+                subtotal=120.0,
+                delivery_fee=0,
+                discount=0,
+                total=120.0,
+                payment_method="CASH",
+                payment_status="PENDING",
+                status="PENDING",
+                source="MANUAL",
+                address_snapshot="Rua A",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
         db.commit()
         tools = AIToolsFactory(db)
         result = tools.get_customer_360({"customer_codigo": "000001"})
@@ -375,11 +415,13 @@ class TestToolIntegration:
 # 8. SAFETY
 # ═══════════════════════════════════════════════════════════
 
+
 class TestSafety:
     def test_no_direct_db_access(self):
         """AI tools should not import database directly."""
         from app.application.ai import engine
         import inspect
+
         source = inspect.getsource(engine)
         assert "session.execute" not in source.lower() or "use case" in source.lower()
 
@@ -406,6 +448,7 @@ class TestSafety:
 # 9. CONVERSATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestConversation:
     def test_conversation_creation(self):
         conv = Conversation(external_id="test-123", title="Test")
@@ -423,11 +466,13 @@ class TestConversation:
 # 10. ADVERSARIAL
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAdversarial:
     def test_adv01_no_sql_execution(self):
         """LLM cannot execute SQL."""
         from app.application.ai import engine
         import inspect
+
         source = inspect.getsource(engine)
         # Should not contain raw SQL execution
         assert "text(" not in source or "execute" not in source
@@ -441,6 +486,7 @@ class TestAdversarial:
         """AI engine should not directly modify inventory."""
         from app.application.ai import engine
         import inspect
+
         source = inspect.getsource(engine)
         # Engine should not call repository directly
         assert "inventory_repo.update" not in source
@@ -462,6 +508,7 @@ class TestAdversarial:
         """Prompts should not contain API keys."""
         from app.application.ai import prompts
         import inspect
+
         source = inspect.getsource(prompts)
         assert "sk-" not in source
         assert "AI_API_KEY" not in source
@@ -473,7 +520,7 @@ class TestAdversarial:
         eng = AIEngine(llm_provider=llm, tool_registry=ToolRegistry())
         result = eng.chat("test")
         assert "traceback" not in str(result).lower()
-        assert "File \"" not in str(result)
+        assert 'File "' not in str(result)
 
     def test_adv08_tool_input_validation(self, tool_registry):
         """Invalid tool inputs are rejected."""
@@ -531,7 +578,11 @@ class TestAdversarial:
     def test_adv16_customer_notes_not_trusted(self):
         """Customer notes should not alter AI behavior."""
         # The system prompt explicitly states customer messages are untrusted
-        assert "untrusted" in SYSTEM_PROMPT.lower() or "não confiável" in SYSTEM_PROMPT.lower() or "não conf" in SYSTEM_PROMPT.lower()
+        assert (
+            "untrusted" in SYSTEM_PROMPT.lower()
+            or "não confiável" in SYSTEM_PROMPT.lower()
+            or "não conf" in SYSTEM_PROMPT.lower()
+        )
 
     def test_adv17_financial_needs_confirmation(self, tool_registry):
         """Financial write tools require confirmation."""
@@ -547,6 +598,7 @@ class TestAdversarial:
 # 11. PROMPT INJECTION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestPromptInjection:
     def test_system_prompt_isolation(self):
         """User text should not override system prompt."""
@@ -558,6 +610,7 @@ class TestPromptInjection:
         """No eval/exec in AI code."""
         from app.application.ai import engine
         import inspect
+
         source = inspect.getsource(engine)
         assert "eval(" not in source
         assert "exec(" not in source
@@ -566,6 +619,7 @@ class TestPromptInjection:
         """Engine should not use dynamic imports for tools."""
         from app.application.ai import engine
         import inspect
+
         source = inspect.getsource(engine)
         # Should not dynamically import arbitrary modules
         assert "__import__(" not in source

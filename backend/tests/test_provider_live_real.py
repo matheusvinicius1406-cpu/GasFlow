@@ -18,11 +18,14 @@ import httpx
 
 from app.infrastructure.whatsapp_provider.current_adapter import WhatsAppWebAdapter
 from app.domain.whatsapp_provider.models import (
-    ConnectionState, ProviderType, SendOptions,
+    ConnectionState,
+    ProviderType,
+    SendOptions,
 )
 
 
 # ── Check if service is running ────────────────────────
+
 
 def is_whatsapp_service_running() -> bool:
     """Check if the real WhatsApp Node.js service is available.
@@ -41,13 +44,11 @@ def is_whatsapp_service_running() -> bool:
 
 
 SERVICE_AVAILABLE = is_whatsapp_service_running()
-pytestmark = pytest.mark.skipif(
-    not SERVICE_AVAILABLE,
-    reason="WhatsApp service not running on localhost:3000"
-)
+pytestmark = pytest.mark.skipif(not SERVICE_AVAILABLE, reason="WhatsApp service not running on localhost:3000")
 
 
 # ── Health & Status Tests ──────────────────────────────
+
 
 class TestLiveHealth:
     """Real health checks against running service."""
@@ -61,9 +62,11 @@ class TestLiveHealth:
         assert "uptimeSeconds" in data
         assert "memory" in data
         assert "whatsapp" in data
-        print(f"\nHEALTH: uptime={data['uptimeSeconds']}s, "
-              f"RSS={data['memory']['rssMb']}MB, "
-              f"heap={data['memory']['heapUsedMb']}MB")
+        print(
+            f"\nHEALTH: uptime={data['uptimeSeconds']}s, "
+            f"RSS={data['memory']['rssMb']}MB, "
+            f"heap={data['memory']['heapUsedMb']}MB"
+        )
 
     def test_accounts_endpoint(self):
         """Accounts endpoint returns both accounts."""
@@ -87,12 +90,11 @@ class TestLiveHealth:
             assert "status" in acc
             assert "state" in acc["status"]
             assert "connected" in acc["status"]
-            assert acc["status"]["state"] in (
-                "disconnected", "connecting", "qr_pending", "connected"
-            )
+            assert acc["status"]["state"] in ("disconnected", "connecting", "qr_pending", "connected")
 
 
 # ── Adapter Tests ──────────────────────────────────────
+
 
 class TestLiveAdapter:
     """Test the WhatsAppWebAdapter against real service."""
@@ -151,6 +153,7 @@ class TestLiveAdapter:
 
 # ── Multi-Account Tests ────────────────────────────────
 
+
 class TestLiveMultiAccount:
     """Test multi-account isolation."""
 
@@ -183,6 +186,7 @@ class TestLiveMultiAccount:
 
 
 # ── Performance Measurement ────────────────────────────
+
 
 class TestLivePerformance:
     """Measure real performance metrics."""

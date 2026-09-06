@@ -31,6 +31,7 @@ class PauseReason(str, Enum):
 @dataclass
 class DriverLocation:
     """GPS location with metadata."""
+
     lat: float = 0.0
     lng: float = 0.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -52,6 +53,7 @@ class DriverLocation:
 @dataclass
 class DriverMetrics:
     """Operational metrics for a driver."""
+
     total_deliveries: int = 0
     completed_deliveries: int = 0
     failed_deliveries: int = 0
@@ -75,6 +77,7 @@ class DriverMetrics:
 @dataclass
 class Driver:
     """Physical driver entity with full operational support."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     tenant_id: str = ""
     name: str = ""
@@ -138,11 +141,20 @@ class Driver:
         self.active = False
         self.updated_at = datetime.utcnow()
 
-    def update_location(self, lat: float, lng: float, accuracy: Optional[float] = None,
-                        speed: Optional[float] = None, heading: Optional[float] = None):
+    def update_location(
+        self,
+        lat: float,
+        lng: float,
+        accuracy: Optional[float] = None,
+        speed: Optional[float] = None,
+        heading: Optional[float] = None,
+    ):
         self.location = DriverLocation(
-            lat=lat, lng=lng, accuracy_meters=accuracy,
-            speed_kmh=speed, heading=heading,
+            lat=lat,
+            lng=lng,
+            accuracy_meters=accuracy,
+            speed_kmh=speed,
+            heading=heading,
         )
         self.last_seen = datetime.utcnow()
         self.updated_at = datetime.utcnow()
@@ -150,7 +162,7 @@ class Driver:
     def distance_to(self, lat: float, lng: float) -> float:
         """Calculate approximate distance to a point in km (Haversine)."""
         if not self.location:
-            return float('inf')
+            return float("inf")
         return _haversine_km(self.location.lat, self.location.lng, lat, lng)
 
     def to_dict(self):
@@ -181,11 +193,10 @@ class Driver:
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Haversine distance in km between two GPS points."""
     import math
+
     R = 6371.0  # Earth radius in km
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlng / 2) ** 2)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c

@@ -44,9 +44,7 @@ class Product:
         if quantidade <= 0:
             raise ValueError("Quantidade deve ser maior que 0")
         if self.estoque < quantidade:
-            raise ValueError(
-                f"Estoque insuficiente. Disponível: {self.estoque}, solicitado: {quantidade}"
-            )
+            raise ValueError(f"Estoque insuficiente. Disponível: {self.estoque}, solicitado: {quantidade}")
         self.estoque -= quantidade
         self.updated_at = datetime.utcnow()
 

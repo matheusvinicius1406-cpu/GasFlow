@@ -13,15 +13,14 @@ Models:
 - AuthAuditModel: auth_audit_log table
 """
 
-from sqlalchemy import (
-    Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
-)
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
 
 class AuthUserModel(Base):
     """Persistent user record — replaces in-memory _users dict."""
+
     __tablename__ = "auth_users"
 
     __table_args__ = (
@@ -43,6 +42,7 @@ class AuthUserModel(Base):
 
 class AuthSessionModel(Base):
     """Persistent session record — replaces in-memory _sessions dict."""
+
     __tablename__ = "auth_sessions"
 
     __table_args__ = (
@@ -66,11 +66,10 @@ class AuthSessionModel(Base):
 
 class AuthTenantModel(Base):
     """Persistent tenant record — replaces in-memory _tenants dict."""
+
     __tablename__ = "auth_tenants"
 
-    __table_args__ = (
-        UniqueConstraint("tenant_id", name="uq_auth_tenant_id"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_auth_tenant_id"),)
 
     id = Column(String(36), primary_key=True)
     tenant_id = Column(String(100), nullable=False)
@@ -81,11 +80,10 @@ class AuthTenantModel(Base):
 
 class AuthRoleModel(Base):
     """Persistent role record — replaces in-memory _roles dict."""
+
     __tablename__ = "auth_roles"
 
-    __table_args__ = (
-        UniqueConstraint("name", name="uq_auth_role_name"),
-    )
+    __table_args__ = (UniqueConstraint("name", name="uq_auth_role_name"),)
 
     id = Column(String(36), primary_key=True)
     name = Column(String(50), nullable=False)
@@ -96,6 +94,7 @@ class AuthRoleModel(Base):
 
 class AuthMembershipModel(Base):
     """Persistent user-tenant-role membership — replaces in-memory _memberships list."""
+
     __tablename__ = "auth_memberships"
 
     __table_args__ = (
@@ -113,6 +112,7 @@ class AuthMembershipModel(Base):
 
 class AuthAuditModel(Base):
     """Persistent audit log — replaces in-memory _audit_log list."""
+
     __tablename__ = "auth_audit_log"
 
     __table_args__ = (

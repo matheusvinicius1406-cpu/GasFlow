@@ -27,6 +27,7 @@ class MessageDirection(str, Enum):
 @dataclass
 class WhatsAppMessage:
     """Normalized incoming WhatsApp message."""
+
     provider_message_id: str
     account_id: str
     sender_phone: str
@@ -44,6 +45,7 @@ class WhatsAppMessage:
 @dataclass
 class WhatsAppOutbound:
     """Outbound message to send via WhatsApp Service."""
+
     recipient_phone: str
     text: str
     account_id: str

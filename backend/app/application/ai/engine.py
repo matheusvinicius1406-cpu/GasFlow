@@ -15,7 +15,9 @@ from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole
 from app.domain.ai.intent import Intent, IntentType, Confidence
 from app.domain.ai.tools import ToolRegistry, ToolResult
 from app.application.ai.prompts import (
-    SYSTEM_PROMPT, INTENT_CLASSIFICATION_PROMPT, RESPONSE_FORMATTING_PROMPT,
+    SYSTEM_PROMPT,
+    INTENT_CLASSIFICATION_PROMPT,
+    RESPONSE_FORMATTING_PROMPT,
 )
 from app.application.ai.context import ContextBuilder
 
@@ -71,9 +73,7 @@ class AIEngine:
     ) -> Dict[str, Any]:
         """Process a user message through the AI pipeline."""
         start_time = time.time()
-        request_id = request_id or hashlib.md5(
-            f"{message}{time.time()}".encode()
-        ).hexdigest()[:12]
+        request_id = request_id or hashlib.md5(f"{message}{time.time()}".encode()).hexdigest()[:12]
 
         # 1. Check LLM availability
         if not self.llm.health_check():
@@ -117,16 +117,12 @@ class AIEngine:
 
         return response
 
-    def _classify_intent(
-        self, message: str, conversation_history: Optional[List[Dict]] = None
-    ) -> Intent:
+    def _classify_intent(self, message: str, conversation_history: Optional[List[Dict]] = None) -> Intent:
         """Classify user message into an intent using LLM."""
         from app.domain.ai.intent import IntentType
 
         intent_list = "\n".join(f"- {i.value}" for i in IntentType)
-        prompt = INTENT_CLASSIFICATION_PROMPT.format(
-            intents=intent_list, message=message
-        )
+        prompt = INTENT_CLASSIFICATION_PROMPT.format(intents=intent_list, message=message)
 
         messages = [
             LLMMessage(role=LLMRole.SYSTEM, content="You are an intent classifier. Respond only with valid JSON."),
@@ -285,20 +281,29 @@ class AIEngine:
         if not conversation_id or not self.message_repo:
             return
         from app.domain.ai.conversation import Message, MessageRole
-        self.message_repo.create(Message(
-            conversation_id=conversation_id,
-            role=MessageRole.USER,
-            content=user_msg,
-        ))
-        self.message_repo.create(Message(
-            conversation_id=conversation_id,
-            role=MessageRole.ASSISTANT,
-            content=assistant_msg,
-        ))
+
+        self.message_repo.create(
+            Message(
+                conversation_id=conversation_id,
+                role=MessageRole.USER,
+                content=user_msg,
+            )
+        )
+        self.message_repo.create(
+            Message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                content=assistant_msg,
+            )
+        )
 
     def _log_audit(
-        self, request_id: str, conversation_id: Optional[str],
-        intent: Intent, tool_result: Optional[ToolResult], latency_ms: float,
+        self,
+        request_id: str,
+        conversation_id: Optional[str],
+        intent: Intent,
+        tool_result: Optional[ToolResult],
+        latency_ms: float,
     ):
         """Log AI interaction for audit."""
         entry = {

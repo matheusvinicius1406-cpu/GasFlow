@@ -25,11 +25,11 @@ class TenantMixin:
         if model_class is None:
             # Try to detect model class from query
             try:
-                model_class = query.column_descriptions[0]['type']
+                model_class = query.column_descriptions[0]["type"]
             except (AttributeError, IndexError):
                 return query
-        
-        if hasattr(model_class, 'tenant_id'):
+
+        if hasattr(model_class, "tenant_id"):
             return query.filter(model_class.tenant_id == self.tenant_id)
         return query
 

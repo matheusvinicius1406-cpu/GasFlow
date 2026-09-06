@@ -27,7 +27,9 @@ import time
 from datetime import datetime
 
 from app.domain.whatsapp_provider.models import (
-    SendOptions, ConnectionState, ProviderType,
+    SendOptions,
+    ConnectionState,
+    ProviderType,
 )
 from app.infrastructure.whatsapp_provider.factory import create_provider
 
@@ -36,10 +38,7 @@ LIVE_MODE = os.getenv("LIVE_MODE", "false").lower() == "true"
 TEST_PHONE = os.getenv("WHATSAPP_TEST_PHONE", "")
 PROVIDER_TYPE = os.getenv("WHATSAPP_PROVIDER", "current")
 
-pytestmark = pytest.mark.skipif(
-    not LIVE_MODE,
-    reason="LIVE_MODE not enabled. Set LIVE_MODE=true to run live tests."
-)
+pytestmark = pytest.mark.skipif(not LIVE_MODE, reason="LIVE_MODE not enabled. Set LIVE_MODE=true to run live tests.")
 
 
 @pytest.fixture
@@ -58,6 +57,7 @@ def test_phone():
 
 # ── Connection Tests ────────────────────────────────────
 
+
 class TestLiveConnection:
     """Real connection tests."""
 
@@ -66,8 +66,10 @@ class TestLiveConnection:
         """Provider can be created."""
         assert provider is not None
         assert provider.provider_type in (
-            ProviderType.CURRENT, ProviderType.EVOLUTION,
-            ProviderType.BAILEYS, ProviderType.META,
+            ProviderType.CURRENT,
+            ProviderType.EVOLUTION,
+            ProviderType.BAILEYS,
+            ProviderType.META,
         )
 
     @pytest.mark.live
@@ -81,11 +83,12 @@ class TestLiveConnection:
         """Provider returns connection info."""
         info = asyncio.run(provider.get_connection_info())
         assert info is not None
-        assert hasattr(info, 'connected')
-        assert hasattr(info, 'provider_type')
+        assert hasattr(info, "connected")
+        assert hasattr(info, "provider_type")
 
 
 # ── Send Tests ──────────────────────────────────────────
+
 
 class TestLiveSend:
     """Real send tests — requires connected WhatsApp."""
@@ -120,6 +123,7 @@ class TestLiveSend:
 
 # ── Status Tests ────────────────────────────────────────
 
+
 class TestLiveStatus:
     """Real status checks."""
 
@@ -147,6 +151,7 @@ class TestLiveStatus:
 
 # ── QR Tests ────────────────────────────────────────────
 
+
 class TestLiveQR:
     """QR code tests."""
 
@@ -160,6 +165,7 @@ class TestLiveQR:
 
 
 # ── Reconnect Tests ─────────────────────────────────────
+
 
 class TestLiveReconnect:
     """Reconnection tests."""
@@ -177,6 +183,7 @@ class TestLiveReconnect:
 
 
 # ── Error Handling Tests ────────────────────────────────
+
 
 class TestLiveErrors:
     """Error handling with real provider."""

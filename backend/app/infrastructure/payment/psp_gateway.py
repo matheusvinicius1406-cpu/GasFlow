@@ -41,10 +41,16 @@ class PspProvider:
 
     name = "base"
 
-    async def create_pix(self, amount: float, txid: str, description: str = "",
-                         key: str = "", merchant_name: str = "GasFlow",
-                         merchant_city: str = "SAO PAULO",
-                         webhook_url: str = "") -> Dict[str, Any]:
+    async def create_pix(
+        self,
+        amount: float,
+        txid: str,
+        description: str = "",
+        key: str = "",
+        merchant_name: str = "GasFlow",
+        merchant_city: str = "SAO PAULO",
+        webhook_url: str = "",
+    ) -> Dict[str, Any]:
         raise NotImplementedError
 
     async def get_status(self, txid: str) -> Dict[str, Any]:
@@ -64,10 +70,16 @@ class MockPixProvider(PspProvider):
     def __init__(self):
         self._payments: Dict[str, Dict[str, Any]] = {}
 
-    async def create_pix(self, amount: float, txid: str, description: str = "",
-                         key: str = "", merchant_name: str = "GasFlow",
-                         merchant_city: str = "SAO PAULO",
-                         webhook_url: str = "") -> Dict[str, Any]:
+    async def create_pix(
+        self,
+        amount: float,
+        txid: str,
+        description: str = "",
+        key: str = "",
+        merchant_name: str = "GasFlow",
+        merchant_city: str = "SAO PAULO",
+        webhook_url: str = "",
+    ) -> Dict[str, Any]:
         record = {
             "psp_txid": txid,
             "external_id": txid,
@@ -106,9 +118,14 @@ class HttpPixProvider(PspProvider):
 
     name = "http"
 
-    def __init__(self, api_url: str = "", api_key: str = "",
-                 client_id: str = "", client_secret: str = "",
-                 provider: str = "gerencianet"):
+    def __init__(
+        self,
+        api_url: str = "",
+        api_key: str = "",
+        client_id: str = "",
+        client_secret: str = "",
+        provider: str = "gerencianet",
+    ):
         self.provider_name = provider
         self.api_url = (api_url or "").rstrip("/")
         self.api_key = api_key
@@ -117,9 +134,7 @@ class HttpPixProvider(PspProvider):
 
     def _require_credentials(self):
         if not self.api_url or not self.api_key:
-            raise PspNotConfigured(
-                f"PSP '{self.provider_name}' requires PSP_API_URL and PSP_API_KEY"
-            )
+            raise PspNotConfigured(f"PSP '{self.provider_name}' requires PSP_API_URL and PSP_API_KEY")
 
     def _headers(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"}
@@ -128,9 +143,7 @@ class HttpPixProvider(PspProvider):
         import httpx
 
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                f"{self.api_url}{path}", json=payload, headers=self._headers()
-            )
+            response = await client.post(f"{self.api_url}{path}", json=payload, headers=self._headers())
             response.raise_for_status()
             return response.json()
 
@@ -138,16 +151,20 @@ class HttpPixProvider(PspProvider):
         import httpx
 
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                f"{self.api_url}{path}", headers=self._headers()
-            )
+            response = await client.get(f"{self.api_url}{path}", headers=self._headers())
             response.raise_for_status()
             return response.json()
 
-    async def create_pix(self, amount: float, txid: str, description: str = "",
-                         key: str = "", merchant_name: str = "GasFlow",
-                         merchant_city: str = "SAO PAULO",
-                         webhook_url: str = "") -> Dict[str, Any]:
+    async def create_pix(
+        self,
+        amount: float,
+        txid: str,
+        description: str = "",
+        key: str = "",
+        merchant_name: str = "GasFlow",
+        merchant_city: str = "SAO PAULO",
+        webhook_url: str = "",
+    ) -> Dict[str, Any]:
         self._require_credentials()
         body = {
             "amount": amount,
@@ -173,15 +190,13 @@ class HttpPixProvider(PspProvider):
 
 # ── Signature helpers (webhook) ─────────────────────────
 
+
 def compute_webhook_signature(body: bytes, secret: str) -> str:
     """HMAC-SHA256 hex digest of the raw body using the shared secret."""
-    return hmac.new(
-        secret.encode("utf-8"), body, hashlib.sha256
-    ).hexdigest()
+    return hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
 
 
-def verify_webhook_signature(body: bytes, signature: str,
-                             secret: str) -> bool:
+def verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
     """Constant-time signature verification for PSP webhook calls."""
     if not secret or not signature:
         return False

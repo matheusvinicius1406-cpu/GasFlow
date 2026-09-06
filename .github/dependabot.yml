@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # Frontend (React/Vite) — agrupa updates do ecossistema React
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    groups:
+      react:
+        patterns: ["react*", "@types/react*", "@testing-library/*"]
+      vite:
+        patterns: ["vite*", "@vitejs/*", "vitest"]
+
+  # WhatsApp service (Node/TypeScript)
+  - package-ecosystem: "npm"
+    directory: "/whatsapp"
+    schedule:
+      interval: "weekly"
+
+  # E2E (Playwright)
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+
+  # Backend (FastAPI/Python)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  # Imagens Docker (node, python, redis, etc.)
+  - package-ecosystem: "docker"
+    directory: "/whatsapp"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

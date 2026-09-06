@@ -22,7 +22,9 @@ from typing import Dict, Any, Optional
 
 from app.domain.audio.provider import SpeechToTextProvider, TextToSpeechProvider, TranscriptionResult
 from app.domain.audio.media import (
-    AudioMessage, MAX_AUDIO_SIZE_MB, MAX_AUDIO_DURATION_SECONDS,
+    AudioMessage,
+    MAX_AUDIO_SIZE_MB,
+    MAX_AUDIO_DURATION_SECONDS,
 )
 
 
@@ -219,7 +221,8 @@ class AudioGateway:
             return result
         except Exception:
             return TranscriptionResult(
-                text="", confidence=0.0,
+                text="",
+                confidence=0.0,
                 provider=self.stt.provider_name,
                 error="STT_FAILED",
             )

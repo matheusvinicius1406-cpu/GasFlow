@@ -9,22 +9,28 @@ from app.domain.client.entity import Client, normalize_phone
 
 # ── Phone Normalization ───────────────────────────────
 
+
 def test_normalize_phone_digits_only():
     assert normalize_phone("11999999999") == "11999999999"
+
 
 def test_normalize_phone_with_country_code():
     # +55 11 99999-9999 → 13 digits including country code
     assert normalize_phone("+55 11 99999-9999") == "5511999999999"
 
+
 def test_normalize_phone_with_zeros():
     # 00551199999999 → strip leading 00 → 12 digits (55+11+99999999)
     assert normalize_phone("00551199999999") == "551199999999"
 
+
 def test_normalize_phone_with_parens():
     assert normalize_phone("(11) 99999-9999") == "11999999999"
 
+
 def test_normalize_phone_empty():
     assert normalize_phone("") == ""
+
 
 def test_normalize_phone_with_dashes():
     assert normalize_phone("11-99999-9999") == "11999999999"
@@ -32,16 +38,13 @@ def test_normalize_phone_with_dashes():
 
 # ── Client Entity ─────────────────────────────────────
 
+
 def test_client_creation_with_normalized_phone():
     client = Client(
-        codigo="000001",
-        nome="Teste",
-        telefone="+55 11 99999-9999",
-        rua="Rua A",
-        numero="1",
-        bairro="Centro"
+        codigo="000001", nome="Teste", telefone="+55 11 99999-9999", rua="Rua A", numero="1", bairro="Centro"
     )
     assert client.telefone == "5511999999999"
+
 
 def test_client_duplicate_phone_rejected():
     """Duplicate phone check is done at use case level, not entity."""
@@ -49,39 +52,45 @@ def test_client_duplicate_phone_rejected():
     c2 = Client(codigo="000002", nome="B", telefone="11999999999", rua="Rua B", numero="2", bairro="Centro")
     assert c1.telefone == c2.telefone
 
+
 def test_client_tipo():
     client = Client(
-        codigo="000001", nome="Restaurante A",
-        telefone="11999999999", rua="Rua A", numero="1", bairro="Centro",
-        tipo="RESTAURANT"
+        codigo="000001",
+        nome="Restaurante A",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        tipo="RESTAURANT",
     )
     assert client.tipo == "RESTAURANT"
 
+
 def test_client_email():
     client = Client(
-        codigo="000001", nome="Teste",
-        telefone="11999999999", rua="Rua A", numero="1", bairro="Centro",
-        email="teste@example.com"
+        codigo="000001",
+        nome="Teste",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        email="teste@example.com",
     )
     assert client.email == "teste@example.com"
 
 
 # ── Schema Validation ─────────────────────────────────
 
+
 def test_schema_client_create_minimal():
     from app.presentation.schemas.client import ClientCreate
 
-    data = ClientCreate(
-        nome="Teste",
-        telefone="11999999999",
-        rua="Rua A",
-        numero="1",
-        bairro="Centro"
-    )
+    data = ClientCreate(nome="Teste", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     assert data.nome == "Teste"
     assert data.telefone == "11999999999"
     assert data.tipo is None
     assert data.email is None
+
 
 def test_schema_client_create_with_crm_fields():
     from app.presentation.schemas.client import ClientCreate
@@ -93,35 +102,56 @@ def test_schema_client_create_with_crm_fields():
         numero="2",
         bairro="Centro",
         tipo="RESTAURANT",
-        email="contato@rest.com"
+        email="contato@rest.com",
     )
     assert data.tipo == "RESTAURANT"
     assert data.email == "contato@rest.com"
+
 
 def test_schema_client_list_response():
     from app.presentation.schemas.client import ClientListResponse, ClientResponse
     from datetime import datetime
 
     response = ClientListResponse(
-        items=[ClientResponse(
-            codigo="000001", nome="Teste", telefone="11999999999",
-            rua="Rua A", numero="1", bairro="Centro", ativo=True,
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow()
-        )],
-        total=1, page=1, page_size=20, total_pages=1
+        items=[
+            ClientResponse(
+                codigo="000001",
+                nome="Teste",
+                telefone="11999999999",
+                rua="Rua A",
+                numero="1",
+                bairro="Centro",
+                ativo=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        ],
+        total=1,
+        page=1,
+        page_size=20,
+        total_pages=1,
     )
     assert response.total == 1
     assert len(response.items) == 1
+
 
 def test_schema_customer360_response():
     from app.presentation.schemas.client import Customer360Response
     from datetime import datetime
 
     data = Customer360Response(
-        codigo="000001", nome="Teste", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro", ativo=True,
-        total_orders=5, total_spent=500.0, average_ticket=100.0,
-        created_at=datetime.utcnow(), updated_at=datetime.utcnow()
+        codigo="000001",
+        nome="Teste",
+        telefone="11999999999",
+        rua="Rua A",
+        numero="1",
+        bairro="Centro",
+        ativo=True,
+        total_orders=5,
+        total_spent=500.0,
+        average_ticket=100.0,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     assert data.total_orders == 5
     assert data.total_spent == 500.0
@@ -130,22 +160,26 @@ def test_schema_customer360_response():
 
 # ── Customer 360 Metrics ──────────────────────────────
 
+
 def test_customer360_no_orders():
     from app.application.client.use_cases import Customer360UseCase
 
     class FakeClientRepo:
         def buscar_por_codigo(self, codigo):
             return Client(
-                codigo="000001", nome="Teste", telefone="11999999999",
-                rua="Rua A", numero="1", bairro="Centro"
+                codigo="000001", nome="Teste", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro"
             )
 
     class FakeOrderRepo:
         def get_customer_metrics(self, codigo):
             return {
-                "total_orders": 0, "total_spent": 0.0, "average_ticket": 0.0,
-                "first_order_at": None, "last_order_at": None,
-                "days_since_last_order": None, "favorite_product": None,
+                "total_orders": 0,
+                "total_spent": 0.0,
+                "average_ticket": 0.0,
+                "first_order_at": None,
+                "last_order_at": None,
+                "days_since_last_order": None,
+                "favorite_product": None,
             }
 
     use_case = Customer360UseCase(FakeClientRepo(), FakeOrderRepo())
@@ -154,6 +188,7 @@ def test_customer360_no_orders():
     assert result["total_orders"] == 0
     assert result["total_spent"] == 0.0
 
+
 def test_customer360_with_orders():
     from datetime import datetime
     from app.application.client.use_cases import Customer360UseCase
@@ -161,14 +196,15 @@ def test_customer360_with_orders():
     class FakeClientRepo:
         def buscar_por_codigo(self, codigo):
             return Client(
-                codigo="000001", nome="Teste", telefone="11999999999",
-                rua="Rua A", numero="1", bairro="Centro"
+                codigo="000001", nome="Teste", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro"
             )
 
     class FakeOrderRepo:
         def get_customer_metrics(self, codigo):
             return {
-                "total_orders": 3, "total_spent": 300.0, "average_ticket": 100.0,
+                "total_orders": 3,
+                "total_spent": 300.0,
+                "average_ticket": 100.0,
                 "first_order_at": datetime(2025, 1, 1),
                 "last_order_at": datetime(2025, 6, 1),
                 "days_since_last_order": 60,
@@ -180,6 +216,7 @@ def test_customer360_with_orders():
     assert result["total_orders"] == 3
     assert result["total_spent"] == 300.0
     assert result["favorite_product"] == "P13"
+
 
 def test_customer360_nonexistent():
     from app.application.client.use_cases import Customer360UseCase
@@ -195,9 +232,11 @@ def test_customer360_nonexistent():
 
 # ── API Boundary ──────────────────────────────────────
 
+
 def test_api_client_no_direct_whatsapp():
     """Frontend API client should not reference WhatsApp Service directly."""
     import os
+
     client_path = os.path.join(os.path.dirname(__file__), "../../frontend/src/lib/api/client.ts")
     if os.path.exists(client_path):
         with open(client_path) as f:
@@ -207,6 +246,7 @@ def test_api_client_no_direct_whatsapp():
 
 
 # ── Duplicate Phone Prevention ────────────────────────
+
 
 def test_duplicate_phone_prevention():
     """Application layer prevents duplicate phone."""
@@ -238,23 +278,15 @@ def test_duplicate_phone_prevention():
 
     repo = FakeRepo()
     use_case = CreateClientUseCase(repo)
-    use_case.execute({
-        "nome": "Cliente A",
-        "telefone": "11999999999",
-        "rua": "Rua A",
-        "numero": "1",
-        "bairro": "Centro"
-    })
+    use_case.execute(
+        {"nome": "Cliente A", "telefone": "11999999999", "rua": "Rua A", "numero": "1", "bairro": "Centro"}
+    )
 
     # Second attempt with same phone should fail
     with pytest.raises(ValueError, match="Já existe cliente"):
-        use_case.execute({
-            "nome": "Cliente B",
-            "telefone": "11999999999",
-            "rua": "Rua B",
-            "numero": "2",
-            "bairro": "Centro"
-        })
+        use_case.execute(
+            {"nome": "Cliente B", "telefone": "11999999999", "rua": "Rua B", "numero": "2", "bairro": "Centro"}
+        )
 
 
 def test_normalized_duplicate_prevention():
@@ -286,23 +318,15 @@ def test_normalized_duplicate_prevention():
 
     repo = FakeRepo()
     use_case = CreateClientUseCase(repo)
-    use_case.execute({
-        "nome": "Cliente A",
-        "telefone": "11999999999",
-        "rua": "Rua A",
-        "numero": "1",
-        "bairro": "Centro"
-    })
+    use_case.execute(
+        {"nome": "Cliente A", "telefone": "11999999999", "rua": "Rua A", "numero": "1", "bairro": "Centro"}
+    )
 
     # Same phone with different formatting should fail
     with pytest.raises(ValueError, match="Já existe cliente"):
-        use_case.execute({
-            "nome": "Cliente B",
-            "telefone": "(11) 99999-9999",
-            "rua": "Rua B",
-            "numero": "2",
-            "bairro": "Centro"
-        })
+        use_case.execute(
+            {"nome": "Cliente B", "telefone": "(11) 99999-9999", "rua": "Rua B", "numero": "2", "bairro": "Centro"}
+        )
 
 
 def test_mass_assignment_protection():
@@ -310,13 +334,7 @@ def test_mass_assignment_protection():
     from app.presentation.schemas.client import ClientCreate, ClientUpdate
 
     # ClientCreate should not accept derived fields
-    data = ClientCreate(
-        nome="Teste",
-        telefone="11999999999",
-        rua="Rua A",
-        numero="1",
-        bairro="Centro"
-    )
+    data = ClientCreate(nome="Teste", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     dumped = data.model_dump()
     assert "total_orders" not in dumped
     assert "total_spent" not in dumped

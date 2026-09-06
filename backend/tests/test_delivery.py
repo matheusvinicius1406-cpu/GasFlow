@@ -16,17 +16,23 @@ import pytest
 import threading
 
 from app.domain.delivery.delivery import (
-    Delivery, DeliveryStatus, DeliveryFailureReason,
-    DeliveryProof, AddressSnapshot, ProofType,
+    Delivery,
+    DeliveryStatus,
+    DeliveryFailureReason,
+    DeliveryProof,
+    AddressSnapshot,
+    ProofType,
     DELIVERY_TRANSITIONS,
 )
 from app.domain.delivery.driver import Driver, DriverStatus
 from app.domain.delivery.vehicle import Vehicle, VehicleStatus
 from app.domain.delivery.route import (
-    Route, RouteStatus,
+    Route,
+    RouteStatus,
 )
 from app.domain.delivery.routing import (
-    MockRoutingProvider, GeoPoint,
+    MockRoutingProvider,
+    GeoPoint,
 )
 
 
@@ -34,10 +40,10 @@ from app.domain.delivery.routing import (
 # 1. DELIVERY DOMAIN MODEL
 # ═══════════════════════════════════════════════════════════
 
+
 class TestDeliveryDomain:
     def test_create_delivery(self):
-        d = Delivery(order_id="ORD001", tenant_id="t1",
-                     customer_codigo="C001", customer_name="Maria")
+        d = Delivery(order_id="ORD001", tenant_id="t1", customer_codigo="C001", customer_name="Maria")
         assert d.status == DeliveryStatus.PENDING
         assert d.order_id == "ORD001"
 
@@ -145,6 +151,7 @@ class TestDeliveryDomain:
 # 2. DRIVER DOMAIN
 # ═══════════════════════════════════════════════════════════
 
+
 class TestDriverDomain:
     def test_create_driver(self):
         d = Driver(tenant_id="t1", name="João", phone="11999998888")
@@ -186,6 +193,7 @@ class TestDriverDomain:
 # 3. VEHICLE DOMAIN
 # ═══════════════════════════════════════════════════════════
 
+
 class TestVehicleDomain:
     def test_create_vehicle(self):
         v = Vehicle(tenant_id="t1", plate="ABC-1234", model="Fiorino", capacity=10)
@@ -205,6 +213,7 @@ class TestVehicleDomain:
 # ═══════════════════════════════════════════════════════════
 # 4. ROUTE + STOP DOMAIN
 # ═══════════════════════════════════════════════════════════
+
 
 class TestRouteDomain:
     def test_create_route(self):
@@ -283,6 +292,7 @@ class TestRouteDomain:
 # 5. ROUTING PROVIDER
 # ═══════════════════════════════════════════════════════════
 
+
 class TestRoutingProvider:
     def test_mock_geocode(self):
         p = MockRoutingProvider()
@@ -300,6 +310,7 @@ class TestRoutingProvider:
 # 6. STATE MACHINE EXHAUSTIVE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestStateMachineExhaustive:
     def test_all_valid_transitions_exist(self):
         """Every status has at least one valid transition defined."""
@@ -308,8 +319,7 @@ class TestStateMachineExhaustive:
             assert transitions is not None
 
     def test_pending_can_only_go_to_assigned_or_cancelled(self):
-        assert DELIVERY_TRANSITIONS[DeliveryStatus.PENDING] == {
-            DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED}
+        assert DELIVERY_TRANSITIONS[DeliveryStatus.PENDING] == {DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED}
 
     def test_delivered_is_terminal(self):
         assert len(DELIVERY_TRANSITIONS[DeliveryStatus.DELIVERED]) == 0
@@ -324,6 +334,7 @@ class TestStateMachineExhaustive:
 # ═══════════════════════════════════════════════════════════
 # 7. CONCURRENCY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestConcurrency:
     def test_concurrent_delivery_creation(self):
@@ -367,50 +378,62 @@ class TestConcurrency:
 # 8. ADVERSARIAL — 50 ITEMS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAdversarial:
     """1. Customer accesses another delivery?"""
+
     def test_01_cross_customer(self):
         d1 = Delivery(order_id="O1", tenant_id="t1", customer_codigo="C1")
         d2 = Delivery(order_id="O2", tenant_id="t1", customer_codigo="C2")
         assert d1.customer_codigo != d2.customer_codigo
 
     """2. Driver accesses another driver's delivery?"""
+
     def test_02_cross_driver(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
         assert d.driver_id == "drv-1"
 
     """3. Driver accesses finance?"""
+
     def test_03_driver_no_finance(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
+
         perms = ROLE_PERMISSIONS.get(SystemRole.DRIVER, [])
         assert not any("finance" in p for p in perms)
 
     """4. Driver changes Order?"""
+
     def test_04_driver_no_order_write(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
+
         perms = ROLE_PERMISSIONS.get(SystemRole.DRIVER, [])
         assert "order.update" not in perms
         assert "order.cancel" not in perms
 
     """5. Customer changes delivery status?"""
+
     def test_05_customer_no_status_change(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
+
         perms = ROLE_PERMISSIONS.get(SystemRole.CUSTOMER, [])
         assert not any("delivery" in p for p in perms)
 
     """6. Operator crosses tenant?"""
+
     def test_06_cross_tenant(self):
         d = Delivery(order_id="O1", tenant_id="tenant-A")
         assert d.tenant_id == "tenant-A"
 
     """7. Duplicate assignment?"""
+
     def test_07_duplicate_assignment(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
         assert not d.assign("drv-2")  # Already ASSIGNED
 
     """8. Duplicate completion?"""
+
     def test_08_duplicate_completion(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -421,6 +444,7 @@ class TestAdversarial:
         assert not d.complete()  # Already DELIVERED
 
     """9. Duplicate notification?"""
+
     def test_09_duplicate_notification(self):
         # Events generated only on transition, not duplicate
         d = Delivery(order_id="O1", tenant_id="t1")
@@ -429,34 +453,40 @@ class TestAdversarial:
         assert len(d.timeline) == timeline_before + 1
 
     """10. Invalid status transition?"""
+
     def test_10_invalid_transition(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         assert not d.transition(DeliveryStatus.EN_ROUTE)
 
     """11. Fake delivery ID?"""
+
     def test_11_fake_delivery_id(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         assert d.id  # Has UUID
         assert len(d.id) > 0
 
     """12. Fake driver ID?"""
+
     def test_12_fake_driver_id(self):
         d = Driver(tenant_id="t1", name="Test", phone="11999998888")
         assert d.id
         assert len(d.id) > 0
 
     """13. Fake route ID?"""
+
     def test_13_fake_route_id(self):
         r = Route(tenant_id="t1", driver_id="drv-1")
         assert r.id
 
     """14. Fake proof?"""
+
     def test_14_fake_proof(self):
         p = DeliveryProof(proof_type=ProofType.OTP, otp_code="123456")
         assert p.id
         assert p.otp_code == "123456"
 
     """15. Proof exposed publicly?"""
+
     def test_15_proof_private(self):
         # Proof is on delivery entity, not public URL
         d = Delivery(order_id="O1", tenant_id="t1")
@@ -465,28 +495,33 @@ class TestAdversarial:
         assert "http" not in d.proof.file_path
 
     """16. Delivery duplicated?"""
+
     def test_16_no_delivery_duplicate(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d2 = Delivery(order_id="O1", tenant_id="t1")
         assert d.id != d2.id  # Different entities
 
     """17. Order receives duplicate delivery?"""
+
     def test_17_one_delivery_per_order(self):
         # Repository enforces uniqueness
         pass  # Tested at use case level
 
     """18. Inventory duplicated?"""
+
     def test_18_no_inventory_change(self):
         # Delivery doesn't modify inventory
         d = Delivery(order_id="O1", tenant_id="t1")
-        assert not hasattr(d, 'inventory_quantity')
+        assert not hasattr(d, "inventory_quantity")
 
     """19. Payment duplicated?"""
+
     def test_19_no_payment_change(self):
         d = Delivery(order_id="O1", tenant_id="t1")
-        assert not hasattr(d, 'payment_amount')
+        assert not hasattr(d, "payment_amount")
 
     """20. Event duplicated?"""
+
     def test_20_event_not_duplicated(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         initial = len(d.timeline)
@@ -494,17 +529,20 @@ class TestAdversarial:
         assert len(d.timeline) == initial + 1
 
     """21. Webhook spoof?"""
+
     def test_21_webhook_auth(self):
         # API requires authentication (Phase 13 middleware)
         pass
 
     """22. GPS spoof?"""
+
     def test_22_gps_location(self):
         d = Driver(tenant_id="t1", name="Test", phone="11999998888")
         d.update_location(0, 0)
         assert d.location.lat == 0  # Stored but flagged
 
     """23. Driver location leaks?"""
+
     def test_23_location_auth(self):
         # Customer should only see ETA, not GPS coordinates
         d = Delivery(order_id="O1", tenant_id="t1")
@@ -512,11 +550,13 @@ class TestAdversarial:
         assert "driver_location" not in data
 
     """24. ETA invented?"""
+
     def test_24_eta_none_when_unknown(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         assert d.eta_minutes is None
 
     """25. Routing provider failure?"""
+
     def test_25_routing_fallback(self):
         # Mock always returns data; real would need graceful degradation
         p = MockRoutingProvider()
@@ -524,6 +564,7 @@ class TestAdversarial:
         assert eta is not None
 
     """26. WhatsApp failure?"""
+
     def test_26_whatsapp_independent(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -531,23 +572,27 @@ class TestAdversarial:
         assert d.status == DeliveryStatus.ASSIGNED
 
     """27. AI failure?"""
+
     def test_27_ai_independent(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         # Delivery doesn't depend on AI
         assert d.status == DeliveryStatus.PENDING
 
     """28. Voice failure?"""
+
     def test_28_voice_independent(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         assert d.status == DeliveryStatus.PENDING
 
     """29. Workflow failure?"""
+
     def test_29_workflow_independent(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         # Delivery progresses without workflow
         assert d.status == DeliveryStatus.PENDING
 
     """30. Offline driver state corruption?"""
+
     def test_30_offline_driver(self):
         d = Driver(tenant_id="t1", name="Test", phone="11999998888")
         d.go_offline()
@@ -555,12 +600,14 @@ class TestAdversarial:
         assert d.is_available
 
     """31. Concurrent assignment?"""
+
     def test_31_concurrent_assignment(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
         assert not d.assign("drv-2")  # Only one assignment
 
     """32. Concurrent completion?"""
+
     def test_32_concurrent_completion(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -571,6 +618,7 @@ class TestAdversarial:
         assert not d.complete()  # Already done
 
     """33. Route sequence race?"""
+
     def test_33_sequence_unique(self):
         r = Route(tenant_id="t1", driver_id="drv-1")
         r.add_stop(delivery_id="d1", sequence=1)
@@ -578,23 +626,27 @@ class TestAdversarial:
             r.add_stop(delivery_id="d2", sequence=1)
 
     """34. Cross customer?"""
+
     def test_34_cross_customer(self):
         d1 = Delivery(order_id="O1", tenant_id="t1", customer_codigo="C1")
         d2 = Delivery(order_id="O2", tenant_id="t1", customer_codigo="C2")
         assert d1.customer_codigo != d2.customer_codigo
 
     """35. Cross tenant?"""
+
     def test_35_cross_tenant(self):
         d1 = Delivery(order_id="O1", tenant_id="A")
         d2 = Delivery(order_id="O2", tenant_id="B")
         assert d1.tenant_id != d2.tenant_id
 
     """36. IDOR?"""
+
     def test_36_idor(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         assert d.id != d.order_id  # Different IDs
 
     """37. Mass assignment?"""
+
     def test_37_mass_assignment(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         # Can't set tenant_id to different value after creation
@@ -602,6 +654,7 @@ class TestAdversarial:
         # In real repo, tenant_id would be validated by tenant context
 
     """38. Secret exposure?"""
+
     def test_38_no_secrets(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         data = d.to_dict()
@@ -610,20 +663,24 @@ class TestAdversarial:
         assert "token" not in data
 
     """39. SQL injection?"""
+
     def test_39_sql_injection(self):
         d = Delivery(order_id="'; DROP TABLE deliveries;--", tenant_id="t1")
         assert "DROP" in d.order_id  # Stored as string, not executed
 
     """40. Arbitrary tool?"""
+
     def test_40_no_arbitrary_tools(self):
         # Delivery domain only exposes controlled methods
         d = Delivery(order_id="O1", tenant_id="t1")
-        assert hasattr(d, 'assign')
-        assert hasattr(d, 'dispatch')
+        assert hasattr(d, "assign")
+        assert hasattr(d, "dispatch")
 
     """41. Driver privilege escalation?"""
+
     def test_41_driver_escalation(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
+
         perms = ROLE_PERMISSIONS.get(SystemRole.DRIVER, [])
         assert len(perms) <= 12  # Delivery-scoped, no admin/tool/workflow perms
         assert not any("admin" in p for p in perms)
@@ -631,22 +688,26 @@ class TestAdversarial:
         assert not any("workflow" in p for p in perms)
 
     """42. Customer privilege escalation?"""
+
     def test_42_customer_escalation(self):
         from app.domain.security.models import ROLE_PERMISSIONS, SystemRole
+
         perms = ROLE_PERMISSIONS.get(SystemRole.CUSTOMER, [])
         assert "order.create" not in perms
         assert "finance.read" not in perms
 
     """43. Approval bypass?"""
+
     def test_43_approval_check(self):
         from app.domain.automation.policy import PolicyEngine, ActionPolicy, RiskLevel
+
         engine = PolicyEngine()
-        engine.register_policy(ActionPolicy(
-            action="create_delivery", risk_level=RiskLevel.LOW))
+        engine.register_policy(ActionPolicy(action="create_delivery", risk_level=RiskLevel.LOW))
         result = engine.check_permission("create_delivery", "OPERATOR")
         assert result["allowed"]
 
     """44. Audit tampering?"""
+
     def test_44_audit_immutable(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -654,21 +715,25 @@ class TestAdversarial:
         assert len(d.timeline) >= 1
 
     """45. Proof upload abuse?"""
+
     def test_45_proof_type_valid(self):
         for pt in ProofType:
             p = DeliveryProof(proof_type=pt)
             assert p.proof_type == pt
 
     """46. Oversized file?"""
+
     def test_46_file_size_check(self):
         # API layer should enforce; domain stores reference
         pass
 
     """47. Invalid MIME?"""
+
     def test_47_mime_check(self):
         pass  # API layer validates
 
     """48. Deleted history?"""
+
     def test_48_history_preserved(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -680,6 +745,7 @@ class TestAdversarial:
         assert len(d.timeline) >= 4
 
     """49. Reschedule loses history?"""
+
     def test_49_reschedule_preserves_history(self):
         d = Delivery(order_id="O1", tenant_id="t1")
         d.assign("drv-1")
@@ -693,6 +759,7 @@ class TestAdversarial:
         assert d.status == DeliveryStatus.RESCHEDULED
 
     """50. All previous phases regress?"""
+
     def test_50_no_regression(self):
         # Delivery domain doesn't touch other domains
         d = Delivery(order_id="O1", tenant_id="t1")

@@ -29,9 +29,7 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
 
     def set_credentials(self, codigo: str, username: str, password_hash: str):
         """Set login credentials for a driver."""
-        model = self._filter_by_tenant(DeliveryDriverModel).filter(
-            DeliveryDriverModel.codigo == codigo
-        ).first()
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
         if model:
             model.username = username
             model.password_hash = password_hash
@@ -39,17 +37,19 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
 
     def find_by_username(self, username: str):
         """Find an active driver by username."""
-        model = self._filter_by_tenant(DeliveryDriverModel).filter(
-            DeliveryDriverModel.username == username,
-            DeliveryDriverModel.ativo == True,
-        ).first()
+        model = (
+            self._filter_by_tenant(DeliveryDriverModel)
+            .filter(
+                DeliveryDriverModel.username == username,
+                DeliveryDriverModel.ativo == True,
+            )
+            .first()
+        )
         return model
 
     def find_by_id_as_model(self, codigo: str):
         """Find driver model by codigo (returns SQLAlchemy model, not entity)."""
-        return self._filter_by_tenant(DeliveryDriverModel).filter(
-            DeliveryDriverModel.codigo == codigo
-        ).first()
+        return self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
 
     def _to_model(self, entity: DeliveryDriver) -> DeliveryDriverModel:
         if entity.id:

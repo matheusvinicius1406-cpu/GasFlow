@@ -28,9 +28,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # HSTS only in production (requires HTTPS)
         import os
+
         if os.getenv("ENVIRONMENT") == "production":
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         return response

@@ -65,8 +65,7 @@ class WhatsAppSendBridge:
                         data = response.json()
                         if data.get("success"):
                             logger.info(
-                                f"[whatsapp-bridge] Message sent to {phone} "
-                                f"(msg_id={data.get('messageId')})"
+                                f"[whatsapp-bridge] Message sent to {phone} " f"(msg_id={data.get('messageId')})"
                             )
                             return {
                                 "success": True,
@@ -75,9 +74,7 @@ class WhatsAppSendBridge:
                             }
                         else:
                             last_error = data.get("error", "Unknown error")
-                            logger.warning(
-                                f"[whatsapp-bridge] Send failed (attempt {attempt+1}): {last_error}"
-                            )
+                            logger.warning(f"[whatsapp-bridge] Send failed (attempt {attempt+1}): {last_error}")
                     elif response.status_code == 429:
                         # Rate limited — back off
                         last_error = "Rate limited by WhatsApp service"
@@ -101,10 +98,8 @@ class WhatsAppSendBridge:
             # Exponential backoff with jitter
             if attempt < MAX_RETRIES - 1:
                 import asyncio
-                delay = min(
-                    RETRY_MAX_DELAY_MS,
-                    RETRY_BASE_DELAY_MS * (2 ** attempt)
-                )
+
+                delay = min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * (2**attempt))
                 await asyncio.sleep(delay / 1000)
 
         logger.error(f"[whatsapp-bridge] All {MAX_RETRIES} attempts failed for {phone}")

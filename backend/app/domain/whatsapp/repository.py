@@ -38,7 +38,9 @@ class ConversationRepository(ABC):
         pass
 
     @abstractmethod
-    def list_active(self, account_id: Optional[str] = None, limit: int = 50, offset: int = 0) -> Tuple[List[Conversation], int]:
+    def list_active(
+        self, account_id: Optional[str] = None, limit: int = 50, offset: int = 0
+    ) -> Tuple[List[Conversation], int]:
         """List active conversations."""
         pass
 

@@ -54,10 +54,12 @@ def _get_gateway(conversation_gateway=None) -> AudioGateway:
 
 # ── Schemas ─────────────────────────────────────────────
 
+
 class TranscribeRequest(BaseModel):
     audio_base64: str = Field(..., description="Base64-encoded audio")
     mime_type: str = Field("audio/ogg")
     language: str = Field("pt-BR")
+
 
 class TranscribeResponse(BaseModel):
     text: str
@@ -67,6 +69,7 @@ class TranscribeResponse(BaseModel):
     provider: str
     error: Optional[str] = None
 
+
 class AudioProcessRequest(BaseModel):
     account_id: str = Field("primary")
     sender_phone: str = Field(..., min_length=8, max_length=20)
@@ -75,6 +78,7 @@ class AudioProcessRequest(BaseModel):
     mime_type: str = Field("audio/ogg")
     file_size_bytes: int = Field(0)
     duration_seconds: float = Field(0.0)
+
 
 class AudioProcessResponse(BaseModel):
     status: str
@@ -87,6 +91,7 @@ class AudioProcessResponse(BaseModel):
 
 
 # ── Endpoints ───────────────────────────────────────────
+
 
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(req: TranscribeRequest, ctx: TenantContext = Depends(get_tenant_context)):

@@ -12,8 +12,12 @@ Tests cover:
 
 from datetime import datetime, timedelta
 from app.domain.whatsapp_automation.entity import (
-    AutomationRule, AutomationStatus, AutomationTriggerType,
-    AutomationExecution, ExecutionStatus, AutomationMetrics,
+    AutomationRule,
+    AutomationStatus,
+    AutomationTriggerType,
+    AutomationExecution,
+    ExecutionStatus,
+    AutomationMetrics,
 )
 
 

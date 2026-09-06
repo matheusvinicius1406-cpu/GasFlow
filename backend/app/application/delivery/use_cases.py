@@ -9,28 +9,40 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from app.domain.delivery.delivery import (
-    Delivery, DeliveryStatus, DeliveryFailureReason, DeliveryProof,
-    ProofType, AddressSnapshot,
+    Delivery,
+    DeliveryStatus,
+    DeliveryFailureReason,
+    DeliveryProof,
+    ProofType,
+    AddressSnapshot,
 )
 from app.domain.delivery.route import Route
 from app.domain.delivery.routing import RoutingProvider, MockRoutingProvider
 from app.domain.delivery.repository import (
-    DeliveryRepository, DriverRepository, VehicleRepository, RouteRepository,
+    DeliveryRepository,
+    DriverRepository,
+    VehicleRepository,
+    RouteRepository,
 )
 
 
 class CreateDeliveryUseCase:
     """Create a delivery for an order."""
 
-    def __init__(self, delivery_repo: DeliveryRepository,
-                 routing_provider: Optional[RoutingProvider] = None):
+    def __init__(self, delivery_repo: DeliveryRepository, routing_provider: Optional[RoutingProvider] = None):
         self._repo = delivery_repo
         self._routing = routing_provider or MockRoutingProvider()
 
-    def execute(self, tenant_id: str, order_id: str, customer_codigo: str,
-                customer_name: str, address: Optional[Dict] = None,
-                scheduled_at: Optional[datetime] = None,
-                notes: str = "") -> Dict[str, Any]:
+    def execute(
+        self,
+        tenant_id: str,
+        order_id: str,
+        customer_codigo: str,
+        customer_name: str,
+        address: Optional[Dict] = None,
+        scheduled_at: Optional[datetime] = None,
+        notes: str = "",
+    ) -> Dict[str, Any]:
         # Check if delivery already exists for this order
         existing = self._repo.find_by_order_id(order_id, tenant_id)
         if existing:
@@ -54,15 +66,19 @@ class CreateDeliveryUseCase:
 class AssignDeliveryUseCase:
     """Assign a driver to a delivery."""
 
-    def __init__(self, delivery_repo: DeliveryRepository,
-                 driver_repo: DriverRepository,
-                 vehicle_repo: Optional[VehicleRepository] = None):
+    def __init__(
+        self,
+        delivery_repo: DeliveryRepository,
+        driver_repo: DriverRepository,
+        vehicle_repo: Optional[VehicleRepository] = None,
+    ):
         self._delivery_repo = delivery_repo
         self._driver_repo = driver_repo
         self._vehicle_repo = vehicle_repo
 
-    def execute(self, tenant_id: str, delivery_id: str, driver_id: str,
-                vehicle_id: Optional[str] = None) -> Dict[str, Any]:
+    def execute(
+        self, tenant_id: str, delivery_id: str, driver_id: str, vehicle_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         delivery = self._delivery_repo.find_by_id(delivery_id, tenant_id)
         if not delivery:
             return {"success": False, "error": "Delivery not found"}
@@ -110,15 +126,20 @@ class DispatchDeliveryUseCase:
 class UpdateDeliveryStatusUseCase:
     """Update delivery status (arrive, complete, fail)."""
 
-    def __init__(self, delivery_repo: DeliveryRepository,
-                 driver_repo: Optional[DriverRepository] = None):
+    def __init__(self, delivery_repo: DeliveryRepository, driver_repo: Optional[DriverRepository] = None):
         self._delivery_repo = delivery_repo
         self._driver_repo = driver_repo
 
-    def execute(self, tenant_id: str, delivery_id: str, new_status: str,
-                failure_reason: Optional[str] = None, failure_notes: str = "",
-                proof_type: Optional[str] = None,
-                actor_type: str = "DRIVER") -> Dict[str, Any]:
+    def execute(
+        self,
+        tenant_id: str,
+        delivery_id: str,
+        new_status: str,
+        failure_reason: Optional[str] = None,
+        failure_notes: str = "",
+        proof_type: Optional[str] = None,
+        actor_type: str = "DRIVER",
+    ) -> Dict[str, Any]:
         delivery = self._delivery_repo.find_by_id(delivery_id, tenant_id)
         if not delivery:
             return {"success": False, "error": "Delivery not found"}
@@ -167,13 +188,13 @@ class UpdateDeliveryStatusUseCase:
 class CreateRouteUseCase:
     """Create a route with stops."""
 
-    def __init__(self, route_repo: RouteRepository,
-                 delivery_repo: DeliveryRepository):
+    def __init__(self, route_repo: RouteRepository, delivery_repo: DeliveryRepository):
         self._route_repo = route_repo
         self._delivery_repo = delivery_repo
 
-    def execute(self, tenant_id: str, driver_id: str, vehicle_id: Optional[str] = None,
-                stops: Optional[List[Dict]] = None) -> Dict[str, Any]:
+    def execute(
+        self, tenant_id: str, driver_id: str, vehicle_id: Optional[str] = None, stops: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
         route = Route(tenant_id=tenant_id, driver_id=driver_id, vehicle_id=vehicle_id)
         if stops:
             for i, stop_data in enumerate(stops):
@@ -196,8 +217,7 @@ class CreateRouteUseCase:
 class DispatchRouteUseCase:
     """Dispatch a route."""
 
-    def __init__(self, route_repo: RouteRepository,
-                 delivery_repo: DeliveryRepository):
+    def __init__(self, route_repo: RouteRepository, delivery_repo: DeliveryRepository):
         self._route_repo = route_repo
         self._delivery_repo = delivery_repo
 
@@ -223,8 +243,7 @@ class GetDeliveryUseCase:
     def __init__(self, delivery_repo: DeliveryRepository):
         self._repo = delivery_repo
 
-    def execute(self, tenant_id: str, delivery_id: str,
-                customer_codigo: Optional[str] = None) -> Dict[str, Any]:
+    def execute(self, tenant_id: str, delivery_id: str, customer_codigo: Optional[str] = None) -> Dict[str, Any]:
         delivery = self._repo.find_by_id(delivery_id, tenant_id)
         if not delivery:
             return {"success": False, "error": "Delivery not found"}
@@ -240,9 +259,14 @@ class ListDeliveriesUseCase:
     def __init__(self, delivery_repo: DeliveryRepository):
         self._repo = delivery_repo
 
-    def execute(self, tenant_id: str, status: Optional[str] = None,
-                driver_id: Optional[str] = None,
-                limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+    def execute(
+        self,
+        tenant_id: str,
+        status: Optional[str] = None,
+        driver_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
         delivery_status = None
         if status:
             try:
@@ -262,18 +286,25 @@ class ListDeliveriesUseCase:
 
 # ── Legacy Use Cases (Phase 5/6 backward compat) ───────
 
+
 class CreateDriverUseCase:
     """Legacy: Create a new DeliveryDriver (entregador)."""
+
     def __init__(self, repository):
         self.repository = repository
 
     def execute(self, data: dict):
         from app.domain.delivery.entity import DeliveryDriver
         from datetime import datetime
+
         codigo = self.repository.proximo_codigo()
         driver = DeliveryDriver(
-            codigo=codigo, nome=data["nome"], telefone=data["telefone"],
-            placa=data.get("placa"), ativo=True, created_at=datetime.utcnow(),
+            codigo=codigo,
+            nome=data["nome"],
+            telefone=data["telefone"],
+            placa=data.get("placa"),
+            ativo=True,
+            created_at=datetime.utcnow(),
         )
         result = self.repository.criar(driver)
         # Save credentials if provided
@@ -286,6 +317,7 @@ class CreateDriverUseCase:
 
 class GetDriverUseCase:
     """Legacy: Get DeliveryDriver by codigo."""
+
     def __init__(self, repository):
         self.repository = repository
 
@@ -295,6 +327,7 @@ class GetDriverUseCase:
 
 class ListDriversUseCase:
     """Legacy: List all active DeliveryDrivers."""
+
     def __init__(self, repository):
         self.repository = repository
 
@@ -304,6 +337,7 @@ class ListDriversUseCase:
 
 class DisableDriverUseCase:
     """Legacy: Disable a DeliveryDriver."""
+
     def __init__(self, repository):
         self.repository = repository
 

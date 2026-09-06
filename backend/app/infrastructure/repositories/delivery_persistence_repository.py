@@ -11,8 +11,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.infrastructure.repositories.delivery_persistence_model import (
-    DeliveryRecord, DriverLocationRecord, OutboxEntry,
-    DriverSessionRecord, IdempotencyKeyRecord
+    DeliveryRecord,
+    DriverLocationRecord,
+    OutboxEntry,
+    DriverSessionRecord,
+    IdempotencyKeyRecord,
 )
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
 
@@ -57,12 +60,14 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
             address_lng=addr.get("lng"),
             notes=notes,
             idempotency_key=idempotency_key,
-            timeline=[{
-                "status": "PENDING",
-                "timestamp": datetime.utcnow().isoformat(),
-                "actor_type": "SYSTEM",
-                "notes": "Delivery created",
-            }],
+            timeline=[
+                {
+                    "status": "PENDING",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "actor_type": "SYSTEM",
+                    "notes": "Delivery created",
+                }
+            ],
         )
         self.db.add(record)
         self.db.commit()
@@ -70,9 +75,7 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
         return record
 
     def get_delivery(self, delivery_id: str) -> Optional[DeliveryRecord]:
-        return self._filter_by_tenant(DeliveryRecord).filter(
-            DeliveryRecord.delivery_id == delivery_id
-        ).first()
+        return self._filter_by_tenant(DeliveryRecord).filter(DeliveryRecord.delivery_id == delivery_id).first()
 
     def list_deliveries(
         self,
@@ -118,15 +121,22 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
     # ── State Transitions (version-locked) ─────────────
 
     def _transition(
-        self, delivery_id: str, new_status: str,
-        version: int, actor_type: str = "DRIVER",
+        self,
+        delivery_id: str,
+        new_status: str,
+        version: int,
+        actor_type: str = "DRIVER",
         extra_fields: Optional[Dict] = None,
     ) -> Optional[DeliveryRecord]:
         """Atomic state transition with optimistic locking."""
-        record = self._filter_by_tenant(DeliveryRecord).filter(
-            DeliveryRecord.delivery_id == delivery_id,
-            DeliveryRecord.version == version,
-        ).first()
+        record = (
+            self._filter_by_tenant(DeliveryRecord)
+            .filter(
+                DeliveryRecord.delivery_id == delivery_id,
+                DeliveryRecord.version == version,
+            )
+            .first()
+        )
 
         if not record:
             return None
@@ -163,6 +173,7 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
             record.timeline = [new_entry]
         # Force SQLAlchemy to detect JSON change
         from sqlalchemy.orm.attributes import flag_modified
+
         flag_modified(record, "timeline")
 
         self.db.commit()
@@ -187,7 +198,9 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
         return self._transition(delivery_id, "ARRIVED", version, actor_type="DRIVER")
 
     def complete_delivery(
-        self, delivery_id: str, version: int,
+        self,
+        delivery_id: str,
+        version: int,
         proof_type: Optional[str] = None,
         proof_data: Optional[Dict] = None,
         driver_notes: str = "",
@@ -199,15 +212,22 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
             extras["proof_data"] = proof_data
         if driver_notes:
             extras["driver_notes"] = driver_notes
-        return self._transition(delivery_id, "DELIVERED", version, actor_type="DRIVER",
-                                extra_fields=extras or None)
+        return self._transition(delivery_id, "DELIVERED", version, actor_type="DRIVER", extra_fields=extras or None)
 
     def fail_delivery(
-        self, delivery_id: str, version: int,
-        reason: str = "OTHER", notes: str = "",
+        self,
+        delivery_id: str,
+        version: int,
+        reason: str = "OTHER",
+        notes: str = "",
     ) -> Optional[DeliveryRecord]:
-        return self._transition(delivery_id, "FAILED", version, actor_type="DRIVER",
-                                extra_fields={"failed_reason": reason, "failure_notes": notes})
+        return self._transition(
+            delivery_id,
+            "FAILED",
+            version,
+            actor_type="DRIVER",
+            extra_fields={"failed_reason": reason, "failure_notes": notes},
+        )
 
     def cancel_delivery(self, delivery_id: str, version: int) -> Optional[DeliveryRecord]:
         return self._transition(delivery_id, "CANCELLED", version, actor_type="OPERATOR")
@@ -226,6 +246,7 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
 
 
 # ── GPS Location Repository ──────────────────────────────
+
 
 class SQLAlchemyDriverLocationRepository:
     """Repository for driver GPS locations — replaces in-memory locations store."""
@@ -292,11 +313,7 @@ class SQLAlchemyDriverLocationRepository:
     def get_all_locations(self, tenant_id: str, stale_threshold_seconds: int = 300) -> List[Dict]:
         """Get all driver locations for admin map. Marks stale ones."""
         now = datetime.utcnow()
-        records = (
-            self.db.query(DriverLocationRecord)
-            .filter(DriverLocationRecord.tenant_id == tenant_id)
-            .all()
-        )
+        records = self.db.query(DriverLocationRecord).filter(DriverLocationRecord.tenant_id == tenant_id).all()
         result = []
         for r in records:
             age = (now - r.timestamp).total_seconds()
@@ -304,22 +321,25 @@ class SQLAlchemyDriverLocationRepository:
             if is_stale and not r.is_stale:
                 r.is_stale = True
                 self.db.commit()
-            result.append({
-                "driver_id": r.driver_id,
-                "latitude": r.latitude,
-                "longitude": r.longitude,
-                "accuracy": r.accuracy,
-                "speed": r.speed,
-                "bearing": r.bearing,
-                "timestamp": r.timestamp.isoformat(),
-                "is_stale": is_stale,
-                "age_seconds": int(age),
-            })
+            result.append(
+                {
+                    "driver_id": r.driver_id,
+                    "latitude": r.latitude,
+                    "longitude": r.longitude,
+                    "accuracy": r.accuracy,
+                    "speed": r.speed,
+                    "bearing": r.bearing,
+                    "timestamp": r.timestamp.isoformat(),
+                    "is_stale": is_stale,
+                    "age_seconds": int(age),
+                }
+            )
         return result
 
     def mark_stale(self, tenant_id: str, stale_threshold_seconds: int = 300):
         """Mark locations older than threshold as stale."""
         from datetime import timedelta
+
         cutoff = datetime.utcnow() - timedelta(seconds=stale_threshold_seconds)
         self.db.query(DriverLocationRecord).filter(
             DriverLocationRecord.tenant_id == tenant_id,
@@ -330,6 +350,7 @@ class SQLAlchemyDriverLocationRepository:
 
 
 # ── Outbox Repository ──────────────────────────────────
+
 
 class SQLAlchemyOutboxRepository:
     """Repository for event outbox — guarantees at-least-once delivery."""
@@ -389,6 +410,7 @@ class SQLAlchemyOutboxRepository:
     def cleanup_old(self, days: int = 7):
         """Remove old processed entries."""
         from datetime import timedelta
+
         cutoff = datetime.utcnow() - timedelta(days=days)
         self.db.query(OutboxEntry).filter(
             OutboxEntry.status == "PROCESSED",
@@ -398,6 +420,7 @@ class SQLAlchemyOutboxRepository:
 
 
 # ── Driver Session Repository ──────────────────────────
+
 
 class SQLAlchemyDriverSessionRepository:
     """Repository for driver sessions — replaces in-memory sessions store."""
@@ -433,15 +456,17 @@ class SQLAlchemyDriverSessionRepository:
         return record
 
     def get_session(self, token: str) -> Optional[DriverSessionRecord]:
-        return self.db.query(DriverSessionRecord).filter(
-            DriverSessionRecord.token == token,
-            DriverSessionRecord.status == "ACTIVE",
-        ).first()
+        return (
+            self.db.query(DriverSessionRecord)
+            .filter(
+                DriverSessionRecord.token == token,
+                DriverSessionRecord.status == "ACTIVE",
+            )
+            .first()
+        )
 
     def revoke_session(self, token: str):
-        record = self.db.query(DriverSessionRecord).filter(
-            DriverSessionRecord.token == token
-        ).first()
+        record = self.db.query(DriverSessionRecord).filter(DriverSessionRecord.token == token).first()
         if record:
             record.status = "REVOKED"
             self.db.commit()
@@ -467,6 +492,7 @@ class SQLAlchemyDriverSessionRepository:
 
 # ── Idempotency Key Repository ─────────────────────────
 
+
 class SQLAlchemyIdempotencyRepository:
     """Repository for idempotency keys — replaces in-memory idempotency store."""
 
@@ -474,9 +500,7 @@ class SQLAlchemyIdempotencyRepository:
         self.db = db
 
     def exists(self, key: str) -> bool:
-        return self.db.query(IdempotencyKeyRecord).filter(
-            IdempotencyKeyRecord.key == key
-        ).first() is not None
+        return self.db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.key == key).first() is not None
 
     def record(self, key: str, tenant_id: str = "default", result_json: Optional[Dict] = None):
         if self.exists(key):
@@ -491,6 +515,7 @@ class SQLAlchemyIdempotencyRepository:
 
     def cleanup_old(self, days: int = 7):
         from datetime import timedelta
+
         cutoff = datetime.utcnow() - timedelta(days=days)
         self.db.query(IdempotencyKeyRecord).filter(
             IdempotencyKeyRecord.created_at < cutoff,

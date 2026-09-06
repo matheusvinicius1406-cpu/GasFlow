@@ -2,6 +2,27 @@
 
 Guia de implantação da stack de produção (`docker-compose.prod.yml`).
 
+## WhatsApp — motor e variáveis
+
+O serviço WhatsApp usa **Baileys** (WebSocket puro, sem Chromium) por padrão:
+
+```env
+# Motor: baileys (default) | wwebjs (rollback, exige imagem com Chromium)
+WA_ENGINE=baileys
+# Alternativa ao QR no primeiro pareamento (opcional)
+WA_PAIRING_CODE_PHONE=
+# Nível de log interno do Baileys (default: error)
+BAILEYS_LOG_LEVEL=error
+```
+
+Higiene de envio (campanhas): `WA_MINUTE_CAP`, `WA_HOURLY_CAP`, `WA_DAILY_CAP`,
+`WA_RECIPIENT_COOLDOWN_MIN`, `WA_QUIET_HOURS_ENABLED/START/END`,
+`WA_SEND_MEAN_MS`, `WA_SEND_STDEV_MS`, `WA_BROADCAST_ENABLED`.
+
+Sessões: `baileys_auth/` (Baileys) e `wwebjs_auth/` (rollback) são volumes —
+o primeiro pareamento (QR ou pairing code) só é necessário uma vez.
+Rollback completo em `docs/phase16/BAILEYS_MIGRATION.md`.
+
 ## Pré-requisitos
 
 - Docker Engine 24+ com Docker Compose v2+

@@ -17,6 +17,8 @@ from app.presentation.api.inventory import router as inventory_router
 from app.presentation.api.finance import router as finance_router
 from app.presentation.api.ai import router as ai_router
 from app.presentation.api.whatsapp_gateway import router as whatsapp_gateway_router
+from app.presentation.api.whatsapp_cloud_webhook import router as whatsapp_cloud_webhook_router
+from app.presentation.api.alerts_webhook import router as alerts_webhook_router
 from app.presentation.api.audio import router as audio_router
 from app.presentation.api.automation import router as automation_router
 from app.presentation.api.auth import router as auth_router
@@ -43,6 +45,8 @@ api_v1_router.include_router(delivery_router, tags=["Drivers"])
 api_v1_router.include_router(delivery_ops_router, tags=["Delivery"])
 api_v1_router.include_router(whatsapp_router, tags=["WhatsApp"])
 api_v1_router.include_router(whatsapp_gateway_router, tags=["WhatsApp Gateway"])
+api_v1_router.include_router(whatsapp_cloud_webhook_router, tags=["WhatsApp Cloud API"])
+api_v1_router.include_router(alerts_webhook_router, tags=["Alerts"])
 api_v1_router.include_router(ai_router, tags=["AI"])
 api_v1_router.include_router(audio_router, tags=["Audio"])
 api_v1_router.include_router(automation_router, tags=["Automation"])

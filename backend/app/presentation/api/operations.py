@@ -19,9 +19,8 @@ from app.domain.security.models import TenantContext
 router = APIRouter(prefix="/operations", tags=["operations"])
 
 
-
-
 # ── Schemas ──────────────────────────────────────────────
+
 
 class DriverLocationResponse(BaseModel):
     driver_id: str
@@ -77,6 +76,7 @@ class OperationalSummary(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────
 
+
 @router.get("/map/drivers", response_model=List[DriverLocationResponse])
 async def get_driver_locations(
     ctx: TenantContext = Depends(require_admin),
@@ -85,7 +85,10 @@ async def get_driver_locations(
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
-    from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository, SQLAlchemyDeliveryPersistenceRepository
+    from app.infrastructure.repositories.delivery_persistence_repository import (
+        SQLAlchemyDriverLocationRepository,
+        SQLAlchemyDeliveryPersistenceRepository,
+    )
 
     db = DBSession(bind=engine)
     try:
@@ -100,19 +103,21 @@ async def get_driver_locations(
             active_deliveries = len(del_repo.list_by_driver(d.codigo))
             location = loc_repo.get_location(ctx.tenant_id, d.codigo)
 
-            result.append(DriverLocationResponse(
-                driver_id=d.codigo,
-                driver_name=d.name or '',
-                status=d.status.value,
-                lat=location.latitude if location else None,
-                lng=location.longitude if location else None,
-                last_seen=location.recorded_at.isoformat() if location and location.recorded_at else None,
-                vehicle_id=d.vehicle_id,
-                vehicle_plate=None,
-                active_deliveries=active_deliveries,
-                is_paused=d.status.value == "PAUSED",
-                pause_reason=None,
-            ))
+            result.append(
+                DriverLocationResponse(
+                    driver_id=d.codigo,
+                    driver_name=d.name or "",
+                    status=d.status.value,
+                    lat=location.latitude if location else None,
+                    lng=location.longitude if location else None,
+                    last_seen=location.recorded_at.isoformat() if location and location.recorded_at else None,
+                    vehicle_id=d.vehicle_id,
+                    vehicle_plate=None,
+                    active_deliveries=active_deliveries,
+                    is_paused=d.status.value == "PAUSED",
+                    pause_reason=None,
+                )
+            )
 
         return result
     finally:
@@ -147,23 +152,25 @@ async def get_active_deliveries(
                 if driver:
                     driver_name = driver.name
 
-            addr_str = d.address_street or ''
+            addr_str = d.address_street or ""
             if d.address_number:
                 addr_str += f", {d.address_number}"
 
-            result.append(ActiveDeliveryResponse(
-                delivery_id=d.delivery_id,
-                order_id=d.order_id or '',
-                customer_name=d.customer_name or '',
-                address=addr_str,
-                status=d.status,
-                driver_id=d.driver_id,
-                driver_name=driver_name,
-                vehicle_id=d.vehicle_id,
-                scheduled_at=d.scheduled_at.isoformat() if d.scheduled_at else None,
-                started_at=d.started_at.isoformat() if d.started_at else None,
-                eta_minutes=None,
-            ))
+            result.append(
+                ActiveDeliveryResponse(
+                    delivery_id=d.delivery_id,
+                    order_id=d.order_id or "",
+                    customer_name=d.customer_name or "",
+                    address=addr_str,
+                    status=d.status,
+                    driver_id=d.driver_id,
+                    driver_name=driver_name,
+                    vehicle_id=d.vehicle_id,
+                    scheduled_at=d.scheduled_at.isoformat() if d.scheduled_at else None,
+                    started_at=d.started_at.isoformat() if d.started_at else None,
+                    eta_minutes=None,
+                )
+            )
 
         return result
     finally:
@@ -196,8 +203,10 @@ async def get_operational_dashboard(
         # Delivery stats from DB counts
         deliveries_pending = status_counts.get("PENDING", 0)
         deliveries_in_progress = (
-            status_counts.get("ASSIGNED", 0) + status_counts.get("DISPATCHED", 0) +
-            status_counts.get("EN_ROUTE", 0) + status_counts.get("ARRIVED", 0)
+            status_counts.get("ASSIGNED", 0)
+            + status_counts.get("DISPATCHED", 0)
+            + status_counts.get("EN_ROUTE", 0)
+            + status_counts.get("ARRIVED", 0)
         )
         deliveries_completed = status_counts.get("DELIVERED", 0)
         deliveries_failed = status_counts.get("FAILED", 0)
@@ -206,20 +215,24 @@ async def get_operational_dashboard(
         alerts = []
 
         if deliveries_pending > 0 and drivers_available == 0 and drivers_online > 0:
-            alerts.append(OperationalAlert(
-                alert_type="PENDING_NO_DRIVER",
-                severity="WARNING",
-                message=f"{deliveries_pending} entrega(s) sem motorista disponivel",
-                timestamp=datetime.utcnow().isoformat(),
-            ))
+            alerts.append(
+                OperationalAlert(
+                    alert_type="PENDING_NO_DRIVER",
+                    severity="WARNING",
+                    message=f"{deliveries_pending} entrega(s) sem motorista disponivel",
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+            )
 
         if drivers_online > 0 and drivers_available == 0:
-            alerts.append(OperationalAlert(
-                alert_type="NO_AVAILABLE_DRIVERS",
-                severity="CRITICAL",
-                message="Nenhum motorista disponivel para novas entregas",
-                timestamp=datetime.utcnow().isoformat(),
-            ))
+            alerts.append(
+                OperationalAlert(
+                    alert_type="NO_AVAILABLE_DRIVERS",
+                    severity="CRITICAL",
+                    message="Nenhum motorista disponivel para novas entregas",
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+            )
 
         return OperationalSummary(
             drivers_online=drivers_online,

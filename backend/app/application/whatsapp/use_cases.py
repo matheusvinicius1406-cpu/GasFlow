@@ -175,10 +175,7 @@ class HandleIncomingMessageUseCase:
 
         if not conv.client_codigo:
             conv.resetar()
-            return (
-                "⚠️ Você ainda não está cadastrado.\n"
-                "Entre em contato com o depósito para cadastro."
-            )
+            return "⚠️ Você ainda não está cadastrado.\n" "Entre em contato com o depósito para cadastro."
 
         conv.definir_quantidade(product.codigo, qty)
         total = product.preco * qty
@@ -243,6 +240,7 @@ class HandleIncomingMessageUseCase:
 
             # Cria o pedido usando o repositório diretamente
             from app.application.order.use_cases import CreateOrderUseCase
+
             create_order = CreateOrderUseCase(
                 order_repo=self.order_repo,
                 client_repo=self.client_repo,

@@ -39,9 +39,11 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
 
     def _to_conversation_model(self, entity: WhatsAppConversation) -> WhatsAppConversationModel:
         if entity.id:
-            model = self._filter_by_tenant(WhatsAppConversationModel).filter(
-                WhatsAppConversationModel.id == entity.id
-            ).first()
+            model = (
+                self._filter_by_tenant(WhatsAppConversationModel)
+                .filter(WhatsAppConversationModel.id == entity.id)
+                .first()
+            )
             if model:
                 model.phone_number = entity.phone_number
                 model.client_codigo = entity.client_codigo
@@ -59,9 +61,11 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
         )
 
     def buscar_conversa_por_telefone(self, phone_number: str) -> Optional[WhatsAppConversation]:
-        model = self._filter_by_tenant(WhatsAppConversationModel).filter(
-            WhatsAppConversationModel.phone_number == phone_number
-        ).first()
+        model = (
+            self._filter_by_tenant(WhatsAppConversationModel)
+            .filter(WhatsAppConversationModel.phone_number == phone_number)
+            .first()
+        )
         return self._to_conversation_entity(model) if model else None
 
     def criar_conversa(self, conversation: WhatsAppConversation) -> WhatsAppConversation:
@@ -106,14 +110,19 @@ class SQLAlchemyWhatsAppRepository(WhatsAppRepository):
         return self._to_message_entity(model)
 
     def listar_mensagens(self, conversation_id: int, limit: int = 50) -> List[WhatsAppMessage]:
-        models = self._filter_by_tenant(WhatsAppMessageModel).filter(
-            WhatsAppMessageModel.conversation_id == conversation_id
-        ).order_by(WhatsAppMessageModel.created_at.desc()).limit(limit).all()
+        models = (
+            self._filter_by_tenant(WhatsAppMessageModel)
+            .filter(WhatsAppMessageModel.conversation_id == conversation_id)
+            .order_by(WhatsAppMessageModel.created_at.desc())
+            .limit(limit)
+            .all()
+        )
         return [self._to_message_entity(m) for m in reversed(models)]
 
     # ── Clientes ───────────────────────────────────────────
 
     def buscar_cliente_por_telefone(self, phone_number: str) -> Optional[str]:
         from app.infrastructure.repositories.client_model import ClientModel
+
         client = self._filter_by_tenant(ClientModel).filter(ClientModel.telefone == phone_number).first()
         return client.codigo if client else None

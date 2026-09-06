@@ -49,6 +49,7 @@ router = APIRouter(prefix="/driver", tags=["driver-v1"])
 # Auth — /api/v1/driver/auth/*
 # ═══════════════════════════════════════════════════════════
 
+
 @router.post("/auth/login", response_model=DriverLoginResponse, summary="Driver login")
 async def v1_driver_login(req: DriverLoginRequest):
     """Driver app login. Returns session token."""
@@ -70,6 +71,7 @@ async def v1_driver_me(ctx: dict = Depends(_authenticate_driver)):
 # ═══════════════════════════════════════════════════════════
 # Deliveries — /api/v1/driver/deliveries/*
 # ═══════════════════════════════════════════════════════════
+
 
 @router.get("/deliveries", summary="List my deliveries")
 async def v1_driver_list_deliveries(
@@ -145,6 +147,7 @@ async def v1_driver_fail_delivery(
 # Routes — /api/v1/driver/routes/*
 # ═══════════════════════════════════════════════════════════
 
+
 @router.get("/routes", summary="List my routes")
 async def v1_driver_list_routes(ctx: dict = Depends(_authenticate_driver)):
     """List routes assigned to THIS driver."""
@@ -161,6 +164,7 @@ async def v1_driver_current_route(ctx: dict = Depends(_authenticate_driver)):
 # Location — /api/v1/driver/location
 # ═══════════════════════════════════════════════════════════
 
+
 @router.post("/location", summary="Update GPS location")
 async def v1_driver_update_location(
     req: LocationUpdate,
@@ -174,6 +178,7 @@ async def v1_driver_update_location(
 # Availability — /api/v1/driver/availability
 # ═══════════════════════════════════════════════════════════
 
+
 @router.post("/availability", summary="Set driver availability")
 async def v1_driver_set_availability(
     req: AvailabilityRequest,
@@ -186,6 +191,7 @@ async def v1_driver_set_availability(
 # ═══════════════════════════════════════════════════════════
 # Proofs — /api/v1/driver/proofs
 # ═══════════════════════════════════════════════════════════
+
 
 @router.post("/proofs", summary="Upload delivery proof")
 async def v1_driver_upload_proof(
@@ -201,6 +207,7 @@ async def v1_driver_upload_proof(
 # ═══════════════════════════════════════════════════════════
 # Sync — /api/v1/driver/sync
 # ═══════════════════════════════════════════════════════════
+
 
 @router.post("/sync", summary="Offline sync")
 async def v1_driver_sync(

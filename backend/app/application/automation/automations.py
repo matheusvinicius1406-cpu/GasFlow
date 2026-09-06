@@ -18,6 +18,7 @@ from app.domain.automation.policy import PolicyEngine, RiskLevel, ActionPolicy
 
 # ── Automation Recipes ──────────────────────────────────
 
+
 def create_low_stock_workflow() -> WorkflowDefinition:
     """InventoryLow → detect → alert operator."""
     return WorkflowDefinition(
@@ -27,15 +28,20 @@ def create_low_stock_workflow() -> WorkflowDefinition:
         trigger_event=EventType.INVENTORY_LOW.value,
         steps=[
             WorkflowStepDef(
-                id="check_stock", name="Check stock details",
-                action_type="tool_call", tool_name="get_inventory",
+                id="check_stock",
+                name="Check stock details",
+                action_type="tool_call",
+                tool_name="get_inventory",
                 arguments={"product_codigo": "{{event.payload.product_codigo}}"},
                 next_step_on_success="alert",
             ),
             WorkflowStepDef(
-                id="alert", name="Alert operator",
+                id="alert",
+                name="Alert operator",
                 action_type="notification",
-                arguments={"message": "Estoque baixo para {{check_stock.product_codigo}}: {{check_stock.quantity}} unidades"},
+                arguments={
+                    "message": "Estoque baixo para {{check_stock.product_codigo}}: {{check_stock.quantity}} unidades"
+                },
                 risk_level="LOW",
             ),
         ],
@@ -52,27 +58,36 @@ def create_receivable_overdue_workflow() -> WorkflowDefinition:
         trigger_event=EventType.RECEIVABLE_OVERDUE.value,
         steps=[
             WorkflowStepDef(
-                id="lookup_customer", name="Lookup customer",
-                action_type="tool_call", tool_name="get_customer",
+                id="lookup_customer",
+                name="Lookup customer",
+                action_type="tool_call",
+                tool_name="get_customer",
                 arguments={"customer_codigo": "{{event.payload.customer_codigo}}"},
                 next_step_on_success="draft_message",
             ),
             WorkflowStepDef(
-                id="draft_message", name="Draft reminder message",
+                id="draft_message",
+                name="Draft reminder message",
                 action_type="notification",
-                arguments={"message": "Olá {{lookup_customer.nome}}, você tem um pedido pendente. Por favor, regularize."},
+                arguments={
+                    "message": "Olá {{lookup_customer.nome}}, você tem um pedido pendente. Por favor, regularize."
+                },
                 next_step_on_success="approval",
             ),
             WorkflowStepDef(
-                id="approval", name="Approve sending",
+                id="approval",
+                name="Approve sending",
                 action_type="approval_request",
                 arguments={"action": "send_reminder", "risk": "MEDIUM"},
-                requires_approval=True, risk_level="MEDIUM",
+                requires_approval=True,
+                risk_level="MEDIUM",
                 next_step_on_success="send",
             ),
             WorkflowStepDef(
-                id="send", name="Send via WhatsApp",
-                action_type="tool_call", tool_name="send_whatsapp",
+                id="send",
+                name="Send via WhatsApp",
+                action_type="tool_call",
+                tool_name="send_whatsapp",
                 arguments={"phone": "{{lookup_customer.telefone}}", "message": "{{draft_message.message}}"},
                 risk_level="MEDIUM",
             ),
@@ -90,27 +105,34 @@ def create_customer_reactivation_workflow() -> WorkflowDefinition:
         trigger_event=EventType.CUSTOMER_INACTIVE.value,
         steps=[
             WorkflowStepDef(
-                id="lookup", name="Lookup customer",
-                action_type="tool_call", tool_name="get_customer_360",
+                id="lookup",
+                name="Lookup customer",
+                action_type="tool_call",
+                tool_name="get_customer_360",
                 arguments={"customer_codigo": "{{event.payload.customer_codigo}}"},
                 next_step_on_success="draft",
             ),
             WorkflowStepDef(
-                id="draft", name="Draft reactivation message",
+                id="draft",
+                name="Draft reactivation message",
                 action_type="notification",
                 arguments={"message": "Olá {{lookup.nome}}! Sentimos sua falta. Temos novidades para você."},
                 next_step_on_success="approval",
             ),
             WorkflowStepDef(
-                id="approval", name="Approve sending",
+                id="approval",
+                name="Approve sending",
                 action_type="approval_request",
                 arguments={"action": "send_reactivation", "risk": "MEDIUM"},
-                requires_approval=True, risk_level="MEDIUM",
+                requires_approval=True,
+                risk_level="MEDIUM",
                 next_step_on_success="send",
             ),
             WorkflowStepDef(
-                id="send", name="Send via WhatsApp",
-                action_type="tool_call", tool_name="send_whatsapp",
+                id="send",
+                name="Send via WhatsApp",
+                action_type="tool_call",
+                tool_name="send_whatsapp",
                 arguments={"phone": "{{lookup.telefone}}", "message": "{{draft.message}}"},
                 risk_level="MEDIUM",
             ),
@@ -128,13 +150,16 @@ def create_order_completion_workflow() -> WorkflowDefinition:
         trigger_event=EventType.ORDER_DELIVERED.value,
         steps=[
             WorkflowStepDef(
-                id="lookup_order", name="Lookup order",
-                action_type="tool_call", tool_name="get_order",
+                id="lookup_order",
+                name="Lookup order",
+                action_type="tool_call",
+                tool_name="get_order",
                 arguments={"order_codigo": "{{event.payload.order_codigo}}"},
                 next_step_on_success="draft",
             ),
             WorkflowStepDef(
-                id="draft", name="Draft follow-up",
+                id="draft",
+                name="Draft follow-up",
                 action_type="notification",
                 arguments={"message": "Pedido {{event.payload.order_codigo}} entregue! Obrigado pela preferência."},
             ),
@@ -152,13 +177,16 @@ def create_payment_confirmation_workflow() -> WorkflowDefinition:
         trigger_event=EventType.PAYMENT_RECEIVED.value,
         steps=[
             WorkflowStepDef(
-                id="confirm", name="Confirm payment",
-                action_type="tool_call", tool_name="get_payments",
+                id="confirm",
+                name="Confirm payment",
+                action_type="tool_call",
+                tool_name="get_payments",
                 arguments={"order_codigo": "{{event.payload.order_codigo}}"},
                 next_step_on_success="notify",
             ),
             WorkflowStepDef(
-                id="notify", name="Notify customer",
+                id="notify",
+                name="Notify customer",
                 action_type="notification",
                 arguments={"message": "Pagamento confirmado para o pedido {{event.payload.order_codigo}}. Obrigado!"},
             ),
@@ -181,16 +209,25 @@ def register_default_policies(policy_engine: PolicyEngine):
         ActionPolicy(action="get_inventory_summary", risk_level=RiskLevel.LOW, description="Inventory summary"),
         ActionPolicy(action="get_receivables", risk_level=RiskLevel.LOW, description="Read receivables"),
         ActionPolicy(action="get_sales_summary", risk_level=RiskLevel.LOW, description="Sales summary"),
-        ActionPolicy(action="create_order", risk_level=RiskLevel.MEDIUM, requires_approval=True,
-                     description="Create order"),
-        ActionPolicy(action="add_stock", risk_level=RiskLevel.HIGH, requires_approval=True,
-                     description="Add stock"),
-        ActionPolicy(action="register_payment", risk_level=RiskLevel.HIGH, requires_approval=True,
-                     description="Register payment"),
-        ActionPolicy(action="send_whatsapp", risk_level=RiskLevel.MEDIUM, requires_approval=True,
-                     description="Send WhatsApp message"),
-        ActionPolicy(action="send_reactivation", risk_level=RiskLevel.MEDIUM, requires_approval=True,
-                     description="Send reactivation"),
+        ActionPolicy(
+            action="create_order", risk_level=RiskLevel.MEDIUM, requires_approval=True, description="Create order"
+        ),
+        ActionPolicy(action="add_stock", risk_level=RiskLevel.HIGH, requires_approval=True, description="Add stock"),
+        ActionPolicy(
+            action="register_payment", risk_level=RiskLevel.HIGH, requires_approval=True, description="Register payment"
+        ),
+        ActionPolicy(
+            action="send_whatsapp",
+            risk_level=RiskLevel.MEDIUM,
+            requires_approval=True,
+            description="Send WhatsApp message",
+        ),
+        ActionPolicy(
+            action="send_reactivation",
+            risk_level=RiskLevel.MEDIUM,
+            requires_approval=True,
+            description="Send reactivation",
+        ),
     ]
     for p in policies:
         policy_engine.register_policy(p)

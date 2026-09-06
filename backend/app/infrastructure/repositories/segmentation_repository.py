@@ -44,9 +44,7 @@ class SQLAlchemySegmentRepository(TenantMixin):
 
     def _to_model(self, entity: Segment) -> SegmentModel:
         if entity.id:
-            model = self._filter_by_tenant(SegmentModel).filter(
-                SegmentModel.id == entity.id
-            ).first()
+            model = self._filter_by_tenant(SegmentModel).filter(SegmentModel.id == entity.id).first()
             if model:
                 model.name = entity.name
                 model.description = entity.description
@@ -70,9 +68,7 @@ class SQLAlchemySegmentRepository(TenantMixin):
         )
 
     def find_by_id(self, segment_id: int) -> Optional[Segment]:
-        model = self._filter_by_tenant(SegmentModel).filter(
-            SegmentModel.id == segment_id
-        ).first()
+        model = self._filter_by_tenant(SegmentModel).filter(SegmentModel.id == segment_id).first()
         return self._to_entity(model) if model else None
 
     def list_all(self, status: Optional[str] = None) -> List[Segment]:
@@ -97,9 +93,7 @@ class SQLAlchemySegmentRepository(TenantMixin):
         return self._to_entity(model)
 
     def delete(self, segment_id: int) -> bool:
-        model = self._filter_by_tenant(SegmentModel).filter(
-            SegmentModel.id == segment_id
-        ).first()
+        model = self._filter_by_tenant(SegmentModel).filter(SegmentModel.id == segment_id).first()
         if model:
             self.db.delete(model)
             self.db.commit()
@@ -107,9 +101,7 @@ class SQLAlchemySegmentRepository(TenantMixin):
         return False
 
     def update_member_count(self, segment_id: int, count: int) -> None:
-        model = self._filter_by_tenant(SegmentModel).filter(
-            SegmentModel.id == segment_id
-        ).first()
+        model = self._filter_by_tenant(SegmentModel).filter(SegmentModel.id == segment_id).first()
         if model:
             model.member_count = count
             model.last_evaluated_at = datetime.utcnow()

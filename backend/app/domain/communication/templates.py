@@ -24,19 +24,20 @@ class CommunicationChannel(str, Enum):
 
 
 class CommunicationEvent(str, Enum):
-    PROXIMITY = "PROXIMITY"           # Driver near customer
-    ARRIVAL = "ARRIVAL"               # Driver arrived
+    PROXIMITY = "PROXIMITY"  # Driver near customer
+    ARRIVAL = "ARRIVAL"  # Driver arrived
     CUSTOMER_ABSENT = "CUSTOMER_ABSENT"  # Customer not found
     ADDRESS_DIFFICULTY = "ADDRESS_DIFFICULTY"  # Hard to find address
-    DELAY = "DELAY"                   # Delivery delayed
-    POST_DELIVERY = "POST_DELIVERY"   # After delivery completed
+    DELAY = "DELAY"  # Delivery delayed
+    POST_DELIVERY = "POST_DELIVERY"  # After delivery completed
     PAYMENT_REMINDER = "PAYMENT_REMINDER"  # Payment pending
-    HELP_REQUEST = "HELP_REQUEST"     # Driver needs help
+    HELP_REQUEST = "HELP_REQUEST"  # Driver needs help
 
 
 @dataclass
 class MessageTemplate:
     """A communication template."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     event: CommunicationEvent = CommunicationEvent.PROXIMITY
     channel: CommunicationChannel = CommunicationChannel.WHATSAPP
@@ -84,10 +85,7 @@ DEFAULT_TEMPLATES = {
     CommunicationEvent.ARRIVAL: MessageTemplate(
         event=CommunicationEvent.ARRIVAL,
         subject="Entregador chegou",
-        body=(
-            "Olá, {customer_name}! O entregador acabou de chegar "
-            "ao local da entrega do pedido #{order_code}."
-        ),
+        body=("Olá, {customer_name}! O entregador acabou de chegar " "ao local da entrega do pedido #{order_code}."),
         variables=["customer_name", "order_code"],
         cooldown_minutes=60,
     ),
@@ -116,10 +114,7 @@ DEFAULT_TEMPLATES = {
     CommunicationEvent.DELAY: MessageTemplate(
         event=CommunicationEvent.DELAY,
         subject="Atraso na entrega",
-        body=(
-            "Olá, {customer_name}! Tivemos um pequeno atraso "
-            "na entrega do seu pedido. Agradecemos a paciência!"
-        ),
+        body=("Olá, {customer_name}! Tivemos um pequeno atraso " "na entrega do seu pedido. Agradecemos a paciência!"),
         variables=["customer_name"],
         cooldown_minutes=60,
     ),
@@ -152,6 +147,7 @@ DEFAULT_TEMPLATES = {
 @dataclass
 class CommunicationPolicy:
     """Tenant-specific communication policy."""
+
     tenant_id: str = ""
     enabled_events: List[CommunicationEvent] = field(default_factory=lambda: list(CommunicationEvent))
     channels: Dict[CommunicationEvent, CommunicationChannel] = field(default_factory=dict)
@@ -172,6 +168,7 @@ class CommunicationPolicy:
         """Check if message can be sent (not in cooldown)."""
         key = f"{delivery_id}:{event.value}"
         import time
+
         last_sent = self.cooldowns.get(key, 0)
         template = self.get_template(event)
         return (time.time() - last_sent) >= (template.cooldown_minutes * 60)
@@ -179,6 +176,7 @@ class CommunicationPolicy:
     def record_sent(self, delivery_id: str, event: CommunicationEvent):
         """Record that a message was sent."""
         import time
+
         key = f"{delivery_id}:{event.value}"
         self.cooldowns[key] = time.time()
 
@@ -186,13 +184,12 @@ class CommunicationPolicy:
         return {
             "tenant_id": self.tenant_id,
             "enabled_events": [e.value for e in self.enabled_events],
-            "templates": {
-                e.value: t.to_dict() for e, t in self.custom_templates.items()
-            },
+            "templates": {e.value: t.to_dict() for e, t in self.custom_templates.items()},
         }
 
 
 # ── Communication Service ────────────────────────────────
+
 
 class CommunicationService:
     """
@@ -217,8 +214,7 @@ class CommunicationService:
             self._policies[tenant_id] = CommunicationPolicy(tenant_id=tenant_id)
         return self._policies[tenant_id]
 
-    def should_send(self, tenant_id: str, delivery_id: str,
-                    event: CommunicationEvent) -> bool:
+    def should_send(self, tenant_id: str, delivery_id: str, event: CommunicationEvent) -> bool:
         """Check if message should be sent."""
         policy = self.get_policy(tenant_id)
         if not policy.is_enabled(event):
@@ -227,18 +223,24 @@ class CommunicationService:
             return False
         return True
 
-    def render_message(self, tenant_id: str, event: CommunicationEvent,
-                       context: Dict[str, str]) -> str:
+    def render_message(self, tenant_id: str, event: CommunicationEvent, context: Dict[str, str]) -> str:
         """Render message template with context."""
         policy = self.get_policy(tenant_id)
         template = policy.get_template(event)
         return template.render(context)
 
-    def record_communication(self, tenant_id: str, delivery_id: str,
-                            event: CommunicationEvent, channel: CommunicationChannel,
-                            message: str, status: str = "QUEUED"):
+    def record_communication(
+        self,
+        tenant_id: str,
+        delivery_id: str,
+        event: CommunicationEvent,
+        channel: CommunicationChannel,
+        message: str,
+        status: str = "QUEUED",
+    ):
         """Record a communication attempt."""
         import uuid
+
         record = {
             "communication_id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
@@ -247,7 +249,7 @@ class CommunicationService:
             "channel": channel.value,
             "message": message,
             "status": status,
-            "created_at": __import__('datetime').datetime.utcnow().isoformat(),
+            "created_at": __import__("datetime").datetime.utcnow().isoformat(),
         }
         self._history.append(record)
 
@@ -257,8 +259,7 @@ class CommunicationService:
 
         return record
 
-    def get_history(self, tenant_id: str, delivery_id: Optional[str] = None,
-                   limit: int = 50) -> List[Dict]:
+    def get_history(self, tenant_id: str, delivery_id: Optional[str] = None, limit: int = 50) -> List[Dict]:
         """Get communication history."""
         records = [r for r in self._history if r["tenant_id"] == tenant_id]
         if delivery_id:

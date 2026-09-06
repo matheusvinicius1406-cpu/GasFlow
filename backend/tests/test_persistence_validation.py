@@ -25,9 +25,7 @@ from app.infrastructure.repositories.delivery_persistence_repository import (
     SQLAlchemyIdempotencyRepository,
     SQLAlchemyDeliveryPersistenceRepository,
 )
-from app.infrastructure.repositories.delivery_persistence_model import (
-    IdempotencyKeyRecord
-)
+from app.infrastructure.repositories.delivery_persistence_model import IdempotencyKeyRecord
 
 
 @pytest.fixture
@@ -64,6 +62,7 @@ def delivery_repo(db):
 # 1. SESSION RESTART TEST
 # ═══════════════════════════════════════════════════════════
 
+
 class TestSessionPersistence:
     def test_session_survives_simulated_restart(self, db, session_repo):
         """Login → new DB session (simulates restart) → still authenticated."""
@@ -71,8 +70,11 @@ class TestSessionPersistence:
         token = "test-token-001"
         expires = datetime.utcnow() + timedelta(hours=8)
         session_repo.create_session(
-            token=token, driver_id="drv-1", tenant_id="t1",
-            role="DRIVER", expires_at=expires,
+            token=token,
+            driver_id="drv-1",
+            tenant_id="t1",
+            role="DRIVER",
+            expires_at=expires,
         )
 
         # Step 2: Simulate restart — create a new repository instance
@@ -91,7 +93,9 @@ class TestSessionPersistence:
         """Logout → new DB session → session still revoked."""
         token = "test-token-002"
         session_repo.create_session(
-            token=token, driver_id="drv-1", tenant_id="t1",
+            token=token,
+            driver_id="drv-1",
+            tenant_id="t1",
         )
 
         # Revoke
@@ -107,7 +111,9 @@ class TestSessionPersistence:
         token = "test-token-003"
         expired_at = datetime.utcnow() - timedelta(hours=1)
         session_repo.create_session(
-            token=token, driver_id="drv-1", tenant_id="t1",
+            token=token,
+            driver_id="drv-1",
+            tenant_id="t1",
             expires_at=expired_at,
         )
         # Even though it's "ACTIVE" status, it should be treated as invalid
@@ -120,7 +126,9 @@ class TestSessionPersistence:
         """Tenant A session cannot be used by Tenant B."""
         repo_a = SQLAlchemyDriverSessionRepository(db)
         repo_a.create_session(
-            token="token-a", driver_id="drv-a", tenant_id="tenant-a",
+            token="token-a",
+            driver_id="drv-a",
+            tenant_id="tenant-a",
         )
 
         repo_b = SQLAlchemyDriverSessionRepository(db)
@@ -135,6 +143,7 @@ class TestSessionPersistence:
 # ═══════════════════════════════════════════════════════════
 # 2. IDEMPOTENCY RESTART TEST
 # ═══════════════════════════════════════════════════════════
+
 
 class TestIdempotencyPersistence:
     def test_idempotency_survives_restart(self, db, idem_repo):
@@ -161,9 +170,7 @@ class TestIdempotencyPersistence:
         idem_repo.record("key-dup")
         idem_repo.record("key-dup")  # Should not raise
         # Only one record
-        count = db.query(IdempotencyKeyRecord).filter(
-            IdempotencyKeyRecord.key == "key-dup"
-        ).count()
+        count = db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.key == "key-dup").count()
         assert count == 1
 
     def test_idempotency_tenant_isolation(self, db):
@@ -182,11 +189,13 @@ class TestIdempotencyPersistence:
 # 3. DELIVERY STATE RESTART TEST
 # ═══════════════════════════════════════════════════════════
 
+
 class TestDeliveryPersistence:
     def test_delivery_survives_restart(self, db, delivery_repo):
         """Create delivery → new repo → delivery still exists."""
         record = delivery_repo.create_delivery(
-            delivery_id="del-001", order_id="ORD-001",
+            delivery_id="del-001",
+            order_id="ORD-001",
             customer_name="Test Customer",
         )
         assert record.status == "PENDING"
@@ -200,11 +209,15 @@ class TestDeliveryPersistence:
     def test_delivery_state_transitions_persist(self, db, delivery_repo):
         """State changes persist: PENDING → ASSIGNED → EN_ROUTE."""
         delivery_repo.create_delivery(
-            delivery_id="del-002", order_id="ORD-002",
+            delivery_id="del-002",
+            order_id="ORD-002",
         )
 
         assigned = delivery_repo.assign_delivery(
-            "del-002", driver_id="drv-1", vehicle_id=None, version=1,
+            "del-002",
+            driver_id="drv-1",
+            vehicle_id=None,
+            version=1,
         )
         assert assigned is not None
         assert assigned.status == "ASSIGNED"
@@ -234,17 +247,24 @@ class TestDeliveryPersistence:
     def test_version_conflict_detected(self, db, delivery_repo):
         """Optimistic locking: stale version returns None."""
         delivery_repo.create_delivery(
-            delivery_id="del-003", order_id="ORD-003",
+            delivery_id="del-003",
+            order_id="ORD-003",
         )
         # Assign with correct version
         result = delivery_repo.assign_delivery(
-            "del-003", "drv-1", None, version=1,
+            "del-003",
+            "drv-1",
+            None,
+            version=1,
         )
         assert result is not None
 
         # Try to assign again with stale version
         result2 = delivery_repo.assign_delivery(
-            "del-003", "drv-2", None, version=1,
+            "del-003",
+            "drv-2",
+            None,
+            version=1,
         )
         assert result2 is None  # Conflict
 
@@ -252,6 +272,7 @@ class TestDeliveryPersistence:
 # ═══════════════════════════════════════════════════════════
 # 4. CONCURRENCY TEST — IDEMPOTENCY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestIdempotencyConcurrency:
     def test_duplicate_key_sequential_only_one_inserted(self, db):
@@ -261,9 +282,7 @@ class TestIdempotencyConcurrency:
         repo.record(key)
         repo.record(key)  # Second should be idempotent
 
-        count = db.query(IdempotencyKeyRecord).filter(
-            IdempotencyKeyRecord.key == key
-        ).count()
+        count = db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.key == key).count()
         assert count == 1
 
     def test_different_keys_both_persist(self, db):
@@ -277,15 +296,16 @@ class TestIdempotencyConcurrency:
 
     def test_postgres_would_handle_true_concurrency(self, db):
         """Documentation: SQLite doesn't support true concurrent writes.
-        
+
         In production (PostgreSQL), UNIQUE constraint on 'key' column
         ensures exactly one insert wins in a race condition.
         This test validates the constraint exists in the schema.
         """
         from app.infrastructure.repositories.delivery_persistence_model import IdempotencyKeyRecord
+
         # Verify unique constraint exists
         table = IdempotencyKeyRecord.__table__
-        unique_constraints = [c for c in table.constraints if hasattr(c, 'columns')]
+        unique_constraints = [c for c in table.constraints if hasattr(c, "columns")]
         assert len(unique_constraints) > 0, "IdempotencyKeyRecord must have unique constraint"
 
 
@@ -293,17 +313,22 @@ class TestIdempotencyConcurrency:
 # 5. CLEANUP TEST
 # ═══════════════════════════════════════════════════════════
 
+
 class TestCleanup:
     def test_cleanup_expired_sessions(self, db, session_repo):
         """Expired sessions are marked EXPIRED."""
         # Create an expired session
         session_repo.create_session(
-            token="old-token", driver_id="drv-1", tenant_id="t1",
+            token="old-token",
+            driver_id="drv-1",
+            tenant_id="t1",
             expires_at=datetime.utcnow() - timedelta(hours=1),
         )
         # Create a valid session
         session_repo.create_session(
-            token="new-token", driver_id="drv-1", tenant_id="t1",
+            token="new-token",
+            driver_id="drv-1",
+            tenant_id="t1",
             expires_at=datetime.utcnow() + timedelta(hours=1),
         )
 

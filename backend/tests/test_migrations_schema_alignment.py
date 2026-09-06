@@ -113,9 +113,7 @@ def test_migrations_schema_matches_models(migrated_db):
     for table in sorted(set(models) & set(db)):
         m, d = models[table], db[table]
         if m["pk"] != d["pk"]:
-            divergencias.append(
-                f"{table}: PK diverge (models={sorted(m['pk'])}, db={sorted(d['pk'])})"
-            )
+            divergencias.append(f"{table}: PK diverge (models={sorted(m['pk'])}, db={sorted(d['pk'])})")
         if set(m["columns"]) != set(d["columns"]):
             divergencias.append(
                 f"{table}: colunas divergem "

@@ -23,13 +23,14 @@ from enum import Enum
 
 
 class DispatchMode(str, Enum):
-    MANUAL = "MANUAL"           # Admin selects driver
-    ASSISTED = "ASSISTED"       # System recommends, admin confirms
-    AUTOMATIC = "AUTOMATIC"     # System assigns automatically
+    MANUAL = "MANUAL"  # Admin selects driver
+    ASSISTED = "ASSISTED"  # System recommends, admin confirms
+    AUTOMATIC = "AUTOMATIC"  # System assigns automatically
 
 
 class CandidateFilter(Enum):
     """Why a candidate was rejected."""
+
     NOT_ACTIVE = "NOT_ACTIVE"
     NOT_AVAILABLE = "NOT_AVAILABLE"
     NO_VEHICLE = "NO_VEHICLE"
@@ -43,6 +44,7 @@ class CandidateFilter(Enum):
 @dataclass
 class OrderItem:
     """Simplified order item for dispatch."""
+
     product_codigo: str
     product_name: str
     quantity: int
@@ -51,12 +53,13 @@ class OrderItem:
 @dataclass
 class OrderRequest:
     """Order details needed for dispatch."""
+
     order_id: str
     tenant_id: str
     customer_codigo: str
     customer_name: str
     items: List[OrderItem] = field(default_factory=list)
-    priority: int = 0           # 0=normal, 1=high, 2=urgent
+    priority: int = 0  # 0=normal, 1=high, 2=urgent
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     scheduled_at: Optional[datetime] = None
@@ -66,6 +69,7 @@ class OrderRequest:
 @dataclass
 class DriverCandidate:
     """Candidate driver with all relevant data."""
+
     driver_id: str
     driver_name: str
     vehicle_id: Optional[str] = None
@@ -90,6 +94,7 @@ class DriverCandidate:
 @dataclass
 class FilterResult:
     """Result of filtering a candidate."""
+
     valid: bool
     reason: Optional[CandidateFilter] = None
     details: str = ""
@@ -98,7 +103,8 @@ class FilterResult:
 @dataclass
 class ScoreResult:
     """Score for a valid candidate."""
-    score: float = 0.0          # 0-100
+
+    score: float = 0.0  # 0-100
     distance_km: float = 0.0
     capacity_score: float = 0.0
     proximity_score: float = 0.0
@@ -110,6 +116,7 @@ class ScoreResult:
 @dataclass
 class DispatchRecommendation:
     """Final recommendation from dispatch engine."""
+
     driver_id: str
     driver_name: str
     vehicle_id: Optional[str]
@@ -124,6 +131,7 @@ class DispatchRecommendation:
 # ═══════════════════════════════════════════════════════════
 # FILTER — Binary eligibility check
 # ═══════════════════════════════════════════════════════════
+
 
 def filter_candidate(candidate: DriverCandidate, order: OrderRequest) -> FilterResult:
     """Check if candidate is eligible. Binary: eligible or not."""
@@ -160,6 +168,7 @@ def filter_candidate(candidate: DriverCandidate, order: OrderRequest) -> FilterR
 # SCORE — Ranking for valid candidates
 # ═══════════════════════════════════════════════════════════
 
+
 def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreResult:
     """Score a valid candidate. Higher = better fit."""
 
@@ -169,8 +178,10 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
     distance_km = 0.0
     if order.latitude and order.longitude and candidate.latitude and candidate.longitude:
         distance_km = _haversine_km(
-            candidate.latitude, candidate.longitude,
-            order.latitude, order.longitude,
+            candidate.latitude,
+            candidate.longitude,
+            order.latitude,
+            order.longitude,
         )
 
     # Proximity score: closer = higher (max 5km = score 100)
@@ -203,8 +214,10 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
     route_score = 0.0
     if candidate.current_route_lat and candidate.current_route_lng and order.latitude and order.longitude:
         route_deviation = _haversine_km(
-            candidate.current_route_lat, candidate.current_route_lng,
-            order.latitude, order.longitude,
+            candidate.current_route_lat,
+            candidate.current_route_lng,
+            order.latitude,
+            order.longitude,
         )
         route_score = max(0, 100 - (route_deviation * 25))
         if route_deviation < 2:
@@ -223,12 +236,7 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
         explanation.append(f"⚠ {candidate.active_deliveries} active deliveries")
 
     # ── Composite score ──────────────────────────────────
-    score = (
-        proximity_score * 0.40 +
-        capacity_score * 0.30 +
-        route_score * 0.20 +
-        workload_score * 0.10
-    )
+    score = proximity_score * 0.40 + capacity_score * 0.30 + route_score * 0.20 + workload_score * 0.10
 
     return ScoreResult(
         score=round(score, 1),
@@ -245,6 +253,7 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
 # DISPATCH ENGINE — Main orchestrator
 # ═══════════════════════════════════════════════════════════
 
+
 class DispatchEngine:
     """
     Intelligent dispatch engine.
@@ -259,7 +268,9 @@ class DispatchEngine:
         self.mode = mode
 
     def filter_candidates(
-        self, order: OrderRequest, candidates: List[DriverCandidate],
+        self,
+        order: OrderRequest,
+        candidates: List[DriverCandidate],
     ) -> List[Tuple[DriverCandidate, FilterResult]]:
         """Filter all candidates, returning eligibility results."""
         results = []
@@ -269,7 +280,9 @@ class DispatchEngine:
         return results
 
     def score_candidates(
-        self, order: OrderRequest, valid_candidates: List[DriverCandidate],
+        self,
+        order: OrderRequest,
+        valid_candidates: List[DriverCandidate],
     ) -> List[Tuple[DriverCandidate, ScoreResult]]:
         """Score all valid candidates."""
         scored = []
@@ -281,7 +294,9 @@ class DispatchEngine:
         return scored
 
     def recommend(
-        self, order: OrderRequest, candidates: List[DriverCandidate],
+        self,
+        order: OrderRequest,
+        candidates: List[DriverCandidate],
         top_n: int = 3,
     ) -> Dict[str, Any]:
         """
@@ -298,9 +313,12 @@ class DispatchEngine:
                 "success": False,
                 "error": "No eligible drivers",
                 "rejected": [
-                    {"driver_id": c.driver_id, "driver_name": c.driver_name,
-                     "reason": f.reason.value if f.reason else "UNKNOWN",
-                     "details": f.details}
+                    {
+                        "driver_id": c.driver_id,
+                        "driver_name": c.driver_name,
+                        "reason": f.reason.value if f.reason else "UNKNOWN",
+                        "details": f.details,
+                    }
                     for c, f in rejected
                 ],
                 "recommendations": [],
@@ -323,16 +341,18 @@ class DispatchEngine:
                     "fits": available >= item.quantity,
                 }
 
-            recommendations.append(DispatchRecommendation(
-                driver_id=candidate.driver_id,
-                driver_name=candidate.driver_name,
-                vehicle_id=candidate.vehicle_id,
-                vehicle_plate=candidate.vehicle_plate,
-                score=score_result.score,
-                distance_km=score_result.distance_km,
-                capacity_fit=capacity_fit,
-                explanation=score_result.explanation,
-            ))
+            recommendations.append(
+                DispatchRecommendation(
+                    driver_id=candidate.driver_id,
+                    driver_name=candidate.driver_name,
+                    vehicle_id=candidate.vehicle_id,
+                    vehicle_plate=candidate.vehicle_plate,
+                    score=score_result.score,
+                    distance_km=score_result.distance_km,
+                    capacity_fit=capacity_fit,
+                    explanation=score_result.explanation,
+                )
+            )
 
         return {
             "success": True,
@@ -341,9 +361,12 @@ class DispatchEngine:
             "eligible": len(valid),
             "rejected_count": len(rejected),
             "rejected": [
-                {"driver_id": c.driver_id, "driver_name": c.driver_name,
-                 "reason": f.reason.value if f.reason else "UNKNOWN",
-                 "details": f.details}
+                {
+                    "driver_id": c.driver_id,
+                    "driver_name": c.driver_name,
+                    "reason": f.reason.value if f.reason else "UNKNOWN",
+                    "details": f.details,
+                }
                 for c, f in rejected
             ],
             "recommendations": [
@@ -366,14 +389,14 @@ class DispatchEngine:
 # HELPERS
 # ═══════════════════════════════════════════════════════════
 
+
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Haversine distance in km."""
     import math
+
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlng / 2) ** 2)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c

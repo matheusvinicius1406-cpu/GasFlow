@@ -89,8 +89,7 @@ class CreateOrderUseCase:
 
             if available < quantity:
                 raise ValueError(
-                    f"Estoque insuficiente para {product.nome}. "
-                    f"Disponível: {available}, solicitado: {quantity}"
+                    f"Estoque insuficiente para {product.nome}. " f"Disponível: {available}, solicitado: {quantity}"
                 )
 
             # Frozen price — backend is authority
@@ -118,9 +117,7 @@ class CreateOrderUseCase:
             discount = 0.0
 
         if discount > subtotal:
-            raise ValueError(
-                f"Desconto (R$ {discount:.2f}) não pode exceder subtotal (R$ {subtotal:.2f})"
-            )
+            raise ValueError(f"Desconto (R$ {discount:.2f}) não pode exceder subtotal (R$ {subtotal:.2f})")
 
         total = subtotal + delivery_fee - discount
         if total < 0:
@@ -187,9 +184,9 @@ class UpdateOrderStatusUseCase:
     - CANCELLED → return stock atomically (if already deducted)
     """
 
-    def __init__(self, repository: OrderRepository,
-                 inventory_repo: Optional[InventoryRepository] = None,
-                 order_item_repo=None):
+    def __init__(
+        self, repository: OrderRepository, inventory_repo: Optional[InventoryRepository] = None, order_item_repo=None
+    ):
         self.repository = repository
         self.inventory_repo = inventory_repo
         self.order_item_repo = order_item_repo
@@ -201,11 +198,9 @@ class UpdateOrderStatusUseCase:
 
         # Immutability check
         from app.domain.order.entity import TERMINAL_STATUSES
+
         if order.status in TERMINAL_STATUSES:
-            raise ValueError(
-                f"Pedido {codigo} está em status {order.status.value} "
-                f"e não pode ser alterado"
-            )
+            raise ValueError(f"Pedido {codigo} está em status {order.status.value} " f"e não pode ser alterado")
 
         try:
             order_status = OrderStatus(status)
@@ -254,7 +249,8 @@ class UpdateOrderStatusUseCase:
         for item in items:
             # Check if stock was actually deducted for this product in this order
             existing_sale = self.inventory_repo.get_movement_by_reference(
-                "ORDER", order.codigo,
+                "ORDER",
+                order.codigo,
                 product_codigo=item.product_codigo,
                 movement_type="SALE",
             )
@@ -288,11 +284,9 @@ class AssignDriverUseCase:
             raise ValueError("Pedido não encontrado")
 
         from app.domain.order.entity import TERMINAL_STATUSES
+
         if order.status in TERMINAL_STATUSES:
-            raise ValueError(
-                f"Pedido {codigo} está em status {order.status.value} "
-                f"e não pode ser alterado"
-            )
+            raise ValueError(f"Pedido {codigo} está em status {order.status.value} " f"e não pode ser alterado")
 
         driver = self.driver_repo.buscar_por_codigo(driver_codigo)
         if not driver or not driver.ativo:

@@ -40,8 +40,7 @@ class OllamaProvider(LLMProvider):
 
     # ── Internals ─────────────────────────────────────────
 
-    def _payload(self, messages: List[LLMMessage], temperature: float,
-                 max_tokens: int) -> Dict[str, Any]:
+    def _payload(self, messages: List[LLMMessage], temperature: float, max_tokens: int) -> Dict[str, Any]:
         return {
             "model": self._model,
             "messages": [{"role": m.role.value, "content": m.content} for m in messages],
@@ -67,8 +66,7 @@ class OllamaProvider(LLMProvider):
 
     # ── Interface LLMProvider ─────────────────────────────
 
-    def generate(self, messages: List[LLMMessage], temperature: float = 0.3,
-                 max_tokens: int = 2048) -> LLMResponse:
+    def generate(self, messages: List[LLMMessage], temperature: float = 0.3, max_tokens: int = 2048) -> LLMResponse:
         start = time.time()
         try:
             with httpx.Client(timeout=self._timeout) as client:
@@ -80,15 +78,13 @@ class OllamaProvider(LLMProvider):
                 latency = (time.time() - start) * 1000
                 return self._to_response(response.json(), latency)
         except httpx.HTTPStatusError as exc:
-            return LLMResponse(
-                content="", error=f"LLM_HTTP_ERROR:{exc.response.status_code}"
-            )
+            return LLMResponse(content="", error=f"LLM_HTTP_ERROR:{exc.response.status_code}")
         except (httpx.HTTPError, OSError) as exc:
             return LLMResponse(content="", error=f"LLM_UNAVAILABLE:{type(exc).__name__}")
 
-    def generate_structured(self, messages: List[LLMMessage], schema: Dict[str, Any],
-                            temperature: float = 0.1,
-                            max_tokens: int = 1024) -> LLMResponse:
+    def generate_structured(
+        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+    ) -> LLMResponse:
         # O Ollama não tem schema-enforcement nativo na API /chat; o JSON de
         # schema é injetado no prompt pelo chamador (AIEngine). Aqui apenas
         # pedimos resposta mais determinística.

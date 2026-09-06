@@ -5,10 +5,7 @@ Decimal (NUMERIC) for all monetary values.
 Constraints: amount > 0, remaining >= 0, FK relationships.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Numeric,
-    Index
-)
+from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Index
 from datetime import datetime
 from decimal import Decimal
 from app.infrastructure.database.base import Base
@@ -19,9 +16,7 @@ class PaymentModel(Base):
 
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
-    order_codigo = Column(
-        String, nullable=False, index=True
-    )
+    order_codigo = Column(String, nullable=False, index=True)
     amount = Column(Numeric(10, 2), nullable=False)
     method = Column(String, nullable=False)  # CASH, PIX, CARD, TRANSFER, OTHER
     status = Column(String, nullable=False, default="PENDING")
@@ -43,12 +38,8 @@ class ReceivableModel(Base):
 
     tenant_id = Column(String, default="default", index=True)
     id = Column(Integer, primary_key=True, index=True)
-    customer_codigo = Column(
-        String, nullable=False, index=True
-    )
-    order_codigo = Column(
-        String, nullable=False, index=True
-    )
+    customer_codigo = Column(String, nullable=False, index=True)
+    order_codigo = Column(String, nullable=False, index=True)
     original_amount = Column(Numeric(10, 2), nullable=False)
     paid_amount = Column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
     due_date = Column(DateTime, nullable=True)

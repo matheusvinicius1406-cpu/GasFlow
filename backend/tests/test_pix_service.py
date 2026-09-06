@@ -27,6 +27,7 @@ from app.domain.payment.service import PaymentService
 
 # ── Helpers ───────────────────────────────────────────
 
+
 def valid_crc(payload: str) -> bool:
     """Recomputa o CRC16 sobre o payload até '6304' e compara com o final."""
     assert "6304" in payload, "payload deve conter o campo 6304"
@@ -36,42 +37,53 @@ def valid_crc(payload: str) -> bool:
 
 # ── Lib pura ──────────────────────────────────────────
 
+
 class TestBrCodeGeneration:
     def test_payload_structure(self):
         code = build_pix_copy_paste(
-            key="contato@teste.com", key_type="EMAIL",
-            merchant_name="GasFlow", merchant_city="SAO PAULO",
-            amount=150.0, txid="ABCDE12345",
+            key="contato@teste.com",
+            key_type="EMAIL",
+            merchant_name="GasFlow",
+            merchant_city="SAO PAULO",
+            amount=150.0,
+            txid="ABCDE12345",
         )
         assert code.startswith("00020126")
         assert "br.gov.bcb.pix" in code
-        assert "5303986" in code          # moeda BRL
-        assert "5802BR" in code           # país
+        assert "5303986" in code  # moeda BRL
+        assert "5802BR" in code  # país
         assert valid_crc(code)
 
     def test_amount_formatted_brl(self):
         code = build_pix_copy_paste(
-            key="contato@teste.com", key_type="EMAIL", amount=150.0,
+            key="contato@teste.com",
+            key_type="EMAIL",
+            amount=150.0,
         )
         assert "54150,00" in code or "54" in code
 
     def test_static_copy_paste_has_no_amount(self):
         code = build_pix_copy_paste(
-            key="contato@teste.com", key_type="EMAIL",
+            key="contato@teste.com",
+            key_type="EMAIL",
         )
         # Sem amount: campo 54 não deve existir com valor monetário.
         assert "54" not in code
 
     def test_txid_default_stars(self):
         code = build_pix_copy_paste(
-            key="contato@teste.com", key_type="EMAIL", amount=10.0,
+            key="contato@teste.com",
+            key_type="EMAIL",
+            amount=10.0,
         )
         # Campo 62 > subcampo 05 com valor literal '***' (PIX estático).
         assert "62070503***" in code
 
     def test_txid_sanitized_and_truncated(self):
         code = build_pix_copy_paste(
-            key="contato@teste.com", key_type="EMAIL", amount=10.0,
+            key="contato@teste.com",
+            key_type="EMAIL",
+            amount=10.0,
             txid="GAS-ORD-123!" + "X" * 40,
         )
         # TXID alfanumérico, máx 25: "GASORD123X" * ~
@@ -122,8 +134,10 @@ class TestBrCodeGeneration:
         service = PixService()
         result = service.generate_payload(
             amount=99.9,
-            key="contato@teste.com", key_type="EMAIL",
-            merchant_name="Teste", merchant_city="SAO PAULO",
+            key="contato@teste.com",
+            key_type="EMAIL",
+            merchant_name="Teste",
+            merchant_city="SAO PAULO",
             txid="PEDIDO42",
         )
         assert result["br_code"].startswith("000201")
@@ -136,11 +150,16 @@ class TestBrCodeGeneration:
 
 # ── PaymentService (integração, in-memory) ────────────
 
+
 class TestPaymentServicePix:
     def test_create_pix_config_stores_copy_paste(self):
         service = PaymentService()
         config = service.create_pix_config(
-            "t1", "contato@teste.com", "EMAIL", "Teste", city="SAO PAULO",
+            "t1",
+            "contato@teste.com",
+            "EMAIL",
+            "Teste",
+            city="SAO PAULO",
         )
         assert config.copy_paste_code
         assert valid_crc(config.copy_paste_code)
@@ -150,7 +169,12 @@ class TestPaymentServicePix:
         service.create_method("t1", "PIX", "PIX", "PIX")
         service.create_pix_config("t1", "contato@teste.com", "EMAIL", "Teste")
         payment = service.create_payment(
-            "t1", "order-1", "ORD-001", "C001", 150.0, "PIX",
+            "t1",
+            "order-1",
+            "ORD-001",
+            "C001",
+            150.0,
+            "PIX",
         )
         assert payment.pix_key_used == "contato@teste.com"
         assert payment.pix_copy_paste
@@ -184,6 +208,7 @@ class TestPaymentServicePix:
 
 # ── Endpoints HTTP (determinísticos) ──────────────────
 
+
 @pytest.fixture()
 def app_client(monkeypatch):
     """TestClient com get_payment_service substituído por service in-memory."""
@@ -195,10 +220,13 @@ def app_client(monkeypatch):
     from app.main import app
 
     with TestClient(app) as client:
-        resp = client.post("/auth/login", json={
-            "username": "admin",
-            "password": "test_password_123",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "test_password_123",
+            },
+        )
         assert resp.status_code == 200, f"login falhou: {resp.text}"
         yield client, {"Authorization": f"Bearer {resp.json()['token']}"}
 
@@ -211,17 +239,25 @@ class TestPixEndpoints:
 
     def test_payload_generates_qr(self, app_client):
         client, headers = app_client
-        client.post("/payments/pix", json={
-            "key": "contato@teste.com",
-            "key_type": "EMAIL",
-            "holder_name": "Teste",
-            "city": "SAO PAULO",
-        }, headers=headers)
-        resp = client.post("/payments/pix/payload", json={
-            "amount": 250.0,
-            "description": "Pedido 1",
-            "order_codigo": "ORD-123",
-        }, headers=headers)
+        client.post(
+            "/payments/pix",
+            json={
+                "key": "contato@teste.com",
+                "key_type": "EMAIL",
+                "holder_name": "Teste",
+                "city": "SAO PAULO",
+            },
+            headers=headers,
+        )
+        resp = client.post(
+            "/payments/pix/payload",
+            json={
+                "amount": 250.0,
+                "description": "Pedido 1",
+                "order_codigo": "ORD-123",
+            },
+            headers=headers,
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["br_code"].startswith("000201")
@@ -231,10 +267,14 @@ class TestPixEndpoints:
 
     def test_payload_invalid_amount(self, app_client):
         client, headers = app_client
-        client.post("/payments/pix", json={
-            "key": "contato@teste.com",
-            "key_type": "EMAIL",
-        }, headers=headers)
+        client.post(
+            "/payments/pix",
+            json={
+                "key": "contato@teste.com",
+                "key_type": "EMAIL",
+            },
+            headers=headers,
+        )
         resp = client.post("/payments/pix/payload", json={"amount": 0}, headers=headers)
         assert resp.status_code == 400
 
@@ -246,16 +286,34 @@ class TestPixEndpoints:
 
     def test_status_found_after_payment(self, app_client):
         client, headers = app_client
-        client.post("/payments/methods", json={
-            "code": "PIX", "name": "PIX", "payment_type": "PIX",
-        }, headers=headers)
-        client.post("/payments/pix", json={
-            "key": "contato@teste.com", "key_type": "EMAIL",
-        }, headers=headers)
-        pay = client.post("/payments/", json={
-            "order_id": "order-9", "order_codigo": "ORD-9",
-            "customer_codigo": "C9", "amount": 80.0, "method_code": "PIX",
-        }, headers=headers)
+        client.post(
+            "/payments/methods",
+            json={
+                "code": "PIX",
+                "name": "PIX",
+                "payment_type": "PIX",
+            },
+            headers=headers,
+        )
+        client.post(
+            "/payments/pix",
+            json={
+                "key": "contato@teste.com",
+                "key_type": "EMAIL",
+            },
+            headers=headers,
+        )
+        pay = client.post(
+            "/payments/",
+            json={
+                "order_id": "order-9",
+                "order_codigo": "ORD-9",
+                "customer_codigo": "C9",
+                "amount": 80.0,
+                "method_code": "PIX",
+            },
+            headers=headers,
+        )
         assert pay.status_code == 200
         copy_paste = pay.json()["payment"]["pix_copy_paste"]
         # Acha o TXID GASORD9 dentro do BR Code

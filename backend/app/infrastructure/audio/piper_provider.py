@@ -13,9 +13,9 @@ from app.domain.audio.provider import SpeechResult, TextToSpeechProvider
 
 
 class PiperTTSProvider(TextToSpeechProvider):
-    def __init__(self, voice: str = "pt_BR-faber-medium",
-                 executable: str = "/usr/local/bin/piper",
-                 models_dir: str = "/models") -> None:
+    def __init__(
+        self, voice: str = "pt_BR-faber-medium", executable: str = "/usr/local/bin/piper", models_dir: str = "/models"
+    ) -> None:
         self._voice = voice
         self._executable = executable
         self._models_dir = models_dir.rstrip("/")
@@ -35,21 +35,19 @@ class PiperTTSProvider(TextToSpeechProvider):
             out_path = Path(tmp_dir) / "out.wav"
             cmd = [
                 self._executable,
-                "--model", f"{self._models_dir}/{self._voice}.onnx",
-                "--output_file", str(out_path),
+                "--model",
+                f"{self._models_dir}/{self._voice}.onnx",
+                "--output_file",
+                str(out_path),
             ]
             try:
-                result = subprocess.run(cmd, input=text.encode("utf-8"),
-                                        capture_output=True, timeout=120)
+                result = subprocess.run(cmd, input=text.encode("utf-8"), capture_output=True, timeout=120)
             except (subprocess.TimeoutExpired, OSError) as exc:
-                return SpeechResult(error=f"TTS_ERROR:{type(exc).__name__}",
-                                    provider=self.provider_name)
+                return SpeechResult(error=f"TTS_ERROR:{type(exc).__name__}", provider=self.provider_name)
             if result.returncode != 0:
-                return SpeechResult(error="TTS_ERROR:nonzero_exit",
-                                    provider=self.provider_name)
+                return SpeechResult(error="TTS_ERROR:nonzero_exit", provider=self.provider_name)
             if not out_path.exists():
-                return SpeechResult(error="TTS_ERROR:no_output",
-                                    provider=self.provider_name)
+                return SpeechResult(error="TTS_ERROR:no_output", provider=self.provider_name)
             audio_bytes = out_path.read_bytes()
             return SpeechResult(
                 audio_bytes=audio_bytes,
@@ -62,8 +60,7 @@ class PiperTTSProvider(TextToSpeechProvider):
         if self._available is not None:
             return self._available
         try:
-            result = subprocess.run([self._executable, "--help"],
-                                    capture_output=True, timeout=10)
+            result = subprocess.run([self._executable, "--help"], capture_output=True, timeout=10)
             self._available = result.returncode == 0
         except (subprocess.TimeoutExpired, OSError):
             self._available = False

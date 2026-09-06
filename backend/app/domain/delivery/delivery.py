@@ -58,6 +58,7 @@ DELIVERY_TRANSITIONS = {
 @dataclass
 class DeliveryProof:
     """Proof of delivery."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     delivery_id: str = ""
     proof_type: ProofType = ProofType.MANUAL_CONFIRMATION
@@ -71,6 +72,7 @@ class DeliveryProof:
 @dataclass
 class DeliveryTimeline:
     """Immutable timeline event."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     delivery_id: str = ""
     status: DeliveryStatus = DeliveryStatus.PENDING
@@ -84,6 +86,7 @@ class DeliveryTimeline:
 @dataclass
 class AddressSnapshot:
     """Frozen copy of delivery address at order time."""
+
     street: str = ""
     number: str = ""
     complement: str = ""
@@ -115,6 +118,7 @@ class AddressSnapshot:
 @dataclass
 class Delivery:
     """Physical operation of delivering an order."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     order_id: str = ""
     tenant_id: str = ""
@@ -141,9 +145,14 @@ class Delivery:
     def can_transition(self, new_status: DeliveryStatus) -> bool:
         return new_status in DELIVERY_TRANSITIONS.get(self.status, set())
 
-    def transition(self, new_status: DeliveryStatus, actor_id: str = "",
-                   actor_type: str = "OPERATOR", notes: str = "",
-                   metadata: Optional[Dict] = None) -> bool:
+    def transition(
+        self,
+        new_status: DeliveryStatus,
+        actor_id: str = "",
+        actor_type: str = "OPERATOR",
+        notes: str = "",
+        metadata: Optional[Dict] = None,
+    ) -> bool:
         """Attempt state transition. Returns True if successful."""
         if not self.can_transition(new_status):
             return False
@@ -172,18 +181,19 @@ class Delivery:
             self.arrived_at = None
 
         # Add timeline event
-        self.timeline.append(DeliveryTimeline(
-            delivery_id=self.id,
-            status=new_status,
-            actor_id=actor_id,
-            actor_type=actor_type,
-            notes=notes,
-            metadata=metadata or {},
-        ))
+        self.timeline.append(
+            DeliveryTimeline(
+                delivery_id=self.id,
+                status=new_status,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                notes=notes,
+                metadata=metadata or {},
+            )
+        )
         return True
 
-    def assign(self, driver_id: str, vehicle_id: Optional[str] = None,
-               route_id: Optional[str] = None) -> bool:
+    def assign(self, driver_id: str, vehicle_id: Optional[str] = None, route_id: Optional[str] = None) -> bool:
         """Assign driver and optionally vehicle/route."""
         if not self.can_transition(DeliveryStatus.ASSIGNED):
             return False
@@ -234,8 +244,10 @@ class Delivery:
     @property
     def customer_can_track(self) -> bool:
         return self.status in {
-            DeliveryStatus.ASSIGNED, DeliveryStatus.DISPATCHED,
-            DeliveryStatus.EN_ROUTE, DeliveryStatus.ARRIVED,
+            DeliveryStatus.ASSIGNED,
+            DeliveryStatus.DISPATCHED,
+            DeliveryStatus.EN_ROUTE,
+            DeliveryStatus.ARRIVED,
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -270,8 +282,12 @@ class Delivery:
                 "reference": self.address.reference,
             },
             "timeline": [
-                {"status": t.status.value, "timestamp": t.timestamp.isoformat(),
-                 "actor_type": t.actor_type, "notes": t.notes}
+                {
+                    "status": t.status.value,
+                    "timestamp": t.timestamp.isoformat(),
+                    "actor_type": t.actor_type,
+                    "notes": t.notes,
+                }
                 for t in self.timeline
             ],
             "eta_minutes": self.eta_minutes,

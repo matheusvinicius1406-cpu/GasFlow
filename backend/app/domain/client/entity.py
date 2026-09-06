@@ -20,10 +20,10 @@ def normalize_phone(phone: str) -> str:
     """Normaliza telefone brasileiro — remove caracteres não numéricos."""
     if not phone:
         return phone
-    digits = re.sub(r'\D', '', phone)
+    digits = re.sub(r"\D", "", phone)
     # Remove leading zeros (international prefix)
-    if digits.startswith('00') and len(digits) > 10:
-        digits = digits.lstrip('0')
+    if digits.startswith("00") and len(digits) > 10:
+        digits = digits.lstrip("0")
     return digits
 
 
@@ -90,9 +90,9 @@ class Client:
         self.ativo = True
         self.updated_at = datetime.utcnow()
 
-    def atualizar_endereco(self, rua: str, numero: str, bairro: str,
-                           complemento: Optional[str] = None,
-                           referencia: Optional[str] = None):
+    def atualizar_endereco(
+        self, rua: str, numero: str, bairro: str, complemento: Optional[str] = None, referencia: Optional[str] = None
+    ):
         """Atualiza o endereço do cliente."""
         self.rua = rua
         self.numero = numero

@@ -33,28 +33,34 @@ def auth_header(token):
 class TestAuthProtection:
     """Test that all protected endpoints return 401 without token."""
 
-    @pytest.mark.parametrize("method,path", [
-        ("GET", "/clients/"),
-        ("GET", "/orders/"),
-        ("GET", "/products/"),
-        ("GET", "/inventory/"),
-        ("GET", "/finance/payments"),
-        ("GET", "/finance/receivables"),
-        ("GET", "/finance/expenses"),
-        ("GET", "/finance/cash"),
-        ("GET", "/delivery-drivers/"),
-        ("GET", "/delivery/deliveries"),
-        ("GET", "/auth/me"),
-    ])
+    @pytest.mark.parametrize(
+        "method,path",
+        [
+            ("GET", "/clients/"),
+            ("GET", "/orders/"),
+            ("GET", "/products/"),
+            ("GET", "/inventory/"),
+            ("GET", "/finance/payments"),
+            ("GET", "/finance/receivables"),
+            ("GET", "/finance/expenses"),
+            ("GET", "/finance/cash"),
+            ("GET", "/delivery-drivers/"),
+            ("GET", "/delivery/deliveries"),
+            ("GET", "/auth/me"),
+        ],
+    )
     def test_protected_endpoint_returns_401_without_token(self, client, method, path):
         resp = client.request(method, path)
         assert resp.status_code == 401, f"{method} {path} should return 401, got {resp.status_code}"
 
-    @pytest.mark.parametrize("path", [
-        "/health",
-        "/docs",
-        "/openapi.json",
-    ])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/health",
+            "/docs",
+            "/openapi.json",
+        ],
+    )
     def test_public_endpoint_accessible_without_token(self, client, path):
         resp = client.get(path)
         assert resp.status_code in (200, 404), f"GET {path} should be accessible, got {resp.status_code}"
@@ -122,13 +128,18 @@ class TestTenantFiltering:
     def test_create_and_read_client_tenant_scoped(self, client, admin_token):
         """Create a client and verify it can be read back (same tenant)."""
         import uuid as _uuid
-        resp = client.post("/clients/", json={
-            "nome": "Teste Isolation",
-            "telefone": f"119{str(_uuid.uuid4().int)[:7]}",
-            "rua": "Rua Teste",
-            "numero": "42",
-            "bairro": "Centro",
-        }, headers=auth_header(admin_token))
+
+        resp = client.post(
+            "/clients/",
+            json={
+                "nome": "Teste Isolation",
+                "telefone": f"119{str(_uuid.uuid4().int)[:7]}",
+                "rua": "Rua Teste",
+                "numero": "42",
+                "bairro": "Centro",
+            },
+            headers=auth_header(admin_token),
+        )
         assert resp.status_code == 200
         data = resp.json()
         codigo = data.get("codigo")

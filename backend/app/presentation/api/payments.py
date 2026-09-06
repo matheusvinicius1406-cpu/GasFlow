@@ -40,6 +40,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 # ── Request/Response Schemas ─────────────────────────
 
+
 class CreateMethodRequest(BaseModel):
     code: str
     name: str
@@ -52,6 +53,7 @@ class CreateMethodRequest(BaseModel):
     discount_type: str = "NONE"
     discount_value: float = 0.0
 
+
 class UpdateMethodRequest(BaseModel):
     name: Optional[str] = None
     display_order: Optional[int] = None
@@ -62,6 +64,7 @@ class UpdateMethodRequest(BaseModel):
     discount_type: Optional[str] = None
     discount_value: Optional[float] = None
 
+
 class CreatePixRequest(BaseModel):
     key: str
     key_type: str = "RANDOM"
@@ -69,6 +72,7 @@ class CreatePixRequest(BaseModel):
     holder_document: str = ""
     institution: str = ""
     city: str = ""
+
 
 class UpdatePixRequest(BaseModel):
     key: Optional[str] = None
@@ -78,6 +82,7 @@ class UpdatePixRequest(BaseModel):
     institution: Optional[str] = None
     city: Optional[str] = None
 
+
 class CreatePaymentRequest(BaseModel):
     order_id: str
     order_codigo: str = ""
@@ -85,8 +90,10 @@ class CreatePaymentRequest(BaseModel):
     amount: float
     method_code: str
 
+
 class ConfirmPaymentRequest(BaseModel):
     notes: str = ""
+
 
 class GeneratePixPayloadRequest(BaseModel):
     amount: float
@@ -95,6 +102,7 @@ class GeneratePixPayloadRequest(BaseModel):
 
 
 # ── Payment Methods ──────────────────────────────────
+
 
 @router.get("/methods")
 async def list_methods(ctx: TenantContext = Depends(get_tenant_context)):
@@ -105,8 +113,7 @@ async def list_methods(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.post("/methods")
-async def create_method(req: CreateMethodRequest,
-                        ctx: TenantContext = Depends(require_admin)):
+async def create_method(req: CreateMethodRequest, ctx: TenantContext = Depends(require_admin)):
     """Create a payment method (admin only)."""
     service = get_payment_service()
     method = service.create_method(
@@ -126,8 +133,7 @@ async def create_method(req: CreateMethodRequest,
 
 
 @router.patch("/methods/{method_id}")
-async def update_method(method_id: str, req: UpdateMethodRequest,
-                        ctx: TenantContext = Depends(require_admin)):
+async def update_method(method_id: str, req: UpdateMethodRequest, ctx: TenantContext = Depends(require_admin)):
     """Update a payment method (admin only)."""
     service = get_payment_service()
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
@@ -138,8 +144,7 @@ async def update_method(method_id: str, req: UpdateMethodRequest,
 
 
 @router.delete("/methods/{method_id}")
-async def delete_method(method_id: str,
-                        ctx: TenantContext = Depends(require_admin)):
+async def delete_method(method_id: str, ctx: TenantContext = Depends(require_admin)):
     """Delete a payment method (admin only)."""
     service = get_payment_service()
     if not service.delete_method(method_id, ctx.tenant_id):
@@ -148,8 +153,7 @@ async def delete_method(method_id: str,
 
 
 @router.patch("/methods/{method_id}/toggle")
-async def toggle_method(method_id: str,
-                        ctx: TenantContext = Depends(require_admin)):
+async def toggle_method(method_id: str, ctx: TenantContext = Depends(require_admin)):
     """Enable/disable a payment method (admin only)."""
     service = get_payment_service()
     method = service.toggle_method(method_id, ctx.tenant_id)
@@ -160,6 +164,7 @@ async def toggle_method(method_id: str,
 
 # ── PIX Configuration ────────────────────────────────
 
+
 @router.get("/pix")
 async def get_pix(ctx: TenantContext = Depends(get_tenant_context)):
     """Get PIX configuration for current tenant."""
@@ -169,8 +174,7 @@ async def get_pix(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.post("/pix")
-async def create_pix(req: CreatePixRequest,
-                     ctx: TenantContext = Depends(require_admin)):
+async def create_pix(req: CreatePixRequest, ctx: TenantContext = Depends(require_admin)):
     """Create PIX configuration (admin only)."""
     service = get_payment_service()
     config = service.create_pix_config(
@@ -186,8 +190,7 @@ async def create_pix(req: CreatePixRequest,
 
 
 @router.patch("/pix/{config_id}")
-async def update_pix(config_id: str, req: UpdatePixRequest,
-                     ctx: TenantContext = Depends(require_admin)):
+async def update_pix(config_id: str, req: UpdatePixRequest, ctx: TenantContext = Depends(require_admin)):
     """Update PIX configuration (admin only)."""
     service = get_payment_service()
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
@@ -198,8 +201,7 @@ async def update_pix(config_id: str, req: UpdatePixRequest,
 
 
 @router.delete("/pix/{config_id}")
-async def delete_pix(config_id: str,
-                     ctx: TenantContext = Depends(require_admin)):
+async def delete_pix(config_id: str, ctx: TenantContext = Depends(require_admin)):
     """Delete PIX configuration (admin only)."""
     service = get_payment_service()
     if not service.delete_pix_config(config_id, ctx.tenant_id):
@@ -209,9 +211,9 @@ async def delete_pix(config_id: str,
 
 # ── PIX Payload (BR Code + QR) ────────────────────────
 
+
 @router.post("/pix/payload")
-async def generate_pix_payload(req: GeneratePixPayloadRequest,
-                               ctx: TenantContext = Depends(get_tenant_context)):
+async def generate_pix_payload(req: GeneratePixPayloadRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Generate a PIX payment payload (BR Code + QR Code) for the tenant.
 
     Uses the tenant's active PIX config (key, holder, city). Returns 409 if
@@ -233,6 +235,7 @@ async def generate_pix_payload(req: GeneratePixPayloadRequest,
 
 
 # ── PSP Webhook (confirmação automática de PIX) ───────
+
 
 class PixWebhookRequest(BaseModel):
     txid: str
@@ -275,7 +278,8 @@ async def pix_webhook(request: Request):
 
     if status == "CONFIRMED" and payment.status == PaymentStatus.PENDING:
         service.confirm_payment(
-            payment.id, payment.tenant_id,
+            payment.id,
+            payment.tenant_id,
             confirmed_by="psp-webhook",
             notes=f"Confirmado via webhook PIX (txid {txid})",
         )
@@ -290,8 +294,7 @@ async def pix_webhook(request: Request):
 
 
 @router.get("/pix/{txid}/status")
-async def pix_status(txid: str,
-                     ctx: TenantContext = Depends(get_tenant_context)):
+async def pix_status(txid: str, ctx: TenantContext = Depends(get_tenant_context)):
     """Check PIX payment status by TXID (tenant-scoped).
 
     Looks up payments whose external_id or copy-paste references the TXID.
@@ -307,6 +310,7 @@ async def pix_status(txid: str,
 
 # ── Payments ─────────────────────────────────────────
 
+
 @router.get("/")
 async def list_payments(
     status: Optional[str] = None,
@@ -320,8 +324,7 @@ async def list_payments(
 
 
 @router.post("/")
-async def create_payment(req: CreatePaymentRequest,
-                         ctx: TenantContext = Depends(get_tenant_context)):
+async def create_payment(req: CreatePaymentRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Create a payment for an order."""
     service = get_payment_service()
 
@@ -343,8 +346,7 @@ async def create_payment(req: CreatePaymentRequest,
 
 
 @router.get("/{payment_id}")
-async def get_payment(payment_id: str,
-                      ctx: TenantContext = Depends(get_tenant_context)):
+async def get_payment(payment_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     """Get payment detail."""
     service = get_payment_service()
     payment = service.get_payment(payment_id, ctx.tenant_id)
@@ -354,20 +356,19 @@ async def get_payment(payment_id: str,
 
 
 @router.post("/{payment_id}/confirm")
-async def confirm_payment(payment_id: str, req: ConfirmPaymentRequest,
-                          ctx: TenantContext = Depends(get_tenant_context)):
+async def confirm_payment(
+    payment_id: str, req: ConfirmPaymentRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
     """Confirm a payment."""
     service = get_payment_service()
-    payment = service.confirm_payment(payment_id, ctx.tenant_id,
-                                       confirmed_by=ctx.user_id, notes=req.notes)
+    payment = service.confirm_payment(payment_id, ctx.tenant_id, confirmed_by=ctx.user_id, notes=req.notes)
     if not payment:
         raise HTTPException(404, "Payment not found or cannot be confirmed")
     return {"success": True, "payment": payment.to_dict()}
 
 
 @router.post("/{payment_id}/cancel")
-async def cancel_payment(payment_id: str,
-                         ctx: TenantContext = Depends(get_tenant_context)):
+async def cancel_payment(payment_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     """Cancel a payment."""
     service = get_payment_service()
     payment = service.cancel_payment(payment_id, ctx.tenant_id)
@@ -377,8 +378,7 @@ async def cancel_payment(payment_id: str,
 
 
 @router.post("/{payment_id}/refund")
-async def refund_payment(payment_id: str,
-                         ctx: TenantContext = Depends(get_tenant_context)):
+async def refund_payment(payment_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     """Refund a payment."""
     service = get_payment_service()
     payment = service.refund_payment(payment_id, ctx.tenant_id)

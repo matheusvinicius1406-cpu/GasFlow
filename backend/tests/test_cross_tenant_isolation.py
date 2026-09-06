@@ -22,6 +22,7 @@ def setup_tenants(client):
     # Ensure rate limiter is clear before any logins in this module
     try:
         import app.presentation.dependencies as deps
+
         if deps._auth_service is not None:
             deps._auth_service._rate_limiter._buckets.clear()
     except Exception:
@@ -32,27 +33,37 @@ def setup_tenants(client):
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     # Create Tenant A (idempotent: 200 = created, 400 = already exists)
-    resp = client.post("/auth/tenants", json={"tenant_id": "tenant_a", "name": "GasFlow Filial A"},
-                       headers=admin_headers)
+    resp = client.post(
+        "/auth/tenants", json={"tenant_id": "tenant_a", "name": "GasFlow Filial A"}, headers=admin_headers
+    )
     assert resp.status_code in (200, 400)
 
     # Create Tenant B
-    resp = client.post("/auth/tenants", json={"tenant_id": "tenant_b", "name": "GasFlow Filial B"},
-                       headers=admin_headers)
+    resp = client.post(
+        "/auth/tenants", json={"tenant_id": "tenant_b", "name": "GasFlow Filial B"}, headers=admin_headers
+    )
     assert resp.status_code in (200, 400)
 
     # Create admin users (idempotent)
     for username, tid in [("admin_a", "tenant_a"), ("admin_b", "tenant_b")]:
-        resp = client.post("/auth/users", json={
-            "username": username, "email": f"{username}@gasflow.local",
-            "password": "test_password_123", "display_name": f"Admin {tid}",
-            "role": "ADMIN", "tenant_id": tid,
-        }, headers=admin_headers)
+        resp = client.post(
+            "/auth/users",
+            json={
+                "username": username,
+                "email": f"{username}@gasflow.local",
+                "password": "test_password_123",
+                "display_name": f"Admin {tid}",
+                "role": "ADMIN",
+                "tenant_id": tid,
+            },
+            headers=admin_headers,
+        )
         assert resp.status_code in (200, 400)
 
     # Reset rate limiter before tenant admin logins
     try:
         import app.presentation.dependencies as deps
+
         if deps._auth_service is not None:
             deps._auth_service._rate_limiter._buckets.clear()
     except Exception:
@@ -97,48 +108,84 @@ class TestTenantProvisioning:
         assert resp.json()["tenant_id"] == "tenant_b"
 
     def test_duplicate_tenant_rejected(self, client, setup_tenants):
-        resp = client.post("/auth/tenants", json={"tenant_id": "tenant_a", "name": "Dup"},
-                           headers=setup_tenants["admin"]["headers"])
+        resp = client.post(
+            "/auth/tenants", json={"tenant_id": "tenant_a", "name": "Dup"}, headers=setup_tenants["admin"]["headers"]
+        )
         assert resp.status_code == 400
 
 
 class TestClientIsolation:
     def test_tenant_a_creates_client(self, client, setup_tenants):
-        resp = client.post("/clients/", json={
-            "nome": "Cliente Filial A", "telefone": "11988880001",
-            "rua": "Rua A", "numero": "10", "bairro": "Centro A",
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp = client.post(
+            "/clients/",
+            json={
+                "nome": "Cliente Filial A",
+                "telefone": "11988880001",
+                "rua": "Rua A",
+                "numero": "10",
+                "bairro": "Centro A",
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_tenant_b_creates_client(self, client, setup_tenants):
-        resp = client.post("/clients/", json={
-            "nome": "Cliente Filial B", "telefone": "21988880001",
-            "rua": "Rua B", "numero": "20", "bairro": "Centro B",
-        }, headers=setup_tenants["tenant_b"]["headers"])
+        resp = client.post(
+            "/clients/",
+            json={
+                "nome": "Cliente Filial B",
+                "telefone": "21988880001",
+                "rua": "Rua B",
+                "numero": "20",
+                "bairro": "Centro B",
+            },
+            headers=setup_tenants["tenant_b"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_same_phone_different_tenants_ok(self, client, setup_tenants):
         """Two tenants can create clients with the same phone number."""
         # Tenant A creates client with phone X
-        resp_a = client.post("/clients/", json={
-            "nome": "Cliente Compartilhado A", "telefone": "11999990000",
-            "rua": "Rua Comum", "numero": "1", "bairro": "Centro",
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp_a = client.post(
+            "/clients/",
+            json={
+                "nome": "Cliente Compartilhado A",
+                "telefone": "11999990000",
+                "rua": "Rua Comum",
+                "numero": "1",
+                "bairro": "Centro",
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         assert resp_a.status_code == 200
 
         # Tenant B creates client with SAME phone X — should succeed
-        resp_b = client.post("/clients/", json={
-            "nome": "Cliente Compartilhado B", "telefone": "11999990000",
-            "rua": "Rua Comum", "numero": "2", "bairro": "Centro",
-        }, headers=setup_tenants["tenant_b"]["headers"])
+        resp_b = client.post(
+            "/clients/",
+            json={
+                "nome": "Cliente Compartilhado B",
+                "telefone": "11999990000",
+                "rua": "Rua Comum",
+                "numero": "2",
+                "bairro": "Centro",
+            },
+            headers=setup_tenants["tenant_b"]["headers"],
+        )
         assert resp_b.status_code == 200
 
     def test_same_phone_same_tenant_rejected(self, client, setup_tenants):
         """Same tenant cannot create two clients with the same phone."""
-        resp = client.post("/clients/", json={
-            "nome": "Cliente Duplicado", "telefone": "11988880001",
-            "rua": "Rua A", "numero": "30", "bairro": "Centro A",
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp = client.post(
+            "/clients/",
+            json={
+                "nome": "Cliente Duplicado",
+                "telefone": "11988880001",
+                "rua": "Rua A",
+                "numero": "30",
+                "bairro": "Centro A",
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         # Should fail — tenant_a already has a client with this phone
         assert resp.status_code == 409
 
@@ -159,17 +206,31 @@ class TestClientIsolation:
     def test_idor_read_client_by_codigo(self, client, setup_tenants):
         """Tenant A reads by codigo — gets its own client, not B's."""
         # Create deterministic test data for this test
-        resp_create = client.post("/clients/", json={
-            "nome": "IDOR Test A", "telefone": "11900001111",
-            "rua": "Rua IDOR", "numero": "1", "bairro": "Centro",
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp_create = client.post(
+            "/clients/",
+            json={
+                "nome": "IDOR Test A",
+                "telefone": "11900001111",
+                "rua": "Rua IDOR",
+                "numero": "1",
+                "bairro": "Centro",
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         assert resp_create.status_code == 200
         codigo_a = resp_create.json()["codigo"]
 
-        resp_create_b = client.post("/clients/", json={
-            "nome": "IDOR Test B", "telefone": "21900002222",
-            "rua": "Rua IDOR", "numero": "2", "bairro": "Centro",
-        }, headers=setup_tenants["tenant_b"]["headers"])
+        resp_create_b = client.post(
+            "/clients/",
+            json={
+                "nome": "IDOR Test B",
+                "telefone": "21900002222",
+                "rua": "Rua IDOR",
+                "numero": "2",
+                "bairro": "Centro",
+            },
+            headers=setup_tenants["tenant_b"]["headers"],
+        )
         assert resp_create_b.status_code == 200
 
         # Tenant A reads its own client — should get "IDOR Test A"
@@ -182,29 +243,42 @@ class TestClientIsolation:
         # When tenant_a reads 000001, it gets "IDOR Test A", NOT "IDOR Test B"
         resp_b_read = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_b"]["headers"])
         assert resp_b_read.status_code == 200
-        assert resp_b_read.json()["nome"] == "IDOR Test B", (
-            "Tenant B should get its own client when reading codigo=000001, not Tenant A's"
-        )
+        assert (
+            resp_b_read.json()["nome"] == "IDOR Test B"
+        ), "Tenant B should get its own client when reading codigo=000001, not Tenant A's"
 
     def test_idor_disable_client_by_codigo(self, client, setup_tenants):
         """Tenant A cannot disable Tenant B's client (by trying to disable a non-existent-in-A codigo)."""
         # Use a codigo that doesn't exist in A's tenant
-        resp_a = client.patch("/clients/999999/disable",
-                              headers=setup_tenants["tenant_a"]["headers"])
+        resp_a = client.patch("/clients/999999/disable", headers=setup_tenants["tenant_a"]["headers"])
         assert resp_a.status_code == 404
 
 
 class TestProductIsolation:
     def test_tenant_a_creates_product(self, client, setup_tenants):
-        resp = client.post("/products/", json={
-            "nome": "Gás 13kg Filial A", "tipo": "GAS", "preco": 120.00, "estoque": 50,
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp = client.post(
+            "/products/",
+            json={
+                "nome": "Gás 13kg Filial A",
+                "tipo": "GAS",
+                "preco": 120.00,
+                "estoque": 50,
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_tenant_b_creates_product(self, client, setup_tenants):
-        resp = client.post("/products/", json={
-            "nome": "Gás 13kg Filial B", "tipo": "GAS", "preco": 115.00, "estoque": 30,
-        }, headers=setup_tenants["tenant_b"]["headers"])
+        resp = client.post(
+            "/products/",
+            json={
+                "nome": "Gás 13kg Filial B",
+                "tipo": "GAS",
+                "preco": 115.00,
+                "estoque": 30,
+            },
+            headers=setup_tenants["tenant_b"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_tenant_a_sees_only_its_products(self, client, setup_tenants):
@@ -224,15 +298,27 @@ class TestProductIsolation:
 
 class TestDriverIsolation:
     def test_tenant_a_creates_driver(self, client, setup_tenants):
-        resp = client.post("/delivery-drivers/", json={
-            "nome": "Motorista A", "telefone": "11977770001", "placa": "ABC-1234",
-        }, headers=setup_tenants["tenant_a"]["headers"])
+        resp = client.post(
+            "/delivery-drivers/",
+            json={
+                "nome": "Motorista A",
+                "telefone": "11977770001",
+                "placa": "ABC-1234",
+            },
+            headers=setup_tenants["tenant_a"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_tenant_b_creates_driver(self, client, setup_tenants):
-        resp = client.post("/delivery-drivers/", json={
-            "nome": "Motorista B", "telefone": "21977770001", "placa": "XYZ-5678",
-        }, headers=setup_tenants["tenant_b"]["headers"])
+        resp = client.post(
+            "/delivery-drivers/",
+            json={
+                "nome": "Motorista B",
+                "telefone": "21977770001",
+                "placa": "XYZ-5678",
+            },
+            headers=setup_tenants["tenant_b"]["headers"],
+        )
         assert resp.status_code == 200
 
     def test_tenant_a_sees_only_its_drivers(self, client, setup_tenants):

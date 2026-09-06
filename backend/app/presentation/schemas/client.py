@@ -59,6 +59,7 @@ class ClientResponse(BaseModel):
 
 class ClientListResponse(BaseModel):
     """Response paginado para listagem de clientes."""
+
     items: List[ClientResponse]
     total: int
     page: int
@@ -68,6 +69,7 @@ class ClientListResponse(BaseModel):
 
 class Customer360Response(BaseModel):
     """Response do Customer 360 — visão consolidada."""
+
     # Identity
     codigo: str
     nome: str

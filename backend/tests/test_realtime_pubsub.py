@@ -66,6 +66,7 @@ def pubsub(monkeypatch) -> RedisPubSub:
 
 # ── RedisPubSub ─────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_publish_event_envelope_has_origin_and_event(pubsub):
     event_data = {"type": "event", "event": {"type": "order.created"}}
@@ -113,6 +114,7 @@ def test_is_own_message_skips_self(pubsub):
 
 
 # ── ConnectionManager + pubsub ──────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_broadcast_event_publishes_and_routes_locally(pubsub):

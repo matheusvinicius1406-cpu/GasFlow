@@ -21,8 +21,7 @@ class MockLLMProvider(LLMProvider):
     def model_name(self) -> str:
         return "mock-model-v1"
 
-    def generate(self, messages: List[LLMMessage], temperature: float = 0.3,
-                 max_tokens: int = 2048) -> LLMResponse:
+    def generate(self, messages: List[LLMMessage], temperature: float = 0.3, max_tokens: int = 2048) -> LLMResponse:
         self._call_count += 1
         if not self._available:
             return LLMResponse(content="", error="AI_PROVIDER_UNAVAILABLE")
@@ -49,8 +48,9 @@ class MockLLMProvider(LLMProvider):
             usage=LLMUsage(input_tokens=50, output_tokens=20, model=self.model_name, latency_ms=10),
         )
 
-    def generate_structured(self, messages: List[LLMMessage], schema: Dict[str, Any],
-                            temperature: float = 0.1, max_tokens: int = 1024) -> LLMResponse:
+    def generate_structured(
+        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+    ) -> LLMResponse:
         return self.generate(messages, temperature, max_tokens)
 
     def health_check(self) -> bool:
@@ -66,10 +66,10 @@ class MockLLMProvider(LLMProvider):
         """Classify intent from text."""
         # Extract the actual user message from the formatted prompt
         user_msg = text
-        if 'User message:' in text:
-            user_msg = text.split('User message:')[-1].strip().split('\n')[0]
-        elif 'message:' in text:
-            user_msg = text.split('message:')[-1].strip().split('\n')[0]
+        if "User message:" in text:
+            user_msg = text.split("User message:")[-1].strip().split("\n")[0]
+        elif "message:" in text:
+            user_msg = text.split("message:")[-1].strip().split("\n")[0]
         text_lower = user_msg.lower()
         if any(w in text_lower for w in ["criar pedido", "cria pedido", "crie um pedido", "novo pedido"]):
             intent = "ORDER_CREATE"
@@ -85,12 +85,14 @@ class MockLLMProvider(LLMProvider):
             intent = "GENERAL_QUESTION"
 
         return LLMResponse(
-            content=json.dumps({
-                "intent": intent,
-                "confidence": 0.9,
-                "entities": {},
-                "reasoning": f"Matched pattern for {intent}",
-            }),
+            content=json.dumps(
+                {
+                    "intent": intent,
+                    "confidence": 0.9,
+                    "entities": {},
+                    "reasoning": f"Matched pattern for {intent}",
+                }
+            ),
             usage=LLMUsage(input_tokens=100, output_tokens=50, model=self.model_name),
         )
 

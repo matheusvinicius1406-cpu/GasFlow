@@ -40,8 +40,14 @@ class PrintJobStatus(str, Enum):
 class PrintJob:
     """Represents a print job."""
 
-    def __init__(self, order_id: str, tenant_id: str, order_data: Dict[str, Any],
-                 requested_by: str = "", is_reprint: bool = False):
+    def __init__(
+        self,
+        order_id: str,
+        tenant_id: str,
+        order_data: Dict[str, Any],
+        requested_by: str = "",
+        is_reprint: bool = False,
+    ):
         self.id = f"print-{order_id}-{int(time.time() * 1000)}"
         self.order_id = order_id
         self.tenant_id = tenant_id
@@ -102,10 +108,14 @@ class PrintAgent:
     def auto_print_enabled(self, enabled: bool):
         self._auto_print_enabled = enabled
 
-    def create_print_job(self, order_id: str, tenant_id: str,
-                         order_data: Dict[str, Any],
-                         requested_by: str = "",
-                         is_reprint: bool = False) -> PrintJob:
+    def create_print_job(
+        self,
+        order_id: str,
+        tenant_id: str,
+        order_data: Dict[str, Any],
+        requested_by: str = "",
+        is_reprint: bool = False,
+    ) -> PrintJob:
         """Create a new print job."""
         job = PrintJob(
             order_id=order_id,
@@ -134,17 +144,11 @@ class PrintAgent:
 
     def get_jobs_for_order(self, order_id: str, tenant_id: str) -> List[PrintJob]:
         """Get all print jobs for a specific order."""
-        return [
-            j for j in self._jobs.values()
-            if j.order_id == order_id and j.tenant_id == tenant_id
-        ]
+        return [j for j in self._jobs.values() if j.order_id == order_id and j.tenant_id == tenant_id]
 
     def get_jobs_for_tenant(self, tenant_id: str, limit: int = 50) -> List[PrintJob]:
         """Get recent print jobs for a tenant."""
-        jobs = [
-            j for j in self._jobs.values()
-            if j.tenant_id == tenant_id
-        ]
+        jobs = [j for j in self._jobs.values() if j.tenant_id == tenant_id]
         jobs.sort(key=lambda j: j.created_at, reverse=True)
         return jobs[:limit]
 
@@ -170,14 +174,14 @@ class PrintAgent:
         return {
             "status": self._printer_status.value,
             "auto_print_enabled": self._auto_print_enabled,
-            "pending_jobs": sum(
-                1 for j in self._jobs.values()
-                if j.status == PrintJobStatus.PENDING
+            "pending_jobs": sum(1 for j in self._jobs.values() if j.status == PrintJobStatus.PENDING),
+            "total_jobs_today": len(
+                [
+                    j
+                    for j in self._jobs.values()
+                    if j.created_at and j.created_at[:10] == datetime.utcnow().strftime("%Y-%m-%d")
+                ]
             ),
-            "total_jobs_today": len([
-                j for j in self._jobs.values()
-                if j.created_at and j.created_at[:10] == datetime.utcnow().strftime('%Y-%m-%d')
-            ]),
         }
 
     def set_printer_online(self):

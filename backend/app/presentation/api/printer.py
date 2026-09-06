@@ -56,17 +56,22 @@ async def create_print_job(req: PrintRequest, ctx: TenantContext = Depends(get_t
     try:
         from sqlalchemy.orm import Session as DBSession
         from app.infrastructure.database.init_db import engine
-        from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+        )
+
         db = DBSession(bind=engine)
         try:
             repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
             deliveries = repo.list_deliveries(limit=1000)
             for delivery in deliveries:
                 if delivery.order_id == req.order_id:
-                    order_data.update({
-                        "client_name": delivery.customer_name or 'Cliente',
-                        "address": delivery.address_street or '',
-                    })
+                    order_data.update(
+                        {
+                            "client_name": delivery.customer_name or "Cliente",
+                            "address": delivery.address_street or "",
+                        }
+                    )
                     break
         finally:
             db.close()
@@ -84,7 +89,7 @@ async def create_print_job(req: PrintRequest, ctx: TenantContext = Depends(get_t
     return {
         "success": True,
         "job": job.to_dict(),
-        "escpos_preview": job.escpos_data[:200].decode('utf-8', errors='replace') if job.escpos_data else None,
+        "escpos_preview": job.escpos_data[:200].decode("utf-8", errors="replace") if job.escpos_data else None,
     }
 
 

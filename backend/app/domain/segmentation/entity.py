@@ -18,6 +18,7 @@ from typing import Optional, List, Any
 
 class RuleField(str, Enum):
     """Fields that can be used in segmentation rules."""
+
     TOTAL_ORDERS = "total_orders"
     TOTAL_SPENT = "total_spent"
     AVERAGE_TICKET = "average_ticket"
@@ -32,6 +33,7 @@ class RuleField(str, Enum):
 
 class RuleOperator(str, Enum):
     """Operators for rule comparison."""
+
     EQUALS = "equals"
     NOT_EQUALS = "not_equals"
     GREATER_THAN = "greater_than"
@@ -46,6 +48,7 @@ class RuleOperator(str, Enum):
 
 class SegmentStatus(str, Enum):
     """Segment lifecycle status."""
+
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
@@ -54,6 +57,7 @@ class SegmentStatus(str, Enum):
 @dataclass
 class SegmentRule:
     """A single condition for customer segmentation."""
+
     field: RuleField
     operator: RuleOperator
     value: Any = None  # String, number, or boolean depending on field
@@ -73,7 +77,7 @@ class SegmentRule:
 
     def evaluate(self, customer_metrics: dict) -> bool:
         """Evaluate this rule against customer metrics.
-        
+
         Returns True if the customer matches this rule.
         """
         field_value = customer_metrics.get(self.field.value)
@@ -150,6 +154,7 @@ class SegmentRule:
 @dataclass
 class Segment:
     """A named customer segment with rules."""
+
     id: Optional[int] = None
     name: str = ""
     description: str = ""
@@ -170,7 +175,7 @@ class Segment:
 
     def evaluate_customer(self, customer_metrics: dict) -> bool:
         """Evaluate all rules against a customer's metrics.
-        
+
         Uses AND or OR logic based on rule_logic.
         """
         if not self.rules:

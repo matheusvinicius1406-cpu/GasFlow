@@ -9,19 +9,45 @@
  * - Atomic claim (SELECT ... FOR UPDATE pattern via UPDATE WHERE status = 'PENDING')
  * - Cooldown between sends (rate-limiting pattern used by WAHA and WPPConnect)
  * - Protection mode on abnormal failure rate (inspired by Evolution API safety)
+ *
+ * Anti-ban hygiene (src/anti-ban): caps por minuto/hora/dia, warmup progressivo,
+ * cooldown por destinatário, quiet hours e pacing gaussiano.
  */
 
 import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getContactById, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db';
 import { providerManager } from './provider/provider-manager';
+import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban';
 
-const SEND_INTERVAL_MS = 2_000; // 2 seconds between sends
+// Pacing gaussiano: média 3s, desvio 1s (env WA_SEND_MEAN_MS / WA_SEND_STDEV_MS).
+// WA_SEND_MIN/MAX_INTERVAL_MS continuam válidos como piso/teto para compatibilidade.
+const SEND_MIN_INTERVAL_MS = Number(process.env.WA_SEND_MIN_INTERVAL_MS || 2_000);
+const SEND_MAX_INTERVAL_MS = Number(process.env.WA_SEND_MAX_INTERVAL_MS || 10_000);
+const SEND_MEAN_MS = Number(process.env.WA_SEND_MEAN_MS || 3_000);
+const SEND_STDEV_MS = Number(process.env.WA_SEND_STDEV_MS || 1_000);
 const PROTECTION_FAILURE_THRESHOLD = 5; // consecutive failures to trigger protection mode
 const PROTECTION_RATE_THRESHOLD = 0.5; // 50% failure rate triggers protection
+// Cap diário pleno (pós-warmup). Durante o warmup o limite é a rampa 50→1000.
+const DAILY_CAP = Math.max(1, Number(process.env.WA_DAILY_CAP || 1_000));
+// Kill-switch: com o Cloud API no ar para campanhas, defina WA_BROADCAST_ENABLED=false
+// para reservar este serviço ao tráfego conversacional (incoming.ts).
+const BROADCAST_ENABLED = process.env.WA_BROADCAST_ENABLED !== 'false';
+
+function nextSendIntervalMs(): number {
+  const floor = Math.max(500, SEND_MIN_INTERVAL_MS);
+  const ceiling = Math.max(floor, SEND_MAX_INTERVAL_MS);
+  return Math.min(gaussianDelayMs(SEND_MEAN_MS, SEND_STDEV_MS, floor), ceiling);
+}
 
 let workerRunning = false;
 let workerTimer: NodeJS.Timeout | null = null;
+/** Pausa o worker até este timestamp (rate limit/quiet hours) antes do próximo ciclo. */
+let pausedUntilMs = 0;
 
 export function startWorker(): void {
+  if (!BROADCAST_ENABLED) {
+    console.log('[broadcast] Worker desabilitado (WA_BROADCAST_ENABLED=false).');
+    return;
+  }
   if (workerRunning) return;
   workerRunning = true;
   // Recover stale PROCESSING jobs from previous run
@@ -42,11 +68,21 @@ export function stopWorker(): void {
   console.log('[broadcast] Worker parado.');
 }
 
-function scheduleNext(): void {
+function scheduleNext(delayMs?: number): void {
   if (!workerRunning) return;
+  const base = Math.max(0, delayMs ?? nextSendIntervalMs());
+  const wait = Math.max(base, pausedUntilMs - Date.now());
+  pausedUntilMs = 0;
   workerTimer = setTimeout(() => {
     void processNext().then(() => scheduleNext());
-  }, SEND_INTERVAL_MS);
+  }, wait);
+}
+
+/** Pausa o worker até `untilMs` (teto de 10 min para reavaliar estado). */
+function pauseWorkerUntil(untilMs: number, reason: string): void {
+  const capped = Math.min(untilMs, Date.now() + 10 * 60_000);
+  pausedUntilMs = Math.max(pausedUntilMs, capped);
+  console.log(`[broadcast] Pausado até ${new Date(capped).toISOString()} — ${reason}.`);
 }
 
 async function processNext(): Promise<void> {
@@ -65,6 +101,17 @@ async function processNext(): Promise<void> {
     // Check if provider is connected
     if (!providerManager.getAccount("primary")?.isConnected()) {
       console.warn('[broadcast] WhatsApp não conectado. Aguardando reconexão...');
+      return;
+    }
+
+    // ── Anti-ban gates (nível conta) ──
+    if (isQuietHour()) {
+      pauseWorkerUntil(nextAllowedTime(), 'quiet hours');
+      return;
+    }
+    if (!hasDailyBudget('primary', DAILY_CAP)) {
+      // Reavalia à meia-noite UTC (teto de 10 min mantém o loop responsivo).
+      pauseWorkerUntil(Date.now() + 10 * 60_000, 'daily cap atingido (warmup/cap)');
       return;
     }
 
@@ -110,6 +157,15 @@ async function processNext(): Promise<void> {
     // 5. Already processed? (atomic claim already ensures PENDING only)
     // The claimNextRecipient only returns PENDING jobs, so this is guaranteed.
 
+    // 6. Rate limits (minuto/hora) + cooldown por destinatário.
+    const rate = checkRate('primary', phone);
+    if (!rate.allowed) {
+      // Devolve o job para a fila e pausa o worker até o limite abrir.
+      unclaimRecipient(campaignId, recipient.customer_id);
+      pauseWorkerUntil(rate.retryAtMs ?? Date.now() + 60_000, `rate limit: ${rate.reason}`);
+      return;
+    }
+
     // Send message via provider
     try {
       console.log(`[broadcast] Enviando para ${phone} (campanha ${campaignId}, customer ${recipient.customer_id})`);
@@ -118,6 +174,9 @@ async function processNext(): Promise<void> {
 
       if (result.success) {
         markRecipientSent(campaignId, recipient.customer_id, result.messageId ?? 'unknown');
+        // Registra nas janelas de rate limit (minuto/hora/cooldown) e no contador de warmup.
+        recordSend('primary', phone, result.messageId);
+        recordSent('primary');
         console.log(`[broadcast] Enviado com sucesso para ${phone}`);
       } else {
         markRecipientFailed(campaignId, recipient.customer_id, result.error ?? 'Unknown error');
@@ -147,6 +206,15 @@ async function processNext(): Promise<void> {
     // Only process one message per cycle to respect cooldown
     return;
   }
+}
+
+/** Devolve um job PROCESSING para PENDING (usado quando o rate limit bloqueia o envio). */
+function unclaimRecipient(campaignId: number, customerId: number): void {
+  db.prepare(
+    `UPDATE campaign_recipients
+     SET status = 'PENDING', lease_until = NULL, started_at = NULL
+     WHERE campaign_id = ? AND customer_id = ?`,
+  ).run(campaignId, customerId);
 }
 
 function shouldActivateProtection(campaignId: number): boolean {

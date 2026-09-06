@@ -37,23 +37,22 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_entity(model)
 
     def get_by_external_id(self, external_id: str) -> Optional[Conversation]:
-        model = self.db.query(ConversationModel).filter(
-            ConversationModel.external_id == external_id
-        ).first()
+        model = self.db.query(ConversationModel).filter(ConversationModel.external_id == external_id).first()
         if not model:
             return None
         conv = self._to_entity(model)
         # Load messages
-        msg_models = self.db.query(AIMessageModel).filter(
-            AIMessageModel.conversation_id == external_id
-        ).order_by(AIMessageModel.created_at).all()
+        msg_models = (
+            self.db.query(AIMessageModel)
+            .filter(AIMessageModel.conversation_id == external_id)
+            .order_by(AIMessageModel.created_at)
+            .all()
+        )
         conv.messages = [self._message_to_entity(m) for m in msg_models]
         return conv
 
     def list_all(self, limit: int = 50) -> List[Conversation]:
-        models = self.db.query(ConversationModel).order_by(
-            ConversationModel.created_at.desc()
-        ).limit(limit).all()
+        models = self.db.query(ConversationModel).order_by(ConversationModel.created_at.desc()).limit(limit).all()
         return [self._to_entity(m) for m in models]
 
     def _message_to_entity(self, m: AIMessageModel) -> Message:
@@ -91,14 +90,21 @@ class SQLAlchemyMessageRepository(MessageRepository):
         )
 
     def list_by_conversation(self, conversation_id: str, limit: int = 50) -> List[Message]:
-        models = self.db.query(AIMessageModel).filter(
-            AIMessageModel.conversation_id == conversation_id
-        ).order_by(AIMessageModel.created_at.desc()).limit(limit).all()
+        models = (
+            self.db.query(AIMessageModel)
+            .filter(AIMessageModel.conversation_id == conversation_id)
+            .order_by(AIMessageModel.created_at.desc())
+            .limit(limit)
+            .all()
+        )
         models.reverse()
-        return [Message(
-            id=m.id,
-            conversation_id=m.conversation_id,
-            role=MessageRole(m.role),
-            content=m.content,
-            created_at=m.created_at,
-        ) for m in models]
+        return [
+            Message(
+                id=m.id,
+                conversation_id=m.conversation_id,
+                role=MessageRole(m.role),
+                content=m.content,
+                created_at=m.created_at,
+            )
+            for m in models
+        ]

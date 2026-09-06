@@ -7,16 +7,17 @@ Deterministic mock providers for testing without external APIs.
 import time
 from typing import Dict, Optional
 from app.domain.audio.provider import (
-    SpeechToTextProvider, TextToSpeechProvider,
-    TranscriptionResult, SpeechResult,
+    SpeechToTextProvider,
+    TextToSpeechProvider,
+    TranscriptionResult,
+    SpeechResult,
 )
 
 
 class MockSTTProvider(SpeechToTextProvider):
     """Deterministic mock STT provider for testing."""
 
-    def __init__(self, responses: Optional[Dict[str, str]] = None,
-                 confidence: float = 0.95, fail: bool = False):
+    def __init__(self, responses: Optional[Dict[str, str]] = None, confidence: float = 0.95, fail: bool = False):
         self._responses = responses or {}
         self._confidence = confidence
         self._fail = fail
@@ -27,21 +28,28 @@ class MockSTTProvider(SpeechToTextProvider):
     def provider_name(self) -> str:
         return "mock-stt-v1"
 
-    def transcribe(self, audio_bytes: bytes, mime_type: str = "audio/ogg",
-                   language: str = "pt-BR") -> TranscriptionResult:
+    def transcribe(
+        self, audio_bytes: bytes, mime_type: str = "audio/ogg", language: str = "pt-BR"
+    ) -> TranscriptionResult:
         start = time.time()
         self._call_count += 1
 
         if self._fail:
             return TranscriptionResult(
-                text="", confidence=0.0, language=language,
-                provider=self.provider_name, error="STT_UNAVAILABLE",
+                text="",
+                confidence=0.0,
+                language=language,
+                provider=self.provider_name,
+                error="STT_UNAVAILABLE",
             )
 
         if not audio_bytes:
             return TranscriptionResult(
-                text="", confidence=0.0, language=language,
-                provider=self.provider_name, error="AUDIO_EMPTY",
+                text="",
+                confidence=0.0,
+                language=language,
+                provider=self.provider_name,
+                error="AUDIO_EMPTY",
             )
 
         # Check for pre-configured responses
@@ -50,8 +58,10 @@ class MockSTTProvider(SpeechToTextProvider):
                 latency = (time.time() - start) * 1000
                 self._total_latency_ms += latency
                 return TranscriptionResult(
-                    text=text, confidence=self._confidence,
-                    language=language, duration_seconds=2.0,
+                    text=text,
+                    confidence=self._confidence,
+                    language=language,
+                    duration_seconds=2.0,
                     provider=self.provider_name,
                 )
 
@@ -61,8 +71,10 @@ class MockSTTProvider(SpeechToTextProvider):
         latency = (time.time() - start) * 1000
         self._total_latency_ms += latency
         return TranscriptionResult(
-            text=text, confidence=self._confidence,
-            language=language, duration_seconds=2.0,
+            text=text,
+            confidence=self._confidence,
+            language=language,
+            duration_seconds=2.0,
             provider=self.provider_name,
         )
 
@@ -108,13 +120,15 @@ class MockTTSProvider(TextToSpeechProvider):
 
         if self._fail:
             return SpeechResult(
-                audio_bytes=b"", error="TTS_UNAVAILABLE",
+                audio_bytes=b"",
+                error="TTS_UNAVAILABLE",
                 provider=self.provider_name,
             )
 
         if not text:
             return SpeechResult(
-                audio_bytes=b"", error="TTS_EMPTY_TEXT",
+                audio_bytes=b"",
+                error="TTS_EMPTY_TEXT",
                 provider=self.provider_name,
             )
 

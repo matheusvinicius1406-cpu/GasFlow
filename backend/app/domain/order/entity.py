@@ -24,6 +24,7 @@ from typing import Optional, List
 
 class OrderStatus(str, Enum):
     """Status possíveis de um pedido."""
+
     PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
     PREPARING = "PREPARING"
@@ -34,6 +35,7 @@ class OrderStatus(str, Enum):
 
 class PaymentStatus(str, Enum):
     """Status possíveis de pagamento."""
+
     PENDING = "PENDING"
     AUTHORIZED = "AUTHORIZED"
     PAID = "PAID"
@@ -44,6 +46,7 @@ class PaymentStatus(str, Enum):
 
 class OrderSource(str, Enum):
     """Origem do pedido."""
+
     WHATSAPP = "WHATSAPP"
     PHONE = "PHONE"
     WEB = "WEB"
@@ -58,8 +61,8 @@ VALID_TRANSITIONS = {
     OrderStatus.CONFIRMED: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
     OrderStatus.PREPARING: [OrderStatus.DELIVERING, OrderStatus.CANCELLED],
     OrderStatus.DELIVERING: [OrderStatus.DELIVERED],
-    OrderStatus.DELIVERED: [],    # Terminal — nenhuma transição
-    OrderStatus.CANCELLED: [],    # Terminal — nenhuma transição
+    OrderStatus.DELIVERED: [],  # Terminal — nenhuma transição
+    OrderStatus.CANCELLED: [],  # Terminal — nenhuma transição
 }
 
 # Status terminais — pedido está imutável
@@ -120,25 +123,18 @@ class Order:
 
         # Valida desconto
         if self.discount > self.subtotal:
-            raise ValueError(
-                f"Desconto (R$ {self.discount:.2f}) não pode exceder subtotal (R$ {self.subtotal:.2f})"
-            )
+            raise ValueError(f"Desconto (R$ {self.discount:.2f}) não pode exceder subtotal (R$ {self.subtotal:.2f})")
 
         self.total = self.subtotal + self.delivery_fee - self.discount
 
         # Total não pode ser negativo
         if self.total < 0:
-            raise ValueError(
-                f"Total (R$ {self.total:.2f}) não pode ser negativo"
-            )
+            raise ValueError(f"Total (R$ {self.total:.2f}) não pode ser negativo")
 
     def _verificar_imutabilidade(self):
         """Verifica se o pedido pode ser alterado."""
         if self.status in TERMINAL_STATUSES:
-            raise ValueError(
-                f"Pedido {self.codigo} está em status {self.status.value} "
-                f"e não pode ser alterado"
-            )
+            raise ValueError(f"Pedido {self.codigo} está em status {self.status.value} " f"e não pode ser alterado")
 
     def confirmar(self):
         """Confirma o pedido."""

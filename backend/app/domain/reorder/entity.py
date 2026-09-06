@@ -18,22 +18,25 @@ from typing import Optional, List
 
 class ReorderStatus(str, Enum):
     """Classification of reorder urgency based on timing."""
-    READY = "READY"      # Customer is near expected reorder date
-    DUE = "DUE"          # Customer is within expected window
+
+    READY = "READY"  # Customer is near expected reorder date
+    DUE = "DUE"  # Customer is within expected window
     OVERDUE = "OVERDUE"  # Customer passed the expected window
     DORMANT = "DORMANT"  # Customer far beyond expected pattern
 
 
 class ConfidenceLevel(str, Enum):
     """Statistical confidence in the reorder prediction."""
-    LOW = "LOW"          # Insufficient data (< 3 orders or high variance)
-    MEDIUM = "MEDIUM"    # Moderate data (3-5 orders, some variance)
-    HIGH = "HIGH"        # Strong pattern (6+ orders, consistent intervals)
+
+    LOW = "LOW"  # Insufficient data (< 3 orders or high variance)
+    MEDIUM = "MEDIUM"  # Moderate data (3-5 orders, some variance)
+    HIGH = "HIGH"  # Strong pattern (6+ orders, consistent intervals)
 
 
 @dataclass
 class ReorderOpportunity:
     """A single reorder prediction for a customer."""
+
     customer_codigo: str
     customer_nome: str
     total_orders: int
@@ -81,6 +84,7 @@ class ReorderOpportunity:
 @dataclass
 class ReorderSummary:
     """Aggregate summary of all reorder opportunities."""
+
     total_customers: int
     ready_count: int
     due_count: int

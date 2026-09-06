@@ -19,10 +19,7 @@ from typing import Optional
 import httpx
 
 
-router = APIRouter(
-    prefix="/whatsapp",
-    tags=["WhatsApp"]
-)
+router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 
 # ── Config ────────────────────────────────────────────────
@@ -32,6 +29,7 @@ WHATSAPP_SERVICE_KEY = os.getenv("MARCOS_GAS_API_KEY", "")
 
 
 # ── Helpers ───────────────────────────────────────────────
+
 
 def _get_headers() -> dict:
     """Build headers for service-to-service authentication."""
@@ -51,10 +49,7 @@ async def _proxy_get(path: str) -> dict:
             )
             return response.json()
         except httpx.ConnectError:
-            raise HTTPException(
-                status_code=503,
-                detail="Serviço WhatsApp não está acessível."
-            )
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -70,16 +65,12 @@ async def _proxy_post(path: str, data: Optional[dict] = None) -> dict:
             )
             return response.json()
         except httpx.ConnectError:
-            raise HTTPException(
-                status_code=503,
-                detail="Serviço WhatsApp não está acessível."
-            )
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Schemas ───────────────────────────────────────────────
-
 
 
 class WhatsAppCampaignCreateRequest(BaseModel):
@@ -91,6 +82,7 @@ class WhatsAppCampaignCreateRequest(BaseModel):
 # ═══════════════════════════════════════════════════════════
 # Multi-Account Endpoints (FASE 4.1)
 # ═══════════════════════════════════════════════════════════
+
 
 @router.get("/accounts")
 async def list_accounts():
@@ -141,8 +133,10 @@ async def account_health(account_id: str):
 # FASE 5: Message Sending
 # ═══════════════════════════════════════════════════════════
 
+
 class WhatsAppSendMessageRequest(BaseModel):
     """Request to send a WhatsApp message."""
+
     recipient: str
     message: str
     idempotency_key: Optional[str] = None
@@ -154,6 +148,7 @@ async def send_message(account_id: str, data: WhatsAppSendMessageRequest):
     payload = data.model_dump()
     if not payload.get("idempotency_key"):
         import uuid
+
         payload["idempotency_key"] = str(uuid.uuid4())
     return await _proxy_post(f"/whatsapp/accounts/{account_id}/messages", payload)
 
@@ -163,8 +158,10 @@ async def list_messages(account_id: str, limit: int = 50, offset: int = 0):
     """List sent messages for an account."""
     return await _proxy_get(f"/whatsapp/accounts/{account_id}/messages?limit={limit}&offset={offset}")
 
+
 # Legacy Endpoints (backward compat)
 # ═══════════════════════════════════════════════════════════
+
 
 @router.get("/status")
 async def get_status():
@@ -193,6 +190,7 @@ async def logout_session():
 
 # ── Contacts ──────────────────────────────────────────────
 
+
 @router.get("/contacts")
 async def list_contacts(limit: int = 50, offset: int = 0):
     return await _proxy_get(f"/contacts?limit={limit}&offset={offset}")
@@ -204,6 +202,7 @@ async def sync_contacts():
 
 
 # ── Customers ─────────────────────────────────────────────
+
 
 @router.get("/customers")
 async def list_customers(limit: int = 50, offset: int = 0):
@@ -227,6 +226,7 @@ async def opt_out_customer(customer_id: int):
 
 # ── Lists ─────────────────────────────────────────────────
 
+
 @router.get("/lists")
 async def list_lists():
     return await _proxy_get("/lists")
@@ -243,6 +243,7 @@ async def seed_lists():
 
 
 # ── Campaigns ─────────────────────────────────────────────
+
 
 @router.get("/campaigns")
 async def list_campaigns():

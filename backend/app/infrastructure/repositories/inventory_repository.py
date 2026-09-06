@@ -41,7 +41,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
     def _movement_to_entity(self, model: StockMovementModel) -> StockMovement:
         return StockMovement(
             id=model.id,
-            product_codigo=model.product_lineno if hasattr(model, 'product_lineno') else model.product_codigo,
+            product_codigo=model.product_lineno if hasattr(model, "product_lineno") else model.product_codigo,
             type=MovementType(model.type),
             quantity=model.quantity,
             reason=model.reason,
@@ -56,15 +56,11 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
     # ── Read Operations ────────────────────────────────────
 
     def get_by_product(self, product_codigo: str) -> Optional[Inventory]:
-        model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        model = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         return self._to_entity(model) if model else None
 
     def get_or_create(self, product_codigo: str, initial_quantity: int = 0) -> Inventory:
-        model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        model = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         if model:
             return self._to_entity(model)
 
@@ -77,8 +73,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         self.db.flush()
         return self._to_entity(model)
 
-    def list_all(self, stock_status: Optional[str] = None,
-                 product_type: Optional[str] = None) -> List[Inventory]:
+    def list_all(self, stock_status: Optional[str] = None, product_type: Optional[str] = None) -> List[Inventory]:
         q = self._filter_by_tenant(InventoryModel)
         models = q.all()
         entities = [self._to_entity(m) for m in models]
@@ -88,20 +83,20 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
 
         return entities
 
-    def get_movements(self, product_codigo: str,
-                      page: int = 1, page_size: int = 20) -> Tuple[List[StockMovement], int]:
-        q = self._filter_by_tenant(StockMovementModel).filter(
-            StockMovementModel.product_codigo == product_codigo
-        )
+    def get_movements(self, product_codigo: str, page: int = 1, page_size: int = 20) -> Tuple[List[StockMovement], int]:
+        q = self._filter_by_tenant(StockMovementModel).filter(StockMovementModel.product_codigo == product_codigo)
         total = q.count()
         offset = (page - 1) * page_size
         models = q.order_by(StockMovementModel.created_at.desc()).offset(offset).limit(page_size).all()
         return [self._movement_to_entity(m) for m in models], total
 
-    def get_movement_by_reference(self, reference_type: str,
-                                  reference_id: str,
-                                  product_codigo: Optional[str] = None,
-                                  movement_type: Optional[str] = None) -> Optional[StockMovement]:
+    def get_movement_by_reference(
+        self,
+        reference_type: str,
+        reference_id: str,
+        product_codigo: Optional[str] = None,
+        movement_type: Optional[str] = None,
+    ) -> Optional[StockMovement]:
         q = self._filter_by_tenant(StockMovementModel).filter(
             StockMovementModel.reference_type == reference_type,
             StockMovementModel.reference_id == reference_id,
@@ -113,13 +108,16 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         model = q.first()
         return self._movement_to_entity(model) if model else None
 
-    def has_movement_by_reference(self, reference_type: str,
-                                  reference_id: str) -> bool:
+    def has_movement_by_reference(self, reference_type: str, reference_id: str) -> bool:
         """Check if ANY movement exists for a given reference (any product/type)."""
-        model = self._filter_by_tenant(StockMovementModel).filter(
-            StockMovementModel.reference_type == reference_type,
-            StockMovementModel.reference_id == reference_id,
-        ).first()
+        model = (
+            self._filter_by_tenant(StockMovementModel)
+            .filter(
+                StockMovementModel.reference_type == reference_type,
+                StockMovementModel.reference_id == reference_id,
+            )
+            .first()
+        )
         return model is not None
 
     # ── Atomic Write Operations ────────────────────────────
@@ -138,31 +136,40 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             created_by=movement.created_by,
         )
 
-    def add_stock_atomic(self, product_codigo: str, quantity: int,
-                         reason: str, reference_type: Optional[str] = None,
-                         reference_id: Optional[str] = None) -> dict:
+    def add_stock_atomic(
+        self,
+        product_codigo: str,
+        quantity: int,
+        reason: str,
+        reference_type: Optional[str] = None,
+        reference_id: Optional[str] = None,
+    ) -> dict:
         """ATOMIC: Add stock + create movement in single transaction."""
         now = datetime.utcnow()
 
         # Check idempotency (per product + type)
         if reference_type and reference_id:
-            existing = self._filter_by_tenant(StockMovementModel).filter(
-                StockMovementModel.reference_type == reference_type,
-                StockMovementModel.reference_id == reference_id,
-                StockMovementModel.product_codigo == product_codigo,
-                StockMovementModel.type == MovementType.ENTRY.value,
-            ).first()
+            existing = (
+                self._filter_by_tenant(StockMovementModel)
+                .filter(
+                    StockMovementModel.reference_type == reference_type,
+                    StockMovementModel.reference_id == reference_id,
+                    StockMovementModel.product_codigo == product_codigo,
+                    StockMovementModel.type == MovementType.ENTRY.value,
+                )
+                .first()
+            )
             if existing:
-                raise ValueError(f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}")
+                raise ValueError(
+                    f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}"
+                )
 
         # Get or create inventory
-        inv_model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        inv_model = (
+            self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
+        )
         if not inv_model:
-            inv_model = InventoryModel(
-                product_codigo=product_codigo, quantity=0, minimum_quantity=0
-            )
+            inv_model = InventoryModel(product_codigo=product_codigo, quantity=0, minimum_quantity=0)
             self.db.add(inv_model)
             self.db.flush()
 
@@ -197,9 +204,14 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             "movement": self._movement_to_entity(movement_model),
         }
 
-    def deduct_stock_atomic(self, product_codigo: str, quantity: int,
-                            reason: str, reference_type: Optional[str] = None,
-                            reference_id: Optional[str] = None) -> dict:
+    def deduct_stock_atomic(
+        self,
+        product_codigo: str,
+        quantity: int,
+        reason: str,
+        reference_type: Optional[str] = None,
+        reference_id: Optional[str] = None,
+    ) -> dict:
         """ATOMIC: Deduct stock + create movement in single transaction.
 
         Uses UPDATE WHERE quantity >= N for concurrency safety.
@@ -209,39 +221,43 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
 
         # Check idempotency (per product + type)
         if reference_type and reference_id:
-            existing = self._filter_by_tenant(StockMovementModel).filter(
-                StockMovementModel.reference_type == reference_type,
-                StockMovementModel.reference_id == reference_id,
-                StockMovementModel.product_codigo == product_codigo,
-                StockMovementModel.type == MovementType.SALE.value,
-            ).first()
+            existing = (
+                self._filter_by_tenant(StockMovementModel)
+                .filter(
+                    StockMovementModel.reference_type == reference_type,
+                    StockMovementModel.reference_id == reference_id,
+                    StockMovementModel.product_codigo == product_codigo,
+                    StockMovementModel.type == MovementType.SALE.value,
+                )
+                .first()
+            )
             if existing:
-                raise ValueError(f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}")
+                raise ValueError(
+                    f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}"
+                )
 
         # Atomic UPDATE: only succeeds if quantity >= requested
         result = self.db.execute(
-            text("UPDATE inventory SET quantity = quantity - :qty, "
-                 "updated_at = :now "
-                 "WHERE product_codigo = :code AND quantity >= :qty"),
-            {"qty": quantity, "now": now, "code": product_codigo}
+            text(
+                "UPDATE inventory SET quantity = quantity - :qty, "
+                "updated_at = :now "
+                "WHERE product_codigo = :code AND quantity >= :qty"
+            ),
+            {"qty": quantity, "now": now, "code": product_codigo},
         )
 
         if result.rowcount == 0:
             # Either product doesn't exist or insufficient stock
             self.db.rollback()
-            inv = self._filter_by_tenant(InventoryModel).filter(
-                InventoryModel.product_codigo == product_codigo
-            ).first()
+            inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
             if not inv:
                 raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
-            raise ValueError(
-                f"Estoque insuficiente. Disponível: {inv.quantity}, solicitado: {quantity}"
-            )
+            raise ValueError(f"Estoque insuficiente. Disponível: {inv.quantity}, solicitado: {quantity}")
 
         # Read the updated inventory
-        inv_model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        inv_model = (
+            self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
+        )
         balance_before = inv_model.quantity + quantity  # reverse the update
         balance_after = inv_model.quantity
 
@@ -268,14 +284,13 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             "movement": self._movement_to_entity(movement_model),
         }
 
-    def adjust_stock_atomic(self, product_codigo: str, new_quantity: int,
-                            reason: str) -> dict:
+    def adjust_stock_atomic(self, product_codigo: str, new_quantity: int, reason: str) -> dict:
         """ATOMIC: Adjust stock + create movement in single transaction."""
         now = datetime.utcnow()
 
-        inv_model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        inv_model = (
+            self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
+        )
         if not inv_model:
             self.db.rollback()
             raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
@@ -311,31 +326,40 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             "movement": self._movement_to_entity(movement_model),
         }
 
-    def return_stock_atomic(self, product_codigo: str, quantity: int,
-                            reason: str, reference_type: Optional[str] = None,
-                            reference_id: Optional[str] = None) -> dict:
+    def return_stock_atomic(
+        self,
+        product_codigo: str,
+        quantity: int,
+        reason: str,
+        reference_type: Optional[str] = None,
+        reference_id: Optional[str] = None,
+    ) -> dict:
         """ATOMIC: Return stock + create movement in single transaction."""
         now = datetime.utcnow()
 
         # Check idempotency
         if reference_type and reference_id:
-            existing = self._filter_by_tenant(StockMovementModel).filter(
-                StockMovementModel.reference_type == reference_type,
-                StockMovementModel.reference_id == reference_id,
-                StockMovementModel.product_codigo == product_codigo,
-                StockMovementModel.type == MovementType.RETURN.value,
-            ).first()
+            existing = (
+                self._filter_by_tenant(StockMovementModel)
+                .filter(
+                    StockMovementModel.reference_type == reference_type,
+                    StockMovementModel.reference_id == reference_id,
+                    StockMovementModel.product_codigo == product_codigo,
+                    StockMovementModel.type == MovementType.RETURN.value,
+                )
+                .first()
+            )
             if existing:
-                raise ValueError(f"Devolução já registrada para {reference_type} #{reference_id} no produto {product_codigo}")
+                raise ValueError(
+                    f"Devolução já registrada para {reference_type} #{reference_id} no produto {product_codigo}"
+                )
 
         # Get or create inventory
-        inv_model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        inv_model = (
+            self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
+        )
         if not inv_model:
-            inv_model = InventoryModel(
-                product_codigo=product_codigo, quantity=0, minimum_quantity=0
-            )
+            inv_model = InventoryModel(product_codigo=product_codigo, quantity=0, minimum_quantity=0)
             self.db.add(inv_model)
             self.db.flush()
 
@@ -371,9 +395,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         }
 
     def update_minimum(self, product_codigo: str, minimum: int) -> Optional[Inventory]:
-        model = self._filter_by_tenant(InventoryModel).filter(
-            InventoryModel.product_codigo == product_codigo
-        ).first()
+        model = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         if not model:
             return None
         model.minimum_quantity = minimum

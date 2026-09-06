@@ -101,18 +101,21 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
 
     def buscar_por_telefone(self, telefone: str) -> Optional[Client]:
         normalized = normalize_phone(telefone)
-        model = self._filter_by_tenant(ClientModel).filter(
-            ClientModel.telefone == normalized
-        ).first()
+        model = self._filter_by_tenant(ClientModel).filter(ClientModel.telefone == normalized).first()
         return self._to_entity(model) if model else None
 
     def listar_todos(self) -> List[Client]:
         models = self._filter_by_tenant(ClientModel).filter(ClientModel.ativo == True).all()
         return [self._to_entity(m) for m in models]
 
-    def buscar(self, query: str = "", tipo: Optional[str] = None,
-               ativo: Optional[bool] = None,
-               page: int = 1, page_size: int = 20) -> Tuple[List[Client], int]:
+    def buscar(
+        self,
+        query: str = "",
+        tipo: Optional[str] = None,
+        ativo: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[Client], int]:
         """Busca clientes com filtros, paginação e contagem total."""
         q = self._filter_by_tenant(ClientModel)
 

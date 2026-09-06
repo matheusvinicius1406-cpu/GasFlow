@@ -155,10 +155,12 @@ class ExecutionProcessor:
                 results["sent"] += 1
             else:
                 results["failed"] += 1
-                results["errors"].append({
-                    "execution_id": exec_entity.id,
-                    "error": result.get("error"),
-                })
+                results["errors"].append(
+                    {
+                        "execution_id": exec_entity.id,
+                        "error": result.get("error"),
+                    }
+                )
 
         self._audit(
             "BATCH_PROCESSED",

@@ -4,6 +4,9 @@ import { closeDb, countLists, insertList } from './db';
 import { providerManager } from './provider/provider-manager';
 import { router } from './routes';
 import { startWorker } from './broadcast';
+import { forwardIncomingMessage, type RawIncomingMessage } from './incoming';
+import { logger } from './log';
+import { renderMetrics, METRICS_CONTENT_TYPE } from './metrics';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -58,6 +61,16 @@ async function main(): Promise<void> {
     res.type('html').send(CONNECT_PAGE_HTML);
   });
 
+  // ── Prometheus metrics ─────────────────────────────────
+  app.get('/metrics', async (_req, res) => {
+    try {
+      res.set('Content-Type', METRICS_CONTENT_TYPE);
+      res.send(await renderMetrics());
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'metrics error' });
+    }
+  });
+
   app.use('/api', router);
 
   // Error handler
@@ -65,6 +78,15 @@ async function main(): Promise<void> {
     console.error('[api] Erro não tratado:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Erro interno.' });
   });
+
+  // ── Incoming messages → backend (AI pipeline) ──────────
+  for (const account of providerManager.getAllAccounts()) {
+    const accountId = account.id;
+    providerManager.getAccount(accountId)?.onMessage((raw: unknown) => {
+      void forwardIncomingMessage(accountId, raw as RawIncomingMessage);
+    });
+  }
+  logger.info('incoming.bridge.wired', { accounts: providerManager.getAccountIds() });
 
   seedDefaultListsIfEmpty();
   startWorker();

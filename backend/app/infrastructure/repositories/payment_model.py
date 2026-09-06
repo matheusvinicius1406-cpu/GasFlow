@@ -10,15 +10,14 @@ Models:
 - PaymentRecord: service_payments table (distinct from financial payments)
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Float, Text, Index, UniqueConstraint
-)
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
 
 class PaymentMethodRecord(Base):
     """Persistent payment method — replaces in-memory _methods dict."""
+
     __tablename__ = "payment_methods"
 
     __table_args__ = (
@@ -45,11 +44,10 @@ class PaymentMethodRecord(Base):
 
 class PixConfigRecord(Base):
     """Persistent PIX configuration — replaces in-memory _pix_configs dict."""
+
     __tablename__ = "pix_configs"
 
-    __table_args__ = (
-        Index("ix_pix_config_tenant", "tenant_id"),
-    )
+    __table_args__ = (Index("ix_pix_config_tenant", "tenant_id"),)
 
     id = Column(String(36), primary_key=True)
     tenant_id = Column(String, default="default", nullable=False)
@@ -67,10 +65,11 @@ class PixConfigRecord(Base):
 
 class PaymentServiceRecord(Base):
     """Persistent payment record from PaymentService — replaces in-memory _payments dict.
-    
+
     Note: This is distinct from the financial PaymentModel which tracks
     accounting entries. This tracks the PaymentService domain lifecycle.
     """
+
     __tablename__ = "service_payments"
 
     __table_args__ = (

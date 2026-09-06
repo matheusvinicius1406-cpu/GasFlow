@@ -45,7 +45,7 @@ class ContextBuilder:
 
         # Truncate if too long (rough: 4 chars per token)
         if len(context) > self.MAX_CONTEXT_TOKENS * 4:
-            context = context[:self.MAX_CONTEXT_TOKENS * 4] + "\n[...]"
+            context = context[: self.MAX_CONTEXT_TOKENS * 4] + "\n[...]"
 
         return context
 

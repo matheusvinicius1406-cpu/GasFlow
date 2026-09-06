@@ -21,10 +21,13 @@ def client():
 
 @pytest.fixture(scope="module")
 def admin_token(client):
-    resp = client.post("/auth/login", json={
-        "username": "admin",
-        "password": "test_password_123",
-    })
+    resp = client.post(
+        "/auth/login",
+        json={
+            "username": "admin",
+            "password": "test_password_123",
+        },
+    )
     assert resp.status_code == 200
     return resp.json()["token"]
 
@@ -44,13 +47,17 @@ def _unique():
 
 def _create_receivable(client, headers, order_codigo, customer_codigo, total):
     """Create a receivable for an order via the use case (no API endpoint)."""
-    from app.infrastructure.repositories.financial_repositories import SQLAlchemyReceivableRepository, SQLAlchemyFinancialLedgerRepository
+    from app.infrastructure.repositories.financial_repositories import (
+        SQLAlchemyReceivableRepository,
+        SQLAlchemyFinancialLedgerRepository,
+    )
     from app.application.financial.use_cases import CreateReceivableUseCase
     from decimal import Decimal
 
     # Use the same DB and tenant as the test client
     from app.infrastructure.database.init_db import engine
     from sqlalchemy.orm import Session
+
     with Session(engine) as db:
         uc = CreateReceivableUseCase(
             receivable_repo=SQLAlchemyReceivableRepository(db, "default"),
@@ -63,21 +70,29 @@ def _create_order(client, headers, name_suffix="", total=100.00):
     """Helper: create client + product + stock + order + receivable. Returns order_codigo."""
     n = _unique()
 
-    client_resp = client.post("/clients/", json={
-        "nome": f"PayTest Client {n} {name_suffix}",
-        "telefone": f"119999{n:06d}",
-        "rua": "Rua Teste",
-        "numero": str(n),
-        "bairro": "Centro",
-    }, headers=headers)
+    client_resp = client.post(
+        "/clients/",
+        json={
+            "nome": f"PayTest Client {n} {name_suffix}",
+            "telefone": f"119999{n:06d}",
+            "rua": "Rua Teste",
+            "numero": str(n),
+            "bairro": "Centro",
+        },
+        headers=headers,
+    )
     assert client_resp.status_code == 200, f"Client: {client_resp.json()}"
     client_codigo = client_resp.json()["codigo"]
 
-    prod_resp = client.post("/products/", json={
-        "nome": f"PayTest Product {n} {name_suffix}",
-        "preco": total,
-        "tipo": "GAS",
-    }, headers=headers)
+    prod_resp = client.post(
+        "/products/",
+        json={
+            "nome": f"PayTest Product {n} {name_suffix}",
+            "preco": total,
+            "tipo": "GAS",
+        },
+        headers=headers,
+    )
     assert prod_resp.status_code == 200, f"Product: {prod_resp.json()}"
     product_codigo = prod_resp.json()["codigo"]
 
@@ -89,10 +104,14 @@ def _create_order(client, headers, name_suffix="", total=100.00):
     )
     assert stock_resp.status_code == 200, f"Stock: {stock_resp.json()}"
 
-    order_resp = client.post("/orders/", json={
-        "client_codigo": client_codigo,
-        "items": [{"product_codigo": product_codigo, "quantity": 1}],
-    }, headers=headers)
+    order_resp = client.post(
+        "/orders/",
+        json={
+            "client_codigo": client_codigo,
+            "items": [{"product_codigo": product_codigo, "quantity": 1}],
+        },
+        headers=headers,
+    )
     assert order_resp.status_code == 200, f"Order: {order_resp.json()}"
     order_codigo = order_resp.json()["codigo"]
 

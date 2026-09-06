@@ -12,10 +12,10 @@ from typing import Optional
 
 
 class CashMovementType(str, Enum):
-    RECEIPT = "RECEIPT"       # Money received (payment from customer)
-    EXPENSE = "EXPENSE"       # Money paid out (operational cost)
-    REFUND = "REFUND"         # Money returned to customer
-    ADJUSTMENT = "ADJUSTMENT" # Manual correction
+    RECEIPT = "RECEIPT"  # Money received (payment from customer)
+    EXPENSE = "EXPENSE"  # Money paid out (operational cost)
+    REFUND = "REFUND"  # Money returned to customer
+    ADJUSTMENT = "ADJUSTMENT"  # Manual correction
 
 
 class CashMovement:
@@ -26,7 +26,7 @@ class CashMovement:
         amount: Decimal = Decimal("0.00"),
         description: str = "",
         reference_type: Optional[str] = None,  # "PAYMENT", "EXPENSE", "REFUND"
-        reference_id: Optional[str] = None,     # payment.id, expense.id
+        reference_id: Optional[str] = None,  # payment.id, expense.id
         balance_after: Decimal = Decimal("0.00"),
         created_at: Optional[datetime] = None,
     ):
@@ -47,7 +47,4 @@ class CashMovement:
         self.created_at = created_at or datetime.utcnow()
 
     def __repr__(self):
-        return (
-            f"CashMovement(type={self.type.value}, amount=R${self.amount}, "
-            f"balance_after=R${self.balance_after})"
-        )
+        return f"CashMovement(type={self.type.value}, amount=R${self.amount}, " f"balance_after=R${self.balance_after})"

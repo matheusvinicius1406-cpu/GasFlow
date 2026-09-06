@@ -18,14 +18,15 @@ import uuid
 @dataclass
 class ProductCapacity:
     """Capacity for a single product type on a vehicle."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     vehicle_id: str = ""
     product_codigo: str = ""  # References Product.codigo
-    product_name: str = ""    # Snapshot for display
-    max_capacity: int = 0     # Maximum units this vehicle can carry
-    current_load: int = 0     # Currently loaded units
-    reserved: int = 0         # Units reserved for assigned deliveries
-    unit: str = "UN"          # UN, CYLINDERS, LITERS, KG
+    product_name: str = ""  # Snapshot for display
+    max_capacity: int = 0  # Maximum units this vehicle can carry
+    current_load: int = 0  # Currently loaded units
+    reserved: int = 0  # Units reserved for assigned deliveries
+    unit: str = "UN"  # UN, CYLINDERS, LITERS, KG
 
     @property
     def available(self) -> int:
@@ -82,6 +83,7 @@ class ProductCapacity:
 @dataclass
 class VehicleLoad:
     """Complete load manifest for a vehicle."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     vehicle_id: str = ""
     capacities: Dict[str, ProductCapacity] = field(default_factory=dict)
@@ -134,8 +136,9 @@ class VehicleLoad:
             if cap:
                 cap.unload(quantity)
 
-    def add_product(self, product_codigo: str, product_name: str,
-                    max_capacity: int, unit: str = "UN") -> ProductCapacity:
+    def add_product(
+        self, product_codigo: str, product_name: str, max_capacity: int, unit: str = "UN"
+    ) -> ProductCapacity:
         """Add or update product capacity."""
         if product_codigo in self.capacities:
             existing = self.capacities[product_codigo]

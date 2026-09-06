@@ -13,8 +13,13 @@ import asyncio
 import time
 
 from app.domain.whatsapp_provider.models import (
-    WhatsAppContact, ConnectionInfo, SendOptions, SendResult,
-    ConnectionState, ProviderType, WhatsAppEvent,
+    WhatsAppContact,
+    ConnectionInfo,
+    SendOptions,
+    SendResult,
+    ConnectionState,
+    ProviderType,
+    WhatsAppEvent,
 )
 from app.domain.whatsapp_provider.contract import WhatsAppProvider
 from app.domain.whatsapp_provider.session import WhatsAppSessionManager
@@ -27,6 +32,7 @@ from app.infrastructure.whatsapp_provider.factory import create_provider
 
 # ── Mock Provider for Benchmarking ──────────────────────
 
+
 class MockProvider(WhatsAppProvider):
     """Mock provider for benchmark testing."""
 
@@ -36,9 +42,12 @@ class MockProvider(WhatsAppProvider):
         self._latency_ms = latency_ms
 
     @property
-    def provider_type(self): return ProviderType.CURRENT
+    def provider_type(self):
+        return ProviderType.CURRENT
+
     @property
-    def account_id(self): return self._account_id
+    def account_id(self):
+        return self._account_id
 
     async def start(self):
         await asyncio.sleep(self._latency_ms / 1000)
@@ -96,6 +105,7 @@ class MockProvider(WhatsAppProvider):
 
 
 # ── Benchmark Tests ─────────────────────────────────────
+
 
 class TestProviderFactory:
     """Benchmark: provider creation time."""
@@ -222,23 +232,27 @@ class TestSessionManagerPerformance:
 
 # ── Contract Compliance Tests ───────────────────────────
 
+
 class TestContractCompliance:
     """Verify all adapters comply with the contract."""
 
     def test_current_adapter_implements_contract(self):
         from app.infrastructure.whatsapp_provider.current_adapter import WhatsAppWebAdapter
+
         provider = WhatsAppWebAdapter("primary")
         assert isinstance(provider, WhatsAppProvider)
         assert provider.provider_type == ProviderType.CURRENT
 
     def test_evolution_adapter_implements_contract(self):
         from app.infrastructure.whatsapp_provider.evolution_adapter import EvolutionAdapter
+
         provider = EvolutionAdapter("primary")
         assert isinstance(provider, WhatsAppProvider)
         assert provider.provider_type == ProviderType.EVOLUTION
 
     def test_baileys_adapter_implements_contract(self):
         from app.infrastructure.whatsapp_provider.baileys_adapter import BaileysAdapter
+
         provider = BaileysAdapter("primary")
         assert isinstance(provider, WhatsAppProvider)
         assert provider.provider_type == ProviderType.BAILEYS
@@ -253,24 +267,25 @@ class TestContractCompliance:
         for ptype, account in adapters:
             provider = create_provider(account, ptype)
             # Check all required methods exist
-            assert hasattr(provider, 'start')
-            assert hasattr(provider, 'stop')
-            assert hasattr(provider, 'logout')
-            assert hasattr(provider, 'get_connection_state')
-            assert hasattr(provider, 'get_connection_info')
-            assert hasattr(provider, 'is_connected')
-            assert hasattr(provider, 'get_qr_code')
-            assert hasattr(provider, 'send_text')
-            assert hasattr(provider, 'send_media')
-            assert hasattr(provider, 'send_typing')
-            assert hasattr(provider, 'mark_as_read')
-            assert hasattr(provider, 'get_contacts')
-            assert hasattr(provider, 'get_contact')
-            assert hasattr(provider, 'get_session_info')
-            assert hasattr(provider, 'health_check')
+            assert hasattr(provider, "start")
+            assert hasattr(provider, "stop")
+            assert hasattr(provider, "logout")
+            assert hasattr(provider, "get_connection_state")
+            assert hasattr(provider, "get_connection_info")
+            assert hasattr(provider, "is_connected")
+            assert hasattr(provider, "get_qr_code")
+            assert hasattr(provider, "send_text")
+            assert hasattr(provider, "send_media")
+            assert hasattr(provider, "send_typing")
+            assert hasattr(provider, "mark_as_read")
+            assert hasattr(provider, "get_contacts")
+            assert hasattr(provider, "get_contact")
+            assert hasattr(provider, "get_session_info")
+            assert hasattr(provider, "health_check")
 
 
 # ── Model Performance ───────────────────────────────────
+
 
 class TestModelPerformance:
     """Benchmark: model serialization/deserialization."""

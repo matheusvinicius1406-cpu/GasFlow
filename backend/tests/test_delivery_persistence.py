@@ -18,7 +18,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.delivery_persistence_model import (
-    DriverLocationRecord, OutboxEntry,
+    DriverLocationRecord,
+    OutboxEntry,
 )
 from app.infrastructure.repositories.delivery_persistence_repository import (
     SQLAlchemyDeliveryPersistenceRepository,
@@ -30,11 +31,13 @@ from app.infrastructure.repositories.delivery_persistence_repository import (
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+
     @event.listens_for(engine, "connect")
     def set_pragma(c, _):
         cur = c.cursor()
         cur.execute("PRAGMA foreign_keys = ON")
         cur.close()
+
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -47,6 +50,7 @@ def db():
 # ═══════════════════════════════════════════════════════════
 # DELIVERY CRUD
 # ═══════════════════════════════════════════════════════════
+
 
 class TestDeliveryCRUD:
     def test_create_delivery(self, db):
@@ -126,6 +130,7 @@ class TestDeliveryCRUD:
 # STATE MACHINE
 # ═══════════════════════════════════════════════════════════
 
+
 class TestStateMachine:
     def test_happy_path(self, db):
         repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
@@ -196,6 +201,7 @@ class TestStateMachine:
 # TENANT ISOLATION
 # ═══════════════════════════════════════════════════════════
 
+
 class TestTenantIsolation:
     def test_cross_tenant_invisible(self, db):
         repo_a = SQLAlchemyDeliveryPersistenceRepository(db, "tenant_a")
@@ -216,6 +222,7 @@ class TestTenantIsolation:
 # ═══════════════════════════════════════════════════════════
 # GPS LOCATION
 # ═══════════════════════════════════════════════════════════
+
 
 class TestGPSLocation:
     def test_upsert_location(self, db):
@@ -262,6 +269,7 @@ class TestGPSLocation:
 # ═══════════════════════════════════════════════════════════
 # OUTBOX
 # ═══════════════════════════════════════════════════════════
+
 
 class TestOutbox:
     def test_enqueue_event(self, db):
@@ -311,6 +319,7 @@ class TestOutbox:
 # ALLOWED ACTIONS
 # ═══════════════════════════════════════════════════════════
 
+
 class TestAllowedActions:
     def test_pending_actions(self):
         actions = SQLAlchemyDeliveryPersistenceRepository.allowed_actions("PENDING")
@@ -337,6 +346,7 @@ class TestAllowedActions:
 # ═══════════════════════════════════════════════════════════
 # IDEMPOTENCY
 # ═══════════════════════════════════════════════════════════
+
 
 class TestIdempotency:
     def test_create_idempotent_key(self, db):

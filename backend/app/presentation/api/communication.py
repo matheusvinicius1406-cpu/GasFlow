@@ -12,8 +12,10 @@ from pydantic import BaseModel
 from typing import Dict, Optional
 
 from app.domain.communication.templates import (
-    CommunicationEvent, CommunicationChannel,
-    get_communication_service, DEFAULT_TEMPLATES,
+    CommunicationEvent,
+    CommunicationChannel,
+    get_communication_service,
+    DEFAULT_TEMPLATES,
 )
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
@@ -22,6 +24,7 @@ router = APIRouter(prefix="/communication", tags=["communication"])
 
 
 # ── Schemas ──────────────────────────────────────────────
+
 
 class SendNotificationRequest(BaseModel):
     delivery_id: str
@@ -45,6 +48,7 @@ class TemplateUpdateRequest(BaseModel):
 
 
 # ── Endpoints ────────────────────────────────────────────
+
 
 @router.post("/send", response_model=NotificationResponse)
 async def send_notification(
@@ -108,11 +112,7 @@ async def list_templates(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """List all available communication templates."""
-    return {
-        "templates": {
-            e.value: t.to_dict() for e, t in DEFAULT_TEMPLATES.items()
-        }
-    }
+    return {"templates": {e.value: t.to_dict() for e, t in DEFAULT_TEMPLATES.items()}}
 
 
 @router.patch("/templates/{event}")
@@ -136,6 +136,7 @@ async def update_template(
         template = policy.custom_templates[event_type]
     else:
         from app.domain.communication.templates import MessageTemplate
+
         default = DEFAULT_TEMPLATES.get(event_type, MessageTemplate(event=event_type))
         template = MessageTemplate(
             event=default.event,

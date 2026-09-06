@@ -19,8 +19,11 @@ from app.domain.financial.expense import Expense, ExpenseCategory
 from app.domain.financial.cash_movement import CashMovement, CashMovementType
 from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 from app.domain.financial.repository import (
-    PaymentRepository, ReceivableRepository, ExpenseRepository,
-    CashMovementRepository, FinancialLedgerRepository
+    PaymentRepository,
+    ReceivableRepository,
+    ExpenseRepository,
+    CashMovementRepository,
+    FinancialLedgerRepository,
 )
 from app.domain.order.entity import PaymentStatus as OrderPaymentStatus
 from app.domain.order.repository import OrderRepository
@@ -69,9 +72,7 @@ class RegisterPaymentUseCase:
 
         # 3. Check overpayment
         if amount > receivable.remaining_amount:
-            raise ValueError(
-                f"Payment R${amount} exceeds remaining R${receivable.remaining_amount}"
-            )
+            raise ValueError(f"Payment R${amount} exceeds remaining R${receivable.remaining_amount}")
 
         # 4. Create payment
         now = datetime.utcnow()
@@ -90,10 +91,7 @@ class RegisterPaymentUseCase:
 
         # 5. Update receivable
         new_paid = receivable.paid_amount + amount
-        new_status = (
-            ReceivableStatus.PAID if new_paid >= receivable.original_amount
-            else ReceivableStatus.PARTIAL
-        )
+        new_status = ReceivableStatus.PAID if new_paid >= receivable.original_amount else ReceivableStatus.PARTIAL
         receivable.paid_amount = new_paid.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         receivable.status = new_status
         if new_status == ReceivableStatus.PAID:
@@ -147,13 +145,13 @@ class RegisterPaymentUseCase:
 class CreateReceivableUseCase:
     """Create receivable when order is confirmed."""
 
-    def __init__(self, receivable_repo: ReceivableRepository,
-                 ledger_repo: FinancialLedgerRepository):
+    def __init__(self, receivable_repo: ReceivableRepository, ledger_repo: FinancialLedgerRepository):
         self.receivable_repo = receivable_repo
         self.ledger_repo = ledger_repo
 
-    def execute(self, order_codigo: str, customer_codigo: str,
-                total: Decimal, due_date: Optional[datetime] = None) -> Receivable:
+    def execute(
+        self, order_codigo: str, customer_codigo: str, total: Decimal, due_date: Optional[datetime] = None
+    ) -> Receivable:
         # Check if receivable already exists
         existing = self.receivable_repo.get_by_order(order_codigo)
         if existing:
@@ -170,13 +168,15 @@ class CreateReceivableUseCase:
         receivable = self.receivable_repo.create(receivable)
 
         # Ledger
-        self.ledger_repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.RECEIVABLE_CREATED,
-            amount=total,
-            reference_type="RECEIVABLE",
-            reference_id=str(receivable.id),
-            description=f"Receivable R${total} for Order #{order_codigo}",
-        ))
+        self.ledger_repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.RECEIVABLE_CREATED,
+                amount=total,
+                reference_type="RECEIVABLE",
+                reference_id=str(receivable.id),
+                description=f"Receivable R${total} for Order #{order_codigo}",
+            )
+        )
 
         return receivable
 
@@ -184,9 +184,9 @@ class CreateReceivableUseCase:
 class RegisterExpenseUseCase:
     """Register an expense. Atomic: expense + cash movement + ledger."""
 
-    def __init__(self, expense_repo: ExpenseRepository,
-                 cash_repo: CashMovementRepository,
-                 ledger_repo: FinancialLedgerRepository):
+    def __init__(
+        self, expense_repo: ExpenseRepository, cash_repo: CashMovementRepository, ledger_repo: FinancialLedgerRepository
+    ):
         self.expense_repo = expense_repo
         self.cash_repo = cash_repo
         self.ledger_repo = ledger_repo
@@ -223,14 +223,16 @@ class RegisterExpenseUseCase:
         cash_movement = self.cash_repo.create(cash_movement)
 
         # Ledger
-        self.ledger_repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.EXPENSE_CREATED,
-            amount=amount,
-            reference_type="EXPENSE",
-            reference_id=str(expense.id),
-            description=f"Expense R${amount}: {expense.description}",
-            created_at=now,
-        ))
+        self.ledger_repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.EXPENSE_CREATED,
+                amount=amount,
+                reference_type="EXPENSE",
+                reference_id=str(expense.id),
+                description=f"Expense R${amount}: {expense.description}",
+                created_at=now,
+            )
+        )
 
         return {"expense": expense, "cash_movement": cash_movement}
 
@@ -238,10 +240,13 @@ class RegisterExpenseUseCase:
 class RefundPaymentUseCase:
     """Refund a payment. Atomic: refund payment + cash movement + ledger."""
 
-    def __init__(self, payment_repo: PaymentRepository,
-                 receivable_repo: ReceivableRepository,
-                 cash_repo: CashMovementRepository,
-                 ledger_repo: FinancialLedgerRepository):
+    def __init__(
+        self,
+        payment_repo: PaymentRepository,
+        receivable_repo: ReceivableRepository,
+        cash_repo: CashMovementRepository,
+        ledger_repo: FinancialLedgerRepository,
+    ):
         self.payment_repo = payment_repo
         self.receivable_repo = receivable_repo
         self.cash_repo = cash_repo
@@ -264,8 +269,10 @@ class RefundPaymentUseCase:
             new_paid = max(Decimal("0.00"), receivable.paid_amount - payment.amount)
             receivable.paid_amount = new_paid.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             receivable.status = (
-                ReceivableStatus.PAID if new_paid >= receivable.original_amount
-                else ReceivableStatus.PARTIAL if new_paid > 0
+                ReceivableStatus.PAID
+                if new_paid >= receivable.original_amount
+                else ReceivableStatus.PARTIAL
+                if new_paid > 0
                 else ReceivableStatus.OPEN
             )
             self.receivable_repo.update(receivable)
@@ -284,13 +291,15 @@ class RefundPaymentUseCase:
         cash_movement = self.cash_repo.create(cash_movement)
 
         # Ledger
-        self.ledger_repo.create(FinancialLedgerEntry(
-            event_type=LedgerEventType.PAYMENT_REFUNDED,
-            amount=payment.amount,
-            reference_type="PAYMENT",
-            reference_id=str(payment.id),
-            description=f"Refund R${payment.amount} for Order #{payment.order_codigo}",
-        ))
+        self.ledger_repo.create(
+            FinancialLedgerEntry(
+                event_type=LedgerEventType.PAYMENT_REFUNDED,
+                amount=payment.amount,
+                reference_type="PAYMENT",
+                reference_id=str(payment.id),
+                description=f"Refund R${payment.amount} for Order #{payment.order_codigo}",
+            )
+        )
 
         return {"payment": payment, "cash_movement": cash_movement}
 
@@ -298,10 +307,13 @@ class RefundPaymentUseCase:
 class FinancialReportsUseCase:
     """Basic financial reports for a period."""
 
-    def __init__(self, payment_repo: PaymentRepository,
-                 receivable_repo: ReceivableRepository,
-                 expense_repo: ExpenseRepository,
-                 cash_repo: CashMovementRepository):
+    def __init__(
+        self,
+        payment_repo: PaymentRepository,
+        receivable_repo: ReceivableRepository,
+        expense_repo: ExpenseRepository,
+        cash_repo: CashMovementRepository,
+    ):
         self.payment_repo = payment_repo
         self.receivable_repo = receivable_repo
         self.expense_repo = expense_repo
@@ -311,9 +323,7 @@ class FinancialReportsUseCase:
         start = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start.replace(day=start.day + 1) if start.day < 28 else start.replace(month=start.month + 1, day=1)
 
-        total_receipts = self.cash_repo.total_by_type_and_period(
-            CashMovementType.RECEIPT, start, end
-        )
+        total_receipts = self.cash_repo.total_by_type_and_period(CashMovementType.RECEIPT, start, end)
         total_expenses = self.expense_repo.total_by_period(start, end)
 
         return {

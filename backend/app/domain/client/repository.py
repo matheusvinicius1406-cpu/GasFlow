@@ -39,9 +39,14 @@ class ClientRepository(ABC):
         ...
 
     @abstractmethod
-    def buscar(self, query: str = "", tipo: Optional[str] = None,
-               ativo: Optional[bool] = None,
-               page: int = 1, page_size: int = 20) -> Tuple[List[Client], int]:
+    def buscar(
+        self,
+        query: str = "",
+        tipo: Optional[str] = None,
+        ativo: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[Client], int]:
         """Busca clientes com filtros, paginação e contagem total."""
         ...
 

@@ -15,6 +15,7 @@ import threading
 
 # ── Event Types ─────────────────────────────────────────
 
+
 class EventType(str, Enum):
     # CRM
     CUSTOMER_CREATED = "CUSTOMER_CREATED"
@@ -50,9 +51,11 @@ class EventType(str, Enum):
 
 # ── Event Contract ──────────────────────────────────────
 
+
 @dataclass
 class DomainEvent:
     """Immutable domain event."""
+
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     event_type: EventType = EventType.CUSTOM
     occurred_at: datetime = field(default_factory=datetime.utcnow)
@@ -71,6 +74,7 @@ class DomainEvent:
 
 
 # ── Event Bus ───────────────────────────────────────────
+
 
 class EventBus:
     """In-process event bus with handler registration."""
@@ -115,6 +119,7 @@ class EventBus:
 
 
 # ── Outbox ──────────────────────────────────────────────
+
 
 class OutboxEntry:
     """Outbox entry for transactional event publishing."""

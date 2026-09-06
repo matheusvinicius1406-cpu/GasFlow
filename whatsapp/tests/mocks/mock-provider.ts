@@ -12,6 +12,8 @@ import type {
   WhatsAppStatus,
   MessagePayload,
   SendResult,
+  MediaPayload,
+  SendMediaResult,
 } from '../../src/provider/types';
 
 export interface MockSentMessage {
@@ -21,12 +23,21 @@ export interface MockSentMessage {
   messageId: string;
 }
 
+export interface MockSentMedia {
+  recipient: string;
+  media: MediaPayload;
+  timestamp: number;
+  messageId: string;
+}
+
 export class MockWhatsAppProvider implements WhatsAppProvider {
   private connected = false;
   private hasQr = false;
   readonly sentMessages: MockSentMessage[] = [];
+  readonly sentMedia: MockSentMedia[] = [];
   private failNextSend = false;
   private messageCounter = 0;
+  private messageListeners: Array<(msg: unknown) => void> = [];
 
   // ── State Control ──────────────────────────────────────
 
@@ -52,8 +63,21 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     this.connected = false;
     this.hasQr = false;
     this.sentMessages.length = 0;
+    this.sentMedia.length = 0;
     this.failNextSend = false;
     this.messageCounter = 0;
+    this.messageListeners.length = 0;
+  }
+
+  /** Simula o recebimento de uma mensagem — dispara os listeners registrados. */
+  simulateIncoming(msg: unknown): void {
+    for (const listener of this.messageListeners) {
+      listener(msg);
+    }
+  }
+
+  onMessage(listener: (msg: unknown) => void): void {
+    this.messageListeners.push(listener);
   }
 
   // ── WhatsAppProvider Interface ─────────────────────────
@@ -106,6 +130,9 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   }
 
   async sendMessage(recipient: string, message: MessagePayload): Promise<SendResult> {
+    if (!this.connected) {
+      return { success: false, error: 'WhatsApp não está conectado.' };
+    }
     if (this.failNextSend) {
       this.failNextSend = false;
       return { success: false, error: 'Mock send failure' };
@@ -121,6 +148,24 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
       messageId,
     });
 
+    return { success: true, messageId };
+  }
+
+  async sendMedia(recipient: string, media: MediaPayload): Promise<SendMediaResult> {
+    if (!this.connected) {
+      return { success: false, error: 'WhatsApp não está conectado.' };
+    }
+    if (this.failNextSend) {
+      this.failNextSend = false;
+      return { success: false, error: 'Mock send failure' };
+    }
+    if (!media.data || !media.mimetype) {
+      return { success: false, error: 'Mídia inválida: data e mimetype são obrigatórios.' };
+    }
+
+    this.messageCounter++;
+    const messageId = `mock-media-${this.messageCounter}-${Date.now()}`;
+    this.sentMedia.push({ recipient, media, timestamp: Date.now(), messageId });
     return { success: true, messageId };
   }
 }

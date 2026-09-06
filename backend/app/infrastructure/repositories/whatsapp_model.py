@@ -22,7 +22,9 @@ class WhatsAppConversationModel(Base):
     account_id = Column(String(50), nullable=False, default="primary", index=True)
     phone_number = Column(String(20), nullable=False, index=True)
     client_codigo = Column(String(20), nullable=True, index=True)
-    status = Column(String(30), default="IDLE")  # IDLE, BROWSING, BUILDING_ORDER, AWAITING_CONFIRMATION, ORDER_CREATED, HUMAN_PENDING, HUMAN_ACTIVE, CLOSED
+    status = Column(
+        String(30), default="IDLE"
+    )  # IDLE, BROWSING, BUILDING_ORDER, AWAITING_CONFIRMATION, ORDER_CREATED, HUMAN_PENDING, HUMAN_ACTIVE, CLOSED
     human_operator = Column(String(100), nullable=True)
     draft_json = Column(Text, nullable=True)  # JSON-serialized order draft
     last_message = Column(Text, nullable=True)
@@ -54,6 +56,4 @@ class WhatsAppMessageModel(Base):
 
     conversation = relationship("WhatsAppConversationModel", back_populates="messages")
 
-    __table_args__ = (
-        Index("ix_wa_message_conversation_created", "conversation_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_wa_message_conversation_created", "conversation_id", "created_at"),)

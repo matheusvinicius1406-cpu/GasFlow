@@ -10,9 +10,7 @@ from app.infrastructure.database.base import Base
 class VehicleModel(Base):
     __tablename__ = "vehicles"
 
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "plate", name="uq_vehicle_tenant_plate"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "plate", name="uq_vehicle_tenant_plate"),)
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(String, default="default", index=True)
@@ -30,9 +28,7 @@ class VehicleModel(Base):
 class VehicleCapacityModel(Base):
     __tablename__ = "vehicle_capacities"
 
-    __table_args__ = (
-        UniqueConstraint("vehicle_id", "product_codigo", name="uq_capacity_vehicle_product"),
-    )
+    __table_args__ = (UniqueConstraint("vehicle_id", "product_codigo", name="uq_capacity_vehicle_product"),)
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(String, default="default", index=True)
@@ -47,9 +43,7 @@ class VehicleCapacityModel(Base):
 class VehicleLoadModel(Base):
     __tablename__ = "vehicle_loads"
 
-    __table_args__ = (
-        UniqueConstraint("vehicle_id", "product_codigo", name="uq_load_vehicle_product"),
-    )
+    __table_args__ = (UniqueConstraint("vehicle_id", "product_codigo", name="uq_load_vehicle_product"),)
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(String, default="default", index=True)

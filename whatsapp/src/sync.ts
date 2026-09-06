@@ -82,7 +82,7 @@ export function upsertContacts(valuesList: ContactValues[]): SyncResult {
 }
 
 /** Sincroniza todos os contatos do provider para o banco. Idempotente.
- * 
+ *
  * IMPORTANTE: sync NÃO cria customers automaticamente.
  * contacts ≠ customers. Um contato do WhatsApp não é automaticamente
  * um cliente do Marcos Gás. A promoção para customer deve ser explícita

@@ -71,6 +71,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      # Chave service-to-service (whatsapp → backend, header X-GasFlow-Key)
+      - WHATSAPP_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-redis}
       - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
       # Realtime entre workers: prod roda BACKEND_WORKERS=2 por padrão — cada
@@ -133,11 +135,34 @@ services:
       - PORT=3000
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
+      - GASFLOW_BACKEND_URL=http://backend:8000
+      - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
+      - WA_HEARTBEAT_INTERVAL_MIN=${WA_HEARTBEAT_INTERVAL_MIN:-5}
+      - WA_SEND_MIN_INTERVAL_MS=${WA_SEND_MIN_INTERVAL_MS:-2000}
+      - WA_SEND_MAX_INTERVAL_MS=${WA_SEND_MAX_INTERVAL_MS:-10000}
+      - WA_CRITICAL_WEBHOOK_URL=${WA_CRITICAL_WEBHOOK_URL:-}
+      - WA_LOG_LEVEL=${WA_LOG_LEVEL:-info}
+      # Motor Baileys (dual-mode; rollback: WA_ENGINE=wwebjs)
+      - WA_ENGINE=${WA_ENGINE:-baileys}
+      - BAILEYS_AUTH_DIR=/app/baileys_auth
+      # Higiene anti-ban (caps/warmup/cooldown/quiet hours/jitter)
+      - WA_MINUTE_CAP=${WA_MINUTE_CAP:-20}
+      - WA_HOURLY_CAP=${WA_HOURLY_CAP:-200}
+      - WA_DAILY_CAP=${WA_DAILY_CAP:-1000}
+      - WA_RECIPIENT_COOLDOWN_MIN=${WA_RECIPIENT_COOLDOWN_MIN:-60}
+      - WA_QUIET_HOURS_ENABLED=${WA_QUIET_HOURS_ENABLED:-true}
+      - WA_QUIET_HOURS_START=${WA_QUIET_HOURS_START:-22}
+      - WA_QUIET_HOURS_END=${WA_QUIET_HOURS_END:-7}
+      - WA_SEND_MEAN_MS=${WA_SEND_MEAN_MS:-3000}
+      - WA_SEND_STDEV_MS=${WA_SEND_STDEV_MS:-1000}
+      - WA_BROADCAST_ENABLED=${WA_BROADCAST_ENABLED:-true}
     ports:
       - "${WHATSAPP_PORT:-3001}:3000"
     volumes:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth
+      - baileys_auth:/app/baileys_auth
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
       interval: 15s
@@ -152,6 +177,64 @@ services:
     networks:
       - internal
 
+  # ── Observabilidade (Fase 16.3) ──────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: gasflow-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - internal
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: gasflow-alertmanager
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: gasflow-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - internal
+
 networks:
   internal:
     driver: bridge
@@ -163,5 +246,11 @@ volumes:
     driver: local
   whatsapp_auth:
     driver: local
+  baileys_auth:
+    driver: local
   backups_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local

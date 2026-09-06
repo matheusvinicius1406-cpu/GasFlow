@@ -42,6 +42,24 @@ export interface MessagePayload {
   text: string;
 }
 
+/** Mídia para envio via sendMedia — conteúdo base64 (sem prefixo data URI). */
+export interface MediaPayload {
+  /** Conteúdo do arquivo em base64. */
+  data: string;
+  /** MIME type, ex.: image/png, audio/ogg, application/pdf. */
+  mimetype: string;
+  /** Nome do arquivo (opcional). */
+  filename?: string;
+  /** Legenda/texto junto à mídia (opcional). */
+  caption?: string;
+}
+
+export interface SendMediaResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
 export interface WhatsAppProvider {
   start(): void;
   /** Encerra o cliente mantendo a sessão salva para o próximo boot. */
@@ -58,4 +76,6 @@ export interface WhatsAppProvider {
   healthCheck(): Promise<boolean>;
   getContacts(): Promise<WhatsAppContact[]>;
   sendMessage(recipient: string, message: MessagePayload): Promise<SendResult>;
+  /** Envia mídia (imagem, áudio, documento) para um contato. */
+  sendMedia(recipient: string, media: MediaPayload): Promise<SendMediaResult>;
 }

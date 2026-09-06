@@ -18,6 +18,7 @@ from typing import Optional
 
 class StockStatus(str, Enum):
     """Status derivado do estoque (calculado, não armazenado)."""
+
     IN_STOCK = "IN_STOCK"
     LOW_STOCK = "LOW_STOCK"
     OUT_OF_STOCK = "OUT_OF_STOCK"
@@ -73,9 +74,7 @@ class Inventory:
         if quantity <= 0:
             raise ValueError("Quantidade de saída deve ser maior que 0")
         if self.quantity < quantity:
-            raise ValueError(
-                f"Estoque insuficiente. Disponível: {self.quantity}, solicitado: {quantity}"
-            )
+            raise ValueError(f"Estoque insuficiente. Disponível: {self.quantity}, solicitado: {quantity}")
         self.quantity -= quantity
         self.updated_at = datetime.utcnow()
         return self.quantity

@@ -6,7 +6,14 @@ SQLAlchemy models for identity, sessions, tenants, roles, audit.
 
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, Index, UniqueConstraint,
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
 )
 from app.infrastructure.database.base import Base
 
@@ -60,9 +67,7 @@ class TenantMembershipModel(Base):
     role_id = Column(String(36), ForeignKey("security_roles.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "tenant_id", name="uq_membership_user_tenant"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "tenant_id", name="uq_membership_user_tenant"),)
 
 
 class RoleModel(Base):
@@ -81,9 +86,7 @@ class RolePermissionModel(Base):
     role_id = Column(String(36), ForeignKey("security_roles.id"), nullable=False, index=True)
     permission = Column(String(100), nullable=False)  # e.g., "customer.read"
 
-    __table_args__ = (
-        UniqueConstraint("role_id", "permission", name="uq_role_permission"),
-    )
+    __table_args__ = (UniqueConstraint("role_id", "permission", name="uq_role_permission"),)
 
 
 class AuditRecordModel(Base):

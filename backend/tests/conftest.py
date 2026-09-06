@@ -26,10 +26,12 @@ def setup_and_cleanup_db():
     """
     from app.infrastructure.database.base import Base
     from app.infrastructure.database.init_db import engine
+
     Base.metadata.create_all(bind=engine)
     # Ensure rate limiter is clear at session start
     try:
         import app.presentation.dependencies as deps
+
         if deps._auth_service is not None:
             deps._auth_service._rate_limiter._buckets.clear()
     except Exception:
@@ -58,6 +60,7 @@ def clean_db_module():
     # Truncate tables that accumulate data across test modules
     from sqlalchemy import text
     from app.infrastructure.database.init_db import engine
+
     tables_to_clean = [
         "whatsapp_conversations",
         "whatsapp_messages",
@@ -82,12 +85,14 @@ def _clear_rate_limiter():
     """
     try:
         import app.presentation.dependencies as deps
+
         if deps._auth_service is not None:
             deps._auth_service._rate_limiter._buckets.clear()
     except Exception:
         pass
     try:
         from app.core.rate_limit import _limiter
+
         _limiter._buckets.clear()
     except Exception:
         pass

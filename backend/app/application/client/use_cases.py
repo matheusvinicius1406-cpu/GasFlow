@@ -65,14 +65,16 @@ class ListClientsUseCase:
     def __init__(self, repository: ClientRepository):
         self.repository = repository
 
-    def execute(self, query: str = "", tipo: Optional[str] = None,
-                ativo: Optional[bool] = None,
-                page: int = 1, page_size: int = 20) -> dict:
+    def execute(
+        self,
+        query: str = "",
+        tipo: Optional[str] = None,
+        ativo: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict:
         """Lista clientes com filtros e paginação."""
-        items, total = self.repository.buscar(
-            query=query, tipo=tipo, ativo=ativo,
-            page=page, page_size=page_size
-        )
+        items, total = self.repository.buscar(query=query, tipo=tipo, ativo=ativo, page=page, page_size=page_size)
         total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
         return {
             "items": items,
@@ -137,8 +139,13 @@ class Customer360UseCase:
     derived from Payment + Receivable.
     """
 
-    def __init__(self, client_repository: ClientRepository, order_repository=None,
-                 payment_repository=None, receivable_repository=None):
+    def __init__(
+        self,
+        client_repository: ClientRepository,
+        order_repository=None,
+        payment_repository=None,
+        receivable_repository=None,
+    ):
         self.client_repository = client_repository
         self.order_repository = order_repository
         self.payment_repository = payment_repository

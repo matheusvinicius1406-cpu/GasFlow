@@ -57,11 +57,22 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://${POSTGRES_USER:-gasflow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gasflow}}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       - WHATSAPP_SERVICE_URL=http://whatsapp:3000
+      # Chave service-to-service (whatsapp → backend, header X-GasFlow-Key)
+      - WHATSAPP_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:8080}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-memory}
       - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
+      # WhatsApp provider: current (whatsapp-web.js) | evolution | baileys | cloud_api
+      - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-current}
+      # WhatsApp Business Cloud API (Meta) — canal oficial para campanhas
+      - WHATSAPP_CLOUD_API_TOKEN=${WHATSAPP_CLOUD_API_TOKEN:-}
+      - WHATSAPP_CLOUD_API_PHONE_NUMBER_ID=${WHATSAPP_CLOUD_API_PHONE_NUMBER_ID:-}
+      - WHATSAPP_CLOUD_API_WABA_ID=${WHATSAPP_CLOUD_API_WABA_ID:-}
+      - WHATSAPP_CLOUD_API_VERSION=${WHATSAPP_CLOUD_API_VERSION:-v21.0}
+      - WHATSAPP_CLOUD_API_APP_SECRET=${WHATSAPP_CLOUD_API_APP_SECRET:-}
+      - WHATSAPP_CLOUD_API_VERIFY_TOKEN=${WHATSAPP_CLOUD_API_VERIFY_TOKEN:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -110,16 +121,43 @@ services:
     build:
       context: ./whatsapp
       dockerfile: Dockerfile
+      args:
+        # 1 = imagem com Chromium (rollback wwebjs)
+        BUILD_WWEBJS: ${WHATSAPP_BUILD_WWEBJS:-0}
     container_name: gasflow-whatsapp
     environment:
       - PORT=3000
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
+      - GASFLOW_BACKEND_URL=http://backend:8000
+      - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
+      - WA_HEARTBEAT_INTERVAL_MIN=${WA_HEARTBEAT_INTERVAL_MIN:-5}
+      - WA_SEND_MIN_INTERVAL_MS=${WA_SEND_MIN_INTERVAL_MS:-2000}
+      - WA_SEND_MAX_INTERVAL_MS=${WA_SEND_MAX_INTERVAL_MS:-10000}
+      # Anti-ban hygiene: caps, warmup, cooldown, quiet hours, pacing gaussiano
+      - WA_MINUTE_CAP=${WA_MINUTE_CAP:-20}
+      - WA_HOURLY_CAP=${WA_HOURLY_CAP:-200}
+      - WA_DAILY_CAP=${WA_DAILY_CAP:-1000}
+      - WA_RECIPIENT_COOLDOWN_MIN=${WA_RECIPIENT_COOLDOWN_MIN:-60}
+      - WA_QUIET_HOURS_ENABLED=${WA_QUIET_HOURS_ENABLED:-true}
+      - WA_QUIET_HOURS_START=${WA_QUIET_HOURS_START:-22}
+      - WA_QUIET_HOURS_END=${WA_QUIET_HOURS_END:-7}
+      - WA_SEND_MEAN_MS=${WA_SEND_MEAN_MS:-3000}
+      - WA_SEND_STDEV_MS=${WA_SEND_STDEV_MS:-1000}
+      # Kill-switch: false = serviço apenas conversacional (campanhas via Cloud API)
+      - WA_BROADCAST_ENABLED=${WA_BROADCAST_ENABLED:-true}
+      - WA_CRITICAL_WEBHOOK_URL=${WA_CRITICAL_WEBHOOK_URL:-}
+      # Motor: baileys (WebSocket puro, default) | wwebjs (Chromium, rollback)
+      - WA_ENGINE=${WA_ENGINE:-baileys}
+      - BAILEYS_AUTH_DIR=/app/baileys_auth
+      - WA_LOG_LEVEL=${WA_LOG_LEVEL:-info}
     ports:
       - "${WHATSAPP_PORT:-3001}:3000"
     volumes:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth
+      - baileys_auth:/app/baileys_auth
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
       interval: 15s
@@ -144,6 +182,8 @@ volumes:
   whatsapp_data:
     driver: local
   whatsapp_auth:
+    driver: local
+  baileys_auth:
     driver: local
   backups_data:
     driver: local

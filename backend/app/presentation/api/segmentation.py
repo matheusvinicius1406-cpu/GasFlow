@@ -34,6 +34,7 @@ router = APIRouter(prefix="/segments", tags=["segmentation"])
 
 # ── Schemas ──────────────────────────────────────────────
 
+
 class RuleSchema(BaseModel):
     field: str
     operator: str
@@ -80,6 +81,7 @@ class AvailableRulesResponse(BaseModel):
 
 
 # ── Endpoints ────────────────────────────────────────────
+
 
 @router.get("", response_model=List[SegmentResponse])
 async def list_segments(
@@ -131,17 +133,25 @@ async def create_segment(
 async def get_available_rules():
     """Get available rule fields and operators."""
     fields = [
-        {"value": f.value, "label": f.value.replace("_", " ").title(), "type": "number" if f in (
-            RuleField.TOTAL_ORDERS, RuleField.TOTAL_SPENT, RuleField.AVERAGE_TICKET,
-            RuleField.DAYS_SINCE_LAST_ORDER, RuleField.ORDER_FREQUENCY
-        ) else "string" if f in (RuleField.CLIENT_TYPE, RuleField.FAVORITE_PRODUCT, RuleField.PAYMENT_STATUS
-        ) else "boolean"}
+        {
+            "value": f.value,
+            "label": f.value.replace("_", " ").title(),
+            "type": "number"
+            if f
+            in (
+                RuleField.TOTAL_ORDERS,
+                RuleField.TOTAL_SPENT,
+                RuleField.AVERAGE_TICKET,
+                RuleField.DAYS_SINCE_LAST_ORDER,
+                RuleField.ORDER_FREQUENCY,
+            )
+            else "string"
+            if f in (RuleField.CLIENT_TYPE, RuleField.FAVORITE_PRODUCT, RuleField.PAYMENT_STATUS)
+            else "boolean",
+        }
         for f in RuleField
     ]
-    operators = [
-        {"value": o.value, "label": o.value.replace("_", " ").title()}
-        for o in RuleOperator
-    ]
+    operators = [{"value": o.value, "label": o.value.replace("_", " ").title()} for o in RuleOperator]
     return AvailableRulesResponse(fields=fields, operators=operators)
 
 

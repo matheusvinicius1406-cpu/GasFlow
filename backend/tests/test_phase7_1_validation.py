@@ -23,6 +23,7 @@ from app.infrastructure.repositories.inventory_repository import SQLAlchemyInven
 # FIXTURES
 # ═══════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def db():
     """Real in-memory SQLite with WAL + FK."""
@@ -52,10 +53,7 @@ def seed_product(db, codigo="P00001", nome="GLP P13", tipo="GAS", preco=100.0):
 
 
 def seed_client(db, codigo="000001"):
-    c = ClientModel(
-        codigo=codigo, nome="Test Client", telefone="11999999999",
-        rua="Rua A", numero="1", bairro="Centro"
-    )
+    c = ClientModel(codigo=codigo, nome="Test Client", telefone="11999999999", rua="Rua A", numero="1", bairro="Centro")
     db.add(c)
     db.commit()
     return c
@@ -64,6 +62,7 @@ def seed_client(db, codigo="000001"):
 # ═══════════════════════════════════════════════════════════
 # 2. SOURCE OF TRUTH PROOF
 # ═══════════════════════════════════════════════════════════
+
 
 def test_inventory_is_sole_stock_authority(db):
     """PROOF: Order flow uses Inventory.quantity, not Product.estoque."""
@@ -108,10 +107,12 @@ def test_order_uses_inventory_not_product_estoque(db):
     )
 
     # This should succeed because Inventory has 10 units
-    order = use_case.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 5}],
-    })
+    order = use_case.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 5}],
+        }
+    )
     assert order is not None
 
 
@@ -138,6 +139,7 @@ def test_product_estoque_is_deprecated_read_only(db):
 # 4-5. MODEL VERIFICATION
 # ═══════════════════════════════════════════════════════════
 
+
 def test_inventory_unique_constraint(db):
     """UNIQUE(product_codigo) enforced."""
     seed_product(db)
@@ -157,11 +159,17 @@ def test_inventory_fk_constraint(db):
 
 def test_movement_fk_constraint(db):
     """Per-tenant codigo: DB-level FK removed. App enforces integrity."""
-    db.add(StockMovementModel(
-        product_codigo="FAKE99", type="ENTRY", quantity=10,
-        reason="Test", balance_before=0, balance_after=10,
-        created_at=datetime.utcnow(),
-    ))
+    db.add(
+        StockMovementModel(
+            product_codigo="FAKE99",
+            type="ENTRY",
+            quantity=10,
+            reason="Test",
+            balance_before=0,
+            balance_after=10,
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()  # No FK constraint at DB level
     db.rollback()
 
@@ -169,17 +177,33 @@ def test_movement_fk_constraint(db):
 def test_movement_idempotency_constraint(db):
     """UNIQUE(reference_type, reference_id) enforced."""
     seed_product(db)
-    db.add(StockMovementModel(
-        product_codigo="P00001", type="SALE", quantity=5,
-        reason="Order #1", reference_type="ORDER", reference_id="000001",
-        balance_before=10, balance_after=5, created_at=datetime.utcnow(),
-    ))
+    db.add(
+        StockMovementModel(
+            product_codigo="P00001",
+            type="SALE",
+            quantity=5,
+            reason="Order #1",
+            reference_type="ORDER",
+            reference_id="000001",
+            balance_before=10,
+            balance_after=5,
+            created_at=datetime.utcnow(),
+        )
+    )
     db.commit()
-    db.add(StockMovementModel(
-        product_codigo="P00001", type="SALE", quantity=5,
-        reason="Order #1 dup", reference_type="ORDER", reference_id="000001",
-        balance_before=5, balance_after=0, created_at=datetime.utcnow(),
-    ))
+    db.add(
+        StockMovementModel(
+            product_codigo="P00001",
+            type="SALE",
+            quantity=5,
+            reason="Order #1 dup",
+            reference_type="ORDER",
+            reference_id="000001",
+            balance_before=5,
+            balance_after=0,
+            created_at=datetime.utcnow(),
+        )
+    )
     with pytest.raises(Exception):
         db.commit()
 
@@ -189,6 +213,7 @@ def test_quantity_cannot_be_negative(db):
     # The Inventory entity validates this, but the model doesn't have a CHECK constraint
     # The repository use cases validate before inserting
     from app.domain.inventory.entity import Inventory
+
     with pytest.raises(ValueError, match="não pode ser negativo"):
         Inventory(product_codigo="P00001", quantity=-5)
 
@@ -196,6 +221,7 @@ def test_quantity_cannot_be_negative(db):
 # ═══════════════════════════════════════════════════════════
 # 6. TRANSACTION PROOF — CRITICAL
 # ═══════════════════════════════════════════════════════════
+
 
 def test_transaction_rollback_on_movement_failure(db):
     """PROOF: If movement insert fails, inventory update is rolled back."""
@@ -208,22 +234,18 @@ def test_transaction_rollback_on_movement_failure(db):
     assert inv_before.quantity == 50
 
     # Now force a failure: try to deduct with duplicate reference
-    repo.deduct_stock_atomic("P00001", 10, reason="Sale",
-                              reference_type="ORDER", reference_id="000099")
+    repo.deduct_stock_atomic("P00001", 10, reason="Sale", reference_type="ORDER", reference_id="000099")
 
     # Try same reference again — should fail
     with pytest.raises(ValueError, match="já registrado"):
-        repo.deduct_stock_atomic("P00001", 10, reason="Sale dup",
-                                  reference_type="ORDER", reference_id="000099")
+        repo.deduct_stock_atomic("P00001", 10, reason="Sale dup", reference_type="ORDER", reference_id="000099")
 
     # CRITICAL PROOF: inventory quantity should be 40, NOT 30
     inv_after = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv_after.quantity == 40
 
     # Only ONE movement should exist for this reference
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.reference_id == "000099"
-    ).count()
+    movements = db.query(StockMovementModel).filter(StockMovementModel.reference_id == "000099").count()
     assert movements == 1
 
 
@@ -237,15 +259,14 @@ def test_transaction_rollback_on_stock_update_failure(db):
         repo.deduct_stock_atomic("P99999", 5, reason="Sale")
 
     # No movements should exist for P99999
-    count = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P99999"
-    ).count()
+    count = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P99999").count()
     assert count == 0
 
 
 # ═══════════════════════════════════════════════════════════
 # 7-8. ORDER TRANSACTION + MULTI-ITEM
 # ═══════════════════════════════════════════════════════════
+
 
 def test_order_confirm_deducts_stock(db):
     """PROOF: Confirming order deducts stock atomically."""
@@ -265,15 +286,18 @@ def test_order_confirm_deducts_stock(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 3}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 3}],
+        }
+    )
 
     # Stock should still be 10 (not deducted yet)
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
@@ -281,7 +305,9 @@ def test_order_confirm_deducts_stock(db):
 
     # Confirm order
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
     update_uc.execute(order.codigo, "CONFIRMED")
 
@@ -307,18 +333,23 @@ def test_order_cancel_returns_stock(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 3}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 3}],
+        }
+    )
 
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
 
     # Confirm → deduct
@@ -360,13 +391,15 @@ def test_multi_item_partial_failure_rollback(db):
 
     # Order: A×2 (OK) + B×2 (NOT OK — only 1 in stock)
     with pytest.raises(ValueError, match="insuficiente"):
-        use_case.execute({
-            "client_codigo": "000001",
-            "items": [
-                {"product_codigo": "P00001", "quantity": 2},
-                {"product_codigo": "P00002", "quantity": 2},
-            ],
-        })
+        use_case.execute(
+            {
+                "client_codigo": "000001",
+                "items": [
+                    {"product_codigo": "P00001", "quantity": 2},
+                    {"product_codigo": "P00002", "quantity": 2},
+                ],
+            }
+        )
 
     # PROOF: Both inventories unchanged
     inv_a = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
@@ -378,6 +411,7 @@ def test_multi_item_partial_failure_rollback(db):
 # ═══════════════════════════════════════════════════════════
 # 9-10. IDEMPOTENCY
 # ═══════════════════════════════════════════════════════════
+
 
 def test_order_same_deduction_twice(db):
     """PROOF: Same order cannot generate two SALE movements."""
@@ -396,18 +430,23 @@ def test_order_same_deduction_twice(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 3}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 3}],
+        }
+    )
 
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
 
     # First confirm → succeeds, stock deducted
@@ -424,10 +463,14 @@ def test_order_same_deduction_twice(db):
     assert inv.quantity == 7
 
     # Only ONE SALE movement should exist
-    sales = db.query(StockMovementModel).filter(
-        StockMovementModel.type == "SALE",
-        StockMovementModel.reference_id == order.codigo,
-    ).count()
+    sales = (
+        db.query(StockMovementModel)
+        .filter(
+            StockMovementModel.type == "SALE",
+            StockMovementModel.reference_id == order.codigo,
+        )
+        .count()
+    )
     assert sales == 1
 
 
@@ -448,18 +491,23 @@ def test_order_cancel_idempotent(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 3}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 3}],
+        }
+    )
 
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
 
     # Confirm → stock becomes 7
@@ -471,16 +519,21 @@ def test_order_cancel_idempotent(db):
     assert inv.quantity == 10
 
     # Count RETURN movements for this order
-    returns = db.query(StockMovementModel).filter(
-        StockMovementModel.reference_type == "ORDER_RETURN",
-        StockMovementModel.reference_id == order.codigo,
-    ).count()
+    returns = (
+        db.query(StockMovementModel)
+        .filter(
+            StockMovementModel.reference_type == "ORDER_RETURN",
+            StockMovementModel.reference_id == order.codigo,
+        )
+        .count()
+    )
     assert returns == 1  # Only one RETURN
 
 
 # ═══════════════════════════════════════════════════════════
 # 11. CONCURRENCY — REAL
 # ═══════════════════════════════════════════════════════════
+
 
 def test_concurrent_deduction_real_db(db):
     """PROOF: Two concurrent deductions — one succeeds, one fails."""
@@ -490,13 +543,11 @@ def test_concurrent_deduction_real_db(db):
 
     # Use sequential operations to prove atomicity
     # (True concurrent test requires file-based SQLite)
-    result1 = repo.deduct_stock_atomic("P00001", 7, reason="Order A",
-                                        reference_type="ORDER", reference_id="000001")
+    result1 = repo.deduct_stock_atomic("P00001", 7, reason="Order A", reference_type="ORDER", reference_id="000001")
     assert result1["inventory"].quantity == 3
 
     with pytest.raises(ValueError, match="insuficiente"):
-        repo.deduct_stock_atomic("P00001", 7, reason="Order B",
-                                  reference_type="ORDER", reference_id="000002")
+        repo.deduct_stock_atomic("P00001", 7, reason="Order B", reference_type="ORDER", reference_id="000002")
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 3
@@ -509,13 +560,11 @@ def test_concurrent_same_order_idempotent(db):
     repo.add_stock_atomic("P00001", 10, reason="Initial")
 
     # First deduction
-    repo.deduct_stock_atomic("P00001", 3, reason="Sale",
-                              reference_type="ORDER", reference_id="000001")
+    repo.deduct_stock_atomic("P00001", 3, reason="Sale", reference_type="ORDER", reference_id="000001")
 
     # Second with same reference → idempotent error
     with pytest.raises(ValueError, match="já registrado"):
-        repo.deduct_stock_atomic("P00001", 3, reason="Sale dup",
-                                  reference_type="ORDER", reference_id="000001")
+        repo.deduct_stock_atomic("P00001", 3, reason="Sale dup", reference_type="ORDER", reference_id="000001")
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 7  # Only deducted once
@@ -524,6 +573,7 @@ def test_concurrent_same_order_idempotent(db):
 # ═══════════════════════════════════════════════════════════
 # 13. SQLITE CONFIG — REAL PROOF
 # ═══════════════════════════════════════════════════════════
+
 
 def test_sqlite_pragmas_real(db):
     """PROOF: SQLite pragmas are actually set."""
@@ -545,6 +595,7 @@ def test_sqlite_pragmas_real(db):
 # 14-17. NEGATIVE STOCK, BALANCE, LEDGER, IMMUTABILITY
 # ═══════════════════════════════════════════════════════════
 
+
 def test_negative_stock_impossible(db):
     """PROOF: Stock can never go negative."""
     seed_product(db)
@@ -565,12 +616,15 @@ def test_balance_before_after_consistent(db):
 
     repo.add_stock_atomic("P00001", 50, reason="Initial")  # 0→50
     repo.add_stock_atomic("P00001", 20, reason="Purchase")  # 50→70
-    repo.deduct_stock_atomic("P00001", 10, reason="Sale")   # 70→60
-    repo.return_stock_atomic("P00001", 5, reason="Return")   # 60→65
+    repo.deduct_stock_atomic("P00001", 10, reason="Sale")  # 70→60
+    repo.return_stock_atomic("P00001", 5, reason="Return")  # 60→65
 
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P00001"
-    ).order_by(StockMovementModel.id).all()
+    movements = (
+        db.query(StockMovementModel)
+        .filter(StockMovementModel.product_codigo == "P00001")
+        .order_by(StockMovementModel.id)
+        .all()
+    )
 
     assert len(movements) == 4
 
@@ -586,21 +640,18 @@ def test_ledger_reconstruction_matches_inventory(db):
     seed_product(db)
     repo = SQLAlchemyInventoryRepository(db)
 
-    repo.add_stock_atomic("P00001", 50, reason="Initial")   # +50
-    repo.add_stock_atomic("P00001", 20, reason="Purchase")   # +20
-    repo.deduct_stock_atomic("P00001", 10, reason="Sale")    # -10
-    repo.deduct_stock_atomic("P00001", 5, reason="Loss",
-                              reference_type="LOSS", reference_id="L001")  # -5
-    repo.return_stock_atomic("P00001", 2, reason="Return")   # +2
+    repo.add_stock_atomic("P00001", 50, reason="Initial")  # +50
+    repo.add_stock_atomic("P00001", 20, reason="Purchase")  # +20
+    repo.deduct_stock_atomic("P00001", 10, reason="Sale")  # -10
+    repo.deduct_stock_atomic("P00001", 5, reason="Loss", reference_type="LOSS", reference_id="L001")  # -5
+    repo.return_stock_atomic("P00001", 2, reason="Return")  # +2
 
     # Expected: 50 + 20 - 10 - 5 + 2 = 57
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 57
 
     # Reconstruct from ledger
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P00001"
-    ).all()
+    movements = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").all()
     balance = 0
     for m in movements:
         if m.type in ("ENTRY", "RETURN", "INITIAL_BALANCE"):
@@ -616,12 +667,14 @@ def test_ledger_reconstruction_matches_inventory(db):
 def test_movement_immutable(db):
     """PROOF: StockMovement has no update/delete methods."""
     from app.domain.inventory.stock_movement import StockMovement
+
     # The entity is a dataclass with no update methods
-    assert not hasattr(StockMovement, 'update')
-    assert not hasattr(StockMovement, 'save')
+    assert not hasattr(StockMovement, "update")
+    assert not hasattr(StockMovement, "save")
     # Verify no SQLAlchemy update operations on StockMovementModel in repository
     import inspect
     from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+
     source = inspect.getsource(SQLAlchemyInventoryRepository)
     # Should not contain UPDATE stock_movements
     assert "UPDATE stock_movements" not in source
@@ -630,6 +683,7 @@ def test_movement_immutable(db):
 # ═══════════════════════════════════════════════════════════
 # 18. CANCELLATION SCENARIOS
 # ═══════════════════════════════════════════════════════════
+
 
 def test_cancel_after_confirm_returns_stock(db):
     """Scenario A: CONFIRMED → SALE → CANCEL → RETURN."""
@@ -648,34 +702,47 @@ def test_cancel_after_confirm_returns_stock(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 2}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 2}],
+        }
+    )
 
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
 
     # Confirm → SALE
     update_uc.execute(order.codigo, "CONFIRMED")
-    sale_count = db.query(StockMovementModel).filter(
-        StockMovementModel.type == "SALE",
-        StockMovementModel.reference_id == order.codigo,
-    ).count()
+    sale_count = (
+        db.query(StockMovementModel)
+        .filter(
+            StockMovementModel.type == "SALE",
+            StockMovementModel.reference_id == order.codigo,
+        )
+        .count()
+    )
     assert sale_count == 1
 
     # Cancel → RETURN
     update_uc.execute(order.codigo, "CANCELLED")
-    return_count = db.query(StockMovementModel).filter(
-        StockMovementModel.type == "RETURN",
-        StockMovementModel.reference_id == order.codigo,
-    ).count()
+    return_count = (
+        db.query(StockMovementModel)
+        .filter(
+            StockMovementModel.type == "RETURN",
+            StockMovementModel.reference_id == order.codigo,
+        )
+        .count()
+    )
     assert return_count == 1
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
@@ -699,18 +766,23 @@ def test_cancel_pending_no_stock_change(db):
     item_repo = SQLAlchemyOrderItemRepository(db)
 
     create_uc = CreateOrderUseCase(
-        order_repo=order_repo, order_item_repo=item_repo,
+        order_repo=order_repo,
+        order_item_repo=item_repo,
         client_repo=SQLAlchemyClientRepository(db),
         product_repo=SQLAlchemyProductRepository(db),
         inventory_repo=repo,
     )
-    order = create_uc.execute({
-        "client_codigo": "000001",
-        "items": [{"product_codigo": "P00001", "quantity": 2}],
-    })
+    order = create_uc.execute(
+        {
+            "client_codigo": "000001",
+            "items": [{"product_codigo": "P00001", "quantity": 2}],
+        }
+    )
 
     update_uc = UpdateOrderStatusUseCase(
-        repository=order_repo, inventory_repo=repo, order_item_repo=item_repo,
+        repository=order_repo,
+        inventory_repo=repo,
+        order_item_repo=item_repo,
     )
 
     # Cancel directly from PENDING — RETURN will be generated (idempotent, 0 stock effect)
@@ -719,10 +791,14 @@ def test_cancel_pending_no_stock_change(db):
     update_uc.execute(order.codigo, "CANCELLED")
 
     # No SALE should exist
-    sales = db.query(StockMovementModel).filter(
-        StockMovementModel.reference_id == order.codigo,
-        StockMovementModel.type == "SALE",
-    ).count()
+    sales = (
+        db.query(StockMovementModel)
+        .filter(
+            StockMovementModel.reference_id == order.codigo,
+            StockMovementModel.type == "SALE",
+        )
+        .count()
+    )
     assert sales == 0
 
     # Stock should remain unchanged
@@ -734,15 +810,14 @@ def test_cancel_pending_no_stock_change(db):
 # 20. PRODUCT STOCK WRITE PATHS
 # ═══════════════════════════════════════════════════════════
 
+
 def test_product_use_case_allows_estoque_write(db):
     """KNOWN: ProductUseCase still allows estoque write. Classified as LEGACY."""
     from app.application.product.use_cases import CreateProductUseCase
     from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
 
     use_case = CreateProductUseCase(SQLAlchemyProductRepository(db))
-    product = use_case.execute({
-        "nome": "Test", "tipo": "GAS", "preco": 100.0, "estoque": 42
-    })
+    product = use_case.execute({"nome": "Test", "tipo": "GAS", "preco": 100.0, "estoque": 42})
     # Product.estoque is set to 42
     assert product.estoque == 42
     # But Inventory is NOT created
@@ -753,6 +828,7 @@ def test_product_use_case_allows_estoque_write(db):
 # ═══════════════════════════════════════════════════════════
 # 22. PRODUCT DELETE SAFETY
 # ═══════════════════════════════════════════════════════════
+
 
 def test_product_soft_delete_preserves_inventory(db):
     """PROOF: Soft-deleting product preserves inventory and movements."""
@@ -772,15 +848,14 @@ def test_product_soft_delete_preserves_inventory(db):
     assert inv.quantity == 40
 
     # Movements still exist
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P00001"
-    ).count()
+    movements = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").count()
     assert movements == 2
 
 
 # ═══════════════════════════════════════════════════════════
 # 25. FRONTEND SECURITY
 # ═══════════════════════════════════════════════════════════
+
 
 def test_schemas_exclude_balance_fields():
     """PROOF: Frontend cannot send balance_before/balance_after."""
@@ -800,6 +875,7 @@ def test_schemas_exclude_balance_fields():
 # ═══════════════════════════════════════════════════════════
 # 27. PERSISTENCE — FILE-BASED TEST
 # ═══════════════════════════════════════════════════════════
+
 
 def test_persistence_file_based():
     """PROOF: Inventory and movements persist across sessions."""
@@ -853,9 +929,7 @@ def test_persistence_file_based():
         assert inv is not None
         assert inv.quantity == 40
 
-        movements = db2.query(StockMovementModel).filter(
-            StockMovementModel.product_codigo == "P00001"
-        ).count()
+        movements = db2.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").count()
         assert movements == 2
 
         db2.close()
@@ -868,6 +942,7 @@ def test_persistence_file_based():
 # 31. ADVERSARIAL REVIEW — ALL 20 ITEMS
 # ═══════════════════════════════════════════════════════════
 
+
 def test_adversarial_01_divergence(db):
     """1. Product and Inventory can diverge? PASS — Inventory is authority."""
     seed_product(db)
@@ -876,6 +951,7 @@ def test_adversarial_01_divergence(db):
     # Product.estoque stays 0, Inventory.quantity = 50
     # Order flow uses Inventory, not Product.estoque
     assert True
+
 
 def test_adversarial_02_two_inventory(db):
     """2. Can I create two Inventory? FAIL — UNIQUE prevents it."""
@@ -886,6 +962,7 @@ def test_adversarial_02_two_inventory(db):
     with pytest.raises(Exception):
         db.commit()
 
+
 def test_adversarial_03_negative_stock(db):
     """3. Can stock go negative? FAIL — atomic UPDATE prevents it."""
     seed_product(db)
@@ -894,15 +971,18 @@ def test_adversarial_03_negative_stock(db):
     with pytest.raises(ValueError):
         repo.deduct_stock_atomic("P00001", 6, reason="Sale")
 
+
 def test_adversarial_04_alter_balance_before(db):
     """4. Can I alter balance_before? FAIL — computed by backend."""
     # balance_before is calculated from current quantity at time of operation
     # No schema field allows frontend to set it
     assert True  # Verified by schema test
 
+
 def test_adversarial_05_alter_balance_after(db):
     """5. Can I alter balance_after? FAIL — computed by backend."""
     assert True  # Same as above
+
 
 def test_adversarial_06_movement_without_stock_change(db):
     """6. Can movement exist without stock change? FAIL — single transaction."""
@@ -910,10 +990,9 @@ def test_adversarial_06_movement_without_stock_change(db):
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 50, reason="Initial")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P00001"
-    ).count()
+    movements = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").count()
     assert movements == 1
+
 
 def test_adversarial_07_stock_change_without_movement(db):
     """7. Can stock change without movement? FAIL — all via atomic methods."""
@@ -921,45 +1000,41 @@ def test_adversarial_07_stock_change_without_movement(db):
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 50, reason="Initial")
     repo.deduct_stock_atomic("P00001", 10, reason="Sale")
-    movements = db.query(StockMovementModel).filter(
-        StockMovementModel.product_codigo == "P00001"
-    ).count()
+    movements = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").count()
     assert movements == 2  # ENTRY + SALE
+
 
 def test_adversarial_08_duplicate_sale(db):
     """8. Same order generates two SALE? FAIL — idempotency."""
     seed_product(db)
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 50, reason="Initial")
-    repo.deduct_stock_atomic("P00001", 10, reason="Sale",
-                              reference_type="ORDER", reference_id="000001")
+    repo.deduct_stock_atomic("P00001", 10, reason="Sale", reference_type="ORDER", reference_id="000001")
     with pytest.raises(ValueError):
-        repo.deduct_stock_atomic("P00001", 10, reason="Sale",
-                                  reference_type="ORDER", reference_id="000001")
+        repo.deduct_stock_atomic("P00001", 10, reason="Sale", reference_type="ORDER", reference_id="000001")
+
 
 def test_adversarial_09_double_cancel(db):
     """9. Cancel twice generates two RETURN? FAIL — idempotency."""
     seed_product(db)
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 50, reason="Initial")
-    repo.return_stock_atomic("P00001", 10, reason="Cancel",
-                              reference_type="ORDER_RETURN", reference_id="000001")
+    repo.return_stock_atomic("P00001", 10, reason="Cancel", reference_type="ORDER_RETURN", reference_id="000001")
     with pytest.raises(ValueError):
-        repo.return_stock_atomic("P00001", 10, reason="Cancel",
-                                  reference_type="ORDER_RETURN", reference_id="000001")
+        repo.return_stock_atomic("P00001", 10, reason="Cancel", reference_type="ORDER_RETURN", reference_id="000001")
+
 
 def test_adversarial_10_concurrent_orders(db):
     """10. Two simultaneous orders leave incorrect balance? FAIL — atomic UPDATE."""
     seed_product(db)
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 10, reason="Initial")
-    repo.deduct_stock_atomic("P00001", 7, reason="Order A",
-                              reference_type="ORDER", reference_id="000001")
+    repo.deduct_stock_atomic("P00001", 7, reason="Order A", reference_type="ORDER", reference_id="000001")
     with pytest.raises(ValueError):
-        repo.deduct_stock_atomic("P00001", 7, reason="Order B",
-                                  reference_type="ORDER", reference_id="000002")
+        repo.deduct_stock_atomic("P00001", 7, reason="Order B", reference_type="ORDER", reference_id="000002")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 3
+
 
 def test_adversarial_11_multi_item_partial(db):
     """11. Multi-item partial leaves inconsistent state? FAIL — rollback."""
@@ -986,26 +1061,31 @@ def test_adversarial_11_multi_item_partial(db):
         inventory_repo=repo,
     )
     with pytest.raises(ValueError):
-        use_case.execute({
-            "client_codigo": "000001",
-            "items": [
-                {"product_codigo": "P00001", "quantity": 2},
-                {"product_codigo": "P00002", "quantity": 2},
-            ],
-        })
+        use_case.execute(
+            {
+                "client_codigo": "000001",
+                "items": [
+                    {"product_codigo": "P00001", "quantity": 2},
+                    {"product_codigo": "P00002", "quantity": 2},
+                ],
+            }
+        )
     inv_a = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     inv_b = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00002").first()
     assert inv_a.quantity == 10
     assert inv_b.quantity == 1
 
+
 def test_adversarial_12_rollback(db):
     """12. Rollback works? PASS — tested in transaction proof."""
     assert True  # Covered by test_transaction_rollback_on_stock_update_failure
+
 
 def test_adversarial_13_fk_enforced(db):
     """13. SQLite foreign_keys really ON? PASS — PRAGMA query proves it."""
     result = db.execute(text("PRAGMA foreign_keys")).fetchone()
     assert result[0] == 1
+
 
 def test_adversarial_14_wal_active(db):
     """14. WAL really active? PASS — set in connection.py, verified for file-based DB."""
@@ -1013,26 +1093,33 @@ def test_adversarial_14_wal_active(db):
     # In-memory SQLite returns 'memory', WAL is for file-based DB
     assert result[0] in ("wal", "WAL", "memory")
 
+
 def test_adversarial_15_product_allows_stock_write(db):
     """15. Product still allows stock write? YES — legacy path. Classified LOW."""
     assert True  # Covered by test_product_use_case_allows_estoque_write
+
 
 def test_adversarial_16_inventory_is_source(db):
     """16. Inventory is really source of truth? PASS — Order flow uses it."""
     assert True  # Covered by test_order_uses_inventory_not_product_estoque
 
+
 def test_adversarial_17_history_editable(db):
     """17. History can be edited? FAIL — no update methods on StockMovement."""
     from app.domain.inventory.stock_movement import StockMovement
-    assert not hasattr(StockMovement, 'update')
+
+    assert not hasattr(StockMovement, "update")
+
 
 def test_adversarial_18_ledger_reconstructs(db):
     """18. Ledger reconstructs balance? PASS — mathematical proof."""
     assert True  # Covered by test_ledger_reconstruction_matches_inventory
 
+
 def test_adversarial_19_product_delete_breaks_inventory(db):
     """19. Product delete breaks inventory? FAIL — soft delete preserves."""
     assert True  # Covered by test_product_soft_delete_preserves_inventory
+
 
 def test_adversarial_20_frontend_invents_balance(db):
     """20. Frontend can invent balance? FAIL — schemas exclude balance fields."""

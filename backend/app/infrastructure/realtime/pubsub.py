@@ -113,9 +113,7 @@ class RedisPubSub:
                     try:
                         await on_event(event)
                     except Exception:
-                        logger.warning(
-                            "Error handling cross-worker event", exc_info=True
-                        )
+                        logger.warning("Error handling cross-worker event", exc_info=True)
         finally:
             await pubsub.unsubscribe(self._channel)
             await pubsub.close()

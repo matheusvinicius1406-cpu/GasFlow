@@ -22,3 +22,6 @@ Pillow
 
 # Rate limiting distribuído (Redis — produção multi-worker; opcional)
 redis
+
+# Métricas Prometheus (/metrics)
+prometheus-client>=0.20

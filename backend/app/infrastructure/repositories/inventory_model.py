@@ -5,16 +5,14 @@ CRITICAL: UNIQUE(reference_type, reference_id, product_codigo, type) prevents du
 Supports multi-item orders and order lifecycle (SALE + RETURN).
 """
 
-from sqlalchemy import (
-    Column, Integer, String, DateTime,
-    Index, UniqueConstraint, Text
-)
+from sqlalchemy import Column, Integer, String, DateTime, Index, UniqueConstraint, Text
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
 
 class InventoryModel(Base):
     """Inventory — single source of truth for stock quantity."""
+
     __tablename__ = "inventory"
 
     tenant_id = Column(String, default="default", index=True)
@@ -25,9 +23,7 @@ class InventoryModel(Base):
         index=True,
     )
 
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "product_codigo", name="uq_inventory_tenant_product"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "product_codigo", name="uq_inventory_tenant_product"),)
     quantity = Column(Integer, nullable=False, default=0)
     minimum_quantity = Column(Integer, nullable=False, default=0)
     maximum_quantity = Column(Integer, nullable=True)
@@ -36,6 +32,7 @@ class InventoryModel(Base):
 
 class StockMovementModel(Base):
     """StockMovement — immutable ledger of all stock changes."""
+
     __tablename__ = "stock_movements"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -49,7 +46,7 @@ class StockMovementModel(Base):
     reason = Column(Text, nullable=False)
 
     reference_type = Column(String, nullable=True)  # "ORDER", "ORDER_RETURN", "ADJUSTMENT"
-    reference_id = Column(String, nullable=True)     # order.codigo, etc.
+    reference_id = Column(String, nullable=True)  # order.codigo, etc.
 
     balance_before = Column(Integer, nullable=False, default=0)
     balance_after = Column(Integer, nullable=False, default=0)
@@ -65,7 +62,10 @@ class StockMovementModel(Base):
         # Multi-item orders share reference_id but differ in product_codigo.
         # Order can have SALE + RETURN for same product — differ in type.
         UniqueConstraint(
-            "reference_type", "reference_id", "product_codigo", "type",
+            "reference_type",
+            "reference_id",
+            "product_codigo",
+            "type",
             name="uq_stock_movements_reference_product_type",
         ),
     )

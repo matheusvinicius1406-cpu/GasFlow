@@ -15,37 +15,57 @@ from app.infrastructure.repositories.order_item_model import OrderItemModel  # n
 from app.infrastructure.repositories.product_model import ProductModel  # noqa: F401
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel  # noqa: F401
 from app.infrastructure.repositories.vehicle_model import (  # noqa: F401
-    VehicleModel, VehicleCapacityModel, VehicleLoadModel,
+    VehicleModel,
+    VehicleCapacityModel,
+    VehicleLoadModel,
 )
 from app.infrastructure.repositories.whatsapp_model import (  # noqa: F401
-    WhatsAppConversationModel, WhatsAppMessageModel,
+    WhatsAppConversationModel,
+    WhatsAppMessageModel,
 )
 from app.infrastructure.repositories.inventory_model import (  # noqa: F401
-    InventoryModel, StockMovementModel,
+    InventoryModel,
+    StockMovementModel,
 )
 from app.infrastructure.repositories.financial_models import (  # noqa: F401
-    PaymentModel, ReceivableModel, ExpenseModel,
-    CashMovementModel, FinancialLedgerModel,
+    PaymentModel,
+    ReceivableModel,
+    ExpenseModel,
+    CashMovementModel,
+    FinancialLedgerModel,
 )
 from app.infrastructure.ai.models import (  # noqa: F401
-    ConversationModel, AIMessageModel, AIAuditLogModel,
+    ConversationModel,
+    AIMessageModel,
+    AIAuditLogModel,
 )
 from app.infrastructure.repositories.delivery_persistence_model import (  # noqa: F401
-    DeliveryRecord, DriverLocationRecord, OutboxEntry,
-    DriverSessionRecord, IdempotencyKeyRecord,
+    DeliveryRecord,
+    DriverLocationRecord,
+    OutboxEntry,
+    DriverSessionRecord,
+    IdempotencyKeyRecord,
 )
 from app.infrastructure.repositories.auth_model import (  # noqa: F401
-    AuthUserModel, AuthSessionModel, AuthTenantModel,
-    AuthRoleModel, AuthMembershipModel, AuthAuditModel,
+    AuthUserModel,
+    AuthSessionModel,
+    AuthTenantModel,
+    AuthRoleModel,
+    AuthMembershipModel,
+    AuthAuditModel,
 )
 from app.infrastructure.repositories.payment_model import (  # noqa: F401
-    PaymentMethodRecord, PixConfigRecord, PaymentServiceRecord,
+    PaymentMethodRecord,
+    PixConfigRecord,
+    PaymentServiceRecord,
 )
 from app.infrastructure.repositories.route_model import (  # noqa: F401
-    RouteRecord, RouteStopRecord,
+    RouteRecord,
+    RouteStopRecord,
 )
 from app.infrastructure.repositories.whatsapp_automation_model import (  # noqa: F401
-    AutomationRuleModel, AutomationExecutionModel,
+    AutomationRuleModel,
+    AutomationExecutionModel,
 )
 from app.infrastructure.repositories.segmentation_model import SegmentModel  # noqa: F401
 

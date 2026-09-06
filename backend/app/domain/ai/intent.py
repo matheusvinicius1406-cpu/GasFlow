@@ -29,9 +29,9 @@ class IntentType(str, Enum):
 
 
 class Confidence(str, Enum):
-    HIGH = "HIGH"       # Can execute tool / respond
-    MEDIUM = "MEDIUM"   # Ask for clarification
-    LOW = "LOW"         # Do not execute
+    HIGH = "HIGH"  # Can execute tool / respond
+    MEDIUM = "MEDIUM"  # Ask for clarification
+    LOW = "LOW"  # Do not execute
 
 
 @dataclass

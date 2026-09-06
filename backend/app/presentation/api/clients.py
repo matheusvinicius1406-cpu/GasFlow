@@ -30,10 +30,7 @@ from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 
 
-router = APIRouter(
-    prefix="/clients",
-    tags=["Clients"]
-)
+router = APIRouter(prefix="/clients", tags=["Clients"])
 
 
 def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
@@ -64,13 +61,7 @@ def list_clients(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListClientsUseCase(repository)
-    return use_case.execute(
-        query=q or "",
-        tipo=tipo,
-        ativo=ativo,
-        page=page,
-        page_size=page_size
-    )
+    return use_case.execute(query=q or "", tipo=tipo, ativo=ativo, page=page, page_size=page_size)
 
 
 @router.get("/legacy", response_model=list[ClientResponse])
@@ -109,6 +100,7 @@ def get_customer_360(
     from app.infrastructure.repositories.financial_repositories import (
         SQLAlchemyReceivableRepository,
     )
+
     recv_repo = SQLAlchemyReceivableRepository(db, ctx.tenant_id)
     use_case = Customer360UseCase(client_repo, order_repo, receivable_repository=recv_repo)
     result = use_case.execute(codigo)

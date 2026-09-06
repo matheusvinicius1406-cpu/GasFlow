@@ -16,8 +16,7 @@ class GetInventoryUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, stock_status: Optional[str] = None,
-                product_type: Optional[str] = None) -> List[Inventory]:
+    def execute(self, stock_status: Optional[str] = None, product_type: Optional[str] = None) -> List[Inventory]:
         return self.repository.list_all(stock_status=stock_status, product_type=product_type)
 
 
@@ -33,11 +32,8 @@ class GetMovementsUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, page: int = 1,
-                page_size: int = 20) -> dict:
-        items, total = self.repository.get_movements(
-            product_codigo, page=page, page_size=page_size
-        )
+    def execute(self, product_codigo: str, page: int = 1, page_size: int = 20) -> dict:
+        items, total = self.repository.get_movements(product_codigo, page=page, page_size=page_size)
         total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
         return {
             "items": items,
@@ -54,8 +50,7 @@ class AddStockUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, quantity: int,
-                reason: str = "Entrada de estoque") -> dict:
+    def execute(self, product_codigo: str, quantity: int, reason: str = "Entrada de estoque") -> dict:
         if quantity <= 0:
             raise ValueError("Quantidade deve ser maior que 0")
         return self.repository.add_stock_atomic(
@@ -71,10 +66,14 @@ class RemoveStockUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, quantity: int,
-                reason: str = "Saída de estoque",
-                reference_type: Optional[str] = None,
-                reference_id: Optional[str] = None) -> dict:
+    def execute(
+        self,
+        product_codigo: str,
+        quantity: int,
+        reason: str = "Saída de estoque",
+        reference_type: Optional[str] = None,
+        reference_id: Optional[str] = None,
+    ) -> dict:
         if quantity <= 0:
             raise ValueError("Quantidade deve ser maior que 0")
         return self.repository.deduct_stock_atomic(
@@ -92,8 +91,7 @@ class AdjustStockUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, new_quantity: int,
-                reason: str = "Ajuste de inventário") -> dict:
+    def execute(self, product_codigo: str, new_quantity: int, reason: str = "Ajuste de inventário") -> dict:
         if new_quantity < 0:
             raise ValueError("Estoque ajustado não pode ser negativo")
         return self.repository.adjust_stock_atomic(
@@ -109,10 +107,14 @@ class ReturnStockUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, quantity: int,
-                reason: str = "Devolução — cancelamento de pedido",
-                reference_type: Optional[str] = None,
-                reference_id: Optional[str] = None) -> dict:
+    def execute(
+        self,
+        product_codigo: str,
+        quantity: int,
+        reason: str = "Devolução — cancelamento de pedido",
+        reference_type: Optional[str] = None,
+        reference_id: Optional[str] = None,
+    ) -> dict:
         if quantity <= 0:
             raise ValueError("Quantidade deve ser maior que 0")
         return self.repository.return_stock_atomic(
@@ -130,8 +132,7 @@ class LossStockUseCase:
     def __init__(self, repository: InventoryRepository):
         self.repository = repository
 
-    def execute(self, product_codigo: str, quantity: int,
-                reason: str = "Perda de estoque") -> dict:
+    def execute(self, product_codigo: str, quantity: int, reason: str = "Perda de estoque") -> dict:
         if quantity <= 0:
             raise ValueError("Quantidade deve ser maior que 0")
         return self.repository.deduct_stock_atomic(

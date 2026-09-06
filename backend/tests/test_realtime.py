@@ -26,6 +26,7 @@ from app.infrastructure.realtime.websocket import (
 
 # ── Fake WebSocket for unit tests ────────────────────────
 
+
 class FakeWS:
     """Minimal WebSocket stand-in recording sends."""
 
@@ -46,6 +47,7 @@ class FakeWS:
 
 
 # ── ConnectionManager unit tests ────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_connect_and_disconnect_manage_channels():
@@ -106,6 +108,7 @@ async def test_broadcast_to_channel_with_no_connections_is_noop():
 
 
 # ── Event → channel routing ─────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_delivery_event_routes_to_tenant_and_delivery_channels():
@@ -172,6 +175,7 @@ async def test_unrelated_event_goes_only_to_tenant_channel():
 
 # ── /ws endpoint tests (via TestClient) ─────────────────
 
+
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app := __import__("app.main", fromlist=["app"]).app) as c:
@@ -180,10 +184,13 @@ def client():
 
 @pytest.fixture(scope="module")
 def admin_token(client):
-    res = client.post("/auth/login", json={
-        "username": "admin",
-        "password": "test_password_123",
-    })
+    res = client.post(
+        "/auth/login",
+        json={
+            "username": "admin",
+            "password": "test_password_123",
+        },
+    )
     assert res.status_code == 200
     return res.json()["token"]
 
@@ -208,9 +215,7 @@ def test_ws_welcome_and_pong(client, admin_token):
 
 def test_ws_rejects_channel_from_other_tenant(client, admin_token):
     with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect(
-            f"/ws?token={admin_token}&channel=tenant:other-tenant"
-        ):
+        with client.websocket_connect(f"/ws?token={admin_token}&channel=tenant:other-tenant"):
             pass
     assert exc.value.code == 4003
 

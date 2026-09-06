@@ -16,13 +16,16 @@ router = APIRouter(prefix="/delivery", tags=["delivery-ops"])
 
 # ── Helper: get a DB session ───────────────────────────
 
+
 def _get_db():
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
+
     return DBSession(bind=engine)
 
 
 # ── Schemas ─────────────────────────────────────────────
+
 
 class AddressSchema(BaseModel):
     street: str = ""
@@ -34,6 +37,7 @@ class AddressSchema(BaseModel):
     zip_code: str = ""
     reference: str = ""
 
+
 class CreateDeliveryRequest(BaseModel):
     order_id: str
     customer_codigo: str
@@ -42,9 +46,11 @@ class CreateDeliveryRequest(BaseModel):
     scheduled_at: Optional[str] = None
     notes: str = ""
 
+
 class AssignRequest(BaseModel):
     driver_id: str
     vehicle_id: Optional[str] = None
+
 
 class StatusUpdateRequest(BaseModel):
     status: str
@@ -52,10 +58,12 @@ class StatusUpdateRequest(BaseModel):
     failure_notes: str = ""
     proof_type: Optional[str] = None
 
+
 class CreateRouteRequest(BaseModel):
     driver_id: str
     vehicle_id: Optional[str] = None
     stops: Optional[List[dict]] = None
+
 
 class CreateDriverRequest(BaseModel):
     name: str
@@ -63,11 +71,13 @@ class CreateDriverRequest(BaseModel):
     license_number: Optional[str] = None
     vehicle_id: Optional[str] = None
 
+
 class CreateVehicleRequest(BaseModel):
     plate: str
     model: str
     capacity: int = 0
     capacity_unit: str = "CYLINDERS"
+
 
 class LocationUpdateRequest(BaseModel):
     lat: float
@@ -76,6 +86,7 @@ class LocationUpdateRequest(BaseModel):
 
 
 # ── Delivery Endpoints (Database-backed) ────────────────
+
 
 @router.post("/deliveries")
 async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depends(require_admin)):
@@ -95,6 +106,7 @@ async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depen
                 raise HTTPException(400, "Delivery already exists for this order")
 
         import uuid as _uuid
+
         addr = req.address.model_dump() if req.address else {}
         record = repo.create_delivery(
             delivery_id=str(_uuid.uuid4()),
@@ -110,7 +122,9 @@ async def create_delivery(req: CreateDeliveryRequest, ctx: TenantContext = Depen
 
 
 @router.get("/deliveries")
-async def list_deliveries(status: Optional[str] = None, driver_id: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
+async def list_deliveries(
+    status: Optional[str] = None, driver_id: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)
+):
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
@@ -174,7 +188,9 @@ async def assign_delivery(delivery_id: str, req: AssignRequest, ctx: TenantConte
 
 
 @router.patch("/deliveries/{delivery_id}/status")
-async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def update_delivery_status(
+    delivery_id: str, req: StatusUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDeliveryPersistenceRepository
@@ -193,12 +209,14 @@ async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx
             result = del_repo.arrive_delivery(delivery_id, delivery.version)
         elif req.status == "DELIVERED":
             result = del_repo.complete_delivery(
-                delivery_id, delivery.version,
+                delivery_id,
+                delivery.version,
                 proof_type=req.proof_type,
             )
         elif req.status == "FAILED":
             result = del_repo.fail_delivery(
-                delivery_id, delivery.version,
+                delivery_id,
+                delivery.version,
                 reason=req.failure_reason or "OTHER",
                 notes=req.failure_notes,
             )
@@ -225,6 +243,7 @@ async def update_delivery_status(delivery_id: str, req: StatusUpdateRequest, ctx
 
 
 # ── Driver Endpoints (Database-backed) ─────────────────
+
 
 @router.post("/drivers")
 async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(require_admin)):
@@ -284,7 +303,9 @@ async def get_driver(driver_id: str, ctx: TenantContext = Depends(get_tenant_con
 
 
 @router.patch("/drivers/{driver_id}/location")
-async def update_driver_location(driver_id: str, req: LocationUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def update_driver_location(
+    driver_id: str, req: LocationUpdateRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
@@ -349,10 +370,12 @@ async def update_driver_status(driver_id: str, status: str, ctx: TenantContext =
 
 # ── Vehicle Endpoints (Database-backed) ───────────────
 
+
 def _get_vehicle_repo():
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.vehicle_repository import VehicleRepository
+
     db = DBSession(bind=engine)
     return VehicleRepository(db, tenant_id="default"), db
 
@@ -370,11 +393,14 @@ async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends
         return {
             "success": True,
             "vehicle": {
-                "id": str(vehicle.id), "plate": vehicle.plate,
-                "model": vehicle.model, "capacity_total": vehicle.capacity_total,
-                "status": vehicle.status, "tenant_id": vehicle.tenant_id,
+                "id": str(vehicle.id),
+                "plate": vehicle.plate,
+                "model": vehicle.model,
+                "capacity_total": vehicle.capacity_total,
+                "status": vehicle.status,
+                "tenant_id": vehicle.tenant_id,
                 "created_at": vehicle.created_at.isoformat() if vehicle.created_at else None,
-            }
+            },
         }
     finally:
         db.close()
@@ -388,8 +414,11 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
         return {
             "vehicles": [
                 {
-                    "id": str(v.id), "plate": v.plate, "model": v.model,
-                    "capacity_total": v.capacity_total, "status": v.status,
+                    "id": str(v.id),
+                    "plate": v.plate,
+                    "model": v.model,
+                    "capacity_total": v.capacity_total,
+                    "status": v.status,
                     "assigned_driver_id": v.assigned_driver_id,
                     "created_at": v.created_at.isoformat() if v.created_at else None,
                 }
@@ -402,6 +431,7 @@ async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depen
 
 
 # ── Route Endpoints (Database-backed) ──────────────────
+
 
 @router.post("/routes")
 async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(require_admin)):
@@ -428,16 +458,27 @@ async def create_route(req: CreateRouteRequest, ctx: TenantContext = Depends(req
                     address_snapshot=stop_data.get("address", ""),
                 )
         stops = repo.get_stops(route.id)
-        return {"success": True, "route": {
-            "id": route.id, "tenant_id": route.tenant_id,
-            "driver_id": route.driver_id, "vehicle_id": route.vehicle_id,
-            "status": route.status, "stops": [
-                {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
-                 "status": s.status, "customer_name": s.customer_name,
-                 "address_snapshot": s.address_snapshot}
-                for s in stops
-            ],
-        }}
+        return {
+            "success": True,
+            "route": {
+                "id": route.id,
+                "tenant_id": route.tenant_id,
+                "driver_id": route.driver_id,
+                "vehicle_id": route.vehicle_id,
+                "status": route.status,
+                "stops": [
+                    {
+                        "id": s.id,
+                        "delivery_id": s.delivery_id,
+                        "sequence": s.sequence,
+                        "status": s.status,
+                        "customer_name": s.customer_name,
+                        "address_snapshot": s.address_snapshot,
+                    }
+                    for s in stops
+                ],
+            },
+        }
     finally:
         db.close()
 
@@ -455,15 +496,25 @@ async def list_routes(status: Optional[str] = None, ctx: TenantContext = Depends
         result = []
         for r in routes:
             stops = repo.get_stops(r.id)
-            result.append({
-                "id": r.id, "tenant_id": r.tenant_id,
-                "driver_id": r.driver_id, "vehicle_id": r.vehicle_id,
-                "status": r.status, "stops": [
-                    {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
-                     "status": s.status, "customer_name": s.customer_name}
-                    for s in stops
-                ],
-            })
+            result.append(
+                {
+                    "id": r.id,
+                    "tenant_id": r.tenant_id,
+                    "driver_id": r.driver_id,
+                    "vehicle_id": r.vehicle_id,
+                    "status": r.status,
+                    "stops": [
+                        {
+                            "id": s.id,
+                            "delivery_id": s.delivery_id,
+                            "sequence": s.sequence,
+                            "status": s.status,
+                            "customer_name": s.customer_name,
+                        }
+                        for s in stops
+                    ],
+                }
+            )
         return {"routes": result, "count": len(result)}
     finally:
         db.close()
@@ -482,16 +533,26 @@ async def get_route(route_id: str, ctx: TenantContext = Depends(get_tenant_conte
         if not route or route.tenant_id != ctx.tenant_id:
             raise HTTPException(404, "Route not found")
         stops = repo.get_stops(route.id)
-        return {"route": {
-            "id": route.id, "tenant_id": route.tenant_id,
-            "driver_id": route.driver_id, "vehicle_id": route.vehicle_id,
-            "status": route.status, "stops": [
-                {"id": s.id, "delivery_id": s.delivery_id, "sequence": s.sequence,
-                 "status": s.status, "customer_name": s.customer_name,
-                 "address_snapshot": s.address_snapshot}
-                for s in stops
-            ],
-        }}
+        return {
+            "route": {
+                "id": route.id,
+                "tenant_id": route.tenant_id,
+                "driver_id": route.driver_id,
+                "vehicle_id": route.vehicle_id,
+                "status": route.status,
+                "stops": [
+                    {
+                        "id": s.id,
+                        "delivery_id": s.delivery_id,
+                        "sequence": s.sequence,
+                        "status": s.status,
+                        "customer_name": s.customer_name,
+                        "address_snapshot": s.address_snapshot,
+                    }
+                    for s in stops
+                ],
+            }
+        }
     finally:
         db.close()
 
@@ -597,6 +658,7 @@ async def fail_stop(route_id: str, stop_id: str, reason: str = "", ctx: TenantCo
 
 # ── Dispatch Dashboard (Database-backed) ───────────────
 
+
 @router.get("/dispatch/summary")
 async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
     from sqlalchemy.orm import Session as DBSession
@@ -621,12 +683,14 @@ async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
 
 # ── Driver Locations (Database-backed) ─────────────────
 
+
 @router.get("/locations")
 async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)):
     """Get all driver GPS locations for the admin drivers map."""
     from sqlalchemy.orm import Session as DBSession
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository
+
     db = DBSession(bind=engine)
     try:
         loc_repo = SQLAlchemyDriverLocationRepository(db)
@@ -637,6 +701,7 @@ async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)
 
 
 # ── Backward-compat helper for printer/reports ─────────
+
 
 def get_store():
     """Backward-compatible accessor — returns an empty dict.

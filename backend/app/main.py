@@ -10,7 +10,7 @@ Arquitetura: Domain-Driven Design (DDD)
 
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.infrastructure.database.init_db import init_db
@@ -44,9 +44,11 @@ from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.rate_limit import RateLimitMiddleware
+from app.core.metrics import MetricsMiddleware, render_metrics
 
 # Setup structured logging
 logger = setup_logging(settings.log_level)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,9 +60,7 @@ async def lifespan(app: FastAPI):
             start_cross_worker_listener,
         )
 
-        _ws_listener_task, _ = start_cross_worker_listener(
-            url=settings.realtime_redis_url
-        )
+        _ws_listener_task, _ = start_cross_worker_listener(url=settings.realtime_redis_url)
     yield
     if _ws_listener_task is not None:
         _ws_listener_task.cancel()
@@ -79,6 +79,9 @@ app = FastAPI(
 
 # Security headers (applied first = outermost)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Prometheus metrics (requisições + latência)
+app.add_middleware(MetricsMiddleware)
 
 # Request logging
 app.add_middleware(LoggingMiddleware)
@@ -101,6 +104,13 @@ init_db()
 logger.info(f"GasFlow backend starting — env={settings.environment}", extra={"service": "gasflow-backend"})
 
 
+@app.get("/metrics")
+def metrics_endpoint():
+    """Prometheus metrics (formato text/plain)."""
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)
+
+
 @app.get("/")
 def root():
     return {
@@ -112,8 +122,8 @@ def root():
             "api": "http://localhost:8000",
             "whatsapp": "http://localhost:3001",
             "docs": "http://localhost:8000/docs",
-            "whatsapp_connect": "http://localhost:3001/connect"
-        }
+            "whatsapp_connect": "http://localhost:3001/connect",
+        },
     }
 
 
@@ -146,9 +156,8 @@ app.include_router(whatsapp_automation_router)
 
 # WebSocket realtime
 from app.infrastructure.realtime.websocket import router as realtime_ws_router, setup_realtime_bridge
+
 app.include_router(realtime_ws_router)
 
 # Unified v1 API (same routers, /api/v1 prefix)
 app.include_router(api_v1_router)
-
-
