@@ -38,6 +38,33 @@ Resiliência do WhatsApp + integração com o app do entregador
 ### 🧪 Testes
 
 - WhatsApp: 38 → **53** (bridge de entrada + mídia).
+
+### 🔐 Hardening anti-ban, canal oficial e motor Baileys (incluído na tag rc.4)
+
+- **Anti-ban no serviço WhatsApp** (`src/anti-ban/`): caps por janela deslizante
+  (20/min, 200/h, diário com warmup 50→1000 em 7 dias), cooldown por
+  destinatário (60 min), quiet hours (22:00–07:00), pacing gaussiano (média 3s,
+  σ 1s) — tudo persistido em SQLite (`send_history`, `send_counters`) e
+  configurável por env (`WA_*`). Kill-switch `WA_BROADCAST_ENABLED`.
+- **Canal oficial Cloud API (backend)**: `cloud_api_adapter.py` (texto, mídia,
+  templates aprovados, E.164, erros mapeados, `list_message_templates`) +
+  webhook assinado HMAC (`/api/v1/whatsapp/cloud-api/webhook`) + factory
+  `WHATSAPP_PROVIDER=cloud_api`. Campanhas de massa devem migrar para cá.
+- **Motor Baileys (dual-mode)**: `WA_ENGINE=baileys|wwebjs` (e
+  `WA_ENGINE_PRIMARY/SECONDARY` por conta) — WebSocket puro, sem Chromium;
+  pareamento por QR ou pairing code (`WA_PAIRING_CODE_PHONE`); rollback = 1
+  env var. Dockerfile slim (`BUILD_WWEBJS=1` para build antigo).
+- **Observabilidade**: `/metrics` Prometheus no serviço WhatsApp
+  (`whatsapp_messages_sent_total`, `whatsapp_messages_failed_total`,
+  `whatsapp_account_connected`, reconexões) e no backend
+  (`gasflow_http_requests_total`, duração). Stack Prometheus + Grafana
+  (provisionado) + Alertmanager no compose prod (`monitoring/`), com receiver
+  `POST /api/v1/webhooks/alerts` no backend.
+- **Segurança/CI**: Dependabot (npm/pip/docker/actions, semanal), job Trivy
+  (CRITICAL+HIGH) no CI, pre-commit (ruff + ruff-format + higiene).
+- **Testes**: WhatsApp 53 → **99** (anti-ban + engine Baileys + métricas);
+  backend 1223 → **1244** (Cloud API, webhook, alerts); frontend 159 (devtools
+  React Query em DEV).
 - Backend: +4 testes HTTP de auth do `/whatsapp/incoming`.
 
 ## [1.0.0-rc.3] - 2026-09-04
