@@ -202,7 +202,19 @@ class TenantContext:
         return bool(self.user_id)
 
     def has_permission(self, permission: str) -> bool:
-        return permission in self.permissions or "admin.*" in self.permissions
+        if "admin.*" in self.permissions:
+            return True
+        if permission in self.permissions:
+            return True
+        # Wildcard support: "order.*" concede "order.read" (e subníveis);
+        # "admin.*" concede tudo. Antes havia só match exato + admin.*,
+        # o que tornava permissões curinga dos roles inoperantes.
+        prefix = permission.rsplit(".", 1)[0] if "." in permission else ""
+        while prefix:
+            if f"{prefix}.*" in self.permissions:
+                return True
+            prefix = prefix.rsplit(".", 1)[0] if "." in prefix else ""
+        return False
 
     def has_any_permission(self, *perms: str) -> bool:
         return any(self.has_permission(p) for p in perms)
@@ -251,6 +263,15 @@ DEFAULT_PERMISSIONS = [
     ("user", "read"),
     ("user", "create"),
     ("user", "update"),
+    # Settings (quadro de configurações)
+    ("settings", "read"),
+    ("settings", "write"),
+    # Coupons (promoções e cupons)
+    ("coupon", "read"),
+    ("coupon", "write"),
+    # Integrations (sites de revendas — agente de ancoragem)
+    ("integration", "read"),
+    ("integration", "write"),
     # Admin
     ("admin", "*"),
 ]
@@ -272,6 +293,9 @@ ROLE_PERMISSIONS = {
         "agent.*",
         "automation.*",
         "user.read",
+        "settings.read",
+        "coupon.*",
+        "integration.*",
     ],
     SystemRole.OPERATOR: [
         "customer.read",
@@ -287,6 +311,8 @@ ROLE_PERMISSIONS = {
         "whatsapp.takeover",
         "conversation.read",
         "conversation.takeover",
+        "coupon.read",
+        "settings.read",
     ],
     SystemRole.DRIVER: [
         "customer.read",

@@ -49,6 +49,18 @@ class Client:
     tipo: Optional[str] = None  # CONSUMER, RESTAURANT, COMPANY, SCHOOL, OTHER
     email: Optional[str] = None
 
+    # ── Integração WhatsApp (sync/enriquecimento/reativação) ──
+    # has_name: nome veio do contato do WhatsApp (não inventado)
+    has_name: Optional[bool] = None
+    # is_whatsapp: telefone tem WhatsApp ativo (padrão: sim, veio do WA)
+    is_whatsapp: Optional[bool] = None
+    # last_interaction_at: última mensagem recebida/enviada (reativação)
+    last_interaction_at: Optional[datetime] = None
+    # last_sync_at: última sincronização com o serviço WhatsApp / import
+    last_sync_at: Optional[datetime] = None
+    # marketing_status: espelho do consentimento (fonte de verdade: serviço WA)
+    marketing_status: Optional[str] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

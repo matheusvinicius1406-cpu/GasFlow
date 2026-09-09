@@ -823,13 +823,20 @@ def test_duplicate_phone_error_message():
 
 
 def test_crm_no_whatsapp_imports():
-    """CRM code should not import WhatsApp modules."""
+    """CRM code should not import WhatsApp modules.
+
+    Nota: a entidade Client possui campos de metadados de sync (is_whatsapp,
+    has_name, etc. — migração d1e5a7c3b2f8). O boundary proíbe DEPENDÊNCIA
+    (import) de módulos de WhatsApp, não a menção a esses campos.
+    """
     import os
+    import re
 
     crm_dirs = [
         "backend/app/domain/client",
         "backend/app/application/client",
     ]
+    import_re = re.compile(r"^\s*(from|import)\s+\S*whatsapp", re.IGNORECASE)
     for d in crm_dirs:
         full_path = os.path.join(os.path.dirname(__file__), "../..", d)
         if not os.path.exists(full_path):
@@ -837,10 +844,10 @@ def test_crm_no_whatsapp_imports():
         for f in os.listdir(full_path):
             if f.endswith(".py"):
                 with open(os.path.join(full_path, f)) as fh:
-                    content = fh.read()
-                assert (
-                    "whatsapp" not in content.lower() or "whatsapp" in f.lower()
-                ), f"CRM file {f} should not reference WhatsApp"
+                    for lineno, line in enumerate(fh, 1):
+                        assert not import_re.match(
+                            line
+                        ), f"CRM file {f}:{lineno} imports WhatsApp module: {line.strip()}"
 
 
 def test_frontend_no_secrets():

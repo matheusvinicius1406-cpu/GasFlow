@@ -83,8 +83,10 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
 
         # ── Inventory ───────────────────────────────────────
         inventory_items = db.query(InventoryModel).filter(InventoryModel.tenant_id == tid).all()
-        low_stock = [i for i in inventory_items if i.stock_status == "LOW_STOCK"]
-        out_of_stock = [i for i in inventory_items if i.stock_status == "OUT_OF_STOCK"]
+        # InventoryModel não tem coluna stock_status — deriva de quantity vs mínimo.
+        # (Bug latente: qualquer linha de estoque quebrava o /dashboard com AttributeError.)
+        low_stock = [i for i in inventory_items if i.quantity > 0 and i.quantity <= (i.minimum_quantity or 0)]
+        out_of_stock = [i for i in inventory_items if i.quantity <= 0]
 
         # ── Yesterday Comparison (Trends) ──────────────────
         yesterday = today - __import__("datetime").timedelta(days=1)

@@ -30,6 +30,13 @@ class ClientModel(Base):
     tipo = Column(String, nullable=True)  # CONSUMER, RESTAURANT, COMPANY, etc.
     email = Column(String, nullable=True)
 
+    # Integração WhatsApp (sync/enriquecimento/reativação)
+    has_name = Column(Boolean, nullable=True)  # nome veio do contato do WA
+    is_whatsapp = Column(Boolean, nullable=True, default=True)
+    last_interaction_at = Column(DateTime, nullable=True)
+    last_sync_at = Column(DateTime, nullable=True)
+    marketing_status = Column(String(20), nullable=True)  # OPTED_IN, OPTED_OUT, BLOCKED (espelho do serviço)
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -40,4 +47,6 @@ class ClientModel(Base):
         Index("ix_clients_tipo", "tipo"),
         Index("ix_clients_ativo", "ativo"),
         Index("ix_clients_email", "email"),
+        Index("ix_clients_last_interaction", "last_interaction_at"),
+        Index("ix_clients_marketing_status", "marketing_status"),
     )

@@ -68,6 +68,17 @@ from app.infrastructure.repositories.whatsapp_automation_model import (  # noqa:
     AutomationExecutionModel,
 )
 from app.infrastructure.repositories.segmentation_model import SegmentModel  # noqa: F401
+from app.infrastructure.repositories.settings_model import SystemSettingModel  # noqa: F401
+from app.infrastructure.repositories.coupon_model import (  # noqa: F401
+    CouponModel,
+    CouponRedemptionModel,
+)
+from app.infrastructure.repositories.lead_model import LeadModel  # noqa: F401
+from app.infrastructure.repositories.integration_model import (  # noqa: F401
+    IntegrationModel,
+    ImportedOrderModel,
+    SyncLogModel,
+)
 
 
 def init_db():

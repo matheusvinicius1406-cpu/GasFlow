@@ -67,6 +67,69 @@ Cliente → Pedido → Entrega → Histórico
 Mensagem → Bot → Banco de Dados → Pedido
 ```
 
+## Contatos, CRM e Reativação
+
+### Sincronização de contatos (WhatsApp → CRM)
+
+O serviço WhatsApp empurra os contatos 1:1 da conta para o CRM do backend:
+
+- **Automático no boot** do serviço (30s após subir) e **ao conectar** a
+  conta (QR escaneado/reconexão, ~8s após `ready` para os contatos carregarem);
+- **Manual** via `POST /api/whatsapp/crm-sync` (no serviço) ou
+  `POST /whatsapp/crm-sync` (proxy no backend);
+- O botão **"Sincronizar WhatsApp"** na tela de Contatos dispara os dois.
+
+O envio é em lotes (`BATCH_SYNC_SIZE`, default 100) para
+`POST /clients/contacts/sync-batch`, autenticado por `X-GasFlow-Key`
+(somente serviço; **sem** fallback JWT). O upsert é idempotente por telefone:
+contato novo cria cliente com placeholders (`Contato <tel>`, endereço
+"A definir"); existente apenas enriquece (nome só preenche placeholder,
+código do CRM nunca muda).
+
+### Import/Export .vcf
+
+- **Importar**: tela de Contatos → "Importar .vcf" (ou `POST
+  /clients/contacts/import-vcf`). Upsert por telefone, mesmo contrato acima.
+- **Exportar**: tela de Contatos → "Exportar .vcf" (ou `GET
+  /clients/contacts/export-vcf`) — gera arquivo com nome, telefone e endereço.
+
+### Enriquecimento por IA
+
+Contatos vindos do WhatsApp cujo nome embute endereço (ex.: "Maria - Rua
+Flores, 123, Centro") podem ser enriquecidos via `POST
+/clients/contacts/{codigo}/enrich`: o LLM extrai rua/número/complemento/bairro
+e grava no CRM. Falha do LLM = no-op seguro.
+
+### Reativação de inativos
+
+Mensagens automáticas para clientes OPTED_IN sem interação há N dias,
+solicitando confirmação do endereço:
+
+1. Ative em **Configurações › Sistema › WhatsApp**
+   (`whatsapp_reactivate_enabled`), ajuste `whatsapp_reactivate_days` e o
+   `whatsapp_reactivate_template` (variáveis `{{nome}} {{rua}} {{numero}}
+   {{complemento}} {{bairro}}`);
+2. Dispare em **Contatos › "Reativar inativos"** (ou `POST
+   /clients/contacts/reactivate`, com `dry_run=true` para pré-visualizar);
+3. As mensagens entram na fila de automações (PENDING, idempotente por
+   cliente/dia) e são enviadas pelo executor — ou em background com
+   `AUTOMATION_POLL_SECONDS>0` no backend, ou por cron externo chamando
+   `POST /whatsapp-automation/process-pending`.
+
+Clientes que respondem têm `last_interaction_at` atualizado (saem da lista
+de inativos) e a IA pode corrigir o endereço na própria conversa (tool
+`update_client_address`, com confirmação).
+
+### Variáveis de ambiente relevantes
+
+| Variável | Onde | Default | Função |
+|----------|------|---------|--------|
+| `BATCH_SYNC_SIZE` | serviço WhatsApp | `100` | Tamanho do lote do push ao CRM |
+| `GASFLOW_BACKEND_URL` | serviço WhatsApp | — | Base do backend (push de contatos e mensagens recebidas) |
+| `GASFLOW_SERVICE_KEY` | serviço WhatsApp | — | Enviada como `X-GasFlow-Key` (mesmo valor de `MARCOS_GAS_API_KEY`) |
+| `WHATSAPP_SERVICE_KEY` / `MARCOS_GAS_API_KEY` | backend | — | Chave esperada pelo backend nas chamadas do serviço |
+| `AUTOMATION_POLL_SECONDS` | backend | `0` (off) | Intervalo do executor de automações em background |
+
 ## Stack
 
 ### Backend (Python)
@@ -266,6 +329,34 @@ curl -X POST http://localhost:8000/whatsapp/campaigns/1/start
 - Proteção contra spam (rate limiting)
 
 ## Desenvolvimento
+
+## Configuração do Serviço WhatsApp (segurança)
+
+O serviço Node (`whatsapp/`) controla conexão, campanhas e envios. Variáveis
+relevantes no `whatsapp/.env` (ou nas settings do Desktop):
+
+| Variável | Default | Descrição |
+|----------|---------|-----------|
+| `MARCOS_GAS_API_KEY` | *(vazio)* | Chave service-to-service (backend ↔ serviço). **Obrigatória quando `ENVIRONMENT=production`** — o boot do serviço aborta (`process.exit(1)`) se ausente, para não expor QR/contatos na rede. |
+| `ENVIRONMENT` | `development` | Ativa o modo de segurança acima. |
+| `WA_UPLOADS_DIR` | `<cwd>/uploads` | Diretório allowlist para `mediaPath` no envio de mídia — caminhos fora dele são rejeitados (400). Nunca aponte para a raiz do projeto. |
+| `WA_MINUTE_CAP` / `WA_HOURLY_CAP` | 20 / 200 | Caps de volume do anti-ban (por conta). |
+| `WA_QUIET_HOURS_START` / `WA_QUIET_HOURS_END` | 22 / 7 | Janela noturna sem envios de campanha. |
+
+### Rate limiting e opt-out (comportamento atual)
+
+- `POST /api/whatsapp/accounts/:id/messages` (e o alias `/send` usado pelas
+  automações) passam pelo anti-ban: caps por minuto/hora + cooldown por
+  destinatário. Bloqueio retorna **429** com cabeçalho **`Retry-After`**.
+- Campanhas usam warmup progressivo (50→1000/dia) e quiet hours.
+- Automações (FASE 14) consultam o `marketing_status` do cliente no serviço:
+  `OPTED_OUT`/`SUPPRESSED`/`BLOCKED` não recebem mensagens, e erro na consulta
+  é **fail-closed** (não envia).
+
+### Logs estruturados
+
+O `setup_logging()` do backend é idempotente — múltiplos módulos podem chamá-lo
+sem duplicar linhas no stdout.
 
 ### Typecheck
 

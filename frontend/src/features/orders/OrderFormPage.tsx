@@ -26,6 +26,10 @@ export function OrderFormPage() {
   const [discount, setDiscount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState('')
   const [notes, setNotes] = useState('')
+  const [couponCode, setCouponCode] = useState('')
+  const [couponChecking, setCouponChecking] = useState(false)
+  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [couponDiscount, setCouponDiscount] = useState(0)
 
   const navigate = useNavigate()
   const { data: customers, isLoading: loadingCustomers } = useCustomersLegacy()
@@ -51,7 +55,36 @@ export function OrderFormPage() {
     return acc + price * item.quantity
   }, 0)
 
-  const total = subtotal + deliveryFee - discount
+  const total = subtotal + deliveryFee - discount - couponDiscount
+
+  const applyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase()
+    if (!code) return
+    setCouponChecking(true)
+    setCouponMsg(null)
+    try {
+      const { data } = await apiClient.get(`/coupons/validate/${code}`, {
+        params: {
+          order_total: subtotal,
+          delivery_fee: deliveryFee,
+          client_codigo: clientCodigo || undefined,
+          products: items.map((i) => i.product_codigo).filter(Boolean).join(','),
+        },
+      })
+      if (data.valid) {
+        setCouponDiscount(data.discount_amount ?? 0)
+        setCouponMsg({ ok: true, text: `Cupom aplicado: -R$ ${(data.discount_amount ?? 0).toFixed(2)}` })
+      } else {
+        setCouponDiscount(0)
+        setCouponMsg({ ok: false, text: data.message ?? 'Cupom inválido' })
+      }
+    } catch {
+      setCouponDiscount(0)
+      setCouponMsg({ ok: false, text: 'Cupom não encontrado' })
+    } finally {
+      setCouponChecking(false)
+    }
+  }
 
   const addItem = () => {
     setItems([...items, { product_codigo: '', quantity: 1 }])
@@ -97,6 +130,17 @@ export function OrderFormPage() {
       }
 
       const created = await createOrder.mutateAsync(orderData)
+      // Aplica o cupom ao pedido real (grava o resgate e recalcula totals)
+      if (couponDiscount > 0 && couponCode.trim()) {
+        try {
+          await apiClient.post('/orders/apply-coupon', {
+            order_codigo: created.codigo,
+            code: couponCode.trim().toUpperCase(),
+          })
+        } catch {
+          // pedido já criado; segue para o detalhe
+        }
+      }
       navigate(`/orders/${created.codigo}`)
     } catch {
       // Error handled by mutation
@@ -269,6 +313,40 @@ export function OrderFormPage() {
                     <span className="text-sm text-muted-foreground">Subtotal</span>
                     <span className="text-sm text-foreground">{formatCurrency(subtotal)}</span>
                   </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-muted-foreground">Cupom</span>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="CÓDIGO"
+                        className="w-32 h-8 text-xs uppercase"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!couponCode.trim() || couponChecking || subtotal <= 0}
+                        onClick={applyCoupon}
+                      >
+                        {couponChecking ? '…' : 'Aplicar'}
+                      </Button>
+                    </div>
+                  </div>
+                  {couponMsg && (
+                    <p
+                      className={`text-xs ${couponMsg.ok ? 'text-green-600' : 'text-red-600'}`}
+                      role="status"
+                    >
+                      {couponMsg.text}
+                    </p>
+                  )}
+                  {couponDiscount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Desconto do cupom</span>
+                      <span className="text-sm text-green-600">-{formatCurrency(couponDiscount)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Entrega</span>
                     <Input

@@ -440,3 +440,48 @@ class AIToolsFactory:
             return ToolResult(success=False, error=str(e))
         finally:
             self._close_session(session)
+
+    def update_client_address(self, args: Dict[str, Any]) -> ToolResult:
+        """Atualiza o endereço do cliente (requer confirmação).
+
+        Usado quando o cliente informa correção de endereço na conversa
+        (ex.: resposta à reativação). Chave: phone (número do remetente)
+        ou customer_codigo.
+        """
+        session = self._get_session()
+        try:
+            from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+
+            repo = SQLAlchemyClientRepository(session)
+            client = None
+            if args.get("phone"):
+                client = repo.buscar_por_telefone(args["phone"])
+            elif args.get("customer_codigo"):
+                client = repo.buscar_por_codigo(args["customer_codigo"])
+            if not client:
+                return ToolResult(success=False, error="Cliente não encontrado")
+
+            rua = (args.get("rua") or "").strip()
+            numero = (args.get("numero") or "").strip()
+            bairro = (args.get("bairro") or "").strip()
+            if not rua or not numero or not bairro:
+                return ToolResult(success=False, error="rua, numero e bairro são obrigatórios")
+
+            client.atualizar_endereco(
+                rua=rua,
+                numero=numero,
+                bairro=bairro,
+                complemento=(args.get("complemento") or None),
+                referencia=(args.get("referencia") or None),
+            )
+            repo.atualizar(client)
+            return ToolResult(
+                success=True,
+                data={"codigo": client.codigo, "endereco": client.endereco_completo},
+                display_message=f"Endereço atualizado: {client.endereco_completo}",
+            )
+        except Exception as e:
+            session.rollback()
+            return ToolResult(success=False, error=str(e))
+        finally:
+            self._close_session(session)

@@ -36,6 +36,11 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
             ativo=model.ativo,
             tipo=model.tipo,
             email=model.email,
+            has_name=model.has_name,
+            is_whatsapp=model.is_whatsapp,
+            last_interaction_at=model.last_interaction_at,
+            last_sync_at=model.last_sync_at,
+            marketing_status=model.marketing_status,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -58,6 +63,11 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
                 model.ativo = entity.ativo
                 model.tipo = entity.tipo
                 model.email = entity.email
+                model.has_name = entity.has_name
+                model.is_whatsapp = entity.is_whatsapp
+                model.last_interaction_at = entity.last_interaction_at
+                model.last_sync_at = entity.last_sync_at
+                model.marketing_status = entity.marketing_status
                 return model
 
         return ClientModel(
@@ -73,6 +83,11 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
             bairro=entity.bairro,
             observacoes=entity.observacoes,
             ativo=entity.ativo,
+            has_name=entity.has_name,
+            is_whatsapp=entity.is_whatsapp,
+            last_interaction_at=entity.last_interaction_at,
+            last_sync_at=entity.last_sync_at,
+            marketing_status=entity.marketing_status,
             tipo=entity.tipo,
             email=entity.email,
         )

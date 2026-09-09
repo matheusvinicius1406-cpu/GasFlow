@@ -29,6 +29,9 @@ jobs:
           - name: whatsapp
             context: ./whatsapp
             dockerfile: Dockerfile
+          - name: agent
+            context: ./agent
+            dockerfile: Dockerfile
     steps:
       - uses: actions/checkout@v4
 

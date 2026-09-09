@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, User, Shield, RefreshCw, CreditCard } from 'lucide-react'
+import { Settings, User, Shield, RefreshCw, CreditCard, SlidersHorizontal, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -8,6 +8,8 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { apiClient } from '@/lib/api/client'
 import { useAuth } from '@/features/auth'
 import { PaymentSettingsPage } from './PaymentSettingsPage'
+import { SystemSettingsPanel } from './SystemSettingsPanel'
+import { PermissionsPanel } from './PermissionsPanel'
 
 interface UserProfile {
   id: string
@@ -25,7 +27,9 @@ export function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'payments'>('profile')
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'payments' | 'system' | 'permissions'
+  >('profile')
 
   const fetchProfile = useCallback(async () => {
     setLoading(true)
@@ -79,10 +83,20 @@ export function SettingsPage() {
         <Button variant={activeTab === 'payments' ? 'default' : 'ghost'} onClick={() => setActiveTab('payments')}>
           <CreditCard className="h-4 w-4 mr-1" /> Pagamentos
         </Button>
+        <Button variant={activeTab === 'system' ? 'default' : 'ghost'} onClick={() => setActiveTab('system')}>
+          <SlidersHorizontal className="h-4 w-4 mr-1" /> Sistema
+        </Button>
+        <Button variant={activeTab === 'permissions' ? 'default' : 'ghost'} onClick={() => setActiveTab('permissions')}>
+          <Users className="h-4 w-4 mr-1" /> Usuários e Permissões
+        </Button>
       </div>
 
       {activeTab === 'payments' ? (
         <PaymentSettingsPage />
+      ) : activeTab === 'system' ? (
+        <SystemSettingsPanel />
+      ) : activeTab === 'permissions' ? (
+        <PermissionsPanel />
       ) : (
         <>
           {/* User Profile */}

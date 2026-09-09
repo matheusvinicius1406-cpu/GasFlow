@@ -53,6 +53,7 @@ class OrderSource(str, Enum):
     COUNTER = "COUNTER"
     MANUAL = "MANUAL"
     API = "API"
+    INTEGRATION = "INTEGRATION"  # importado de site de revenda (agente)
 
 
 # Transições válidas de status

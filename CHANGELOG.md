@@ -2,6 +2,49 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
+## [Unreleased]
+
+### 🚀 Funcionalidades
+
+- **CRM ↔ WhatsApp (contatos)**: push automático de contatos do WhatsApp
+  para o CRM (`crm-sync.ts`) — no boot, ao conectar a conta e manualmente.
+  Upsert idempotente por telefone em `POST /clients/contacts/sync-batch`
+  (lotes de `BATCH_SYNC_SIZE`, tolerante a falhas de rede).
+- **Import/export VCF**: `POST /clients/contacts/import-vcf` e
+  `GET /clients/contacts/export-vcf` (parser vCard próprio, sem dependência).
+- **Enriquecimento por IA**: `POST /clients/contacts/{codigo}/enrich` extrai
+  endereço embutido no nome do contato (LLM, no-op seguro em falha).
+- **Reativação de inativos**: `POST /clients/contacts/reactivate` (com
+  `dry_run`) cria executions para clientes OPTED_IN inativos há N dias
+  (`whatsapp_reactivate_days`/`_template`/`_enabled` nas Configurações ›
+  Sistema). Idempotente por cliente/dia; envio pelo executor de automações.
+- **Executor em background (opt-in)**: `AUTOMATION_POLL_SECONDS>0` processa
+  executions PENDING automaticamente; default desligado (cron externo
+  chamando `POST /whatsapp-automation/process-pending` continua válido).
+- **Tool `update_client_address`**: a IA pode atualizar o endereço do
+  cliente na conversa (requer confirmação, permissão OPERATOR).
+- **Última interação no CRM**: mensagens recebidas atualizam
+  `last_interaction_at` (base da elegibilidade de reativação).
+- **Configurações do sistema no frontend**: painéis de Sistema (quadro de
+  configurações por categoria) e Usuários/Permissões (matriz RBAC).
+- **Página de Promoções/Cupons** conectada à API de cupons.
+
+### 🐛 Correções
+
+- `sync-batch` agora é **service-key only** (`require_whatsapp_service`,
+  `X-GasFlow-Key`): sem fallback JWT — token de usuário vazado não consegue
+  sobrescrever o CRM em lote; fail-closed sem chave configurada.
+- Contexto de serviço usava `tenant_id="1"` (contatos invisíveis no CRM);
+  alinhado ao tenant do admin (`"default"`).
+- `NameError` de `Tuple` em `contacts/service.py` (derrubava o boot).
+- Reativação usava `was_recently_contacted(days=)` (assinatura errada) e
+  duplicava a fila em re-execução no mesmo dia (PENDING não contava como
+  contato) — substituído por checagem de REACTIVATION do dia.
+- Botão "Sincronizar WhatsApp" não empurrava contatos ao CRM (chamava
+  `sync-batch` vazio com JWT); agora dispara o push real via serviço.
+- Boundary test de CRM tolera campos de sync na entidade Client (checa
+  `import` real, não menção textual).
+
 ## [1.0.0-rc.4] - 2026-09-05
 
 Resiliência do WhatsApp + integração com o app do entregador

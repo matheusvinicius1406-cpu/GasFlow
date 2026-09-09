@@ -24,6 +24,8 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import threading
 
+from app.core.logging import setup_logging
+
 from app.domain.whatsapp.message import WhatsAppMessage, WhatsAppOutbound, MessageType
 from app.domain.whatsapp.conversation import (
     Conversation,
@@ -33,6 +35,8 @@ from app.domain.whatsapp.conversation import (
 )
 from app.domain.whatsapp.repository import ConversationRepository, ConversationMessageRepository
 from app.application.ai.engine import AIEngine
+
+logger = setup_logging("INFO")
 
 
 # ── Anti-loop ────────────────────────────────────────────
@@ -151,6 +155,10 @@ class MessageGateway:
 
         self._inc_metric("messages_received")
 
+        # 4.1. CRM: última interação do cliente (reativação usa este campo).
+        # Tolerante a falhas: problema de CRM nunca bloqueia a conversa.
+        self._touch_last_interaction(message.sender_phone)
+
         # 5. Rate limiting
         if self._is_rate_limited(message.sender_phone):
             self._inc_metric("rate_limited")
@@ -263,6 +271,23 @@ class MessageGateway:
                 return True
             bucket.append(now)
             return False
+
+    def _touch_last_interaction(self, phone: str) -> None:
+        """Atualiza last_interaction_at do cliente no CRM (best-effort).
+
+        Base da elegibilidade de reativação: sem isso, clientes que conversam
+        pelo WhatsApp continuariam 'inativos' e receberiam a mensagem de
+        reativação sem necessidade. Falha é silenciosa (log) — pipeline segue.
+        """
+        if not self.customer_repo:
+            return
+        try:
+            client = self.customer_repo.buscar_por_telefone(phone)
+            if client:
+                client.last_interaction_at = datetime.utcnow()
+                self.customer_repo.atualizar(client)
+        except Exception as exc:
+            logger.warning(f"[gateway] touch_last_interaction falhou para {phone}: {exc}")
 
     def _get_or_create_conversation(self, message: WhatsAppMessage) -> Conversation:
         """Find existing conversation or create new one."""

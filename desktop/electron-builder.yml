@@ -1,0 +1,41 @@
+appId: com.gasflow.desktop
+productName: GasFlow Desktop
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+# Módulos embutidos como recursos — rodam como subprocessos em produção:
+#   <resources>/agent/dist/index.js        (AgentBridge, ELECTRON_RUN_AS_NODE)
+#   <resources>/whatsapp/dist/server.js    (WhatsAppBridge, ELECTRON_RUN_AS_NODE)
+#   <resources>/frontend/                  (React original, servido pelo FastAPI)
+#   <resources>/backend/app/               (código Python — roda com python local)
+extraResources:
+  - from: ../backend
+    to: backend
+    filter:
+      - app/**/*
+      - requirements.txt
+  - from: ../agent
+    to: agent
+    filter:
+      - dist/**/*
+      - node_modules/**/*
+      - package.json
+  - from: ../whatsapp
+    to: whatsapp
+    filter:
+      - dist/**/*
+      - node_modules/**/*
+      - package.json
+  - from: ../frontend/dist
+    to: frontend
+    filter:
+      - "**/*"
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true

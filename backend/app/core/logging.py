@@ -43,9 +43,25 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_entry, default=str)
 
 
+_LOGGING_CONFIGURED = False
+
+
 def setup_logging(level: str = "INFO"):
-    """Configure structured logging."""
+    """Configure structured logging (idempotente).
+
+    É chamada em múltiplos módulos (main, executor, whatsapp_bridge) e no
+    import deste arquivo; sem o guard, cada chamada re-adiciona um handler
+    ao mesmo logger e toda linha aparece N vezes no stdout.
+    """
+    global _LOGGING_CONFIGURED
     root_logger = logging.getLogger("gasflow")
+    if _LOGGING_CONFIGURED:
+        # Apenas reajusta o nível se a chamada pedir algo mais verboso.
+        level_no = getattr(logging, level.upper(), logging.INFO)
+        if level_no < root_logger.getEffectiveLevel():
+            root_logger.setLevel(level_no)
+        return root_logger
+
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 
     # Console handler with structured format
@@ -57,6 +73,7 @@ def setup_logging(level: str = "INFO"):
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
+    _LOGGING_CONFIGURED = True
     return root_logger
 
 

@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from 'express';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
 import QRCode from 'qrcode';
 import { requireAuth } from './auth';
 import { providerManager } from './provider/provider-manager';
@@ -42,6 +44,7 @@ import {
 import { runDedupe } from './dedupe';
 import { seedListsFromRules } from './list-seed';
 import { runSync } from './sync';
+import { checkRate, recordSend } from './anti-ban';
 
 export const router = Router();
 
@@ -50,13 +53,15 @@ export const router = Router();
 // ═══════════════════════════════════════════════════════════
 
 /** List all WhatsApp accounts with status */
-router.get('/whatsapp/accounts', (_req: Request, res: Response) => {
+// GETs de dados protegidos: sem auth, QR/contatos/campanhas ficam expostos
+// na rede (QR escaneado por terceiro = sequestro da sessão do bot).
+router.get('/whatsapp/accounts', requireAuth, (_req: Request, res: Response) => {
   const accounts = providerManager.getAllAccounts();
   res.json({ accounts, total: accounts.length });
 });
 
 /** Get single account status */
-router.get('/whatsapp/accounts/:id', (req: Request, res: Response) => {
+router.get('/whatsapp/accounts/:id', requireAuth, (req: Request, res: Response) => {
   const account = providerManager.getAccount(req.params.id);
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });
@@ -97,7 +102,7 @@ router.post('/whatsapp/accounts/:id/logout', requireAuth, async (req: Request, r
 });
 
 /** Get QR code for a specific account */
-router.get('/whatsapp/accounts/:id/qr', async (req: Request, res: Response) => {
+router.get('/whatsapp/accounts/:id/qr', requireAuth, async (req: Request, res: Response) => {
   const account = providerManager.getAccount(req.params.id);
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });
@@ -216,7 +221,20 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
     return;
   }
 
-  // 6. Insert record (PENDING)
+  // 6. Anti-ban: conversacional também respeita caps/cooldown (antes só o
+  // broadcast passava pelos gates — automações e API podiam rajadas).
+  const rate = checkRate(accountId, normalizedPhone);
+  if (!rate.allowed) {
+    const retryAfterSec = rate.retryAtMs ? Math.max(1, Math.ceil((rate.retryAtMs - Date.now()) / 1000)) : 60;
+    res.set('Retry-After', String(retryAfterSec));
+    res.status(429).json({
+      error: 'RATE_LIMITED',
+      detail: `Envio bloqueado pelo anti-ban (${rate.reason}). Tente em ${retryAfterSec}s.`,
+    });
+    return;
+  }
+
+  // 7. Insert record (PENDING)
   const record = insertSentMessage({
     idempotencyKey,
     accountId,
@@ -224,12 +242,13 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
     messageText: message.trim(),
   });
 
-  // 7. Send via provider
+  // 8. Send via provider
   try {
     const result = await account.sendMessage(normalizedPhone, { text: message.trim() });
 
     if (result.success) {
       markSentMessageSent(record.id, result.messageId || 'unknown');
+      recordSend(accountId, normalizedPhone, result.messageId);
       console.log(`[message] Enviado para ${normalizedPhone} via ${accountId} (key: ${idempotencyKey})`);
       res.json({
         success: true,
@@ -276,6 +295,25 @@ router.get('/whatsapp/accounts/:id/messages', requireAuth, (req: Request, res: R
 const MAX_MEDIA_BASE64_LENGTH = 25 * 1024 * 1024; // 25MB em base64 (~18MB binário)
 
 /**
+ * Diretório allowlist para mediaPath — segurança: sem isso a rota leria
+ * ARQUIVO ARBITRÁRIO do servidor (ex.: ../../.env) e o exfiltraria como
+ * anexo de WhatsApp. Config via WA_UPLOADS_DIR; default <cwd>/uploads.
+ */
+const ALLOWED_MEDIA_DIR = path.resolve(
+  process.env.WA_UPLOADS_DIR || path.join(process.cwd(), 'uploads'),
+);
+
+function resolveSafeMediaPath(raw: string): string | null {
+  const resolved = path.resolve(String(raw));
+  // Prefixo + separador evita bypass tipo /uploads-evil (fora de /uploads).
+  if (resolved !== ALLOWED_MEDIA_DIR && !resolved.startsWith(ALLOWED_MEDIA_DIR + path.sep)) {
+    return null;
+  }
+  if (!existsSync(resolved)) return null;
+  return resolved;
+}
+
+/**
  * POST /api/whatsapp/accounts/:id/media
  *
  * Envia mídia (imagem, áudio, documento) via uma conta específica.
@@ -308,9 +346,17 @@ router.post('/whatsapp/accounts/:id/media', requireAuth, async (req: Request, re
   let mediaData = data;
   let mediaMime = mimetype;
   if (mediaPath) {
+    const safePath = resolveSafeMediaPath(String(mediaPath));
+    if (!safePath) {
+      res.status(400).json({
+        error: 'MEDIA_PATH_INVALID',
+        detail: `mediaPath deve estar dentro de ${ALLOWED_MEDIA_DIR} e existir.`,
+      });
+      return;
+    }
     try {
       const { readFileSync } = await import('node:fs');
-      const buffer = readFileSync(String(mediaPath));
+      const buffer = readFileSync(safePath);
       mediaData = buffer.toString('base64');
       mediaMime = mediaMime || 'application/octet-stream';
     } catch {
@@ -371,12 +417,12 @@ router.post('/whatsapp/accounts/:id/media', requireAuth, async (req: Request, re
 });
 // ── Legacy endpoints (backward compat) ──────────────────
 
-router.get('/whatsapp/status', (_req: Request, res: Response) => {
+router.get('/whatsapp/status', requireAuth, (_req: Request, res: Response) => {
   const accounts = providerManager.getAllAccounts();
   res.json({ accounts, primary: accounts[0] });
 });
 
-router.get('/whatsapp/qr', async (_req: Request, res: Response) => {
+router.get('/whatsapp/qr', requireAuth, async (_req: Request, res: Response) => {
   const account = providerManager.getAccount('primary');
   if (!account) {
     res.status(404).json({ error: 'Conta principal não encontrada.' });
@@ -425,7 +471,14 @@ router.post('/contacts/sync', requireAuth, async (_req: Request, res: Response) 
     const result = await runSync();
     cleanOrphanMemberships();
     const dedupe = runDedupe();
-    res.json({ ...result, dedupe });
+    // Push dos contatos ao CRM do backend (fire-and-forget, tolerante a falhas).
+    // Import tardio evita dependência circular (routes → provider → crm-sync).
+    void import('./crm-sync')
+      .then(({ syncAllToCrm }) => syncAllToCrm())
+      .catch(() => {
+        /* tolerante: sync local já foi feito */
+      });
+    res.json({ ...result, dedupe, crmSync: 'triggered' });
   } catch (err) {
     res.status(409).json({ error: err instanceof Error ? err.message : 'Falha na sincronização.' });
   }
@@ -435,7 +488,7 @@ router.post('/contacts/dedupe', requireAuth, (_req: Request, res: Response) => {
   res.json({ dedupe: runDedupe() });
 });
 
-router.get('/contacts', (req: Request, res: Response) => {
+router.get('/contacts', requireAuth, (req: Request, res: Response) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 500);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
   const parseFlag = (v: unknown): number | undefined => (v === 'true' ? 1 : v === 'false' ? 0 : undefined);
@@ -453,7 +506,7 @@ router.get('/contacts/:id', (req: Request, res: Response) => {
 // Customers
 // ═══════════════════════════════════════════════════════════
 
-router.get('/customers', (req: Request, res: Response) => {
+router.get('/customers', requireAuth, (req: Request, res: Response) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 500);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
   const customerStatus = typeof req.query.customerStatus === 'string' ? req.query.customerStatus : undefined;
@@ -464,7 +517,9 @@ router.get('/customers', (req: Request, res: Response) => {
 router.get('/customers/:id', (req: Request, res: Response) => {
   const customer = getCustomerWithContact(Number(req.params.id));
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
-  res.json(customer);
+  // Preferência de marketing incluída — backend (automações) consome p/ LGPD.
+  const pref = getPreference(customer.id);
+  res.json({ ...customer, marketing_status: pref?.marketing_status ?? 'UNKNOWN' });
 });
 
 router.post('/customers/:contactId/promote', requireAuth, (req: Request, res: Response) => {
@@ -493,7 +548,13 @@ router.post('/customers/sync', requireAuth, async (_req: Request, res: Response)
     const result = await runSync();
     cleanOrphanMemberships();
     const dedupe = runDedupe();
-    res.json({ ...result, dedupe });
+    // Mesma semântica de /contacts/sync: empurra contatos ao CRM.
+    void import('./crm-sync')
+      .then(({ syncAllToCrm }) => syncAllToCrm())
+      .catch(() => {
+        /* tolerante */
+      });
+    res.json({ ...result, dedupe, crmSync: 'triggered' });
   } catch (err) {
     res.status(409).json({ error: err instanceof Error ? err.message : 'Falha na sincronização.' });
   }
@@ -529,7 +590,7 @@ router.post('/lists/seed', requireAuth, (_req: Request, res: Response) => {
   res.json({ results: seedListsFromRules() });
 });
 
-router.get('/lists', (_req: Request, res: Response) => {
+router.get('/lists', requireAuth, (_req: Request, res: Response) => {
   const lists = getLists().map((list) => ({
     ...list,
     contactCount: countListContacts(list.id),
@@ -626,7 +687,12 @@ router.post('/lists/:id/sync', requireAuth, async (req: Request, res: Response) 
   try {
     const sync = await runSync();
     cleanOrphanMemberships();
-    res.json({ sync, listId: id, contactCount: countListContacts(id), customerCount: countListCustomers(id) });
+    void import('./crm-sync')
+      .then(({ syncAllToCrm }) => syncAllToCrm())
+      .catch(() => {
+        /* tolerante */
+      });
+    res.json({ sync, listId: id, contactCount: countListContacts(id), customerCount: countListCustomers(id), crmSync: 'triggered' });
   } catch (err) {
     res.status(409).json({ error: err instanceof Error ? err.message : 'Falha na sincronização.' });
   }
@@ -636,7 +702,7 @@ router.post('/lists/:id/sync', requireAuth, async (req: Request, res: Response) 
 // Campaigns
 // ═══════════════════════════════════════════════════════════
 
-router.get('/campaigns', (_req: Request, res: Response) => {
+router.get('/campaigns', requireAuth, (_req: Request, res: Response) => {
   res.json({ total: listCampaigns().length, campaigns: listCampaigns() });
 });
 

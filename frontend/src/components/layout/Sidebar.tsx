@@ -14,6 +14,7 @@ import {
   Settings,
   Filter,
   Repeat,
+  Ticket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/brand/BrandLogo'
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { label: 'Estoque', href: '/inventory', icon: Warehouse },
   { label: 'Financeiro', href: '/finance', icon: DollarSign },
   { label: 'Relatórios', href: '/reports', icon: BarChart3 },
+  { label: 'Cupons', href: '/promotions', icon: Ticket },
   { label: 'Inteligência', href: '/intelligence', icon: Brain },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ]

@@ -14,6 +14,19 @@ No LLM dependency — deterministic template rendering.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
+import httpx  # noqa: F401  (usado em _get_marketing_status)
+from app.core.config import settings
+from app.core.logging import setup_logging
+
+logger = setup_logging("INFO")
+
+
+def _wa_service_headers() -> Dict[str, str]:
+    """Headers service-to-service para o serviço WhatsApp (mesma key)."""
+    key = settings.whatsapp_service_key
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
 from app.domain.whatsapp_automation.entity import (
     AutomationRule,
     AutomationStatus,
@@ -41,6 +54,10 @@ TEMPLATE_VARIABLES = {
 class WhatsAppAutomationService:
     """Service for WhatsApp automation rules and executions."""
 
+    # TTL do cache de preferências (segundos) — evita lookup por cliente em
+    # cada execução; opt-out novo vale em até 5 min.
+    PREF_CACHE_TTL_SECONDS = 300
+
     def __init__(
         self,
         automation_repo: SQLAlchemyAutomationRepository,
@@ -50,6 +67,7 @@ class WhatsAppAutomationService:
         self.automation_repo = automation_repo
         self.client_repo = client_repo
         self.order_repo = order_repo
+        self._pref_cache: Dict[str, Dict[str, Any]] = {}
 
     # ── Rule Management ────────────────────────────────
 
@@ -293,6 +311,17 @@ class WhatsAppAutomationService:
 
     def _check_policies(self, rule: AutomationRule, customer_codigo: str) -> bool:
         """Check if sending is allowed based on policies."""
+        # ── Opt-out / preferências de marketing (LGPD) ──
+        # Consulta o marketing_status no serviço WhatsApp (fonte da verdade
+        # para opt-in/opt-out). Falha aberta a bloqueio: sem resposta ou sem
+        # status conhecido de opt-in, NÃO envia — antes assumia opt-in.
+        status = self._get_marketing_status(customer_codigo)
+        if status is not None and status not in ("UNKNOWN", "OPTED_IN"):
+            return False
+        if status is None:
+            # Serviço indisponível/erro → fail-closed (não enviar).
+            return False
+
         # Check cooldown
         if self.automation_repo.was_recently_contacted(customer_codigo, rule.cooldown_days):
             return False
@@ -302,10 +331,48 @@ class WhatsAppAutomationService:
         if recent_count >= rule.max_messages_per_day:
             return False
 
-        # Check customer opt-out (would be in a real system)
-        # For now, assume all customers are opted-in
-
         return True
+
+    def _get_marketing_status(self, customer_codigo: str) -> Optional[str]:
+        """Busca o marketing_status do cliente no serviço WhatsApp.
+
+        O serviço indexa clientes por telefone/jid; o CRM tem o telefone do
+        cliente. Retorna None em qualquer falha (fail-closed nas políticas).
+        Cache em memória por processo (TTL simples) evita bater no serviço
+        para cada cliente a cada execução de regra.
+        """
+        import time
+
+        client = self.client_repo.buscar_por_codigo(customer_codigo)
+        if not client or not client.telefone:
+            return None
+
+        phone = client.telefone.lstrip("+")
+        cached = self._pref_cache.get(phone)
+        if cached and time.time() - cached["ts"] < self.PREF_CACHE_TTL_SECONDS:
+            return cached["status"]
+
+        base = str(settings.whatsapp_service_url).rstrip("/")
+        status: Optional[str] = None
+        try:
+            with httpx.Client(timeout=5) as http:
+                resp = http.get(f"{base}/api/customers", params={"limit": 500}, headers=_wa_service_headers())
+                resp.raise_for_status()
+                for row in resp.json().get("customers", []):
+                    contact = row.get("contact") or {}
+                    wa_phone = (contact.get("phone") or "").lstrip("+") or (contact.get("jid") or "").split("@")[0]
+                    # Match por sufixo: 9 dígitos locais batem com 55+DDD+número.
+                    if wa_phone and (phone.endswith(wa_phone) or wa_phone.endswith(phone)):
+                        detail = http.get(f"{base}/api/customers/{row['id']}", headers=_wa_service_headers())
+                        detail.raise_for_status()
+                        status = (detail.json() or {}).get("marketing_status") or "UNKNOWN"
+                        break
+        except Exception:
+            logger.warning(f"[automation] marketing_status lookup falhou para {customer_codigo} — fail-closed")
+            return None
+
+        self._pref_cache[phone] = {"status": status, "ts": time.time()}
+        return status
 
     def _get_customer_data(self, customer_codigo: str) -> Optional[Dict[str, Any]]:
         """Get customer data for template rendering."""

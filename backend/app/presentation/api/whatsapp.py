@@ -201,6 +201,17 @@ async def sync_contacts():
     return await _proxy_post("/contacts/sync")
 
 
+@router.post("/crm-sync")
+async def trigger_crm_sync(account_id: str = "primary"):
+    """Dispara o push de contatos (Node → POST /clients/contacts/sync-batch).
+
+    O serviço WhatsApp coleta os contatos 1:1 da conta e envia ao CRM em
+    lotes com X-GasFlow-Key. Útil após conectar/parear para popular o CRM
+    sem esperar o push automático do boot.
+    """
+    return await _proxy_post("/whatsapp/crm-sync", {"accountId": account_id})
+
+
 # ── Customers ─────────────────────────────────────────────
 
 

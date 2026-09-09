@@ -1,0 +1,23 @@
+{
+  "name": "gasflow-agent",
+  "version": "1.0.0-rc.4",
+  "private": true,
+  "description": "GasFlow Integration Agent — extrai pedidos do site da própria revenda (autorizado) e envia ao GasFlow via API.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "once": "tsx src/index.ts --once",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "node-html-parser": "^6.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

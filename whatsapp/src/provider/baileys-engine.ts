@@ -73,7 +73,7 @@ export interface BaileysEngineOptions {
 }
 
 export class BaileysEngine {
-  private sock: WASocket | null = null;
+  private sock: WASocket | null = null;  // exposto (leitura) p/ heartbeat do manager
   private connected = false;
   private qrString: string | null = null;
   private phone: string | null = null;

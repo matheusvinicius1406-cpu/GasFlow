@@ -24,11 +24,19 @@ logs/
 *.db
 *.sqlite3
 
+# Desktop (Electron) runtime data e artefatos de build
+# (app.db = banco local do usuário; release/ = instaladores .exe)
+desktop/data/
+desktop/release/
+
 # Coverage
 .coverage
 htmlcov/
 coverage/
 frontend/coverage/
+
+# TypeScript incremental build info (artefato local)
+frontend/tsconfig.tsbuildinfo
 
 # Pytest
 .pytest_cache/

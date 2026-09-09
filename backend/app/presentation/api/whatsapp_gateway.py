@@ -293,6 +293,28 @@ def _build_tool_registry(db) -> ToolRegistry:
             handler=factory.register_payment,
         )
     )
+    registry.register(
+        ToolDefinition(
+            name="update_client_address",
+            description="Atualizar endereço do cliente (requer confirmação)",
+            tool_type=ToolType.WRITE,
+            permission=ToolPermission.OPERATOR,
+            requires_confirmation=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "phone": {"type": "string"},
+                    "customer_codigo": {"type": "string"},
+                    "rua": {"type": "string"},
+                    "numero": {"type": "string"},
+                    "complemento": {"type": "string"},
+                    "bairro": {"type": "string"},
+                    "referencia": {"type": "string"},
+                },
+            },
+            handler=factory.update_client_address,
+        )
+    )
     return registry
 
 

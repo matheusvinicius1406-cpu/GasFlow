@@ -141,10 +141,37 @@ def require_whatsapp_service_or_user(
     if service_key and x_gasflow_key and hmac.compare_digest(service_key, x_gasflow_key):
         return TenantContext(
             user_id="service:whatsapp",
-            tenant_id="1",
+            # Mesmo tenant do admin bootstrap (auth_service) — contatos criados
+            # pelo serviço precisam ser visíveis no CRM.
+            tenant_id="default",
             role=SystemRole.SYSTEM,
             permissions=set(),
             session_id="service",
         )
     # Fallback: usuário normal (Bearer token)
     return get_tenant_context(authorization)
+
+
+def require_whatsapp_service(
+    x_gasflow_key: Optional[str] = Header(None),
+) -> TenantContext:
+    """Exige a chave de serviço (X-GasFlow-Key) — sem fallback para JWT.
+
+    Diferença de require_whatsapp_service_or_user: aqui SOMENTE o serviço
+    WhatsApp pode chamar (superfície de máquina-para-máquina). Um token de
+    usuário roubado (XSS, log vazado) não consegue gravar contatos em lote
+    no CRM. Se a chave não estiver configurada no backend, o endpoint fica
+    indisponível (fail-closed) — nunca aberto.
+    """
+    from app.core.config import settings
+
+    service_key = settings.whatsapp_service_key
+    if not service_key or not x_gasflow_key or not hmac.compare_digest(service_key, x_gasflow_key):
+        raise HTTPException(status_code=401, detail="Service key required")
+    return TenantContext(
+        user_id="service:whatsapp",
+        tenant_id="default",
+        role=SystemRole.SYSTEM,
+        permissions=set(),
+        session_id="service",
+    )

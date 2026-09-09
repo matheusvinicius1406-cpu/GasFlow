@@ -14,6 +14,7 @@
  * O forwarder é tolerante a falhas: nunca derruba o serviço WhatsApp.
  */
 
+import { normalizePhone } from './normalize';
 import { providerManager } from './provider/provider-manager';
 import { logger } from './log';
 
@@ -59,15 +60,23 @@ export function createIncomingForwarder(opts: IncomingForwardOptions) {
     logger.warn('incoming.bridge.disabled', { reason: 'GASFLOW_BACKEND_URL não configurado' });
   }
 
-  /** Converte a mensagem bruta para o contrato IncomingMessageRequest do backend. */
+  /** Converte a mensagem bruta para o contrato IncomingMessageRequest do backend.
+   *
+   * sender_phone: apenas dígitos (8–20 chars) — o schema do backend rejeita
+   * JIDs. Cobre os sufixos dos 3 engines: @s.whatsapp.net (Baileys),
+   * @c.us (wwebjs) e @g.us (grupos, filtrados antes).
+   */
   function buildPayload(accountId: string, raw: RawIncomingMessage) {
     const from = raw.from ?? '';
-    const senderPhone = from.replace(/@c\.us$/, '').replace(/@g\.us$/, '');
+    const senderPhone = normalizePhone(from);
     const messageId =
       (typeof raw.id === 'object' && raw.id ? raw.id._serialized : raw.id as string) || `local-${Date.now()}`;
+    if (!senderPhone) {
+      logger.warn('incoming.forward.invalid_sender', { account: accountId, from });
+    }
     return {
       account_id: accountId,
-      sender_phone: senderPhone,
+      sender_phone: senderPhone ?? '',
       provider_message_id: messageId,
       text: raw.body ?? '',
       message_type: raw.type ? String(raw.type).toUpperCase() : 'TEXT',
@@ -126,6 +135,9 @@ export function createIncomingForwarder(opts: IncomingForwardOptions) {
     if (!from || !from.includes('@')) return;
 
     const payload = buildPayload(accountId, raw);
+    // Sem telefone utilizável (8–20 dígitos) o backend rejeitaria (422) —
+    // não adianta retentar; desiste silenciosamente.
+    if (!payload.sender_phone) return;
     await attemptForward(accountId, payload);
   };
 }

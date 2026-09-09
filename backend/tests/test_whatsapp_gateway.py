@@ -402,6 +402,25 @@ class TestCustomerResolution:
         assert conv.customer_codigo is None
 
 
+class TestLastInteractionBump:
+    """CRM: mensagem recebida atualiza last_interaction_at (base da reativação)."""
+
+    def test_known_customer_gets_interaction_bump(self, gateway, db, sample_data):
+        client = db.query(ClientModel).filter(ClientModel.codigo == "000001").first()
+        assert client.last_interaction_at is None  # inativo antes da mensagem
+
+        result = gateway.process_incoming(_make_msg(text="Olá"))
+        assert result["status"] == "processed"
+
+        db.refresh(client)
+        assert client.last_interaction_at is not None
+
+    def test_unknown_customer_is_silent_noop(self, gateway, sample_data):
+        # Não deve lançar — cliente fora do CRM não bloqueia a conversa.
+        result = gateway.process_incoming(_make_msg(phone="5511000000000", text="Olá"))
+        assert result["status"] == "processed"
+
+
 # ═══════════════════════════════════════════════════════════
 # 6. CONVERSATION STATE MACHINE
 # ═══════════════════════════════════════════════════════════

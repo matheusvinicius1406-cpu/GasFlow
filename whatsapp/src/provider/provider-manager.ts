@@ -51,6 +51,8 @@ const HEARTBEAT_INTERVAL_MIN = Number(process.env.WA_HEARTBEAT_INTERVAL_MIN || 5
 const HEARTBEAT_INTERVAL_MS = Math.max(1, HEARTBEAT_INTERVAL_MIN) * 60_000;
 /** URL opcional para alertar em falha crítica (ex.: desconexão permanente). */
 const CRITICAL_WEBHOOK_URL = process.env.WA_CRITICAL_WEBHOOK_URL || '';
+/** Delay antes do push de contatos ao CRM após conectar (contatos carregam assíncrono). */
+const CRM_SYNC_ON_CONNECT_DELAY_MS = 8_000;
 
 const HEADLESS = process.env.WHATSAPP_HEADFUL !== 'true';
 
@@ -151,10 +153,13 @@ class AccountInstance implements WhatsAppProvider {
   private engine: EngineName;
 
   getStatus(): WhatsAppStatus {
+    // hasQr expira em 60s (mesmo TTL do endpoint /qr) — sem isso o FE
+    // mostrava QR "disponível" que já tinha expirado (404 ao buscar).
+    const qrFresh = this.qrString !== null && this.qrGeneratedAtMs !== null && Date.now() - this.qrGeneratedAtMs < QR_TTL_MS;
     return {
       state: this.state,
-      connected: this.state === 'connected' && this.client !== null,
-      hasQr: this.qrString !== null && this.qrGeneratedAtMs !== null,
+      connected: this.state === 'connected' && (this.engine === 'baileys' ? this.baileys !== null : this.client !== null),
+      hasQr: qrFresh,
     };
   }
 
@@ -273,7 +278,8 @@ class AccountInstance implements WhatsAppProvider {
     if (!this.isConnected()) {
       return { success: false, error: 'WhatsApp não está conectado.' };
     }
-    const chatId = recipient.includes('@') ? recipient : `${recipient}@c.us`;
+    // Sufixo decidido pelo ENGINE — @c.us é do wwebjs; Baileys usa @s.whatsapp.net.
+    const chatId = recipient.includes('@') ? recipient : `${recipient}${this.engine === 'baileys' ? '@s.whatsapp.net' : '@c.us'}`;
     if (this.engine === 'baileys') {
       try {
         const sent = await this.baileys!.sendText(chatId, message.text);
@@ -304,7 +310,7 @@ class AccountInstance implements WhatsAppProvider {
     if (!media.data || !media.mimetype) {
       return { success: false, error: 'Mídia inválida: data e mimetype são obrigatórios.' };
     }
-    const chatId = recipient.includes('@') ? recipient : `${recipient}@c.us`;
+    const chatId = recipient.includes('@') ? recipient : `${recipient}${this.engine === 'baileys' ? '@s.whatsapp.net' : '@c.us'}`;
     if (this.engine === 'baileys') {
       try {
         const sent = await this.baileys!.sendMediaBase64(
@@ -394,8 +400,10 @@ class AccountInstance implements WhatsAppProvider {
           this.phone = info.wid.user;
         }
       } catch { /* ignore */ }
+      accountConnected.set({ account: this.id, engine: this.engine }, 1);
       this.startHeartbeat();
       logger.info('account.connected', { account: this.id, phone: this.phone });
+      this.scheduleCrmSync();
     });
 
     client.on('auth_failure', (message: string) => {
@@ -408,6 +416,7 @@ class AccountInstance implements WhatsAppProvider {
       logger.warn('account.disconnected', { account: this.id, reason });
       this.state = 'disconnected';
       this.stopHeartbeat();
+      accountConnected.set({ account: this.id, engine: this.engine }, 0);
       this.scheduleReconnect();
     });
 
@@ -451,11 +460,13 @@ class AccountInstance implements WhatsAppProvider {
           accountConnected.set({ account: this.id, engine: this.engine }, 1);
           this.startHeartbeat();
           logger.info('account.connected', { account: this.id, phone: this.phone, engine: 'baileys' });
+          this.scheduleCrmSync();
           break;
         case 'disconnected':
           logger.warn('account.disconnected', { account: this.id, reason: String(payload ?? 'unknown'), engine: 'baileys' });
           this.state = 'disconnected';
           this.stopHeartbeat();
+          accountConnected.set({ account: this.id, engine: this.engine }, 0);
           this.scheduleReconnect();
           break;
         case 'message':
@@ -482,16 +493,32 @@ class AccountInstance implements WhatsAppProvider {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      if (this.state !== 'connected' || !this.client) return;
-      this.client
-        .sendPresenceAvailable()
-        .then(() => logger.debug('account.heartbeat', { account: this.id }))
-        .catch((err: unknown) =>
-          logger.warn('account.heartbeat.failed', {
-            account: this.id,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        );
+      if (this.state !== 'connected') return;
+      try {
+        if (this.engine === 'baileys') {
+          // Baileys: sendPresenceAvailable direto no socket ( antes só wwebjs
+          // tinha heartbeat — o guard !this.client pulava o Baileys).
+          const sock = (this.baileys as unknown as { sock?: { sendPresenceAvailable?: () => Promise<void> } | null } | null)?.sock;
+          sock?.sendPresenceAvailable?.()
+            .then(() => logger.debug('account.heartbeat', { account: this.id }))
+            .catch((err: unknown) =>
+              logger.warn('account.heartbeat.failed', {
+                account: this.id,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          return;
+        }
+        this.client
+          ?.sendPresenceAvailable()
+          .then(() => logger.debug('account.heartbeat', { account: this.id }))
+          .catch((err: unknown) =>
+            logger.warn('account.heartbeat.failed', {
+              account: this.id,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+      } catch { /* nunca derrubar o processo por heartbeat */ }
     }, HEARTBEAT_INTERVAL_MS);
     this.heartbeatTimer.unref?.();
     logger.debug('account.heartbeat.started', { account: this.id, intervalMs: HEARTBEAT_INTERVAL_MS });
@@ -502,6 +529,40 @@ class AccountInstance implements WhatsAppProvider {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+  }
+
+  // ── CRM sync (push de contatos ao backend ao conectar) ──
+
+  private crmSyncTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * Agenda o push de contatos ao CRM logo após a conta conectar.
+   * Debounce de alguns segundos (contatos do provider podem demorar a
+   * carregar) e idempotente: reconexões em janela curta disparam 1 push.
+   * Tolerante a falhas: backend fora do ar nunca afeta a sessão.
+   */
+  private scheduleCrmSync(): void {
+    if (this.crmSyncTimer) clearTimeout(this.crmSyncTimer);
+    this.crmSyncTimer = setTimeout(() => {
+      this.crmSyncTimer = null;
+      if (this.state !== 'connected') return;
+      void import('../crm-sync')
+        .then(({ syncAccountToCrm }) => syncAccountToCrm(this.id))
+        .then((result) => {
+          if (!result.ok && result.error) {
+            logger.warn('crm-sync.connect.skipped', { account: this.id, error: result.error });
+          } else {
+            logger.info('crm-sync.connect.done', { account: this.id, sent: result.sent, batches: result.batches });
+          }
+        })
+        .catch((err: unknown) =>
+          logger.warn('crm-sync.connect.failed', {
+            account: this.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+    }, CRM_SYNC_ON_CONNECT_DELAY_MS);
+    this.crmSyncTimer.unref?.();
   }
 
   // ── Reconnect ─────────────────────────────────────────

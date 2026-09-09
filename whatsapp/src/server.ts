@@ -31,7 +31,10 @@ function seedDefaultListsIfEmpty(): void {
 async function main(): Promise<void> {
   const startedAt = Date.now();
   const app = express();
-  app.use(express.json());
+  // 30mb: a rota de mídia aceita 25MB base64 (+overhead JSON) — o default
+  // de 100KB rejeitava a maioria das mídias com 413 antes de chegar à rota.
+  app.use(express.json({ limit: '30mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
   // ── Liveness: process is alive ──────────────────────────
   app.get('/api/health', (_req, res) => {
@@ -73,6 +76,19 @@ async function main(): Promise<void> {
 
   app.use('/api', router);
 
+  // Alias raiz /send → /api/whatsapp/accounts/:id/messages — contrato do
+  // WhatsAppSendBridge do backend (POST {service_url}/send com accountId no
+  // body). Sem isso, TODA automação (FASE 14) falhava com 404.
+  app.post('/send', express.json({ limit: '1mb' }), (req: express.Request, res: express.Response) => {
+    req.url = `/api/whatsapp/accounts/${encodeURIComponent(String(req.body?.accountId ?? 'primary'))}/messages`;
+    (req as unknown as { body: unknown }).body = {
+      recipient: req.body?.recipient,
+      message: req.body?.text,
+      idempotency_key: req.body?.idempotencyKey,
+    };
+    app._router.handle(req, res, () => res.status(404).json({ error: 'Not found' }));
+  });
+
   // Error handler
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('[api] Erro não tratado:', err);
@@ -90,6 +106,22 @@ async function main(): Promise<void> {
 
   seedDefaultListsIfEmpty();
   startWorker();
+
+  // Push de contatos → CRM (backend). Dispara no boot (após conectar) e
+  // fica disponível manualmente via POST /api/whatsapp/crm-sync.
+  // Import tardio: falha de rede nunca derruba o serviço.
+  const { syncAllToCrm } = await import('./crm-sync');
+  const crmSyncTimer = setTimeout(() => {
+    void syncAllToCrm().catch(() => { /* tolerante */ });
+  }, 30_000); // aguarda contas conectarem
+  crmSyncTimer.unref?.();
+
+  app.post('/api/whatsapp/crm-sync', (req: express.Request, res: express.Response) => {
+    const accountId = String(req.body?.accountId || 'primary');
+    void import('./crm-sync').then(({ syncAccountToCrm }) => syncAccountToCrm(accountId))
+      .then((result) => res.json(result))
+      .catch((err) => res.status(500).json({ error: err instanceof Error ? err.message : 'crm-sync failed' }));
+  });
 
   app.listen(PORT, () => {
     console.log(`[api] Servidor rodando em http://localhost:${PORT}`);

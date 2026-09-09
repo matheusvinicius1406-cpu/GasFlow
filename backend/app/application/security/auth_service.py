@@ -178,6 +178,14 @@ class AuthService:
                     password_hash=hash_password(settings.admin_password),
                 )
                 membership_repo.create("admin-001", "default", admin_role.id)
+        else:
+            # ADMIN_PASSWORD é autoritativa a cada boot: se a senha do env
+            # mudou (ex.: GasFlow Desktop regenerando settings.json), sincroniza
+            # o hash persistido — sem isso o login ignora a nova senha.
+            admin_user = user_repo.get_by_username("admin")
+            if admin_user and not verify_password(settings.admin_password, admin_user.password_hash):
+                admin_user.password_hash = hash_password(settings.admin_password)
+                self._db.commit()
 
     def _get_user_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyUserRepository
