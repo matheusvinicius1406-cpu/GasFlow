@@ -1,0 +1,21 @@
+{
+  "//": [
+    "Bridge de build: os fontes do main process (src/) não estão no repositório —",
+    "apenas dist/ compilado (os .map não têm sourcesContent). Este tsconfig compila",
+    "um placeholder mínimo para que `npm run typecheck`/`npm run build`/`npm run dist`",
+    "funcionem até os fontes serem restaurados. Ao restaurar desktop/src/main,",
+    "troque o include para src/main/**/* e remova o placeholder."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}
