@@ -61,7 +61,13 @@ DATABASE_URL=sqlite:///./gasflow.db
 # WhatsApp service (dev roda na 3001 — a 3000 pode estar ocupada)
 WHATSAPP_PORT=3001
 WHATSAPP_SERVICE_URL=http://localhost:3001
+# Chave service-to-service — obrigatória para o push de contatos ao CRM
+# (sync-batch é fail-closed sem ela) e para o bridge de mensagens recebidas.
+# Gere com: openssl rand -hex 32
 MARCOS_GAS_API_KEY=
+# Bridge do serviço WhatsApp → backend (crm-sync + incoming). Sem isto o
+# push de contatos e o bot ficam desligados em dev.
+GASFLOW_BACKEND_URL=http://localhost:8000
 
 # Frontend usa o proxy do Vite (/api → :8000)
 VITE_API_BASE_URL=/api
