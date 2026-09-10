@@ -15,7 +15,6 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { Client, LocalAuth, MessageMedia, type Contact } from 'whatsapp-web.js';
 import { BaileysEngine } from './baileys-engine';
 import type { WhatsAppContact, WhatsAppProvider, WhatsAppQr, WhatsAppStatus, MessagePayload, SendResult, MediaPayload, SendMediaResult, WhatsAppConnectionState } from './types';
@@ -468,6 +467,19 @@ class AccountInstance implements WhatsAppProvider {
           this.stopHeartbeat();
           accountConnected.set({ account: this.id, engine: this.engine }, 0);
           this.scheduleReconnect();
+          break;
+        case 'logged_out':
+          // Sessão deslogada no servidor (creds locais viram lixo). Reconectar
+          // com as mesmas creds dá Bad MAC/No session record até esgotar as
+          // tentativas. Auto-recovery: apaga credenciais e recomeça com QR.
+          logger.warn('account.logged_out', { account: this.id, engine: 'baileys', action: 'wipe-creds-and-restart' });
+          this.state = 'disconnected';
+          this.stopHeartbeat();
+          accountConnected.set({ account: this.id, engine: this.engine }, 0);
+          this.reconnectAttempts = 0;
+          void this.teardownClient().then(() => {
+            if (!this.intentionallyStopped) this.createAndInitializeClient();
+          });
           break;
         case 'message':
           for (const listener of this.messageListeners) {

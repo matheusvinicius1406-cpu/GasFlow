@@ -37,7 +37,6 @@ import {
   removeContactFromList,
   removeCustomerFromList,
   renameList,
-  setCampaignProtection,
   updateCampaignStatus,
   updateCustomerStatus,
 } from './db';

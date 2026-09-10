@@ -17,7 +17,7 @@
 
 import { createInterface } from "node:readline";
 import { GasFlowClient } from "./gasflow-client";
-import { runDueIntegrations, syncIntegration, type SyncOutcome } from "./runner";
+import { syncIntegration, type SyncOutcome } from "./runner";
 import type { IntegrationConfig } from "./types";
 
 type Params = Record<string, unknown>;

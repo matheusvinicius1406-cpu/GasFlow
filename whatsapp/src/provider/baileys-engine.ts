@@ -52,6 +52,7 @@ export type EngineEvent =
   | 'authenticated'
   | 'ready'
   | 'disconnected'
+  | 'logged_out'
   | 'message';
 
 export interface BaileysIncomingMessage {
@@ -183,7 +184,8 @@ export class BaileysEngine {
 
         if (loggedOut) {
           this.state = 'disconnected';
-          onEvent('disconnected', 'logged_out');
+          // Evento distinto: manager apaga credenciais corrompidas e reabre QR.
+          onEvent('logged_out');
           return;
         }
         // Reconexão: o próprio manager agenda retry via connect() novamente.

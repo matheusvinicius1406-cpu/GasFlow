@@ -14,7 +14,7 @@
  * cooldown por destinatário, quiet hours e pacing gaussiano.
  */
 
-import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getContactById, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db';
+import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db';
 import { providerManager } from './provider/provider-manager';
 import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban';
 

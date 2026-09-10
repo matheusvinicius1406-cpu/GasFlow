@@ -46,8 +46,9 @@ frontend/tsconfig.tsbuildinfo
 Thumbs.db
 
 # Build
-build/
-dist/
+# (build/ e desktop/dist não são ignorados: icon.ico e o main process compilado
+#  são versionados — os fontes do main não existem no repo, apenas dist/)
+!desktop/dist/
 
 # Node
 node_modules/
@@ -71,3 +72,6 @@ whatsapp/export/
 *.db-shm
 *.db-wal
 *.db
+
+# Agent build output (compilado de agent/src pelo build:win; nao versionar)
+agent/dist/
