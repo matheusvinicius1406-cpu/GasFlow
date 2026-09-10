@@ -40,6 +40,54 @@ class CreateOrderUseCase:
         self.product_repo = product_repo
         self.inventory_repo = inventory_repo
 
+    def _available_stock(self, product) -> float:
+        """Estoque disponível: Inventory (FASE 7.1) com fallback a Product.estoque."""
+        if self.inventory_repo:
+            inv = self.inventory_repo.get_by_product(product.codigo)
+            return inv.quantity if inv else 0
+        # Backward compatibility: fallback to Product.estoque
+        return product.estoque
+
+    def _build_item(self, item_data: dict, codigo: str) -> tuple:
+        """Valida e monta um OrderItem com preço congelado (backend é a autoridade)."""
+        product = self.product_repo.buscar_por_codigo(item_data["product_codigo"])
+        if not product:
+            raise ValueError(f"Produto {item_data['product_codigo']} não encontrado")
+
+        if not product.ativo:
+            raise ValueError(f"Produto {product.nome} está desativado")
+
+        quantity = item_data.get("quantity", 1)
+        if quantity <= 0:
+            raise ValueError(f"Quantidade inválida para {product.nome}")
+
+        available = self._available_stock(product)
+        if available < quantity:
+            raise ValueError(
+                f"Estoque insuficiente para {product.nome}. " f"Disponível: {available}, solicitado: {quantity}"
+            )
+
+        unit_price = product.preco
+        item = OrderItem(
+            order_codigo=codigo,
+            product_codigo=product.codigo,
+            product_nome=product.nome,
+            quantity=quantity,
+            unit_price=unit_price,
+            subtotal=unit_price * quantity,
+        )
+        return item, item.subtotal
+
+    def _build_items(self, items_data: list, codigo: str) -> tuple:
+        """Monta todos os itens do pedido e retorna (itens, subtotal)."""
+        order_items = []
+        subtotal = 0.0
+        for item_data in items_data:
+            item, item_subtotal = self._build_item(item_data, codigo)
+            order_items.append(item)
+            subtotal += item_subtotal
+        return order_items, subtotal
+
     def execute(self, data: dict) -> Order:
         # 1. Validate client
         client = self.client_repo.buscar_por_codigo(data["client_codigo"])
@@ -63,49 +111,8 @@ class CreateOrderUseCase:
         if client.referencia:
             address += f" - Ref: {client.referencia}"
 
-        # 5. Create items with frozen price
-        order_items = []
-        subtotal = 0.0
-
-        for item_data in items_data:
-            product = self.product_repo.buscar_por_codigo(item_data["product_codigo"])
-            if not product:
-                raise ValueError(f"Produto {item_data['product_codigo']} não encontrado")
-
-            if not product.ativo:
-                raise ValueError(f"Produto {product.nome} está desativado")
-
-            quantity = item_data.get("quantity", 1)
-            if quantity <= 0:
-                raise ValueError(f"Quantidade inválida para {product.nome}")
-
-            # FASE 7.1: Validate stock against Inventory (not Product.estoque)
-            if self.inventory_repo:
-                inv = self.inventory_repo.get_by_product(product.codigo)
-                available = inv.quantity if inv else 0
-            else:
-                # Backward compatibility: fallback to Product.estoque
-                available = product.estoque
-
-            if available < quantity:
-                raise ValueError(
-                    f"Estoque insuficiente para {product.nome}. " f"Disponível: {available}, solicitado: {quantity}"
-                )
-
-            # Frozen price — backend is authority
-            unit_price = product.preco
-            item_subtotal = unit_price * quantity
-
-            order_item = OrderItem(
-                order_codigo=codigo,
-                product_codigo=product.codigo,
-                product_nome=product.nome,
-                quantity=quantity,
-                unit_price=unit_price,
-                subtotal=item_subtotal,
-            )
-            order_items.append(order_item)
-            subtotal += item_subtotal
+        # 5. Create items with frozen price (validação de estoque + preço congelado)
+        order_items, subtotal = self._build_items(items_data, codigo)
 
         # 6. Financial calculation
         delivery_fee = data.get("delivery_fee", 0.0)
