@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { cleanOrphanMemberships, deleteLidContacts, dedupeByName, type DedupeResult } from './db';
+import { logger } from './log';
 
 /**
  * Deduplicação da base de contatos:
@@ -27,9 +28,7 @@ export function runDedupe(): DedupeResult & { reportFile: string | null } {
     }
   }
 
-  console.log(
-    `[dedupe] @lid removidos: ${lidRemoved} | grupos consolidados por nome: ${nameMergedGroups} | linhas removidas: ${removed.length}`,
-  );
+  logger.info('dedupe.completed', { lidRemoved, nameMergedGroups, nameRemoved: removed.length });
 
   return { lidRemoved, nameMergedGroups, nameRemoved: removed.length, reportFile };
 }

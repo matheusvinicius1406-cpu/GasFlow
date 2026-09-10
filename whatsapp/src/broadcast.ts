@@ -17,6 +17,7 @@
 import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db';
 import { providerManager } from './provider/provider-manager';
 import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban';
+import { logger } from './log';
 
 // Pacing gaussiano: média 3s, desvio 1s (env WA_SEND_MEAN_MS / WA_SEND_STDEV_MS).
 // WA_SEND_MIN/MAX_INTERVAL_MS continuam válidos como piso/teto para compatibilidade.
@@ -45,7 +46,7 @@ let pausedUntilMs = 0;
 
 export function startWorker(): void {
   if (!BROADCAST_ENABLED) {
-    console.log('[broadcast] Worker desabilitado (WA_BROADCAST_ENABLED=false).');
+    logger.info('broadcast.disabled');
     return;
   }
   if (workerRunning) return;
@@ -53,9 +54,9 @@ export function startWorker(): void {
   // Recover stale PROCESSING jobs from previous run
   const recovered = recoverStaleProcessing();
   if (recovered > 0) {
-    console.log(`[broadcast] ${recovered} jobs PROCESSING expirados recuperados para PENDING.`);
+    logger.info('broadcast.stale_jobs_recovered', { recovered });
   }
-  console.log('[broadcast] Worker iniciado.');
+  logger.info('broadcast.started');
   scheduleNext();
 }
 
@@ -65,7 +66,7 @@ export function stopWorker(): void {
     clearTimeout(workerTimer);
     workerTimer = null;
   }
-  console.log('[broadcast] Worker parado.');
+  logger.info('broadcast.stopped');
 }
 
 function scheduleNext(delayMs?: number): void {
@@ -82,7 +83,7 @@ function scheduleNext(delayMs?: number): void {
 function pauseWorkerUntil(untilMs: number, reason: string): void {
   const capped = Math.min(untilMs, Date.now() + 10 * 60_000);
   pausedUntilMs = Math.max(pausedUntilMs, capped);
-  console.log(`[broadcast] Pausado até ${new Date(capped).toISOString()} — ${reason}.`);
+  logger.info('broadcast.paused', { until: new Date(capped).toISOString(), reason });
 }
 
 async function processNext(): Promise<void> {
@@ -100,7 +101,7 @@ async function processNext(): Promise<void> {
 
     // Check if provider is connected
     if (!providerManager.getAccount("primary")?.isConnected()) {
-      console.warn('[broadcast] WhatsApp não conectado. Aguardando reconexão...');
+      logger.warn('broadcast.account_not_connected');
       return;
     }
 
@@ -119,7 +120,7 @@ async function processNext(): Promise<void> {
     const recipient = claimNextRecipient(campaignId);
     if (!recipient) {
       // No more pending recipients — campaign complete
-      console.log(`[broadcast] Campanha ${campaignId} concluída — sem destinatários pendentes.`);
+      logger.info('broadcast.campaign_completed', { campaignId });
       updateCampaignStatus(campaignId, 'COMPLETED');
       continue;
     }
@@ -168,7 +169,7 @@ async function processNext(): Promise<void> {
 
     // Send message via provider
     try {
-      console.log(`[broadcast] Enviando para ${phone} (campanha ${campaignId}, customer ${recipient.customer_id})`);
+      logger.info('broadcast.message_sending', { phone, campaignId, customerId: recipient.customer_id });
 
       const result = await providerManager.getAccount("primary")?.sendMessage(phone, { text: campaign.message }) || { success: false, error: "Primary account not found" };
 
@@ -177,14 +178,14 @@ async function processNext(): Promise<void> {
         // Registra nas janelas de rate limit (minuto/hora/cooldown) e no contador de warmup.
         recordSend('primary', phone, result.messageId);
         recordSent('primary');
-        console.log(`[broadcast] Enviado com sucesso para ${phone}`);
+        logger.info('broadcast.message_sent', { phone, campaignId, customerId: recipient.customer_id });
       } else {
         markRecipientFailed(campaignId, recipient.customer_id, result.error ?? 'Unknown error');
-        console.warn(`[broadcast] Falha ao enviar para ${phone}: ${result.error}`);
+        logger.warn('broadcast.message_failed', { phone, campaignId, error: result.error });
 
         // Check protection mode
         if (shouldActivateProtection(campaignId)) {
-          console.error(`[broadcast] PROTECTION_MODE ativado para campanha ${campaignId}`);
+          logger.error('broadcast.protection_mode', { campaignId });
           setCampaignProtection(campaignId, 'Too many consecutive failures');
           updateCampaignStatus(campaignId, 'FAILED');
           return;
@@ -193,10 +194,10 @@ async function processNext(): Promise<void> {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       markRecipientFailed(campaignId, recipient.customer_id, errorMsg);
-      console.error(`[broadcast] Erro ao enviar para ${phone}: ${errorMsg}`);
+      logger.error('broadcast.message_error', { phone, campaignId, error: errorMsg });
 
       if (shouldActivateProtection(campaignId)) {
-        console.error(`[broadcast] PROTECTION_MODE ativado para campanha ${campaignId}`);
+        logger.error('broadcast.protection_mode', { campaignId });
         setCampaignProtection(campaignId, 'Too many consecutive failures');
         updateCampaignStatus(campaignId, 'FAILED');
         return;

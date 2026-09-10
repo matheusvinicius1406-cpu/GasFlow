@@ -146,7 +146,7 @@ class AccountInstance implements WhatsAppProvider {
     this.id = config.id;
     this.name = config.name;
     this.engine = resolveEngineForAccount(config.id);
-    console.log(`[${this.id}] Motor: ${this.engine}.`);
+    logger.info('account.engine_selected', { accountId: this.id, engine: this.engine });
   }
 
   private engine: EngineName;
@@ -231,7 +231,7 @@ class AccountInstance implements WhatsAppProvider {
       try { await client.logout(); } catch { /* session may be invalid */ }
       try { await client.destroy(); } catch { /* ignore */ }
     }
-    console.log(`[${this.id}] Logout concluído.`);
+    logger.info('account.logout_completed', { accountId: this.id });
   }
 
   async healthCheck(): Promise<boolean> {
@@ -379,11 +379,11 @@ class AccountInstance implements WhatsAppProvider {
       this.state = 'qr_pending';
       this.qrString = qr;
       this.qrGeneratedAtMs = Date.now();
-      console.log(`[${this.id}] QR code gerado.`);
+      logger.info('account.qr_generated', { accountId: this.id, engine: this.engine });
     });
 
     client.on('authenticated', () => {
-      console.log(`[${this.id}] Autenticado.`);
+      logger.info('account.authenticated', { accountId: this.id, engine: this.engine });
       this.reconnectAttempts = 0;
     });
 
@@ -443,10 +443,10 @@ class AccountInstance implements WhatsAppProvider {
           this.state = 'qr_pending';
           this.qrString = String(payload ?? '');
           this.qrGeneratedAtMs = Date.now();
-          console.log(`[${this.id}] QR code gerado (Baileys).`);
+          logger.info('account.qr_generated', { accountId: this.id, engine: 'baileys' });
           break;
         case 'authenticated':
-          console.log(`[${this.id}] Autenticado (Baileys).`);
+          logger.info('account.authenticated', { accountId: this.id, engine: 'baileys' });
           this.reconnectAttempts = 0;
           break;
         case 'ready':

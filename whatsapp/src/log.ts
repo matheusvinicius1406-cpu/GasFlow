@@ -2,26 +2,20 @@
  * Log estruturado (JSON lines) do serviço WhatsApp.
  *
  * Saída: uma linha JSON por evento, legível por qualquer agregador
- * (Grafana/Loki, CloudWatch, etc.) e preservando os console.* simples
- * das páginas/rotas legadas.
+ * (Grafana/Loki, CloudWatch, etc.).
  */
+
+import pino from 'pino';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 const MIN_LEVEL: LogLevel = (process.env.WA_LOG_LEVEL as LogLevel) || 'info';
+const pinoLogger = pino({ level: MIN_LEVEL });
 
 function emit(level: LogLevel, event: string, fields: Record<string, unknown> = {}): void {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
-  const line = JSON.stringify({
-    ts: new Date().toISOString(),
-    level,
-    service: 'gasflow-whatsapp',
-    event,
-    ...fields,
-  });
-  // eslint-disable-next-line no-console
-  console.log(line);
+  pinoLogger[level]({ service: 'gasflow-whatsapp', event, ...fields }, event);
 }
 
 export const logger = {

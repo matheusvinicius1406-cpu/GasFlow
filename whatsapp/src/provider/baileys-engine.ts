@@ -37,10 +37,12 @@ import {
   downloadMediaMessage,
   type WASocket,
   type AnyMessageContent,
+  type WAMessage,
   type UserFacingSocketConfig,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
+import { logger } from '../log';
 
 /** Logger dedicado do Baileys (pino) — padrão da lib; silencioso por padrão. */
 const baileysLogger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'error' });
@@ -159,9 +161,9 @@ export class BaileysEngine {
         if (!this.qrString && this.pairingCodePhone && !sock.authState.creds.registered) {
           try {
             const code = await sock.requestPairingCode(this.pairingCodePhone);
-            console.log(`[${this.accountId}] Pairing code: ${code}`);
+            logger.info('account.pairing_code_generated', { accountId: this.accountId, code });
           } catch (err) {
-            console.warn(`[${this.accountId}] Pairing code falhou: ${err instanceof Error ? err.message : String(err)}`);
+            logger.warn('account.pairing_code_failed', { accountId: this.accountId, error: err instanceof Error ? err.message : String(err) });
           }
         }
       }
@@ -321,7 +323,7 @@ export class BaileysEngine {
 }
 
 /** Converte WAMessage para o formato que o incoming.ts já consome (wwebjs-like). */
-export function toIncomingShape(msg: Parameters<Parameters<WASocket['ev']['on']>[1]>[0] extends never ? never : any): BaileysIncomingMessage & { raw: unknown } {
+export function toIncomingShape(msg: WAMessage): BaileysIncomingMessage & { raw: unknown } {
   const jid = msg.key.remoteJid ?? '';
   const type = Object.keys(msg.message ?? {})[0] ?? 'unknown';
   const m = msg.message as Record<string, Record<string, unknown> | undefined> | undefined;

@@ -13,12 +13,13 @@
 
 import { timingSafeEqual } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
+import { logger } from './log';
 
 const API_KEY = process.env.MARCOS_GAS_API_KEY;
 
 /** Falha rápido se produção subir sem chave (QR/contatos expostos = sequestro de sessão). */
 if (process.env.ENVIRONMENT === 'production' && !API_KEY) {
-  console.error('❌ MARCOS_GAS_API_KEY é obrigatória em produção (ENVIRONMENT=production). Abortando boot.');
+  logger.error('auth.missing_production_api_key');
   process.exit(1);
 }
 

@@ -44,6 +44,7 @@ import { runDedupe } from './dedupe';
 import { seedListsFromRules } from './list-seed';
 import { runSync } from './sync';
 import { checkRate, recordSend } from './anti-ban';
+import { logger } from './log';
 
 export const router = Router();
 
@@ -248,7 +249,7 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
     if (result.success) {
       markSentMessageSent(record.id, result.messageId || 'unknown');
       recordSend(accountId, normalizedPhone, result.messageId);
-      console.log(`[message] Enviado para ${normalizedPhone} via ${accountId} (key: ${idempotencyKey})`);
+      logger.info('message.sent', { phone: normalizedPhone, accountId, idempotencyKey });
       res.json({
         success: true,
         messageId: result.messageId,
@@ -256,7 +257,7 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
       });
     } else {
       markSentMessageFailed(record.id, result.error || 'Unknown error');
-      console.warn(`[message] Falha ao enviar para ${normalizedPhone}: ${result.error}`);
+      logger.warn('message.failed', { phone: normalizedPhone, accountId, error: result.error });
       res.status(500).json({
         error: 'MESSAGE_SEND_FAILED',
         detail: result.error || 'Falha ao enviar mensagem.',
@@ -265,7 +266,7 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     markSentMessageFailed(record.id, errorMsg);
-    console.error(`[message] Erro ao enviar para ${normalizedPhone}:`, errorMsg);
+    logger.error('message.error', { phone: normalizedPhone, accountId, error: errorMsg });
     res.status(500).json({
       error: 'SERVICE_UNAVAILABLE',
       detail: 'Serviço de mensageria temporariamente indisponível.',
@@ -402,7 +403,7 @@ router.post('/whatsapp/accounts/:id/media', requireAuth, async (req: Request, re
     });
     if (result.success) {
       markSentMessageSent(record.id, result.messageId || 'unknown');
-      console.log(`[media] Enviado para ${normalizedPhone} via ${accountId} (key: ${idempotencyKey})`);
+      logger.info('media.sent', { phone: normalizedPhone, accountId, idempotencyKey });
       res.json({ success: true, messageId: result.messageId, idempotencyKey });
     } else {
       markSentMessageFailed(record.id, result.error || 'Unknown error');

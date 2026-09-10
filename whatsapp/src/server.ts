@@ -25,7 +25,7 @@ function seedDefaultListsIfEmpty(): void {
     { name: 'Empresas', description: 'Empresas' },
   ];
   for (const l of defaults) insertList(l.name, l.description);
-  console.log('[db] Listas padrão criadas.');
+  logger.info('db.default_lists_created');
 }
 
 async function main(): Promise<void> {
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
 
   // Error handler
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('[api] Erro não tratado:', err);
+    logger.error('api.unhandled_error', { error: err instanceof Error ? err.message : String(err) });
     if (!res.headersSent) res.status(500).json({ error: 'Erro interno.' });
   });
 
@@ -124,9 +124,7 @@ async function main(): Promise<void> {
   });
 
   app.listen(PORT, () => {
-    console.log(`[api] Servidor rodando em http://localhost:${PORT}`);
-    console.log('[api] POST /api/whatsapp/accounts/:id/start para iniciar uma conta.');
-    console.log(`[api] Contas disponíveis: ${providerManager.getAccountIds().join(', ')}`);
+    logger.info('api.started', { port: PORT, accounts: providerManager.getAccountIds() });
   });
 
   // Graceful shutdown
@@ -134,7 +132,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`\n[api] Recebido ${signal}, encerrando...`);
+    logger.info('api.shutdown_requested', { signal });
     try {
       await providerManager.stopAll();
     } finally {
