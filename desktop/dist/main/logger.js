@@ -1,9 +1,4 @@
-// @ts-nocheck
 "use strict";
-/**
- * Logger do main process: escreve em electron-log (arquivo em userData) e
- * espelha cada linha para o renderer via webContents (console de logs da UI).
- */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };

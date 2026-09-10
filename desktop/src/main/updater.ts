@@ -1,5 +1,7 @@
-// @ts-nocheck
-"use strict";
+import { app, BrowserWindow, ipcMain } from "electron";
+import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
+import { logLine } from "./logger";
+
 /**
  * Auto-update (electron-updater + GitHub Releases).
  *
@@ -15,113 +17,118 @@
  * O módulo usa uma instância padrão; os testes criam as suas com
  * autoUpdater falso (EventEmitter) — sem depender de Electron.
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.createUpdateState = createUpdateState;
-exports.registerUpdateIpc = registerUpdateIpc;
-exports.setupAutoUpdate = setupAutoUpdate;
-const electron_1 = require("electron");
-const electron_updater_1 = require("electron-updater");
-const logger_1 = require("./logger");
 /**
  * Máquina de estados do auto-update.
  * wire(autoUpdater) conecta os eventos do electron-updater ao estado.
  */
-function createUpdateState(deps = {}) {
-    const log = deps.log ?? (() => { });
-    let state = {
+export type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "error" | "up-to-date";
+export interface UpdateState {
+    status: UpdateStatus;
+    version: string | null;
+    progress: number;
+    error: string | null;
+}
+
+type UpdateLog = (level: "info" | "warn", scope: string, message: string) => void;
+type UpdateStateListener = (state: UpdateState) => void;
+type AutoUpdaterLike = {
+    on: (event: string, listener: (...args: any[]) => void) => unknown;
+};
+
+export function createUpdateState(deps: { log?: (level: "info" | "warn", scope: string, message: string) => void } = {}) {
+    const log: UpdateLog = deps.log ?? (() => undefined);
+    let state: UpdateState = {
         status: "idle", // idle | checking | available | downloading | ready | error | up-to-date
         version: null,
         progress: 0,
         error: null,
     };
-    const listeners = new Set();
-    function get() {
+    const listeners = new Set<UpdateStateListener>();
+    function get(): UpdateState {
         return state;
     }
-    function set(patch) {
+    function set(patch: Partial<UpdateState>): UpdateState {
         state = { ...state, ...patch };
         for (const listener of listeners) {
             try {
                 listener(state);
+            } catch {
+                // Um listener quebrado não deve derrubar o updater.
             }
-            catch {
-                /* listener quebrado não derruba o updater */
-            }
-        }
+    }
         return state;
     }
-    function subscribe(fn) {
+    function subscribe(fn: UpdateStateListener): () => boolean {
         listeners.add(fn);
         return () => listeners.delete(fn);
     }
-    function wire(autoUpdater) {
-        autoUpdater.on("checking-for-update", () => {
+    function wire(updater: AutoUpdaterLike): void {
+        updater.on("checking-for-update", () => {
             log("info", "updater", "verificando atualizações…");
             set({ status: "checking" });
         });
-        autoUpdater.on("update-available", (info) => {
+        updater.on("update-available", (info: UpdateInfo) => {
             log("info", "updater", `nova versão disponível: v${info.version}`);
             set({ status: "available", version: info.version, error: null });
         });
-        autoUpdater.on("update-not-available", (info) => {
+        updater.on("update-not-available", (info: UpdateInfo) => {
             log("info", "updater", `sem atualizações (v${info.version} é a mais recente)`);
             set({ status: "up-to-date", version: info.version, error: null });
         });
-        autoUpdater.on("download-progress", (p) => {
-            set({ status: "downloading", progress: Math.round(p.percent || 0) });
+        updater.on("download-progress", (progress: ProgressInfo) => {
+            set({ status: "downloading", progress: Math.round(progress.percent || 0) });
         });
-        autoUpdater.on("update-downloaded", (info) => {
+        updater.on("update-downloaded", (info: UpdateInfo) => {
             log("info", "updater", `v${info.version} baixada — pronta para instalar`);
             set({ status: "ready", version: info.version, progress: 100 });
-            // NÃO força quitAndInstall aqui — o usuário decide na UI.
         });
-        autoUpdater.on("error", (err) => {
-            // Sem rede / sem release publicada ainda — loga e segue sem travar o app.
-            log("warn", "updater", `erro: ${String(err?.message ?? err)}`);
-            set({ status: "error", error: String(err?.message ?? err) });
+        updater.on("error", (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            log("warn", "updater", `erro: ${message}`);
+            set({ status: "error", error: message });
         });
     }
     return { get, set, subscribe, wire };
 }
-// Instância padrão do módulo (usada pelo app real).
-const update = createUpdateState({ log: logger_1.logLine });
+
+const update = createUpdateState({ log: (level, scope, message) => logLine(level, scope, message) });
 let ipcRegistered = false;
-let checkTimer = null;
-function broadcastUpdateState() {
+let checkTimer: ReturnType<typeof setInterval> | null = null;
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function broadcastUpdateState(): void {
     try {
-        for (const win of electron_1.BrowserWindow.getAllWindows()) {
-            if (!win.isDestroyed())
-                win.webContents.send("update:state", update.get());
-        }
+        for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) win.webContents.send("update:state", update.get());
     }
-    catch (err) {
-        logger_1.logLine("warn", "updater", `broadcast falhou: ${String(err)}`);
+    } catch (error) {
+        logLine("warn", "updater", `broadcast falhou: ${errorMessage(error)}`);
     }
 }
-function registerUpdateIpc() {
-    if (ipcRegistered)
-        return;
+
+export function registerUpdateIpc(): void {
+    if (ipcRegistered) return;
     ipcRegistered = true;
-    electron_1.ipcMain.handle("update:check", async () => {
+    ipcMain.handle("update:check", async () => {
         try {
-            await electron_updater_1.autoUpdater.checkForUpdates();
+            await autoUpdater.checkForUpdates();
             return { ok: true, state: update.get() };
-        }
-        catch (err) {
-            return { ok: false, error: String(err?.message ?? err) };
-        }
+        } catch (error) {
+            return { ok: false, error: errorMessage(error) };
+    }
     });
-    electron_1.ipcMain.handle("update:install", async () => {
+    ipcMain.handle("update:install", async () => {
         try {
-            // isSilent=false (instalador visível), isForceRunAfter=true (reabre o app)
-            electron_updater_1.autoUpdater.quitAndInstall(false, true);
+            autoUpdater.quitAndInstall(false, true);
             return { ok: true };
-        }
-        catch (err) {
-            return { ok: false, error: String(err?.message ?? err) };
+        } catch (error) {
+            return { ok: false, error: errorMessage(error) };
         }
     });
-    electron_1.ipcMain.handle("update:state", async () => update.get());
+    ipcMain.handle("update:state", async () => update.get());
 }
 /**
  * Liga o auto-update. Só atua com app empacotado (dev não tem release).
@@ -129,38 +136,36 @@ function registerUpdateIpc() {
  *
  * @param getChannel retorna o canal de settings.json ("latest" | "beta" | ...)
  */
-function setupAutoUpdate(getChannel) {
-    if (!electron_1.app.isPackaged) {
-        logger_1.logLine("info", "updater", "app não empacotado — auto-update desligado (dev)");
+export function setupAutoUpdate(getChannel?: () => string | undefined): void {
+    if (!app.isPackaged) {
+        logLine("info", "updater", "app não empacotado — auto-update desligado (dev)");
         return;
     }
-    electron_updater_1.autoUpdater.autoDownload = true;
-    electron_updater_1.autoUpdater.autoInstallOnAppQuit = true;
-    electron_updater_1.autoUpdater.allowDowngrade = false;
-    electron_updater_1.autoUpdater.allowPrerelease = false;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.allowPrerelease = false;
     // Canal configurável via settings.json (opcional, default: latest)
     try {
         const channel = getChannel?.();
         if (channel && channel !== "latest") {
-            electron_updater_1.autoUpdater.channel = channel;
-            electron_updater_1.autoUpdater.allowPrerelease = channel !== "latest";
+            autoUpdater.channel = channel;
+            autoUpdater.allowPrerelease = channel !== "latest";
         }
-    }
-    catch { /* settings indisponível — segue com default */ }
+    } catch { /* settings indisponível — segue com default */ }
     // Eventos → máquina de estados; mudança de estado → broadcast ao renderer.
-    update.wire(electron_updater_1.autoUpdater);
+    update.wire(autoUpdater);
     update.subscribe(() => broadcastUpdateState());
     // Checagem inicial: 15s após o renderer carregar (não compete com o boot do backend).
     setTimeout(() => {
-        electron_updater_1.autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-            logger_1.logLine("warn", "updater", `checagem inicial falhou: ${String(err?.message ?? err)}`);
+        autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
+            logLine("warn", "updater", `checagem inicial falhou: ${errorMessage(error)}`);
         });
     }, 15_000);
     // Re-checagem a cada 6h (interval único — guard contra chamadas repetidas).
     if (checkTimer === null) {
         checkTimer = setInterval(() => {
-            electron_updater_1.autoUpdater.checkForUpdates().catch(() => { /* offline — tenta de novo em 6h */ });
+            autoUpdater.checkForUpdates().catch(() => undefined);
         }, 6 * 60 * 60 * 1000);
     }
 }
-//# sourceMappingURL=updater.js.map

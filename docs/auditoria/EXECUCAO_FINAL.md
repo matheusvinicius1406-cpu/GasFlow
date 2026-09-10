@@ -18,13 +18,13 @@
 | 5 | 5.4 except:pass | ✅ | `71a1ead` | `1332 passed, 27 skipped` | Fallbacks agora registram contexto |
 | 5 | 5.5 console → pino | ✅ | `e3c8f48` | lint, typecheck e 86 testes | `no-console` configurado para `whatsapp/src` |
 | 4 | 4.1–4.4 fontes/build | ✅ | `3224009` | build, typecheck e 11 testes | Fontes main/preload restaurados na branch dedicada |
-| 4 | 4.5 strict progressivo | ⚠️ | — | Falhou com fontes compilados | Requer reescrita manual de `config.ts`/`updater.ts`; ver `FALHAS.md` |
+| 4 | 4.5 strict progressivo | ✅ | — | typecheck, build e 11 testes | `config.ts`, `updater.ts` e `logger.ts` reescritos como módulos TypeScript tipados |
 | 4 | 4.6 PR | ⏸️ | — | Não executado | Aguarda autorização para push e abertura do PR |
 
 ## Estado final
 
 - `main` contém as Ondas 3 e 5 até `e3c8f48`.
-- `refactor/desktop-sources` contém a reescrita do desktop em `3224009`.
+- `refactor/desktop-sources` contém a reescrita do desktop em `3224009` e o endurecimento TypeScript subsequente.
 - A árvore de trabalho está limpa na branch atual.
 - Nenhuma tag, push ou PR foi criado nesta retomada.
 - A matriz de riscos foi atualizada em `01_MATRIZ_DE_RISCOS.md`.

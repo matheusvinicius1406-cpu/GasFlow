@@ -2,9 +2,7 @@
 
 ## Strict progressivo do desktop
 
-A tentativa de remover `@ts-nocheck` de `desktop/src/main/config.ts` e `updater.ts` com `strict: true` falhou no typecheck. Os arquivos restaurados a partir de `dist/` ainda são JavaScript compilado, com helpers `__importStar`/`__createBinding`, `require` e escopo global; o TypeScript reporta redeclarações e parâmetros implícitos. A configuração validada permanece `strict: false` com `@ts-nocheck` inicial.
-
-Próximo passo: reescrever manualmente `config.ts` e `updater.ts` como módulos TypeScript idiomáticos, tipar as interfaces públicas e então habilitar `strict` arquivo a arquivo.
+Resolvido na branch `refactor/desktop-sources`: `config.ts`, `updater.ts` e `logger.ts` foram reescritos como módulos TypeScript tipados, sem `@ts-nocheck`. O `typecheck`, build e os 11 testes do desktop passaram.
 
 ## Validações externas não executadas
 

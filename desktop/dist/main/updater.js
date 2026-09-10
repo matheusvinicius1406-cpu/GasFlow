@@ -1,33 +1,13 @@
-// @ts-nocheck
 "use strict";
-/**
- * Auto-update (electron-updater + GitHub Releases).
- *
- * Fluxo: push de tag v* → GitHub Actions builda e publica a release →
- * apps instalados detectam (15s após abrir, e a cada 6h), baixam e
- * instalam ao clicar em "Reiniciar e instalar" (ou ao fechar o app).
- *
- * Idempotente: registerUpdateIpc() pode ser chamado N vezes sem duplicar
- * handlers (ipcMain.handle lançaria erro em registro duplicado).
- *
- * Testabilidade: createUpdateState() fábrica da máquina de estados
- * (idle → checking → available → downloading → ready | up-to-date | error).
- * O módulo usa uma instância padrão; os testes criam as suas com
- * autoUpdater falso (EventEmitter) — sem depender de Electron.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createUpdateState = createUpdateState;
 exports.registerUpdateIpc = registerUpdateIpc;
 exports.setupAutoUpdate = setupAutoUpdate;
-const electron_1 = require("electron");
+const electron_2 = require("electron");
 const electron_updater_1 = require("electron-updater");
-const logger_1 = require("./logger");
-/**
- * Máquina de estados do auto-update.
- * wire(autoUpdater) conecta os eventos do electron-updater ao estado.
- */
+const logger_2 = require("./logger");
 function createUpdateState(deps = {}) {
-    const log = deps.log ?? (() => { });
+    const log = deps.log ?? (() => undefined);
     let state = {
         status: "idle", // idle | checking | available | downloading | ready | error | up-to-date
         version: null,
@@ -45,7 +25,7 @@ function createUpdateState(deps = {}) {
                 listener(state);
             }
             catch {
-                /* listener quebrado não derruba o updater */
+                // Um listener quebrado não deve derrubar o updater.
             }
         }
         return state;
@@ -54,74 +34,74 @@ function createUpdateState(deps = {}) {
         listeners.add(fn);
         return () => listeners.delete(fn);
     }
-    function wire(autoUpdater) {
-        autoUpdater.on("checking-for-update", () => {
+    function wire(updater) {
+        updater.on("checking-for-update", () => {
             log("info", "updater", "verificando atualizações…");
             set({ status: "checking" });
         });
-        autoUpdater.on("update-available", (info) => {
+        updater.on("update-available", (info) => {
             log("info", "updater", `nova versão disponível: v${info.version}`);
             set({ status: "available", version: info.version, error: null });
         });
-        autoUpdater.on("update-not-available", (info) => {
+        updater.on("update-not-available", (info) => {
             log("info", "updater", `sem atualizações (v${info.version} é a mais recente)`);
             set({ status: "up-to-date", version: info.version, error: null });
         });
-        autoUpdater.on("download-progress", (p) => {
-            set({ status: "downloading", progress: Math.round(p.percent || 0) });
+        updater.on("download-progress", (progress) => {
+            set({ status: "downloading", progress: Math.round(progress.percent || 0) });
         });
-        autoUpdater.on("update-downloaded", (info) => {
+        updater.on("update-downloaded", (info) => {
             log("info", "updater", `v${info.version} baixada — pronta para instalar`);
             set({ status: "ready", version: info.version, progress: 100 });
-            // NÃO força quitAndInstall aqui — o usuário decide na UI.
         });
-        autoUpdater.on("error", (err) => {
-            // Sem rede / sem release publicada ainda — loga e segue sem travar o app.
-            log("warn", "updater", `erro: ${String(err?.message ?? err)}`);
-            set({ status: "error", error: String(err?.message ?? err) });
+        updater.on("error", (error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            log("warn", "updater", `erro: ${message}`);
+            set({ status: "error", error: message });
         });
     }
     return { get, set, subscribe, wire };
 }
-// Instância padrão do módulo (usada pelo app real).
-const update = createUpdateState({ log: logger_1.logLine });
+const update = createUpdateState({ log: (level, scope, message) => (0, logger_2.logLine)(level, scope, message) });
 let ipcRegistered = false;
 let checkTimer = null;
+function errorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
 function broadcastUpdateState() {
     try {
-        for (const win of electron_1.BrowserWindow.getAllWindows()) {
+        for (const win of electron_2.BrowserWindow.getAllWindows()) {
             if (!win.isDestroyed())
                 win.webContents.send("update:state", update.get());
         }
     }
-    catch (err) {
-        logger_1.logLine("warn", "updater", `broadcast falhou: ${String(err)}`);
+    catch (error) {
+        (0, logger_2.logLine)("warn", "updater", `broadcast falhou: ${errorMessage(error)}`);
     }
 }
 function registerUpdateIpc() {
     if (ipcRegistered)
         return;
     ipcRegistered = true;
-    electron_1.ipcMain.handle("update:check", async () => {
+    electron_2.ipcMain.handle("update:check", async () => {
         try {
             await electron_updater_1.autoUpdater.checkForUpdates();
             return { ok: true, state: update.get() };
         }
-        catch (err) {
-            return { ok: false, error: String(err?.message ?? err) };
+        catch (error) {
+            return { ok: false, error: errorMessage(error) };
         }
     });
-    electron_1.ipcMain.handle("update:install", async () => {
+    electron_2.ipcMain.handle("update:install", async () => {
         try {
-            // isSilent=false (instalador visível), isForceRunAfter=true (reabre o app)
             electron_updater_1.autoUpdater.quitAndInstall(false, true);
             return { ok: true };
         }
-        catch (err) {
-            return { ok: false, error: String(err?.message ?? err) };
+        catch (error) {
+            return { ok: false, error: errorMessage(error) };
         }
     });
-    electron_1.ipcMain.handle("update:state", async () => update.get());
+    electron_2.ipcMain.handle("update:state", async () => update.get());
 }
 /**
  * Liga o auto-update. Só atua com app empacotado (dev não tem release).
@@ -130,8 +110,8 @@ function registerUpdateIpc() {
  * @param getChannel retorna o canal de settings.json ("latest" | "beta" | ...)
  */
 function setupAutoUpdate(getChannel) {
-    if (!electron_1.app.isPackaged) {
-        logger_1.logLine("info", "updater", "app não empacotado — auto-update desligado (dev)");
+    if (!electron_2.app.isPackaged) {
+        (0, logger_2.logLine)("info", "updater", "app não empacotado — auto-update desligado (dev)");
         return;
     }
     electron_updater_1.autoUpdater.autoDownload = true;
@@ -152,14 +132,14 @@ function setupAutoUpdate(getChannel) {
     update.subscribe(() => broadcastUpdateState());
     // Checagem inicial: 15s após o renderer carregar (não compete com o boot do backend).
     setTimeout(() => {
-        electron_updater_1.autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-            logger_1.logLine("warn", "updater", `checagem inicial falhou: ${String(err?.message ?? err)}`);
+        electron_updater_1.autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+            (0, logger_2.logLine)("warn", "updater", `checagem inicial falhou: ${errorMessage(error)}`);
         });
     }, 15_000);
     // Re-checagem a cada 6h (interval único — guard contra chamadas repetidas).
     if (checkTimer === null) {
         checkTimer = setInterval(() => {
-            electron_updater_1.autoUpdater.checkForUpdates().catch(() => { });
+            electron_updater_1.autoUpdater.checkForUpdates().catch(() => undefined);
         }, 6 * 60 * 60 * 1000);
     }
 }
