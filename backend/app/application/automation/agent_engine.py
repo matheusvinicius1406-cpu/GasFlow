@@ -148,7 +148,7 @@ class AgentEngine:
 
             # Check approval requirement
             if policy_check.get("requires_approval") and not dry_run:
-                approval = self.approvals.create_approval(
+                self.approvals.create_approval(
                     action=step.tool_name or "",
                     arguments=step.arguments,
                     actor=f"agent:{agent_id}",
@@ -189,7 +189,6 @@ class AgentEngine:
     def _generate_plan(self, agent_def: AgentDefinition, goal: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate a deterministic plan based on agent scope and goal."""
         plan = []
-        goal_lower = goal.lower()
 
         if agent_def.scope == AgentScope.CUSTOMER_AGENT:
             plan.append({"description": "Lookup customer", "tool": "get_customer", "arguments": context})

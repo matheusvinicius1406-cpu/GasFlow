@@ -78,7 +78,12 @@ class AIEngine:
         # 1. Check LLM availability
         if not self.llm.health_check():
             return {
-                "message": "Desculpe, o serviço de IA está temporariamente indisponível.",
+                "message": (
+                    "Desculpe, o serviço de IA está temporariamente indisponível.\n\n"
+                    "Se você estiver usando Ollama local, verifique:\n"
+                    "• O Ollama está instalado e rodando? (ollama.com)\n"
+                    "• O modelo está baixado? (ex.: ollama pull qwen3:0.6b)"
+                ),
                 "intent": None,
                 "requires_confirmation": False,
                 "error": "AI_PROVIDER_UNAVAILABLE",
@@ -130,6 +135,20 @@ class AIEngine:
         ]
 
         response = self.llm.generate(messages, temperature=0.1, max_tokens=256)
+
+        # LLM caiu entre o health check e a chamada (ou timeout): degrada
+        # com mensagem clara em vez de conteúdo vazio.
+        if response.error or not response.content.strip():
+            return {
+                "message": (
+                    "Não consegui consultar o modelo de IA agora.\n\n"
+                    "Verifique se o Ollama está rodando e o modelo baixado "
+                    "(ollama list). O restante do sistema continua funcionando."
+                ),
+                "intent": None,
+                "requires_confirmation": False,
+                "error": response.error or "AI_EMPTY_RESPONSE",
+            }
 
         try:
             parsed = json.loads(response.content)
@@ -200,6 +219,13 @@ class AIEngine:
                 LLMMessage(role=LLMRole.USER, content=f"Contexto:\n{context}\n\nPergunta: {user_message}"),
             ]
             response = self.llm.generate(messages, temperature=0.3)
+            if response.error or not response.content.strip():
+                return {
+                    "message": "Não consegui gerar a resposta agora (serviço de IA indisponível). Tente novamente.",
+                    "intent": intent.type.value,
+                    "requires_confirmation": False,
+                    "error": response.error or "AI_EMPTY_RESPONSE",
+                }
             return {
                 "message": response.content,
                 "intent": intent.type.value,
@@ -238,6 +264,15 @@ class AIEngine:
                     ),
                 ]
                 response = self.llm.generate(messages, temperature=0.3)
+                if response.error or not response.content.strip():
+                    return {
+                        "message": "A operação foi executada, mas não consegui formatar a resposta (IA indisponível).",
+                        "intent": intent.type.value,
+                        "requires_confirmation": False,
+                        "tool_used": intent.tool_name,
+                        "data": tool_result.data,
+                        "error": response.error or "AI_EMPTY_RESPONSE",
+                    }
                 return {
                     "message": response.content,
                     "intent": intent.type.value,

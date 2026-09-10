@@ -11,6 +11,8 @@ Endpoints (sob /clients/contacts — o CRUD completo de clientes continua em
 Autenticação: get_tenant_context (usuário do CRM).
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
@@ -48,6 +50,24 @@ class ReactivateRequest(BaseModel):
     dry_run: bool = False
 
 
+def _parse_last_interaction(value: object) -> Optional[datetime]:
+    """ISO string → datetime (naive, UTC). Malformed/None → None (sem no-op).
+
+    O SQLAlchemy (SQLite) só aceita datetime/date — uma string ISO passaria
+    direto e derrubaria o INSERT com TypeError, descartando o contato do
+    lote em silêncio. Valor inválido é descartado (contato ainda sincroniza).
+    """
+    if not value or isinstance(value, datetime):
+        return value if isinstance(value, datetime) else None  # type: ignore[return-value]
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
 def _repo(db: Session, ctx: TenantContext) -> SQLAlchemyClientRepository:
     return SQLAlchemyClientRepository(db, ctx.tenant_id)
 
@@ -68,7 +88,12 @@ def sync_batch(
 ):
     """Upsert em lote de contatos vindos do serviço WhatsApp (ou manual)."""
     svc = _svc(db, ctx)
-    results = svc.sync_batch([item.model_dump() for item in payload.contacts])
+    items = []
+    for item in payload.contacts:
+        data = item.model_dump()
+        data["last_interaction_at"] = _parse_last_interaction(data.get("last_interaction_at"))
+        items.append(data)
+    results = svc.sync_batch(items)
     created = sum(1 for r in results if r.get("action") == "created")
     updated = sum(1 for r in results if r.get("action") == "updated")
     errors = sum(1 for r in results if r.get("action") == "error")

@@ -66,3 +66,70 @@ class TestSyncBatchAuthMatrix:
         monkeypatch.setattr(settings, "whatsapp_service_key", "")
         res = _post(client, {"X-GasFlow-Key": "anything"})
         assert res.status_code == 401
+
+
+class TestSyncBatchLastInteraction:
+    """last_interaction_at deve virar datetime real (SQLite rejeita string ISO).
+
+    Regressão: string ISO passava direto ao ORM e derrubava o INSERT com
+    TypeError — o contato era descartado do lote em silêncio (errors:1).
+    """
+
+    def test_iso_timestamp_is_parsed_and_syncs(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
+        res = client.post(
+            "/clients/contacts/sync-batch",
+            json={
+                "contacts": [
+                    {
+                        "telefone": "11990000001",
+                        "nome": "Com Timestamp",
+                        "last_interaction_at": "2026-09-05T10:00:00",
+                    }
+                ]
+            },
+            headers={"X-GasFlow-Key": "secret-key-123"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["errors"] == 0
+        assert body["results"][0]["action"] in ("created", "updated", "unchanged")
+
+    def test_tz_aware_timestamp_is_accepted(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
+        res = client.post(
+            "/clients/contacts/sync-batch",
+            json={
+                "contacts": [
+                    {
+                        "telefone": "11990000002",
+                        "nome": "Com TZ",
+                        "last_interaction_at": "2026-09-05T10:00:00Z",
+                    }
+                ]
+            },
+            headers={"X-GasFlow-Key": "secret-key-123"},
+        )
+        assert res.status_code == 200
+        assert res.json()["errors"] == 0
+
+    def test_malformed_timestamp_dropped_but_contact_syncs(self, client, monkeypatch):
+        """Valor inválido é descartado (sem 422, sem erro no item)."""
+        monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
+        res = client.post(
+            "/clients/contacts/sync-batch",
+            json={
+                "contacts": [
+                    {
+                        "telefone": "11990000003",
+                        "nome": "Timestamp Ruim",
+                        "last_interaction_at": "not-a-date",
+                    }
+                ]
+            },
+            headers={"X-GasFlow-Key": "secret-key-123"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["errors"] == 0
+        assert body["results"][0]["action"] in ("created", "updated", "unchanged")

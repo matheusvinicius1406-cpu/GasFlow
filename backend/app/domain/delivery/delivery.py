@@ -156,7 +156,6 @@ class Delivery:
         """Attempt state transition. Returns True if successful."""
         if not self.can_transition(new_status):
             return False
-        old_status = self.status
         self.status = new_status
         self.updated_at = datetime.utcnow()
 

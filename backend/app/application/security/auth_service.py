@@ -353,7 +353,6 @@ class AuthService:
         tenant_id = membership.tenant_id if membership else "default"
         role = self._get_role(membership.role_id) if membership else None
         system_role = role.system_role if role else SystemRole.OPERATOR
-        permissions = set(role.permissions) if role else set()
 
         # Create session
         token = generate_token(user.id, tenant_id)

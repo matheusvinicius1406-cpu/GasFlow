@@ -70,7 +70,7 @@ class DailyReportPDF:
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -88,8 +88,6 @@ class DailyReportPDF:
             "Subtitle", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER, textColor=colors.grey, spaceAfter=20
         )
         heading_style = ParagraphStyle("Heading", parent=styles["Heading2"], fontSize=14, spaceAfter=10, spaceBefore=20)
-        normal_style = ParagraphStyle("NormalCustom", parent=styles["Normal"], fontSize=10, spaceAfter=6)
-        right_style = ParagraphStyle("Right", parent=styles["Normal"], fontSize=10, alignment=TA_RIGHT)
 
         # Header
         elements.append(Paragraph(self.company_name, title_style))
@@ -347,8 +345,6 @@ startxref
 %%EOF"""
 
         # Calculate offsets
-        xref_offsets = [9, 58, 115, 266]
-        content_length = len(content)
 
         return content.encode("latin-1", errors="replace")
 

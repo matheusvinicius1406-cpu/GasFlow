@@ -1,6 +1,10 @@
 fastapi
 uvicorn[standard]
 
+# Upload de arquivos (multipart — UploadFile do FastAPI; VCF import).
+# Fixada: 0.0.12 tem múltiplos advisories (PYSEC-2026-1851/1852/3036–3040).
+python-multipart>=0.0.31
+
 sqlalchemy
 psycopg2-binary
 

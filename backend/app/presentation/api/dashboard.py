@@ -92,7 +92,7 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
         yesterday = today - __import__("datetime").timedelta(days=1)
         yesterday_orders = [o for o in all_orders if o.created_at and o.created_at.date() == yesterday]
         yesterday_revenue = sum(float(o.total or 0) for o in yesterday_orders if o.payment_status == "PAID")
-        yesterday_delivered = sum(
+        _yesterday_delivered = sum(
             1 for o in all_orders if o.status == "DELIVERED" and o.updated_at and o.updated_at.date() == yesterday
         )
 

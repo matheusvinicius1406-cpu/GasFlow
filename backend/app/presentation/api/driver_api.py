@@ -950,7 +950,6 @@ async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
                 continue
 
             result_record = None
-            previous_status = record.status
             if action_type == "start" and record.status in ("ASSIGNED", "DISPATCHED"):
                 result_record = delivery_repo.start_delivery(delivery_id, server_version, driver_id)
             elif action_type == "arrive" and record.status == "EN_ROUTE":

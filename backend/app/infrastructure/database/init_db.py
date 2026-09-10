@@ -81,5 +81,87 @@ from app.infrastructure.repositories.integration_model import (  # noqa: F401
 )
 
 
+def _ensure_sqlite_columns() -> None:
+    """Migrations leves e idempotentes para SQLite em produção (app Desktop).
+
+    `Base.metadata.create_all()` cria tabelas NOVAS, mas nunca altera tabelas
+    já existentes — um banco criado por uma versão antiga do app fica sem as
+    colunas novas (ex.: clients.has_name/is_whatsapp/last_interaction_at/
+    last_sync_at/marketing_status), derrubando todo SELECT/INSERT da entidade
+    com `OperationalError: no such column`.
+
+    Aqui comparamos o schema real (PRAGMA table_info) com o metadata e
+    adicionamos as colunas faltantes via ALTER TABLE. Tipos SQLite são
+    permissivos; defaults aplicam-se a linhas novas (NULL para as antigas).
+    """
+    from sqlalchemy import text
+
+    type_map = {str: "TEXT", bool: "BOOLEAN", int: "INTEGER", float: "REAL"}
+    with engine.connect() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {row[1] for row in conn.execute(text(f'PRAGMA table_info("{table.name}")')).fetchall()}
+            if not existing:
+                continue  # tabela ainda não existe — create_all cuida dela
+            for column in table.columns:
+                if column.name in existing:
+                    continue
+                col_type = type_map.get(column.type.python_type, "TEXT")
+                default = ""
+                if column.nullable is False:
+                    default = " DEFAULT ''" if col_type == "TEXT" else " DEFAULT 0"
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" ' f"{col_type}{default}"))
+        conn.commit()
+
+
+SCHEMA_VERSION = (
+    2  # v2: colunas CRM de clients (has_name, is_whatsapp, last_interaction_at, last_sync_at, marketing_status)
+)
+
+
+def _ensure_schema_version() -> None:
+    """Grava a versão de schema aplicada — permite detectar drift em logs.
+
+    Idempotente: a tabela só tem a linha id=1 e o upsert não cria duplicatas.
+    Deve rodar DEPOIS de _ensure_sqlite_columns() (que migra o que falta).
+    """
+    import logging
+    from datetime import datetime
+
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """CREATE TABLE IF NOT EXISTS _schema_version (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+            )
+        )
+        row = conn.execute(text("SELECT version FROM _schema_version WHERE id = 1")).fetchone()
+        current = row[0] if row else 0
+        if current < SCHEMA_VERSION:
+            logging.getLogger("gasflow.init_db").warning(
+                "schema.version.migrated",
+                extra={"from": current, "to": SCHEMA_VERSION},
+            )
+        conn.execute(
+            text(
+                """INSERT INTO _schema_version (id, version, updated_at)
+                VALUES (1, :v, :ts)
+                ON CONFLICT(id) DO UPDATE SET version = :v, updated_at = :ts"""
+            ),
+            {"v": SCHEMA_VERSION, "ts": datetime.utcnow().isoformat()},
+        )
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    try:
+        _ensure_sqlite_columns()
+        _ensure_schema_version()
+    except Exception:  # pragma: no cover — nunca derrubar o boot por migration
+        import logging
+
+        logging.getLogger("gasflow.init_db").exception("schema migration leve falhou")

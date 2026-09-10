@@ -131,8 +131,6 @@ class MessageGateway:
         """
         Process an incoming WhatsApp message through the full hardened pipeline.
         """
-        start_time = time.time()
-
         # 1. Parse and validate
         message = self._parse_message(raw_message)
         if not message:
@@ -211,7 +209,6 @@ class MessageGateway:
         result = self._route_to_ai(conversation, message)
 
         self._inc_metric("messages_processed")
-        latency_ms = (time.time() - start_time) * 1000
         return result
 
     def _parse_message(self, raw: Dict[str, Any]) -> Optional[WhatsAppMessage]:
@@ -396,7 +393,6 @@ class MessageGateway:
             return {"ok": False, "message": "Draft inválido."}
 
         # Recheck each item
-        updated_items = []
         for item in draft.items:
             product_codigo = item.get("product_codigo")
             quantity = item.get("quantity", 1)
