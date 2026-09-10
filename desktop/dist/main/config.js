@@ -55,6 +55,9 @@ const DEFAULTS = {
     // Backend local (uvicorn) — senha do login admin/original do frontend
     backendAdminPassword: "",
     // WhatsApp local (serviço embutido no app desktop)
+    // waEnabled controla se o waBridge sobe no boot (default true — comportamento
+    // histórico; false pula o start do serviço WhatsApp).
+    waEnabled: true,
     waPort: 3101,
     waApiKey: "",
     waAutoReply: false,

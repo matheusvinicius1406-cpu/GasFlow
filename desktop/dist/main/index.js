@@ -189,6 +189,43 @@ function ensureAgentBridge() {
     });
     return bridge;
 }
+// ── IPC de settings ─────────────────────────────────────────────
+// settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
+// Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
+function registerSettingsIpc() {
+    electron_1.ipcMain.handle("settings:setWaEnabled", async (_event, enabled) => {
+        const next = enabled === true;
+        settings = { ...settings, waEnabled: next };
+        (0, config_1.saveSettings)(settings);
+        if (next) {
+            logger_1.logger.info("wa.bridge", "waEnabled=true — iniciando waBridge");
+            try {
+                await ensureWaBridge().start();
+                if (settings.waAutoReply)
+                    ensureAssistant().start();
+                return { ok: true, running: true };
+            }
+            catch (e) {
+                logger_1.logger.warn("wa.bridge", `falha ao iniciar: ${e.message}`);
+                return { ok: false, running: false, error: String(e.message) };
+            }
+        }
+        logger_1.logger.info("wa.bridge", "waEnabled=false — parando waBridge");
+        if (waBridge && typeof waBridge.stop === "function") {
+            try {
+                await waBridge.stop();
+                return { ok: true, running: false };
+            }
+            catch (e) {
+                logger_1.logger.warn("wa.bridge", `falha ao parar: ${e.message}`);
+                return { ok: false, running: true, error: String(e.message) };
+            }
+        }
+        // Bridge nem chegou a ser instanciado (boot com waEnabled=false) — nada a parar.
+        logger_1.logger.info("wa.bridge", "waBridge não instanciado — nada a parar");
+        return { ok: true, running: false };
+    });
+}
 function ensureAssistant() {
     if (assistant)
         return assistant;
@@ -242,6 +279,9 @@ if (!gotLock) {
 else {
     electron_1.app.on("second-instance", () => mainWindow?.focus());
     electron_1.app.whenReady().then(async () => {
+        // Handlers de settings registrados cedo — o renderer pode chamar a
+        // qualquer momento depois do preload.
+        registerSettingsIpc();
         ai = new ai_service_1.AiService({
             baseUrl: settings.ollamaBaseUrl,
             textModel: settings.ollamaTextModel,
@@ -263,13 +303,20 @@ else {
             return;
         }
         // Serviços em segundo plano — independentes: falha de um não trava o outro.
-        void ensureWaBridge()
-            .start()
-            .then(() => {
-            if (settings.waAutoReply)
-                ensureAssistant().start();
-        })
-            .catch((e) => logger_1.logger.warn("app", `whatsapp: ${e.message}`));
+        // waEnabled=false pula o boot do serviço WhatsApp (settings.json).
+        if (settings.waEnabled !== false) {
+            void ensureWaBridge()
+                .start()
+                .then(() => {
+                logger_1.logger.info("wa.bridge.started", "waEnabled=true");
+                if (settings.waAutoReply)
+                    ensureAssistant().start();
+            })
+                .catch((e) => logger_1.logger.warn("app", `whatsapp: ${e.message}`));
+        }
+        else {
+            logger_1.logger.info("wa.bridge.skipped", "waEnabled=false");
+        }
         void ensureAgentBridge()
             .start()
             .catch((e) => logger_1.logger.warn("app", `agente: ${e.message}`));
