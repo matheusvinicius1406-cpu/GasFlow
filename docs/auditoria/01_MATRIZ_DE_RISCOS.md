@@ -1,5 +1,8 @@
 # 01 · Matriz de Riscos
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 Consolidação de todos os achados (IDs referenciam os arquivos por área). Ordenado por severidade.
 
 | ID | Achado | Área | Severidade | Impacto | Esforço | Status |

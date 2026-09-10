@@ -1,5 +1,8 @@
 # 🔍 AUDITORIA PROFUNDA — GasFlow
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 **Data:** 2026-09-10 · **Escopo:** repositório completo (backend, frontend, whatsapp, agent, desktop, e2e)
 
 > **✅ AÇÃO APLICADA (mesma data):** A1, A2, A3, A4, A7, A9 corrigidos; ícone

@@ -54,7 +54,7 @@ def create_provider(
 
 
 def _create_current(account_id: str) -> WhatsAppProvider:
-    """Create the current whatsapp-web.js adapter."""
+    """Create the embedded Baileys service adapter."""
     from app.infrastructure.whatsapp_provider.current_adapter import WhatsAppWebAdapter
 
     service_url = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000")

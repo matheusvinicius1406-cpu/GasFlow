@@ -1,5 +1,8 @@
 # FASE 5 — ADVERSARIAL REVIEW
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 ## Perguntas Hostis
 
 ### 1. Posso mandar mensagem sem estar conectado?

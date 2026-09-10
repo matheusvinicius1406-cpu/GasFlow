@@ -1,5 +1,8 @@
 # Fase 16.1 — WhatsApp Anti-Ban Hygiene + Cloud API (Meta Oficial)
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 > Escopo acordado: **sem camadas de evasão** (fingerprint spoofing, memory
 > hooking, deteção de vigilância) — essas técnicas não reduzem o risco real
 > (a deteção é server-side) e violam os termos da Meta. O que funciona é

@@ -1,5 +1,8 @@
 # BASELINE 14.9 — Auditoria Obrigatória do GasFlow
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 **Data:** 2026-08-29
 **Branch:** `main`
 **HEAD:** `45f4bca` feat(delivery): database persistence, GPS tracking, outbox, and driver app enhancements

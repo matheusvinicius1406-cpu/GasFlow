@@ -1,11 +1,13 @@
 """
 Current WhatsApp Provider Adapter — WAVE 2
 
-Wraps the existing whatsapp-web.js Node.js service via HTTP API.
+Wraps the embedded Baileys Node.js service via HTTP API.
+(Histórico: o motor original era whatsapp-web.js — substituído por Baileys;
+a rota HTTP /whatsapp/* permanece a mesma.)
 This adapter preserves all current behavior while conforming to the new contract.
 
 Architecture:
-FastAPI → WhatsAppWebAdapter → HTTP → Node.js /whatsapp/* → whatsapp-web.js → WhatsApp
+FastAPI → WhatsAppWebAdapter → HTTP → Node.js /whatsapp/* → Baileys → WhatsApp
 """
 
 import httpx
@@ -35,7 +37,7 @@ DEFAULT_TIMEOUT = 10
 
 
 class WhatsAppWebAdapter(WhatsAppProvider):
-    """Adapter for the current whatsapp-web.js Node.js service."""
+    """Adapter for the embedded Baileys Node.js service."""
 
     def __init__(self, account_id: str, service_url: str = DEFAULT_SERVICE_URL):
         self._account_id = account_id

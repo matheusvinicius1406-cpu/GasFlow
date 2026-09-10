@@ -1,5 +1,8 @@
 # FASE 5 — AUDITORIA DO ESTADO ATUAL
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 ## Estado Atual
 
 ### Componentes Existentes

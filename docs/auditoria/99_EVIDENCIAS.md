@@ -1,5 +1,8 @@
 # Evidências — comandos e saídas
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 Rastreabilidade bruta da auditoria. Comandos executados em `GasFlow/` (repo git com remote `matheusvinicius1406-cpu/GasFlow`).
 
 ## 1. Estado do repositório

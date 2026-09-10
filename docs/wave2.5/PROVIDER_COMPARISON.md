@@ -1,5 +1,8 @@
 # GASFLOW — WAVE 2.5 — PROVIDER COMPARISON MATRIX
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 **Data:** 2 de setembro de 2026
 **Baseline:** Backend 1030/1030 PASS, Frontend 62/62 PASS
 

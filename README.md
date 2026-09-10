@@ -48,7 +48,7 @@ backend/app/
 - ✅ Pedidos com status
 - ✅ Produtos com estoque
 - ✅ Entregadores
-- ✅ WhatsApp Automation (whatsapp-web.js)
+- ✅ WhatsApp Automation (Baileys — canal não-oficial embutido)
   - Conexão via QR Code
   - Gerenciamento de contatos
   - Listas de segmentação
@@ -139,7 +139,7 @@ de inativos) e a IA pode corrigir o endereço na própria conversa (tool
 - Pydantic
 
 ### WhatsApp (Node.js)
-- whatsapp-web.js
+- Baileys (substituiu o whatsapp-web.js — ver docs/phase16/BAILEYS_MIGRATION.md)
 - Express
 - SQLite (contatos/listas/campanhas)
 
@@ -384,6 +384,19 @@ cd whatsapp && npm test
 docker compose -f docker-compose.e2e.yml up -d --build
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
+
+## Auto-update (app Desktop Windows)
+
+O app Desktop se atualiza sozinho via `electron-updater` + GitHub Releases:
+
+1. **Bump** da versão em `desktop/package.json` + commit.
+2. **Push de tag** `v<versão>` → o workflow `release.yml` builda o instalador
+   (`GasFlow Desktop Setup <versão>.exe` + `latest.yml` + `*.blockmap`) e
+   publica na Release.
+3. Apps instalados checam o canal `latest` 15s após abrir (e a cada 6h),
+   baixam e instalam ao clicar em "Reiniciar e instalar" (ou ao fechar).
+
+Detalhes e logs: [`desktop/README.md`](desktop/README.md#auto-update-electron-updater--github-releases).
 
 ## Licença
 

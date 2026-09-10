@@ -5,7 +5,7 @@ Abstract interface that all WhatsApp providers must implement.
 The GasFlow domain depends ONLY on this contract.
 
 Providers:
-- WhatsAppWebProvider (current whatsapp-web.js)
+- WhatsAppWebProvider (HTTP adapter — o serviço local roda Baileys)
 - EvolutionProvider (Evolution API)
 - BaileysProvider (Baileys — experimental)
 - MetaProvider (Meta Cloud API — future)

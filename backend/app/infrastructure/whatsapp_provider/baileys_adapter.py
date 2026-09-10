@@ -41,7 +41,7 @@ class BaileysAdapter(WhatsAppProvider):
     NOTE: This is a structural placeholder. A Baileys-based Node.js service
     would need to be built to make this functional.
 
-    Baileys advantages over whatsapp-web.js:
+    Baileys advantages over the previous whatsapp-web.js engine (histórico):
     - No Chromium/Puppeteer required (pure WebSocket)
     - Lower memory footprint (~50-100MB vs ~200-500MB)
     - Faster startup

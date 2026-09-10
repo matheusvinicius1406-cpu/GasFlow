@@ -2,7 +2,8 @@
 Normalized WhatsApp Models — WAVE 2
 
 Provider-independent models that abstract differences between
-whatsapp-web.js, Evolution API, Baileys, and Meta Cloud API.
+the embedded Baileys service, Evolution API, and Meta Cloud API.
+(Histórico: o motor original era whatsapp-web.js — substituído por Baileys.)
 
 The GasFlow domain should ONLY use these models.
 """
@@ -49,7 +50,7 @@ class MediaType(str, Enum):
 class ProviderType(str, Enum):
     """Supported provider types."""
 
-    CURRENT = "current"  # whatsapp-web.js
+    CURRENT = "current"  # serviço local embutido (Baileys) via HTTP
     EVOLUTION = "evolution"  # Evolution API
     BAILEYS = "baileys"  # Baileys
     META = "meta"  # Meta Cloud API (future)

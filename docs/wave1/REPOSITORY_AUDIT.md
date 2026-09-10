@@ -1,5 +1,8 @@
 # GASFLOW — WAVE 1 — AUDITORIA DOS 11 REPOSITÓRIOS
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 **Data:** 2 de setembro de 2026
 **Baseline:** Backend 1002/1002 PASS, Frontend 62/62 PASS
 

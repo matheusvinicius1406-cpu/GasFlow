@@ -1,4 +1,7 @@
 # FASE 10 — FINAL VALIDATION
+
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
 # WhatsApp AI + Conversational Commerce
 
 ## STATUS: **APPROVED**

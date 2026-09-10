@@ -1,5 +1,8 @@
 # 02 · Plano de Correção — P0 → P3
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 Ordem de execução recomendada. Cada fase é comitável e verificável isoladamente.
 
 ## Onda 1 — P0: salvar o trabalho e viabilizar CI de release (~1 h)

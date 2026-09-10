@@ -22,7 +22,7 @@ Notas de implementação:
   canais não-oficiais).
 - `transport` pode ser injetado (httpx.MockTransport) para testes sem rede.
 
-Diferenças vs. canal não-oficial (whatsapp-web.js):
+Diferenças vs. canal não-oficial (Baileys; histórico: whatsapp-web.js):
 - Envio exige template aprovado fora da janela de 24h do usuário (erro 131047).
 - Dentro da janela de 24h (usuário mandou mensagem), texto livre é permitido.
 - Delivery/read receipts chegam via webhook (ver verify_webhook_signature).

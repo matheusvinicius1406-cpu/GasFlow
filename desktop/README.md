@@ -83,6 +83,7 @@ Scripts:
 | `ollamaTextModel` / `ollamaVisionModel` | `llama3.2` / `llama3.2-vision` | Modelos |
 | `waPort` | `3101` | Porta do serviço WhatsApp local |
 | `waApiKey` | gerada | Chave local que protege a API do WhatsApp |
+| `waEnabled` | `true` | Se `false`, o serviço WhatsApp **não sobe** no boot (log `wa.bridge.skipped`) |
 | `waAutoReply` | `false` | Assistente IA responde novas mensagens sozinho |
 
 ### Segurança e anti-ban do serviço WhatsApp (efeitos recentes)
@@ -98,6 +99,48 @@ Scripts:
   respeitam caps por minuto/hora e cooldown por destinatário — bloqueio
   retorna `429` com `Retry-After`. O assistente IA do desktop não duplica
   resposta: só fala quando o backend ainda não respondeu àquela mensagem.
+
+## Auto-update (electron-updater + GitHub Releases)
+
+Fluxo completo de atualização do app instalado:
+
+1. **Bump de versão** (`desktop/package.json` e `package-lock.json`) + commit.
+2. **Push de tag** `v<versão>` → o workflow `release.yml` builda o instalador
+   no GitHub Actions e publica na Release correspondente (com `latest.yml` e
+   `*.blockmap`).
+3. **Apps instalados detectam**: 15s após abrir (e a cada 6h) o
+   `electron-updater` consulta o canal (default `latest`) no GitHub Releases.
+4. **Download automático** (`autoDownload=true`); o usuário vê o progresso e
+   clica em **"Reiniciar e instalar"** — ou instala ao fechar o app
+   (`autoInstallOnAppQuit=true`).
+
+Logs para diagnosticar: `updater.checking` / `updater.available` /
+`updater.ready` / `updater.error` (arquivo de log em `%APPDATA%/gasflow-desktop/logs/`).
+
+- `allowDowngrade=false`: versão anterior nunca é instalada por cima.
+- **Rollback**: publique uma release nova com versão maior — o updater não
+  rebaixa versão sozinho.
+- Dev (app não empacotado): auto-update desligado de propósito (log
+  `app não empacotado — auto-update desligado (dev)`).
+
+## Migration de schema (SQLite local)
+
+O banco do usuário (`%APPDATA%/gasflow-desktop/gasflow.db`) é criado por
+`Base.metadata.create_all()` — que **não altera tabelas existentes**. Para
+evolutivas de schema, `init_db._ensure_sqlite_columns()` compara o schema real
+(`PRAGMA table_info`) com os models e adiciona colunas faltantes via
+`ALTER TABLE ... ADD COLUMN` (idempotente, não perde dados). A versão aplicada
+fica registrada em `_schema_version` (tabela de 1 linha, upsert idempotente).
+
+## Sobre `desktop/dist/` versionado
+<arg_value><b88a6f17>> [histórico] Os fontes do main process (`src/main/*.ts`) não estão nesta
+> árvore — apenas o `dist/` compilado é versionado. A restauração dos fontes
+> está em andamento na branch `refactor/desktop-sources` (Onda 4 da auditoria).
+
+O Electron carrega `dist/main/index.js` direto — alterações no main process
+são feitas hoje no próprio `dist/` (com os testes de fumaça em `desktop/tests/`
+cobrindo updater, config e preload). `npm run typecheck` usa um placeholder em
+`src/` até os fontes serem restaurados.
 
 ## Arquitetura / decisões
 

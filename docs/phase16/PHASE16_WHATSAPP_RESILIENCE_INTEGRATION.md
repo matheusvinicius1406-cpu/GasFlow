@@ -1,5 +1,8 @@
 # FASE 16 — Resiliência do WhatsApp + Integração dos 2 Repositórios
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 Data: 2026-09-05 · Branch `main` · v1.0.0-rc.4 (proposto)
 
 ## O que foi encontrado (bugs reais na análise)

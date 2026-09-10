@@ -1,5 +1,8 @@
 # GasFlow — FASE 0: Auditoria Arquitetural (Refinada)
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 **Data:** 26/08/2026
 **Auditor:** Buffy (Codebuff)
 **Status:** COMPLETO ✅

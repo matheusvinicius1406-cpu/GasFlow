@@ -1,5 +1,8 @@
 # Resolução de Pendências (WA-02 + GHCR + PIX + Redis + FE + RT-01)
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 Data: 2026-09-04 · Branch `main` · v1.0.0-rc.3
 
 ## Round 2 — executado (rc.3)

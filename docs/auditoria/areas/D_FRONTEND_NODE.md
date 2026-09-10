@@ -1,5 +1,8 @@
 # Achados por área — Frontend, WhatsApp, Agent e Docs
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 ## F-1 · 🟢 Frontend: limpo e integrado (estado atual)
 
 **Evidência:** ESLint sem erros; `tsc -b` limpo; 159/159 testes; rota `/contacts` + menu "Contatos WhatsApp" ligados (ContactsCrmPage não é mais órfã); `UpdateNotifier` montado no DashboardLayout com `window.gasflowUpdater` opcional (no navegador, não renderiza).

@@ -1,5 +1,8 @@
 # Roadmap
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 ## Fase 1 ✅
 * Estrutura do projeto
 * API

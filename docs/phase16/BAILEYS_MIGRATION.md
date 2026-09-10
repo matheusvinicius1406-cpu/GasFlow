@@ -1,5 +1,8 @@
 # Fase 16.2 — Migração wwebjs → Baileys (WebSocket puro)
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 > Estratégia: **migração dual-mode**. Ambos os motores permanecem no código;
 > `WA_ENGINE` escolhe por conta. Rollback = trocar uma env var, sem rebuild
 > e sem perder a sessão antiga.

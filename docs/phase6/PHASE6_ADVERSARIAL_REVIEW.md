@@ -1,5 +1,8 @@
 # FASE 6 — ADVERSARIAL REVIEW
 
+> [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
+
+
 ## Methodology
 
 Each scenario was tested with real code execution, not theoretical analysis.
