@@ -17,6 +17,7 @@ Architecture: WhatsApp → Message Gateway → Conversation → AI Core → Tool
 """
 
 import json
+import logging
 import time
 import re
 from typing import Dict, Any, Optional, List
@@ -25,6 +26,8 @@ from collections import defaultdict
 import threading
 
 from app.core.logging import setup_logging
+
+logger = logging.getLogger("gasflow.whatsapp.gateway")
 
 from app.domain.whatsapp.message import WhatsAppMessage, WhatsAppOutbound, MessageType
 from app.domain.whatsapp.conversation import (
@@ -312,7 +315,7 @@ class MessageGateway:
                     "telefone": client.telefone,
                 }
         except Exception:
-            pass
+            logger.debug("wa.gateway.client_lookup_failed", exc_info=True)
         return None
 
     def _handle_media_message(self, message: WhatsAppMessage) -> Dict[str, Any]:
@@ -411,7 +414,8 @@ class MessageGateway:
                             ),
                         }
                 except Exception:
-                    pass  # If inventory check fails, proceed (order UseCase will catch)
+                    # Se a checagem falhar, segue (o UseCase de pedido revalida).
+                    logger.warning("wa.gateway.inventory_check_failed", exc_info=True)
 
             # Recheck price
             product_info = self._resolve_product(product_codigo)
@@ -652,7 +656,7 @@ class MessageGateway:
                 if codigo.lower() in p.nome.lower():
                     return {"codigo": p.codigo, "nome": p.nome, "preco": float(p.preco)}
         except Exception:
-            pass
+            logger.debug("wa.gateway.product_lookup_failed", exc_info=True)
         return None
 
     def _format_draft_confirmation(self, draft: ConversationDraft) -> str:

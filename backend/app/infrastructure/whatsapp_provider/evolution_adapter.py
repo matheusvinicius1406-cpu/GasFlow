@@ -172,7 +172,7 @@ class EvolutionAdapter(WhatsAppProvider):
                     data = resp.json()
                     return data.get("base64")
         except Exception:
-            pass
+            logger.debug("wa.evolution.qr_fetch_failed", exc_info=True)
         return None
 
     # ── Messaging ────────────────────────────────────────
@@ -353,7 +353,7 @@ class EvolutionAdapter(WhatsAppProvider):
                         if inst.get("instanceName") == self._instance_name:
                             return inst
         except Exception:
-            pass
+            logger.debug("wa.evolution.instance_lookup_failed", exc_info=True)
         return None
 
     async def _create_instance(self) -> None:

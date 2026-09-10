@@ -10,6 +10,8 @@ Events:
   DriverAvailable, DriverLocationUpdated, DispatchReplanned
 """
 
+import logging
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -135,8 +137,8 @@ class EventBus:
             try:
                 handler(event)
             except Exception:
-                # Don't let handler errors break the bus
-                pass
+                # Don't let handler errors break the bus — mas ficam visíveis.
+                logging.getLogger("gasflow.events").debug("event.handler_failed", exc_info=True)
 
     def get_history(self, event_type: Optional[EventType] = None, limit: int = 50) -> List[DomainEvent]:
         """Get recent events, optionally filtered by type."""

@@ -157,7 +157,7 @@ class CloudApiAdapter(WhatsAppProvider):
             try:
                 retry_after = int(resp.json().get("error", {}).get("retry_after", DEFAULT_RETRY_AFTER_S))
             except Exception:  # noqa: BLE001 — body pode não ser JSON
-                pass
+                logger.debug("wa.cloud_api.retry_after_parse_failed", exc_info=True)
             raise WhatsAppRateLimitError(
                 f"Cloud API rate limited: HTTP 429 (retry after {retry_after}s)",
                 provider="cloud_api",
@@ -273,7 +273,7 @@ class CloudApiAdapter(WhatsAppProvider):
             try:
                 await self._client.aclose()
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("wa.cloud_api.client_close_failed", exc_info=True)
             self._client = None
 
     async def logout(self) -> None:

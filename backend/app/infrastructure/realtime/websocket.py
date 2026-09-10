@@ -245,7 +245,8 @@ def _verify_ws_token(token: str) -> Optional[dict]:
                 "driver_id": "",
             }
     except Exception:
-        pass
+        # Token inválido/expirado cai no fluxo de driver auth abaixo.
+        logger.debug("ws.token_auth_failed", exc_info=True)
 
     # Try driver auth via DB session
     try:
@@ -267,7 +268,7 @@ def _verify_ws_token(token: str) -> Optional[dict]:
         finally:
             db.close()
     except Exception:
-        pass
+        logger.debug("ws.driver_session_auth_failed", exc_info=True)
 
     return None
 

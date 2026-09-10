@@ -10,7 +10,10 @@ Executes workflow definitions step by step with:
 - Idempotency
 """
 
+import logging
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("gasflow.automation")
 from app.domain.automation.workflows import (
     WorkflowDefinition,
     WorkflowRun,
@@ -240,7 +243,8 @@ class WorkflowEngine:
                     cond = Condition(field=field_name, operator=op, value=val)
                     return evaluate_condition(cond, context)
             except Exception:
-                pass
+                # Condição malformada não derruba a regra — segue com default.
+                logger.debug("automation.condition.parse_failed", exc_info=True)
         return True  # Default: condition met
 
     def _skip_step(self, run_id: str, step_def) -> WorkflowStepRun:

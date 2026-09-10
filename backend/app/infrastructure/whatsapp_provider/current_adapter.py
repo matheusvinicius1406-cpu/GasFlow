@@ -148,7 +148,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
                     data = resp.json()
                     return data.get("qr")
         except Exception:
-            pass
+            logger.debug("wa.current.qr_fetch_failed", exc_info=True)
         return None
 
     # ── Messaging ────────────────────────────────────────
@@ -285,7 +285,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
                         if acc.get("id") == self._account_id:
                             return acc.get("status", {}).get("connected", False)
         except Exception:
-            pass
+            logger.debug("wa.current.status_check_failed", exc_info=True)
         return False
 
     # ── Private helpers ──────────────────────────────────

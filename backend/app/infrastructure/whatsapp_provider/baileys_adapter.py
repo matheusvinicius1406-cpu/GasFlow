@@ -147,7 +147,7 @@ class BaileysAdapter(WhatsAppProvider):
                     }
                     return mapping.get(state, ConnectionState.DISCONNECTED)
         except Exception:
-            pass
+            logger.debug("wa.baileys.connection_state_failed", exc_info=True)
         return ConnectionState.DISCONNECTED
 
     async def get_connection_info(self) -> ConnectionInfo:
@@ -177,7 +177,7 @@ class BaileysAdapter(WhatsAppProvider):
                     data = resp.json()
                     return data.get("qr")
         except Exception:
-            pass
+            logger.debug("wa.baileys.qr_fetch_failed", exc_info=True)
         return None
 
     # ── Messaging ────────────────────────────────────────

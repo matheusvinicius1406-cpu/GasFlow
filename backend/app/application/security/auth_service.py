@@ -6,8 +6,11 @@ Authority: IDENTITY + POLICY + DOMAIN + DATABASE.
 Never trust: frontend, LLM, Agent, Workflow, WhatsApp.
 """
 
+import logging
 import uuid
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("gasflow.security")
 from datetime import datetime, timedelta
 import threading
 import functools
@@ -57,7 +60,8 @@ def _db_synchronized(fn):
                     try:
                         self._db.rollback()
                     except Exception:
-                        pass
+                        # Rollback de limpeza falhou — registra e propaga o erro original.
+                        logger.debug("auth.session.rollback_failed", exc_info=True)
                 raise
 
     return wrapper

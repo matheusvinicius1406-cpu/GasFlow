@@ -12,9 +12,13 @@ Endpoints:
     GET /printer/orders/{order_id}/jobs — Get print jobs for an order
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
+
+logger = logging.getLogger("gasflow.printer")
 from pydantic import BaseModel
 
 from app.infrastructure.printing.print_agent import get_print_agent, PrintJobStatus
@@ -76,7 +80,8 @@ async def create_print_job(req: PrintRequest, ctx: TenantContext = Depends(get_t
         finally:
             db.close()
     except Exception:
-        pass
+        # Fallback: impressão segue com dados mínimos do pedido.
+        logger.warning("printer.order_lookup_failed", exc_info=True)
 
     job = agent.create_print_job(
         order_id=req.order_id,

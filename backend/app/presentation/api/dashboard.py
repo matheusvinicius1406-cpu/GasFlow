@@ -5,9 +5,13 @@ Consolidated endpoint for the premium dashboard.
 GET /dashboard — Dashboard overview
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
+
+logger = logging.getLogger("gasflow.dashboard")
 from typing import Any
 from datetime import datetime, date
 
@@ -79,7 +83,8 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
             if last_cash:
                 cash_balance = float(last_cash.balance_after or 0)
         except Exception:
-            pass
+            # Métrica cosmética do dashboard — falha não pode derrubar a página.
+            logger.debug("dashboard.cash_balance_failed", exc_info=True)
 
         # ── Inventory ───────────────────────────────────────
         inventory_items = db.query(InventoryModel).filter(InventoryModel.tenant_id == tid).all()
@@ -147,7 +152,7 @@ async def get_dashboard(ctx: TenantContext = Depends(get_tenant_context)) -> dic
                         driver_name = driver.name
                         driver_phone = getattr(driver, "phone", None)
                 except Exception:
-                    pass
+                    logger.debug("dashboard.driver_lookup_failed", exc_info=True)
             active_deliveries.append(
                 {
                     "order_codigo": o.codigo,
