@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * AgentBridge — roda o agente de integração como subprocesso (`node agent/dist/index.js --ipc`)
  * e fala o protocolo JSON-lines (agent/src/ipc.ts) sobre stdin/stdout.
@@ -64,6 +65,9 @@ class AgentBridge extends node_events_1.EventEmitter {
                 resolve();
             }, 5000);
         });
+        if (!this.running) {
+            throw new Error(`agente encerrou durante a inicialização${this.lastError ? `: ${this.lastError}` : ""}`);
+        }
         const creds = this.opts.getCredentials();
         if (creds.token) {
             await this.request("configure", { apiUrl: creds.apiUrl, token: creds.token }).catch((e) => {

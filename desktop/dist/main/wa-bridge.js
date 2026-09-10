@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * WhatsAppBridge — roda o serviço whatsapp/ como subprocesso e fala REST
  * com ele (mesmos endpoints usados pelo backend: /api/whatsapp/*).
@@ -73,6 +74,7 @@ class WhatsAppBridge extends node_events_1.EventEmitter {
             }
             await new Promise((r) => setTimeout(r, 400));
         }
+        await this.stop();
         throw new Error(`serviço whatsapp não respondeu em ${Math.round(waitMs / 1000)}s`);
     }
     async stop() {

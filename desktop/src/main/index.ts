@@ -196,6 +196,22 @@ function ensureAgentBridge() {
     });
     return bridge;
 }
+
+async function startWithRetry(label: string, start: () => Promise<unknown>, attempts = 3): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            await start();
+            logger.info(`${label}.started`, `tentativa=${attempt}`);
+            return;
+        } catch (error) {
+            lastError = error;
+            logger.warn(`${label}.start_failed`, `tentativa=${attempt}/${attempts}: ${error instanceof Error ? error.message : String(error)}`);
+            if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`${label} não iniciou`);
+}
 // ── IPC de settings ─────────────────────────────────────────────
 // settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
 // Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
@@ -295,7 +311,7 @@ else {
             visionModel: settings.ollamaVisionModel,
         });
         try {
-            await ensureBackend().start();
+            await startWithRetry("backend", () => ensureBackend().start());
             createWindow();
             logger_1.logger.info("app", `backend pronto em ${backendUrl()} — frontend original servido pelo FastAPI`);
         }
@@ -304,18 +320,16 @@ else {
             // Janela de erro mínima (sem interface custom) — mensagem nativa.
             const { dialog } = await Promise.resolve().then(() => __importStar(require("electron")));
             await dialog.showErrorBox("GasFlow Desktop", `O backend não conseguiu iniciar.\n\n${e.message}\n\n` +
-                "Verifique se o Python 3.11+ e as dependências do backend estão instalados\n" +
-                "(cd backend && pip install -r requirements.txt).");
+                "Feche outras instâncias do GasFlow e tente novamente. Se o problema continuar,\n" +
+                "consulte os logs em %APPDATA%\\gasflow-desktop\\logs.");
             electron_1.app.quit();
             return;
         }
         // Serviços em segundo plano — independentes: falha de um não trava o outro.
         // waEnabled=false pula o boot do serviço WhatsApp (settings.json).
         if (settings.waEnabled !== false) {
-            void ensureWaBridge()
-                .start()
+            void startWithRetry("wa.bridge", () => ensureWaBridge().start())
                 .then(() => {
-                logger_1.logger.info("wa.bridge.started", "waEnabled=true");
                 if (settings.waAutoReply)
                     ensureAssistant().start();
             })
@@ -324,8 +338,7 @@ else {
         else {
             logger_1.logger.info("wa.bridge.skipped", "waEnabled=false");
         }
-        void ensureAgentBridge()
-            .start()
+        void startWithRetry("agent", () => ensureAgentBridge().start())
             .catch((e) => logger_1.logger.warn("app", `agente: ${e.message}`));
         electron_1.app.on("activate", () => {
             if (electron_1.BrowserWindow.getAllWindows().length === 0)

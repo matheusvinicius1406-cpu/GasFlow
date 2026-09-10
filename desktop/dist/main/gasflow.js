@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Cliente HTTP para o backend GasFlow — mesmos endpoints do agente
  * (listIntegrations / sync-run / test-connection) mais health check.

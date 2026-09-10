@@ -28,3 +28,13 @@ alertas HIGH no `npm audit`. `qs` e outras transitivas foram atualizadas por
 overrides, mas remover o restante exige retirar o rollback wwebjs ou migrar
 definitivamente para Baileys. O engine padrão já é Baileys; o risco permanece
 isolado ao modo legado e está registrado para a migração definitiva.
+
+## Assinatura do instalador Windows
+
+O instalador local continua sem assinatura (`NotSigned`), portanto o
+SmartScreen pode bloqueá-lo. O workflow de release agora exige os secrets
+`WINDOWS_CODESIGN_CERTIFICATE_BASE64` e `WINDOWS_CODESIGN_CERTIFICATE_PASSWORD`
+e falha se o Authenticode não for válido. É necessário fornecer um certificado
+de assinatura de código emitido por uma autoridade confiável para remover o
+aviso no Windows; um certificado autoassinado não resolve a confiança do
+usuário final.

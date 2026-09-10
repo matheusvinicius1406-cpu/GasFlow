@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * AssistantEngine — assistente WhatsApp do GasFlow Desktop.
  *

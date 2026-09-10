@@ -48,6 +48,9 @@ win:
   icon: build/icon.ico
   publisherName: GasFlow
   requestedExecutionLevel: asInvoker
+  # O release CI exige CSC_LINK/CSC_KEY_PASSWORD para Authenticode.
+  # Sem certificado, o Windows/SmartScreen continuará exibindo aviso.
+  signAndEditExecutable: true
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

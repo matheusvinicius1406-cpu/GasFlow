@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadSettings = loadSettings;
 exports.saveSettings = saveSettings;
-const electron_2 = require("electron");
+const electron_1 = require("electron");
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
 const DEFAULTS = {
@@ -28,7 +28,7 @@ function generateKey(prefix) {
     return `${prefix}-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 function settingsPath() {
-    return node_path_1.default.join(electron_2.app.getPath("userData"), "settings.json");
+    return node_path_1.default.join(electron_1.app.getPath("userData"), "settings.json");
 }
 function loadSettings() {
     let loaded;

@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Preload — ponte segura entre renderer (React) e main process.
  * contextIsolation: o renderer não tem acesso a Node; só a esta API.

@@ -64,6 +64,9 @@ class AgentBridge extends node_events_1.EventEmitter {
                 resolve();
             }, 5000);
         });
+        if (!this.running) {
+            throw new Error(`agente encerrou durante a inicialização${this.lastError ? `: ${this.lastError}` : ""}`);
+        }
         const creds = this.opts.getCredentials();
         if (creds.token) {
             await this.request("configure", { apiUrl: creds.apiUrl, token: creds.token }).catch((e) => {

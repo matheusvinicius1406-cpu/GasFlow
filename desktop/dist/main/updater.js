@@ -3,9 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createUpdateState = createUpdateState;
 exports.registerUpdateIpc = registerUpdateIpc;
 exports.setupAutoUpdate = setupAutoUpdate;
-const electron_2 = require("electron");
+const electron_1 = require("electron");
 const electron_updater_1 = require("electron-updater");
-const logger_2 = require("./logger");
+const logger_1 = require("./logger");
 function createUpdateState(deps = {}) {
     const log = deps.log ?? (() => undefined);
     let state = {
@@ -62,7 +62,7 @@ function createUpdateState(deps = {}) {
     }
     return { get, set, subscribe, wire };
 }
-const update = createUpdateState({ log: (level, scope, message) => (0, logger_2.logLine)(level, scope, message) });
+const update = createUpdateState({ log: (level, scope, message) => (0, logger_1.logLine)(level, scope, message) });
 let ipcRegistered = false;
 let checkTimer = null;
 function errorMessage(error) {
@@ -70,20 +70,20 @@ function errorMessage(error) {
 }
 function broadcastUpdateState() {
     try {
-        for (const win of electron_2.BrowserWindow.getAllWindows()) {
+        for (const win of electron_1.BrowserWindow.getAllWindows()) {
             if (!win.isDestroyed())
                 win.webContents.send("update:state", update.get());
         }
     }
     catch (error) {
-        (0, logger_2.logLine)("warn", "updater", `broadcast falhou: ${errorMessage(error)}`);
+        (0, logger_1.logLine)("warn", "updater", `broadcast falhou: ${errorMessage(error)}`);
     }
 }
 function registerUpdateIpc() {
     if (ipcRegistered)
         return;
     ipcRegistered = true;
-    electron_2.ipcMain.handle("update:check", async () => {
+    electron_1.ipcMain.handle("update:check", async () => {
         try {
             await electron_updater_1.autoUpdater.checkForUpdates();
             return { ok: true, state: update.get() };
@@ -92,7 +92,7 @@ function registerUpdateIpc() {
             return { ok: false, error: errorMessage(error) };
         }
     });
-    electron_2.ipcMain.handle("update:install", async () => {
+    electron_1.ipcMain.handle("update:install", async () => {
         try {
             electron_updater_1.autoUpdater.quitAndInstall(false, true);
             return { ok: true };
@@ -101,7 +101,7 @@ function registerUpdateIpc() {
             return { ok: false, error: errorMessage(error) };
         }
     });
-    electron_2.ipcMain.handle("update:state", async () => update.get());
+    electron_1.ipcMain.handle("update:state", async () => update.get());
 }
 /**
  * Liga o auto-update. Só atua com app empacotado (dev não tem release).
@@ -110,8 +110,8 @@ function registerUpdateIpc() {
  * @param getChannel retorna o canal de settings.json ("latest" | "beta" | ...)
  */
 function setupAutoUpdate(getChannel) {
-    if (!electron_2.app.isPackaged) {
-        (0, logger_2.logLine)("info", "updater", "app não empacotado — auto-update desligado (dev)");
+    if (!electron_1.app.isPackaged) {
+        (0, logger_1.logLine)("info", "updater", "app não empacotado — auto-update desligado (dev)");
         return;
     }
     electron_updater_1.autoUpdater.autoDownload = true;
@@ -133,7 +133,7 @@ function setupAutoUpdate(getChannel) {
     // Checagem inicial: 15s após o renderer carregar (não compete com o boot do backend).
     setTimeout(() => {
         electron_updater_1.autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-            (0, logger_2.logLine)("warn", "updater", `checagem inicial falhou: ${errorMessage(error)}`);
+            (0, logger_1.logLine)("warn", "updater", `checagem inicial falhou: ${errorMessage(error)}`);
         });
     }, 15_000);
     // Re-checagem a cada 6h (interval único — guard contra chamadas repetidas).

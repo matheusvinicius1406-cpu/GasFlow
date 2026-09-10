@@ -68,6 +68,7 @@ class BackendBridge {
             }
             await new Promise((r) => setTimeout(r, 500));
         }
+        await this.stop();
         throw new Error("backend não respondeu /health a tempo");
     }
     async stop() {

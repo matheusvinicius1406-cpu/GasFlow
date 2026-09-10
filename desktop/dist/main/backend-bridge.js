@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * BackendBridge — roda o backend FastAPI como subprocesso (uvicorn).
  *
@@ -68,6 +69,7 @@ class BackendBridge {
             }
             await new Promise((r) => setTimeout(r, 500));
         }
+        await this.stop();
         throw new Error("backend não respondeu /health a tempo");
     }
     async stop() {

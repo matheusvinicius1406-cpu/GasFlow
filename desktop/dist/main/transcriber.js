@@ -1,5 +1,6 @@
 // @ts-nocheck
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Transcrição de áudio (WhatsApp) via CLI whisper — mesmo contrato do backend
  * (app/infrastructure/audio/whisper_provider.py): binário no PATH (ou caminho
