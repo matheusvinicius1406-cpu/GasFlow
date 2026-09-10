@@ -75,3 +75,7 @@ whatsapp/export/
 
 # Agent build output (compilado de agent/src pelo build:win; nao versionar)
 agent/dist/
+
+# Artefatos residuais do electron-builder (runs falhas deixam win-unpacked em dist/)
+desktop/dist/win-unpacked/
+desktop/dist/builder-debug.yml

@@ -2,6 +2,14 @@ appId: com.gasflow.desktop
 productName: GasFlow Desktop
 directories:
   output: release
+  buildResources: build
+# Auto-update (electron-updater): releases publicados no GitHub.
+# releaseType: release evita draft (drafts não são vistos pelo updater).
+publish:
+  provider: github
+  owner: matheusvinicius1406-cpu
+  repo: GasFlow
+  releaseType: release
 files:
   - dist/**
   - package.json
@@ -35,7 +43,17 @@ extraResources:
 win:
   target:
     - nsis
+  icon: build/icon.ico
+  publisherName: GasFlow
+  requestedExecutionLevel: asInvoker
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GasFlow Desktop
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  artifactName: "GasFlow Desktop Setup ${version}.${ext}"
