@@ -71,4 +71,3 @@ const updaterApi = {
     onStateChange: (cb) => subscribe("update:state", cb),
 };
 electron_1.contextBridge.exposeInMainWorld("gasflowUpdater", updaterApi);
-//# sourceMappingURL=index.js.map

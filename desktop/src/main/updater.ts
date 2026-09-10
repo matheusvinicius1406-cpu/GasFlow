@@ -159,7 +159,7 @@ function setupAutoUpdate(getChannel) {
     // Re-checagem a cada 6h (interval único — guard contra chamadas repetidas).
     if (checkTimer === null) {
         checkTimer = setInterval(() => {
-            electron_updater_1.autoUpdater.checkForUpdates().catch(() => { });
+            electron_updater_1.autoUpdater.checkForUpdates().catch(() => { /* offline — tenta de novo em 6h */ });
         }, 6 * 60 * 60 * 1000);
     }
 }
