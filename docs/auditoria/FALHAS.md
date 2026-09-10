@@ -16,11 +16,10 @@ Os roteiros e o workflow CI permanecem registrados; essas verificações depende
 ## Instalador Windows
 
 O build local `1.1.1` gerou o instalador e `latest.yml` corretamente, com
-frontend, agente e WhatsApp presentes. A inspeção também mostrou que esse
-artefato local não tinha Python embutido. O workflow de release agora compila
-`backend/gasflow-backend.exe` com PyInstaller e o Electron o prefere quando
-empacotado; a validação final desse caminho depende de uma execução do GitHub
-Actions ou de PyInstaller instalado localmente.
+frontend, agente e WhatsApp presentes. O backend standalone também foi gerado
+localmente com PyInstaller (`gasflow-backend.exe`, 56 MB) e respondeu a
+`--help`; o Electron o prefere quando empacotado. A validação restante é
+executar o instalador em uma VM Windows limpa e publicar uma release real.
 
 ## Dependências legadas do WhatsApp
 

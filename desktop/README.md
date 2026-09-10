@@ -41,10 +41,10 @@ os serviços rodando localmente na máquina.
 
 - **Node.js 20+** (para desenvolver) — o usuário final não precisa (Electron
   embute o Node 22 para os subprocessos).
-- **Python 3.11+** com as deps do backend (o backend roda via `python -m
-  uvicorn`; se existir `backend/.venv`, ele é usado automaticamente).
-  Empacotar o backend com PyInstaller é o próximo passo para um instalador
-  100% autônomo.
+- **Python 3.11+** com as deps do backend para desenvolvimento. O workflow de
+  release gera `gasflow-backend.exe` com PyInstaller e o Electron usa esse
+  binário quando empacotado; builds locais sem esse artefato usam Python do
+  sistema como fallback.
 - **Ollama** com modelo de texto (`ollama pull llama3.2`) — usado pelo
   assistente e pelo pipeline de IA do backend (`AI_PROVIDER=ollama`).
 
@@ -133,7 +133,8 @@ evolutivas de schema, `init_db._ensure_sqlite_columns()` compara o schema real
 fica registrada em `_schema_version` (tabela de 1 linha, upsert idempotente).
 
 ## Sobre `desktop/dist/` versionado
-<arg_value><b88a6f17>> [histórico] Os fontes do main process (`src/main/*.ts`) não estão nesta
+
+<arg_value><b88a6f17>> [histórico] Os fontes do main process (`src/main/*.ts`) não estão nesta
 > árvore — apenas o `dist/` compilado é versionado. A restauração dos fontes
 > está em andamento na branch `refactor/desktop-sources` (Onda 4 da auditoria).
 
