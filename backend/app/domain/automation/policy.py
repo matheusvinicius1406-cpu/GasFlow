@@ -240,7 +240,8 @@ class ApprovalEngine:
             approval.approved_by = approved_by
             return True
 
-    def reject(self, approval_id: str, rejected_by: str = "") -> bool:
+    def reject(self, approval_id: str, _rejected_by: str = "") -> bool:
+        # _rejected_by: parte do contrato de auditoria; ainda não registrado.
         """Reject an approval request."""
         with self._lock:
             approval = self._approvals.get(approval_id)

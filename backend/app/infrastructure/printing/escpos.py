@@ -98,7 +98,7 @@ class ReceiptFormatter:
         self.company_name = company_name
         self.width = width
 
-    def format_order(self, order: Dict[str, Any], extra: Optional[Dict] = None) -> bytes:
+    def format_order(self, order: Dict[str, Any], _extra: Optional[Dict] = None) -> bytes:
         """
         Generate ESC/POS bytes for an order receipt.
 

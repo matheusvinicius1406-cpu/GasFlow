@@ -516,7 +516,7 @@ class IntegrationImportService:
                 self.tables: List[List[str]] = []
                 self.title = ""
 
-            def handle_starttag(self, tag, attrs):
+            def handle_starttag(self, tag, _attrs):  # noqa: ARG001 — interface HTMLParser
                 if tag == "table":
                     self.in_table += 1
                 elif tag == "tr" and self.in_table:

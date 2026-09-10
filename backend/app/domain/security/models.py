@@ -366,7 +366,9 @@ def needs_rehash(password_hash: str) -> bool:
 # ── Token Generation ────────────────────────────────────
 
 
-def generate_token(user_id: str, tenant_id: str, expires_minutes: int = 60) -> str:
+def generate_token(user_id: str, tenant_id: str, _expires_minutes: int = 60) -> str:
+    # _expires_minutes: reservado para tokens com TTL próprio (hoje o token
+    # não carrega expiração embutida).
     """Generate a cryptographically secure session token."""
     random_part = secrets.token_hex(32)  # 256 bits of entropy
     payload = f"{user_id}:{tenant_id}:{random_part}"

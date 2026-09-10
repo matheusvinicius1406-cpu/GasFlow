@@ -31,12 +31,12 @@ class RoutingProvider(ABC):
         ...
 
     @abstractmethod
-    def calculate_route(self, origin: GeoPoint, destination: GeoPoint) -> Optional[RouteInfo]:
+    def calculate_route(self, _origin: GeoPoint, _destination: GeoPoint) -> Optional[RouteInfo]:
         """Calculate route between two points."""
         ...
 
     @abstractmethod
-    def estimate_eta(self, origin: GeoPoint, destination: GeoPoint) -> Optional[int]:
+    def estimate_eta(self, _origin: GeoPoint, _destination: GeoPoint) -> Optional[int]:
         """Estimate delivery time in minutes."""
         ...
 
@@ -51,12 +51,12 @@ class MockRoutingProvider(RoutingProvider):
     def geocode(self, address: str) -> Optional[GeoPoint]:
         return GeoPoint(lat=-23.5505, lng=-46.6333)  # São Paulo
 
-    def calculate_route(self, origin: GeoPoint, destination: GeoPoint) -> Optional[RouteInfo]:
+    def calculate_route(self, _origin: GeoPoint, _destination: GeoPoint) -> Optional[RouteInfo]:
         return RouteInfo(
             distance_km=self._distance,
             duration_minutes=self._eta,
             eta_minutes=self._eta,
         )
 
-    def estimate_eta(self, origin: GeoPoint, destination: GeoPoint) -> Optional[int]:
+    def estimate_eta(self, _origin: GeoPoint, _destination: GeoPoint) -> Optional[int]:
         return self._eta

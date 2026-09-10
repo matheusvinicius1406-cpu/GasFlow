@@ -50,7 +50,7 @@ engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 
 @event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
+def set_sqlite_pragma(dbapi_connection, _connection_record):  # noqa: ARG001 — assinatura exigida pelo evento
     if _is_sqlite:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
