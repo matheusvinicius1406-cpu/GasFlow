@@ -1,13 +1,18 @@
 """
-Pytest conftest — configures test-specific environment variables
-and cleans sensitive data between test modules.
+Pytest conftest — configures test-specific environment variables,
+isolates the database engine from the developer's gasflow.db and
+cleans sensitive data between test modules.
 
 Each test file creates its own in-memory engine for isolation.
-Tables on the file-based gasflow.db are created by init_db() when
-the app starts. This conftest cleans them up at session end.
+Tests that rely on the app's global engine (TestClient, driver_api,
+integration flows) are redirected to a throwaway file-based SQLite
+in a temp dir, so the developer's backend/gasflow.db is never touched.
 """
 
 import os
+import shutil
+import tempfile
+
 import pytest
 
 # Set test-specific environment variables BEFORE any imports
@@ -16,13 +21,60 @@ os.environ.setdefault("ADMIN_PASSWORD", "test_password_123")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 
+def _build_isolated_engine():
+    """Create a dedicated file-based SQLite engine for the whole test session.
+
+    The global engine in app.infrastructure.database.connection points at the
+    developer's backend/gasflow.db. This test engine points at a temp dir so
+    create_all/drop_all and every TestClient-based test never touch dev data.
+    """
+    from sqlalchemy import create_engine, event
+
+    test_dir = tempfile.mkdtemp(prefix="gasflow-tests-")
+    engine = create_engine(
+        f"sqlite:///{os.path.join(test_dir, 'test.db')}",
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False},
+    )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record):
+        # Mirror the pragmas set in connection.py so tests run under the
+        # same SQLite configuration as production.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.execute("PRAGMA busy_timeout = 5000")
+        cursor.close()
+
+    return engine, test_dir
+
+
+ISOLATED_ENGINE, ISOLATED_DB_DIR = _build_isolated_engine()
+
+# Rebind the production module attributes to the isolated engine.
+# This MUST happen at conftest import time — BEFORE test collection imports
+# app.main (which captures `engine` at module level in main.py:218) and
+# tests/test_integration_dataflow.py (`from connection import engine,
+# SessionLocal`). A fixture-based monkeypatch would run too late for those
+# module-level captures, so we rebind the module attributes directly here.
+import app.infrastructure.database.connection as _conn_module  # noqa: E402
+import app.infrastructure.database.init_db as _init_db_module  # noqa: E402
+
+_conn_module.engine = ISOLATED_ENGINE
+_init_db_module.engine = ISOLATED_ENGINE
+# SessionLocal is a shared sessionmaker object: configure(bind=...) mutates it
+# in place, so even references captured before this line follow the new bind.
+_conn_module.SessionLocal.configure(bind=ISOLATED_ENGINE)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_cleanup_db():
     """Create tables at session start, drop at end.
 
-    Tables are created on the file-based gasflow.db engine.
-    Tests that use TestClient(app) or driver_api.py depend on these.
-    Also ensures the rate limiter is clear at session start.
+    Tables are created on the ISOLATED test engine (never on the dev
+    gasflow.db). Tests that use TestClient(app) or driver_api.py depend on
+    these. Also ensures the rate limiter is clear at session start.
     """
     from app.infrastructure.database.base import Base
     from app.infrastructure.database.init_db import engine
@@ -38,6 +90,9 @@ def setup_and_cleanup_db():
         pass
     yield
     Base.metadata.drop_all(bind=engine)
+    # Session-wide teardown: release the isolated DB so the temp dir can go.
+    ISOLATED_ENGINE.dispose()
+    shutil.rmtree(ISOLATED_DB_DIR, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -58,6 +113,7 @@ def clean_db_module():
     """Clean sensitive tables between test modules to prevent UNIQUE violations."""
     yield
     # Truncate tables that accumulate data across test modules
+    # (runs against the isolated test engine — never against gasflow.db)
     from sqlalchemy import text
     from app.infrastructure.database.init_db import engine
 
