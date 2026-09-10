@@ -24,6 +24,8 @@ extraResources:
     filter:
       - app/**/*
       - requirements.txt
+  - from: ../backend/dist/gasflow-backend.exe
+    to: backend/gasflow-backend.exe
   - from: ../agent
     to: agent
     filter:

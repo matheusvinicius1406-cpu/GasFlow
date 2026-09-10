@@ -12,9 +12,9 @@ Consolidação de todos os achados (IDs referenciam os arquivos por área). Orde
 | D-2 | Ponte IPC dormente (preload nunca carregado, 0 handlers) | Desktop | 🔴 P0 p/ auto-update | `window.gasflow*` nunca existiu no renderer; UpdateNotifier dependeria disso | já mitigado no dist | Mitigado (validar E2E) |
 | D-1 | Fontes do main process não existem (só dist compilado) | Desktop | 🔴 P0 sustentação | Mudanças no main = editar JS à mão, sem typecheck | 1–2 dias | Resolvido na branch `refactor/desktop-sources`; config/updater/logger tipados |
 | P-3 | Sem `release.yml`; permissão de escrita no repo não confirmada | CI/CD | 🟠 P1 | Auto-update sem CI = releases manuais para sempre | 1 h | Aberto |
-| D-3 | Build local não gera `latest.yml`; auto-update não validado em release | Desktop | 🟠 P1 | Updater não encontra manifest → sem detecção de update | 30 min | Aberto |
+| D-3 | Build local não gera `latest.yml`; auto-update não validado em release | Desktop | 🟠 P1 | Updater não encontra manifest → sem detecção de update | 30 min | Manifest local gerado; release remota pendente |
 | W-1 | Auto-recovery `logged_out` sem validação E2E (QR → desconexão → QR) | WhatsApp | 🟠 P1 | Correção do loop de desconexão não provada em campo | 30 min + usuário | Aberto |
-| E2E-1 | Playwright (7 specs) sem execução garantida no CI | Testes | 🟠 P1 | Regressões de UI chegam ao app instalado | 1 h | Workflow criado; execução local não realizada nesta retomada |
+| E2E-1 | Playwright (7 specs) sem execução garantida no CI | Testes | 🟠 P1 | Regressões de UI chegam ao app instalado | 1 h | Workflow criado; execução local pendente |
 | B-1 | 2 resíduos ruff (F841 `start_time`, F401 `TA_RIGHT`) quebram o CI | Backend | 🟡 P2 | Push será barrado no job de lint | 5 min | Aberto |
 | B-4 | pytest `drop_all` no banco dev (`conftest.py:40`) | Backend | 🟡 P2 | Dev perde dados locais ao rodar testes | 30 min | Resolvido |
 | D-5 | `waEnabled: false` ignorado no boot | Desktop | 🟡 P2 | Usuário desativa WhatsApp e serviço segue rodando | 15 min | Resolvido |

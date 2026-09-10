@@ -5,8 +5,8 @@
 #   - ENVIRONMENT=production por padrão
 #   - Backend roda `alembic upgrade head` antes de subir a API
 #   - Postgres e backend sem portas expostas (rede interna)
-#   - Frontend (nginx) é a única porta pública (80); whatsapp 3001
-#     fica exposto apenas para parear QR quando necessário
+#   - Frontend (nginx) é a única porta pública (80); WhatsApp fica apenas
+#     na rede interna e o pareamento usa uma rede administrativa/túnel.
 #
 # Uso:
 #   cp .env.production.example .env.production   # preencha os valores
@@ -70,9 +70,9 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
-      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
       # Chave service-to-service (whatsapp → backend, header X-GasFlow-Key)
-      - WHATSAPP_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
+      - WHATSAPP_SERVICE_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-redis}
       - RATE_LIMIT_REDIS_URL=redis://redis:6379/0
       # Realtime entre workers: prod roda BACKEND_WORKERS=2 por padrão — cada
@@ -134,10 +134,11 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/app/data
-      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
+      - ALLOW_INSECURE_AUTH=false
       # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
       - GASFLOW_BACKEND_URL=http://backend:8000
-      - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
+      - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
       - WA_HEARTBEAT_INTERVAL_MIN=${WA_HEARTBEAT_INTERVAL_MIN:-5}
       - WA_SEND_MIN_INTERVAL_MS=${WA_SEND_MIN_INTERVAL_MS:-2000}
       - WA_SEND_MAX_INTERVAL_MS=${WA_SEND_MAX_INTERVAL_MS:-10000}
@@ -157,8 +158,6 @@ services:
       - WA_SEND_MEAN_MS=${WA_SEND_MEAN_MS:-3000}
       - WA_SEND_STDEV_MS=${WA_SEND_STDEV_MS:-1000}
       - WA_BROADCAST_ENABLED=${WA_BROADCAST_ENABLED:-true}
-    ports:
-      - "${WHATSAPP_PORT:-3001}:3000"
     volumes:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth
@@ -219,7 +218,7 @@ services:
     image: grafana/grafana:11.2.0
     container_name: gasflow-grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana

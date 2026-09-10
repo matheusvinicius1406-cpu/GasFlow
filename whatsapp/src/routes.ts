@@ -131,7 +131,7 @@ router.get('/whatsapp/accounts/:id/qr', requireAuth, async (req: Request, res: R
 });
 
 /** Health check for a specific account */
-router.get('/whatsapp/accounts/:id/health', async (req: Request, res: Response) => {
+router.get('/whatsapp/accounts/:id/health', requireAuth, async (req: Request, res: Response) => {
   const account = providerManager.getAccount(req.params.id);
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });

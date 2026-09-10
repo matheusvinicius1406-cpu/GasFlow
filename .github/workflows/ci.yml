@@ -52,6 +52,8 @@ jobs:
         run: npm ci
       - name: Build (tsc + vite)
         run: npm run build
+      - name: Lint
+        run: npm run lint
       - name: Test (vitest)
         run: npm test
 
@@ -135,9 +137,6 @@ jobs:
     name: Trivy (scan de vulnerabilidades)
     runs-on: ubuntu-latest
     needs: [backend, frontend, whatsapp, agent]
-    # Não bloqueia o pipeline: baseline de imagens legadas precisa de triage
-    # (logs do job têm a tabela completa) antes de virar gate duro.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Build images

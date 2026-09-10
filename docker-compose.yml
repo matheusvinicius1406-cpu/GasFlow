@@ -60,6 +60,7 @@ services:
       # Chave service-to-service (whatsapp → backend, header X-GasFlow-Key)
       - WHATSAPP_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:8080}
+        - ALLOW_INSECURE_AUTH=${ALLOW_INSECURE_AUTH:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-memory}
@@ -129,6 +130,7 @@ services:
       - PORT=3000
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
+      - ALLOW_INSECURE_AUTH=${ALLOW_INSECURE_AUTH:-true}
       # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
       - GASFLOW_BACKEND_URL=http://backend:8000
       - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}

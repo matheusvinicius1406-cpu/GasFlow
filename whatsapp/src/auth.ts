@@ -1,10 +1,8 @@
 /**
  * API Key authentication middleware.
  *
- * Uses MARCOS_GAS_API_KEY from environment. When the env var is not set,
- * authentication is DISABLED (for local development convenience) — mas em
- * produção (ENVIRONMENT=production) a ausência da chave DERRUBA o boot:
- * sem auth, o QR code e os dados de clientes ficam expostos na rede.
+ * Uses MARCOS_GAS_API_KEY from environment. Authentication can only be
+ * bypassed when ALLOW_INSECURE_AUTH=true outside production.
  *
  * All sensitive endpoints (campaign start/pause/cancel, customer updates,
  * opt-in/out, list modifications, WhatsApp logout) require auth.
@@ -16,10 +14,12 @@ import type { Request, Response, NextFunction } from 'express';
 import { logger } from './log';
 
 const API_KEY = process.env.MARCOS_GAS_API_KEY;
+const ALLOW_INSECURE_AUTH = process.env.ALLOW_INSECURE_AUTH === 'true'
+  && process.env.ENVIRONMENT !== 'production';
 
-/** Falha rápido se produção subir sem chave (QR/contatos expostos = sequestro de sessão). */
-if (process.env.ENVIRONMENT === 'production' && !API_KEY) {
-  logger.error('auth.missing_production_api_key');
+/** Falha rápido se o serviço subir sem proteção explícita. */
+if (!API_KEY && !ALLOW_INSECURE_AUTH) {
+  logger.error('auth.missing_api_key');
   process.exit(1);
 }
 
@@ -37,12 +37,16 @@ function safeEqual(a: string, b: string): boolean {
 
 /**
  * Express middleware that validates Bearer token against MARCOS_GAS_API_KEY.
- * If MARCOS_GAS_API_KEY is not set, authentication is bypassed (dev mode).
+ * A bypass is allowed only when ALLOW_INSECURE_AUTH=true outside production.
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  // If no API key configured, allow all (development mode)
-  if (!API_KEY) {
+  if (!API_KEY && ALLOW_INSECURE_AUTH) {
     next();
+    return;
+  }
+
+  if (!API_KEY) {
+    res.status(503).json({ error: 'Autenticação do serviço não configurada.' });
     return;
   }
 

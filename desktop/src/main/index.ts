@@ -102,6 +102,12 @@ function resolvePython() {
     const backendDir = electron_1.app.isPackaged
         ? path.join(process.resourcesPath, "backend")
         : path.join(__dirname, "..", "..", "..", "backend");
+    if (electron_1.app.isPackaged) {
+        const packagedBackend = path.join(backendDir, "gasflow-backend.exe");
+        if (fs.existsSync(packagedBackend)) {
+            return { command: packagedBackend, args: [], cwd: backendDir };
+        }
+    }
     const venvPython = path.join(backendDir, ".venv", "Scripts", "python.exe");
     const cwd = fs.existsSync(path.join(backendDir, "app", "main.py")) ? backendDir : process.cwd();
     if (fs.existsSync(venvPython)) {

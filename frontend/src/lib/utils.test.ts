@@ -7,8 +7,9 @@ describe('cn', () => {
   })
 
   it('handles conditional classes', () => {
-    expect(cn('foo', false && 'bar')).toBe('foo')
-    expect(cn('foo', true && 'bar')).toBe('foo bar')
+    const shouldInclude = false
+    expect(cn('foo', shouldInclude && 'bar')).toBe('foo')
+    expect(cn('foo', !shouldInclude && 'bar')).toBe('foo bar')
   })
 })
 

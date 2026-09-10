@@ -74,7 +74,7 @@ export function ReorderPage() {
       ]);
       setSummary(summaryRes.data);
       setOpportunities(oppsRes.data.opportunities || []);
-    } catch (err) {
+    } catch {
       setError('Erro ao carregar dados de recompra');
     } finally {
       setLoading(false);

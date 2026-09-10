@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { CONNECT_PAGE_HTML } from './connect-page';
 import { closeDb, countLists, insertList } from './db';
@@ -6,6 +7,7 @@ import { router } from './routes';
 import { startWorker } from './broadcast';
 import { forwardIncomingMessage, type RawIncomingMessage } from './incoming';
 import { logger } from './log';
+import { requireAuth } from './auth';
 import { renderMetrics, METRICS_CONTENT_TYPE } from './metrics';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -116,7 +118,7 @@ async function main(): Promise<void> {
   }, 30_000); // aguarda contas conectarem
   crmSyncTimer.unref?.();
 
-  app.post('/api/whatsapp/crm-sync', (req: express.Request, res: express.Response) => {
+  app.post('/api/whatsapp/crm-sync', requireAuth, (req: express.Request, res: express.Response) => {
     const accountId = String(req.body?.accountId || 'primary');
     void import('./crm-sync').then(({ syncAccountToCrm }) => syncAccountToCrm(accountId))
       .then((result) => res.json(result))
