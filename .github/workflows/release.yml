@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Build & publish Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      # build:win também compila agent, whatsapp e frontend (--prefix ../<pkg>).
+      # Em um runner limpo cada um precisa do próprio npm ci (tsc/vite vêm dos
+      # devDependencies de cada projeto, não do desktop).
+      - name: Install sibling deps
+        run: |
+          npm ci --prefix ../agent
+          npm ci --prefix ../whatsapp
+          npm ci --prefix ../frontend
+
+      - name: Build + publish (electron-updater → GitHub Releases)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Assinatura de código (quando existir): CSC_LINK / CSC_KEY_PASSWORD
+        run: npm run build:win -- --publish always
+
+      - name: Upload artifacts (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gasflow-windows-installer
+          path: |
+            desktop/release/*.exe
+            desktop/release/latest.yml
+          retention-days: 30
