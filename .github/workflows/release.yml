@@ -55,12 +55,11 @@ jobs:
           npm ci --prefix ../whatsapp
           npm ci --prefix ../frontend
 
-      - name: Build + publish (electron-updater → GitHub Releases)
+      - name: Build signed installer candidate
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
-        run: npm run build:win -- --publish always
+        run: npm run build:win
 
       - name: Require Authenticode signature
         shell: pwsh
@@ -71,6 +70,13 @@ jobs:
           if ($signature.Status -ne 'Valid') {
             throw "Assinatura Authenticode inválida: $($signature.Status)"
           }
+
+      - name: Publish verified installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
+        run: npx electron-builder --win --publish always
 
       - name: Upload artifacts (backup)
         uses: actions/upload-artifact@v4
