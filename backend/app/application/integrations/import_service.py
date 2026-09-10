@@ -18,11 +18,79 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from html.parser import HTMLParser
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session as DBSession
 
 from app.application.order.use_cases import CreateOrderUseCase
+
+# Palavras-chave que identificam linhas de cabeçalho de tabela de pedidos.
+_ORDER_HEADER_KEYWORDS = (
+    "cliente",
+    "produto",
+    "valor",
+    "total",
+    "status",
+    "pedido",
+    "quantid",
+    "endere",
+    "data",
+)
+
+
+class _TableHeaders(HTMLParser):
+    """Extrai linhas de tabelas HTML + título da página (preview de integração)."""
+
+    def __init__(self):
+        super().__init__()
+        self.in_table = 0
+        self.in_row = False
+        self.in_cell = False
+        self.cell_buf: List[str] = []
+        self.row: List[str] = []
+        self.tables: List[List[str]] = []
+        self.title = ""
+
+    def handle_starttag(self, tag, _attrs):  # noqa: ARG001 — interface HTMLParser
+        if tag == "table":
+            self.in_table += 1
+        elif tag == "tr" and self.in_table:
+            self.in_row = True
+            self.row = []
+        elif tag in ("th", "td") and self.in_row:
+            self.in_cell = True
+            self.cell_buf = []
+        elif tag == "title" and not self.title:
+            self._in_title = True
+
+    def handle_endtag(self, tag):
+        if tag == "table" and self.in_table:
+            self.in_table -= 1
+        elif tag == "tr" and self.in_row:
+            self.in_row = False
+            if self.row and self.in_table:
+                self.tables.append(self.row)
+        elif tag in ("th", "td") and self.in_cell:
+            self.in_cell = False
+            self.row.append(" ".join("".join(self.cell_buf).split()))
+        elif tag == "title":
+            self._in_title = False
+
+    def handle_data(self, data):
+        if getattr(self, "_in_title", False) and not self.title:
+            self.title += data
+        if self.in_cell:
+            self.cell_buf.append(data)
+
+
+def _order_table_candidates(tables: List[List[str]]) -> List[List[str]]:
+    """Linhas que parecem cabeçalho (contêm >=2 palavras-chave de pedido)."""
+    return [
+        row
+        for row in tables
+        if sum(1 for c in row if any(k in c.lower() for k in _ORDER_HEADER_KEYWORDS)) >= 2
+    ]
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.integration_model import (
@@ -496,61 +564,16 @@ class IntegrationImportService:
 
     # ── Teste de conexão (preview server-side) ───────────
 
-    async def test_connection(self, integration: IntegrationModel) -> Dict[str, Any]:
-        """Busca a página de pedidos e extrai cabeçalhos de tabelas (preview).
-
-        Extração completa roda no agente Node; aqui apenas validamos
-        conectividade + presença de candidatos a tabela de pedidos.
-        """
-        import httpx
-        from html.parser import HTMLParser
-
-        class _TableHeaders(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.in_table = 0
-                self.in_row = False
-                self.in_cell = False
-                self.cell_buf: List[str] = []
-                self.row: List[str] = []
-                self.tables: List[List[str]] = []
-                self.title = ""
-
-            def handle_starttag(self, tag, _attrs):  # noqa: ARG001 — interface HTMLParser
-                if tag == "table":
-                    self.in_table += 1
-                elif tag == "tr" and self.in_table:
-                    self.in_row = True
-                    self.row = []
-                elif tag in ("th", "td") and self.in_row:
-                    self.in_cell = True
-                    self.cell_buf = []
-                elif tag == "title" and not self.title:
-                    self._in_title = True
-
-            def handle_endtag(self, tag):
-                if tag == "table" and self.in_table:
-                    self.in_table -= 1
-                elif tag == "tr" and self.in_row:
-                    self.in_row = False
-                    if self.row and self.in_table:
-                        self.tables.append(self.row)
-                elif tag in ("th", "td") and self.in_cell:
-                    self.in_cell = False
-                    self.row.append(" ".join("".join(self.cell_buf).split()))
-                elif tag == "title":
-                    self._in_title = False
-
-            def handle_data(self, data):
-                if getattr(self, "_in_title", False) and not self.title:
-                    self.title += data
-                if self.in_cell:
-                    self.cell_buf.append(data)
-
+    @staticmethod
+    def _orders_url(integration: IntegrationModel) -> str:
+        """Monta a URL da página de pedidos da integração."""
         base = integration.base_url.rstrip("/")
         path = integration.orders_path or "/pedidos"
-        url = f"{base}{path}"
+        return f"{base}{path}"
 
+    @staticmethod
+    def _auth_for(integration: IntegrationModel) -> Tuple[Optional[Tuple[str, str]], Dict[str, str]]:
+        """Traduz auth_type/auth_config para (httpx auth, headers)."""
         auth = None
         headers: Dict[str, str] = {}
         if integration.auth_type == "basic":
@@ -563,6 +586,18 @@ class IntegrationImportService:
         elif integration.auth_type == "cookie":
             cookie = (integration.auth_config or {}).get("cookie", "")
             headers["Cookie"] = cookie
+        return auth, headers
+
+    async def test_connection(self, integration: IntegrationModel) -> Dict[str, Any]:
+        """Busca a página de pedidos e extrai cabeçalhos de tabelas (preview).
+
+        Extração completa roda no agente Node; aqui apenas validamos
+        conectividade + presença de candidatos a tabela de pedidos.
+        """
+        import httpx
+
+        url = self._orders_url(integration)
+        auth, headers = self._auth_for(integration)
 
         try:
             async with httpx.AsyncClient(timeout=15, follow_redirects=True, auth=auth) as client:
@@ -578,10 +613,7 @@ class IntegrationImportService:
 
         parser = _TableHeaders()
         parser.feed(resp.text)
-
-        # linhas que parecem cabeçalho (contêm palavras-chave de pedido)
-        keywords = ("cliente", "produto", "valor", "total", "status", "pedido", "quantid", "endere", "data")
-        candidates = [row for row in parser.tables if sum(1 for c in row if any(k in c.lower() for k in keywords)) >= 2]
+        candidates = _order_table_candidates(parser.tables)
 
         return {
             "ok": True,
