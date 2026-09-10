@@ -5,7 +5,7 @@
 ## Metodologia
 
 - **Evidência primeiro:** todo achado cita comando executado e saída observada (sem especulação).
-- **Somente diagnóstico:** nenhum código foi alterado durante esta auditoria (a árvore estava com trabalho pendente de commit — tratado como achado P0, não corrigido aqui).
+- **Execução posterior:** as correções das Ondas 3 e 5 foram aplicadas na `main`; a reescrita do desktop foi isolada na branch `refactor/desktop-sources`.
 - **Ferramentas:** vulture 2.16, ruff 0.15.22, mypy 2.3.1, tsc 5.8 (strict), depcheck, pip-audit, grep estrutural, análise de logs do app instalado (`%APPDATA%/gasflow-desktop/logs/`), inspeção de `app.asar`, análise de workflows.
 
 ## Escopo
