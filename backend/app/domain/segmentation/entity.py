@@ -84,36 +84,42 @@ class SegmentRule:
 
         # Handle None/missing values
         if field_value is None:
-            if self.operator in (RuleOperator.IS_FALSE,):
-                return True
-            if self.operator in (RuleOperator.IS_TRUE,):
-                return False
-            return False
+            return self.operator is RuleOperator.IS_FALSE
 
         # Boolean fields
         if self.field in (RuleField.IS_ACTIVE, RuleField.HAS_EMAIL):
-            bool_val = bool(field_value)
-            if self.operator == RuleOperator.IS_TRUE:
-                return bool_val
-            if self.operator == RuleOperator.IS_FALSE:
-                return not bool_val
-            return False
+            return self._evaluate_boolean(bool(field_value))
 
         # String fields
         if self.field in (RuleField.CLIENT_TYPE, RuleField.FAVORITE_PRODUCT, RuleField.PAYMENT_STATUS):
-            str_val = str(field_value).upper()
-            target = str(self.value).upper() if self.value else ""
-            if self.operator == RuleOperator.EQUALS:
-                return str_val == target
-            if self.operator == RuleOperator.NOT_EQUALS:
-                return str_val != target
-            if self.operator == RuleOperator.CONTAINS:
-                return target in str_val
-            if self.operator == RuleOperator.NOT_CONTAINS:
-                return target not in str_val
-            return False
+            return self._evaluate_string(str(field_value).upper())
 
         # Numeric fields
+        return self._evaluate_numeric(field_value)
+
+    def _evaluate_boolean(self, bool_val: bool) -> bool:
+        """Compara campo booleano com operadores IS_TRUE / IS_FALSE."""
+        if self.operator == RuleOperator.IS_TRUE:
+            return bool_val
+        if self.operator == RuleOperator.IS_FALSE:
+            return not bool_val
+        return False
+
+    def _evaluate_string(self, str_val: str) -> bool:
+        """Compara campo de texto (já em caixa alta) com o valor da regra."""
+        target = str(self.value).upper() if self.value else ""
+        if self.operator == RuleOperator.EQUALS:
+            return str_val == target
+        if self.operator == RuleOperator.NOT_EQUALS:
+            return str_val != target
+        if self.operator == RuleOperator.CONTAINS:
+            return target in str_val
+        if self.operator == RuleOperator.NOT_CONTAINS:
+            return target not in str_val
+        return False
+
+    def _evaluate_numeric(self, field_value: Any) -> bool:
+        """Compara campo numérico com o valor da regra (ordem/comparação)."""
         try:
             num_val = float(field_value)
             target = float(self.value) if self.value is not None else 0
