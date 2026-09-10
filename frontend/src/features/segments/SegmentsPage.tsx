@@ -172,7 +172,7 @@ function SegmentForm({
   useEffect(() => {
     apiClient.get('/segments/rules').then(({ data }) => {
       setFields(data.fields || [])
-    }).catch(() => {})
+    }).catch(() => setFields([]))
   }, [])
 
   const addRule = () => {
@@ -273,7 +273,7 @@ function PreviewPanel({ segmentId, onClose }: { segmentId: number; onClose: () =
     setLoading(true)
     apiClient.post(`/segments/${segmentId}/preview`)
       .then(({ data }) => setPreview(data))
-      .catch(() => {})
+      .catch(() => setPreview(null))
       .finally(() => setLoading(false))
   }, [segmentId])
 

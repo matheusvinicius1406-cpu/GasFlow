@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
   { label: 'Clientes', href: '/customers', icon: Users },
+  { label: 'Contatos WhatsApp', href: '/contacts', icon: MessageSquare },
   { label: 'Segmentos', href: '/segments', icon: Filter },
   { label: 'Recompra', href: '/reorder', icon: Repeat },
   { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },

@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { MobileSidebar } from './MobileSidebar'
 import { RealtimeBridge } from '@/components/realtime/RealtimeBridge'
+import { UpdateNotifier } from '@/components/UpdateNotifier'
 
 export function DashboardLayout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
@@ -33,6 +34,9 @@ export function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Auto-update (Electron) — canto inferior direito */}
+      <UpdateNotifier />
     </div>
   )
 }

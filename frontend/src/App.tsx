@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
 import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/customers'
+import { ContactsCrmPage } from '@/features/contacts/ContactsCrmPage'
 import { WhatsAppPage, CampaignWizardPage, CampaignResultsPage, AutomationsPage } from '@/features/whatsapp'
 import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage, DriverFormPage } from '@/features/drivers'
@@ -44,6 +45,7 @@ export function App() {
         <Route path="customers/new" element={<CustomerFormPage />} />
         <Route path="customers/:codigo" element={<CustomerDetailPage />} />
         <Route path="customers/:codigo/edit" element={<CustomerFormPage />} />
+        <Route path="contacts" element={<ContactsCrmPage />} />
 
         {/* Products */}
         <Route path="products" element={<ProductsPage />} />

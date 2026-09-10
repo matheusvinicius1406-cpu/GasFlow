@@ -38,7 +38,7 @@ export function OrderFormPage() {
   useEffect(() => {
     apiClient.get('/payments/methods').then(({ data }) => {
       setPaymentMethods((data.methods || []).filter((m: {enabled: boolean}) => m.enabled))
-    }).catch(() => {})
+    }).catch(() => setPaymentMethods([]))
   }, [])
   const { data: products, isLoading: loadingProducts } = useProducts()
   const createOrder = useCreateOrder()
