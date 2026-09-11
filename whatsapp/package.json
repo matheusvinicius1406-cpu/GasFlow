@@ -4,6 +4,9 @@
   "private": true,
   "description": "WhatsApp automation service for GasFlow — contact management, campaigns, and order bot.",
   "main": "dist/server.js",
+  "puppeteer": {
+    "skipDownload": true
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
