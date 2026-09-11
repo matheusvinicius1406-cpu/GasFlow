@@ -115,7 +115,7 @@ def register_payment(
             "payment": PaymentResponse.model_validate(_to_dict(result["payment"])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/payments/{payment_id}/refund", response_model=dict)
@@ -135,7 +135,7 @@ def refund_payment(
         result = uc.execute(payment_id, reason)
         return {"status": result["status"], "message": "Refund processed"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ── Receivables ──────────────────────────────────────
@@ -228,7 +228,7 @@ def register_expense(
         )
         return {"status": "created", "expense": ExpenseResponse.model_validate(_to_dict(result["expense"]))}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/expenses/{expense_id}/cancel", response_model=dict)

@@ -5,6 +5,7 @@ SQLAlchemy implementation for segment persistence and evaluation.
 """
 
 import json
+import logging
 from typing import Optional, List
 from datetime import datetime
 
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.domain.segmentation.entity import Segment, SegmentRule, SegmentStatus
 from app.infrastructure.repositories.segmentation_model import SegmentModel
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
+
+logger = logging.getLogger("gasflow.segmentation.repository")
 
 
 class SQLAlchemySegmentRepository(TenantMixin):
@@ -27,7 +30,7 @@ class SQLAlchemySegmentRepository(TenantMixin):
             rules_data = json.loads(model.rules_json)
             rules = [SegmentRule.from_dict(r) for r in rules_data]
         except (json.JSONDecodeError, TypeError):
-            pass
+            logger.warning("segment.rules_json_invalid — segmento sem regras", exc_info=True)
 
         return Segment(
             id=model.id,

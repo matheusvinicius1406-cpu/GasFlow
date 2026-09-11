@@ -75,7 +75,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
             raise WhatsAppConnectionError(
                 f"Cannot connect to WhatsApp service: {e}",
                 provider="current",
-            )
+            ) from e
 
     async def stop(self) -> None:
         """Stop is handled by the Node.js service."""

@@ -158,9 +158,9 @@ async def assign_driver_to_delivery(
         )
         return result
     except ValueError as e:
-        raise HTTPException(400, detail=str(e))
+        raise HTTPException(400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(500, detail=f"Assignment failed: {e}")
+        raise HTTPException(500, detail=f"Assignment failed: {e}") from e
     finally:
         db.close()
 

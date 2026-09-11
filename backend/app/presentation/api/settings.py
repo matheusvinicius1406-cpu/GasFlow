@@ -81,7 +81,7 @@ def update_key(
     try:
         row = svc.update(key, body.value, updated_by=ctx.user_id)
     except SettingsError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return svc.to_dict(row)
 
 

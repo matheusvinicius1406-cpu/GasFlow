@@ -101,7 +101,8 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
         except Exception as e:
             self.db.rollback()
             if "UNIQUE constraint failed" in str(e) and "telefone" in str(e):
-                raise ValueError(f"Já existe cliente com telefone {client.telefone}")
+                raise ValueError(f"Já existe cliente com telefone {client.telefone}") from e
+            raise
             raise
         self.db.refresh(model)
         return self._to_entity(model)

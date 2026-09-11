@@ -115,7 +115,7 @@ async def create_segment(
             )
             rules.append(rule)
         except (ValueError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid rule: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid rule: {e}") from e
 
     segment = Segment(
         name=req.name,
@@ -202,7 +202,7 @@ async def update_segment(
                 )
                 rules.append(rule)
             except (ValueError, KeyError) as e:
-                raise HTTPException(status_code=400, detail=f"Invalid rule: {e}")
+                raise HTTPException(status_code=400, detail=f"Invalid rule: {e}") from e
         segment.rules = rules
 
     updated = repo.update(segment)

@@ -168,7 +168,7 @@ def add_stock(
             movement=StockMovementResponse.model_validate(result["movement"]) if result["movement"] else None,
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 # ── Adjust Stock ──────────────────────────────────────────
@@ -203,7 +203,7 @@ def adjust_stock(
             movement=StockMovementResponse.model_validate(result["movement"]) if result["movement"] else None,
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 # ── Record Loss ──────────────────────────────────────────
@@ -238,7 +238,7 @@ def record_loss(
             movement=StockMovementResponse.model_validate(result["movement"]) if result["movement"] else None,
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 # ── Reconciliation ───────────────────────────────────────
@@ -281,4 +281,4 @@ def set_minimum(
             updated_at=inventory.updated_at,
         )
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e

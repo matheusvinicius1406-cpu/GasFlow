@@ -47,7 +47,7 @@ def create_client(
     try:
         return use_case.execute(client.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.get("/", response_model=ClientListResponse)
@@ -140,7 +140,7 @@ def update_client(
             raise HTTPException(status_code=404, detail="Cliente não encontrado")
         return client
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.patch("/{codigo}/disable", response_model=ClientResponse)

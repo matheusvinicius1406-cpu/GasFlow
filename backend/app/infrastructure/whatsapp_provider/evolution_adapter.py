@@ -94,7 +94,7 @@ class EvolutionAdapter(WhatsAppProvider):
             raise WhatsAppConnectionError(
                 f"Evolution API connection failed: {e}",
                 provider="evolution",
-            )
+            ) from e
 
     async def stop(self) -> None:
         """Disconnect from Evolution API."""

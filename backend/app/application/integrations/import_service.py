@@ -86,11 +86,9 @@ class _TableHeaders(HTMLParser):
 
 def _order_table_candidates(tables: List[List[str]]) -> List[List[str]]:
     """Linhas que parecem cabeçalho (contêm >=2 palavras-chave de pedido)."""
-    return [
-        row
-        for row in tables
-        if sum(1 for c in row if any(k in c.lower() for k in _ORDER_HEADER_KEYWORDS)) >= 2
-    ]
+    return [row for row in tables if sum(1 for c in row if any(k in c.lower() for k in _ORDER_HEADER_KEYWORDS)) >= 2]
+
+
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.infrastructure.repositories.integration_model import (

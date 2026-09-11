@@ -84,7 +84,7 @@ class RetryPolicy:
                     error_type=WhatsAppErrorType.UNKNOWN,
                     retryable=False,
                     raw_error=e,
-                )
+                ) from e
 
         # All retries exhausted
         self._metrics["total_failures"] += 1
