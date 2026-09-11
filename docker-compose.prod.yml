@@ -80,6 +80,10 @@ services:
       # propaga eventos entre eles (ver docs RT-01 / pubsub.py).
       - REALTIME_BACKEND=${REALTIME_BACKEND:-redis}
       - REALTIME_REDIS_URL=redis://redis:6379/0
+      # Fila de aprovações (ações de alto risco): compartilhada entre workers —
+      # aprovação criada por um worker precisa existir no worker do "aprovar".
+      - APPROVAL_QUEUE_MODE=${APPROVAL_QUEUE_MODE:-redis}
+      - APPROVAL_QUEUE_REDIS_URL=redis://redis:6379/0
     # Aplica migrations antes de servir — o schema em prod é do Alembic,
     # não do create_all do boot (que segue disponível p/ dev/tests).
     command: >

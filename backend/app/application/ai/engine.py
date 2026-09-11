@@ -13,7 +13,7 @@ from datetime import datetime
 
 from app.domain.ai.provider import LLMProvider, LLMMessage, LLMRole
 from app.domain.ai.intent import Intent, IntentType, Confidence
-from app.domain.ai.tools import ToolRegistry, ToolResult
+from app.domain.ai.tools import ToolRegistry, ToolResult, ToolPermission
 from app.application.ai.prompts import (
     SYSTEM_PROMPT,
     INTENT_CLASSIFICATION_PROMPT,
@@ -42,6 +42,26 @@ INTENT_TOOL_MAP = {
 }
 
 WRITE_INTENTS = {IntentType.ORDER_CREATE}
+
+# Ranking de permissões: caller precisa ter rank >= rank da tool.
+PERMISSION_RANK = {p.value: i for i, p in enumerate(ToolPermission)}
+
+
+def _permission_sufficient(tool_permission: ToolPermission, caller_level: str) -> bool:
+    """Compara a permissão exigida pela tool com o nível efetivo do chamador.
+
+    O nível do chamador NUNCA vem do cliente — é derivado do papel
+    autenticado no endpoint (ver ai.py). Tools cujo `permission` excede o
+    nível do chamador são bloqueadas em runtime (o campo deixou de ser
+    decorativo).
+    """
+    caller_rank = PERMISSION_RANK.get((caller_level or "READ_ONLY").upper(), 0)
+    tool_rank = PERMISSION_RANK.get(tool_permission.value, len(PERMISSION_RANK))
+    return tool_rank <= caller_rank
+
+
+class LLMUnavailableError(Exception):
+    """LLM caiu entre o health check e a chamada (ou respondeu vazio)."""
 
 
 class AIEngine:
@@ -73,7 +93,9 @@ class AIEngine:
     ) -> Dict[str, Any]:
         """Process a user message through the AI pipeline."""
         start_time = time.time()
-        request_id = request_id or hashlib.md5(f"{message}{time.time()}".encode()).hexdigest()[:12]
+        # Uso não-criptográfico (id de correlação p/ audit log) — sem
+        # requisito de resistência a colisão adversária.
+        request_id = request_id or hashlib.md5(f"{message}{time.time()}".encode()).hexdigest()[:12]  # noqa: S324
 
         # 1. Check LLM availability
         if not self.llm.health_check():
@@ -92,12 +114,27 @@ class AIEngine:
         # 2. Build conversation context
         conv_messages = self._load_conversation(conversation_id)
 
-        # 3. Classify intent
-        intent = self._classify_intent(message, conv_messages)
+        # 3. Classify intent — degrada com mensagem clara se o LLM cair
+        # entre o health check e a chamada.
+        try:
+            intent = self._classify_intent(message, conv_messages)
+        except LLMUnavailableError as exc:
+            return {
+                "message": (
+                    "Não consegui consultar o modelo de IA agora.\n\n"
+                    "Verifique se o Ollama está rodando e o modelo baixado "
+                    "(ollama list). O restante do sistema continua funcionando."
+                ),
+                "intent": None,
+                "requires_confirmation": False,
+                "error": str(exc),
+            }
 
-        # 4. Check permission for write intents
+        # 4. Check permission for write intents (defesa extra antes da checagem
+        # por tool em _execute_tool — mesma comparação de ranking).
         if intent.type in WRITE_INTENTS:
-            if permission_level == "READ_ONLY":
+            caller_rank = PERMISSION_RANK.get((permission_level or "READ_ONLY").upper(), 0)
+            if caller_rank < PERMISSION_RANK[ToolPermission.OPERATOR.value]:
                 return {
                     "message": "Você não tem permissão para esta operação.",
                     "intent": intent.type.value,
@@ -108,7 +145,7 @@ class AIEngine:
         # 5. Execute tool if needed
         tool_result = None
         if intent.tool_name:
-            tool_result = self._execute_tool(intent)
+            tool_result = self._execute_tool(intent, permission_level=permission_level)
 
         # 6. Build response
         response = self._build_response(message, intent, tool_result, conv_messages)
@@ -136,19 +173,11 @@ class AIEngine:
 
         response = self.llm.generate(messages, temperature=0.1, max_tokens=256)
 
-        # LLM caiu entre o health check e a chamada (ou timeout): degrada
-        # com mensagem clara em vez de conteúdo vazio.
+        # LLM caiu entre o health check e a chamada (ou timeout): sinaliza
+        # via exceção — o método é tipado como Intent, devolver dict aqui
+        # quebrava `intent.type` no chamador (AttributeError latente).
         if response.error or not response.content.strip():
-            return {
-                "message": (
-                    "Não consegui consultar o modelo de IA agora.\n\n"
-                    "Verifique se o Ollama está rodando e o modelo baixado "
-                    "(ollama list). O restante do sistema continua funcionando."
-                ),
-                "intent": None,
-                "requires_confirmation": False,
-                "error": response.error or "AI_EMPTY_RESPONSE",
-            }
+            raise LLMUnavailableError(response.error or "AI_EMPTY_RESPONSE")
 
         try:
             parsed = json.loads(response.content)
@@ -178,14 +207,19 @@ class AIEngine:
                 reasoning="Failed to classify intent",
             )
 
-    def _execute_tool(self, intent: Intent) -> Optional[ToolResult]:
-        """Execute a tool based on intent."""
+    def _execute_tool(self, intent: Intent, permission_level: str = "OPERATOR") -> Optional[ToolResult]:
+        """Execute a tool based on intent, enforcing the tool's permission level."""
         if not intent.tool_name:
             return None
 
         tool = self.tools.get(intent.tool_name)
         if not tool:
             return ToolResult(success=False, error="Tool not found")
+
+        # Permission check (runtime): a permissão declarada da tool é
+        # comparada com o nível efetivo do chamador — nunca aceito do cliente.
+        if not _permission_sufficient(tool.permission, permission_level):
+            return ToolResult(success=False, error="AI_TOOL_NOT_ALLOWED")
 
         # Validate input
         errors = self.tools.validate_input(intent.tool_name, intent.tool_arguments)

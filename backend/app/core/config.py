@@ -78,6 +78,17 @@ class Settings(BaseModel):
     rate_limit_mode: str = os.getenv("RATE_LIMIT_MODE", "memory")
     rate_limit_redis_url: str = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0")
 
+    # ── Approval queue (automações de alto risco) ───────────
+    # backend da fila de aprovações: memory (default, single worker) |
+    # redis (compartilhado entre workers/instâncias — produção).
+    # Aprovações pendentes não podem desaparecer num restart nem ficar
+    # presas no worker que as criou (ver policy.py / automation.py).
+    approval_queue_mode: str = os.getenv("APPROVAL_QUEUE_MODE", "memory")
+    approval_queue_redis_url: str = os.getenv(
+        "APPROVAL_QUEUE_REDIS_URL",
+        os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0"),
+    )
+
     # ── Realtime (WebSocket cross-worker) ──────────────────
     # propagação entre workers: memory (default, 1 worker/processo) |
     # redis (compartilha eventos entre workers via pub/sub — multi-worker).
@@ -111,8 +122,6 @@ class Settings(BaseModel):
                 "http://127.0.0.1:5173",
                 "http://127.0.0.1:8080",
             ]
-
-        env = os.getenv("ENVIRONMENT", "development")
 
         env = os.getenv("ENVIRONMENT", "development")
         admin_pw = os.getenv("ADMIN_PASSWORD", "")
