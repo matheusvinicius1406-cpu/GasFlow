@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 
@@ -35,10 +35,15 @@ describe('OrderFormPage', () => {
     resetState()
   })
 
-  it('shows loading spinner while loading', () => {
+  it('shows loading spinner while loading', async () => {
     productsState.isLoading = true
     const { container } = renderWithProviders(<OrderFormPage />)
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+    // Flush atualizações assíncronas pendentes (efeitos/queries) dentro de
+    // act() — sem isso o React avisava "not wrapped in act(...)".
+    await act(async () => {
+      await Promise.resolve()
+    })
   })
 
   it('renders new order form with customer and product selectors', async () => {

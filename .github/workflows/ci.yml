@@ -63,6 +63,13 @@ jobs:
     defaults:
       run:
         working-directory: whatsapp
+    env:
+      # Motor default é Baileys (sem Chromium); pular o download do Chrome
+      # no post-install do puppeteer (storage.googleapis.com pode não estar
+      # no allowlist da rede do runner). Rollback wwebjs usa a imagem Docker
+      # com Chromium (BUILD_WWEBJS=1).
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
