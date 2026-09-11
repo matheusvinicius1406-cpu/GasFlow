@@ -118,3 +118,38 @@ def test_schema_version_recorded_and_idempotent(old_schema_db):
     rows = c.execute("SELECT id, version FROM _schema_version").fetchall()
     c.close()
     assert rows == [(1, init_db_module.SCHEMA_VERSION)]
+
+
+def test_backup_created_before_first_migration(old_schema_db):
+    """A.3: primeiro boot num banco antigo grava backup antes de migrar."""
+    from pathlib import Path
+
+    from app.infrastructure.database import init_db as init_db_module
+
+    init_db_module.init_db()
+
+    backups_dir = Path(old_schema_db + ".backups")
+    assert backups_dir.is_dir()
+    backups = list(backups_dir.glob("*.db"))
+    assert len(backups) == 1
+
+    # O backup contém o dado ORIGINAL (a migration não tocou nele)
+    bc = sqlite3.connect(backups[0])
+    cols = {r[1] for r in bc.execute("PRAGMA table_info('clients')").fetchall()}
+    nome = bc.execute("SELECT nome FROM clients").fetchone()[0]
+    bc.close()
+    assert "has_name" not in cols  # schema antigo, pré-migration
+    assert nome == "Cliente Antigo"
+
+
+def test_backup_not_duplicated_when_schema_is_current(old_schema_db):
+    """A.3: banco já na versão atual → init_db NÃO cria backup novo."""
+    from pathlib import Path
+
+    from app.infrastructure.database import init_db as init_db_module
+
+    init_db_module.init_db()  # migra + backupeia + versiona
+    init_db_module.init_db()  # segunda passada: nada pendente
+
+    backups = list(Path(old_schema_db + ".backups").glob("*.db"))
+    assert len(backups) == 1  # só o da primeira passada

@@ -118,6 +118,62 @@ SCHEMA_VERSION = (
 )
 
 
+def _backup_before_migration() -> None:
+    """Backup automático do arquivo SQLite ANTES de qualquer migration (A.3).
+
+    Roda só quando há migration pendente (versão gravada < SCHEMA_VERSION),
+    antes do primeiro ALTER TABLE. Guarda até MAX_BACKUPS cópias em
+    `<banco>.backups/gasflow-v<N>-<timestamp>.db` — se a migration corromper
+    o banco, o dado do cliente é restaurável sem depender do usuário.
+    Silenciosa em falha de backup? Não: loga e PROPAGA — melhor o app não
+    migrar do que migrar sem rede de segurança.
+    """
+    import logging
+    import shutil
+    from datetime import datetime
+    from pathlib import Path
+
+    from sqlalchemy import text
+
+    url = str(engine.url)
+    if not url.startswith("sqlite"):
+        return  # backup de arquivo só faz sentido para SQLite
+
+    db_path = Path(url.removeprefix("sqlite:///")).resolve()
+    if not db_path.exists():
+        return  # banco novo — nada a proteger
+
+    # Migration pendente? Compara versão gravada com a do código.
+    pending = False
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT version FROM _schema_version WHERE id = 1")).fetchone()
+            pending = (row[0] if row else 0) < SCHEMA_VERSION
+    except Exception:
+        # Tabela ausente/ilegível = banco pré-versionamento: tem migration a
+        # fazer (a _ensure_schema_version criará a tabela) → backupear.
+        pending = True
+    if not pending:
+        return
+
+    backups_dir = db_path.parent / f"{db_path.name}.backups"
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = backups_dir / f"{db_path.stem}-v{stamp}.db"
+    shutil.copy2(db_path, dest)
+
+    # Rotação: mantém só os MAX_BACKUPS mais recentes.
+    MAX_BACKUPS = 5
+    backups = sorted(backups_dir.glob(f"{db_path.stem}-v*.db"))
+    for old in backups[:-MAX_BACKUPS]:
+        old.unlink(missing_ok=True)
+
+    logging.getLogger("gasflow.init_db").warning(
+        "schema.backup.created",
+        extra={"path": str(dest), "pending_version": True},
+    )
+
+
 def _ensure_schema_version() -> None:
     """Grava a versão de schema aplicada — permite detectar drift em logs.
 
@@ -159,6 +215,7 @@ def _ensure_schema_version() -> None:
 def init_db():
     Base.metadata.create_all(bind=engine)
     try:
+        _backup_before_migration()
         _ensure_sqlite_columns()
         _ensure_schema_version()
     except Exception:  # pragma: no cover — nunca derrubar o boot por migration
