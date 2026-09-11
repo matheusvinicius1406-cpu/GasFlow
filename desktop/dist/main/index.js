@@ -158,13 +158,13 @@ function ensureWaBridge() {
     const useDist = electron_1.app.isPackaged || fs.existsSync(waDist);
     const command = useDist ? process.execPath : "npx";
     const args = useDist
-        ? [electron_1.app.isPackaged ? path.join(process.resourcesPath, "whatsapp", "dist", "server.js") : waDist]
+        ? [electron_1.app.isPackaged ? path.join("whatsapp", "dist", "server.js") : waDist]
         : ["tsx", "src/server.ts"];
     const userData = electron_1.app.getPath("userData");
     waBridge = new wa_bridge_1.WhatsAppBridge({
         command,
         args,
-        cwd: useDist ? undefined : path.join(__dirname, "..", "..", "..", "whatsapp"),
+        cwd: useDist ? (electron_1.app.isPackaged ? process.resourcesPath : undefined) : path.join(__dirname, "..", "..", "..", "whatsapp"),
         env: {
             PORT: String(settings.waPort),
             DATA_DIR: path.join(userData, "whatsapp-data"),
@@ -189,9 +189,9 @@ function ensureAgentBridge() {
     bridge = new agent_bridge_1.AgentBridge({
         command: useDist ? process.execPath : "npx",
         args: useDist
-            ? [electron_1.app.isPackaged ? path.join(process.resourcesPath, "agent", "dist", "index.js") : agentDist, "--ipc"]
+            ? [electron_1.app.isPackaged ? path.join("agent", "dist", "index.js") : agentDist, "--ipc"]
             : ["tsx", "src/index.ts", "--ipc"],
-        cwd: useDist ? undefined : path.join(__dirname, "..", "..", "..", "agent"),
+        cwd: useDist ? (electron_1.app.isPackaged ? process.resourcesPath : undefined) : path.join(__dirname, "..", "..", "..", "agent"),
         env: useDist ? { ELECTRON_RUN_AS_NODE: "1" } : { AGENT_DEV: "1" },
         getCredentials: () => ({ apiUrl: backendUrl(), token: settings.gasflowToken }),
     });
@@ -210,12 +210,12 @@ async function startWithRetry(label, start, attempts = 3) {
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
             await start();
-            logger.info(`${label}.started`, `tentativa=${attempt}`);
+            logger_1.logger.info(`${label}.started`, `tentativa=${attempt}`);
             return;
         }
         catch (error) {
             lastError = error;
-            logger.warn(`${label}.start_failed`, `tentativa=${attempt}/${attempts}: ${error instanceof Error ? error.message : String(error)}`);
+            logger_1.logger.warn(`${label}.start_failed`, `tentativa=${attempt}/${attempts}: ${error instanceof Error ? error.message : String(error)}`);
             if (attempt < attempts)
                 await new Promise((resolve) => setTimeout(resolve, 1500));
         }
@@ -330,8 +330,8 @@ else {
             // Janela de erro mínima (sem interface custom) — mensagem nativa.
             const { dialog } = await Promise.resolve().then(() => __importStar(require("electron")));
             await dialog.showErrorBox("GasFlow Desktop", `O backend não conseguiu iniciar.\n\n${e.message}\n\n` +
-                "Verifique se o Python 3.11+ e as dependências do backend estão instalados\n" +
-                "(cd backend && pip install -r requirements.txt).");
+                "Feche outras instâncias do GasFlow e tente novamente. Se o problema continuar,\n" +
+                "consulte os logs em %APPDATA%\\gasflow-desktop\\logs.");
             electron_1.app.quit();
             return;
         }
