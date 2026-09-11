@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 
@@ -80,7 +80,11 @@ describe('WhatsAppPage', () => {
     renderWithProviders(<WhatsAppPage />)
 
     const connect = await screen.findByRole('button', { name: /Conectar/i })
-    connect.click()
+    // act: o handler do clique é assíncrono (post + refresh) — sem o act(),
+    // o setState interno do AccountCard acontece fora do act e emite warning.
+    await act(async () => {
+      connect.click()
+    })
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith('/whatsapp/accounts/secondary/start')
