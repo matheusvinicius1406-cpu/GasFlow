@@ -20,6 +20,7 @@ from app.infrastructure.database.dependencies import get_db
 from app.infrastructure.ai.factory import get_llm_provider
 from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository, SQLAlchemyMessageRepository
 from app.application.ai.engine import AIEngine
+from app.application.ai.tools_impl import AIToolsFactory
 from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -30,7 +31,12 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     conversation_id: Optional[str] = None
-    permission_level: str = Field("OPERATOR", description="READ_ONLY, OPERATOR, or ADMIN")
+    # DEPRECATED: aceito por compatibilidade de contrato mas IGNORADO.
+    # O nível de permissão é derivado do papel autenticado no servidor —
+    # o cliente não escolhe o próprio nível (controle de acesso quebrado).
+    permission_level: Optional[str] = Field(
+        None, description="Ignored — derived server-side from the authenticated role"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -70,12 +76,38 @@ class AuditEntry(BaseModel):
     timestamp: Optional[str] = None
 
 
+# ── Role → permission level mapping ──────────────────
+
+
+def _role_to_permission_level(ctx: TenantContext) -> str:
+    """Deriva o nível de permissão IA do papel autenticado (server-side).
+
+    ADMIN/MANAGER → ADMIN; OPERATOR (atendente) → OPERATOR;
+    DRIVER/CUSTOMER (PIN baixo privilégio) → READ_ONLY. Chamadores de
+    serviço (whatsapp gateway) mantêm OPERATOR — o gateway já limita as
+    ferramentas expostas ao canal de mensagens.
+    """
+    from app.domain.security.models import SystemRole
+
+    if ctx.role in (SystemRole.ADMIN, SystemRole.MANAGER, SystemRole.SYSTEM):
+        return "ADMIN"
+    if ctx.role == SystemRole.OPERATOR:
+        return "OPERATOR"
+    return "READ_ONLY"
+
+
 # ── Tool Registry Setup ───────────────────────────────
 
 
-def _build_tool_registry() -> ToolRegistry:
-    """Build the tool registry with all available tools."""
+def _build_tool_registry(db: Optional[Session] = None) -> ToolRegistry:
+    """Build the tool registry with all available tools.
+
+    Todas as tools recebem handler (AIToolsFactory) — sem handler a tool
+    sempre falhava com "Tool has no handler" e o endpoint principal de chat
+    só respondia perguntas genéricas.
+    """
     registry = ToolRegistry()
+    factory = AIToolsFactory(db_session=db)
 
     # READ TOOLS
     registry.register(
@@ -92,6 +124,7 @@ def _build_tool_registry() -> ToolRegistry:
                     "phone": {"type": "string"},
                 },
             },
+            handler=factory.get_customer,
         )
     )
     registry.register(
@@ -101,6 +134,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            handler=factory.search_customers,
         )
     )
     registry.register(
@@ -114,6 +148,7 @@ def _build_tool_registry() -> ToolRegistry:
                 "properties": {"customer_codigo": {"type": "string"}},
                 "required": ["customer_codigo"],
             },
+            handler=factory.get_customer_360,
         )
     )
     registry.register(
@@ -127,6 +162,7 @@ def _build_tool_registry() -> ToolRegistry:
                 "properties": {"order_codigo": {"type": "string"}},
                 "required": ["order_codigo"],
             },
+            handler=factory.get_order,
         )
     )
     registry.register(
@@ -140,6 +176,7 @@ def _build_tool_registry() -> ToolRegistry:
                 "properties": {"product_codigo": {"type": "string"}},
                 "required": ["product_codigo"],
             },
+            handler=factory.get_inventory,
         )
     )
     registry.register(
@@ -149,6 +186,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {}},
+            handler=factory.get_low_stock,
         )
     )
     registry.register(
@@ -158,6 +196,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {}},
+            handler=factory.get_inventory_summary,
         )
     )
     registry.register(
@@ -167,6 +206,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {"order_codigo": {"type": "string"}}},
+            handler=factory.get_payments,
         )
     )
     registry.register(
@@ -176,6 +216,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {"customer_codigo": {"type": "string"}}},
+            handler=factory.get_receivables,
         )
     )
     registry.register(
@@ -185,6 +226,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {}},
+            handler=factory.get_financial_summary,
         )
     )
     registry.register(
@@ -194,6 +236,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {}},
+            handler=factory.get_sales_summary,
         )
     )
     registry.register(
@@ -203,6 +246,7 @@ def _build_tool_registry() -> ToolRegistry:
             tool_type=ToolType.READ,
             permission=ToolPermission.READ_ONLY,
             input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            handler=factory.search_products,
         )
     )
 
@@ -222,6 +266,7 @@ def _build_tool_registry() -> ToolRegistry:
                 },
                 "required": ["client_codigo", "items"],
             },
+            handler=factory.create_order,
         )
     )
     registry.register(
@@ -235,11 +280,12 @@ def _build_tool_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "product_codigo": {"type": "string"},
-                    "quantity": {"type": "integer"},
+                    "quantity": {"type": "number"},
                     "reason": {"type": "string"},
                 },
                 "required": ["product_codigo", "quantity"],
             },
+            handler=factory.add_stock,
         )
     )
     registry.register(
@@ -256,8 +302,9 @@ def _build_tool_registry() -> ToolRegistry:
                     "amount": {"type": "number"},
                     "method": {"type": "string"},
                 },
-                "required": ["order_coordinates", "amount", "method"],
+                "required": ["order_codigo", "amount", "method"],
             },
+            handler=factory.register_payment,
         )
     )
 
@@ -271,9 +318,15 @@ _engine = None
 
 
 def _get_engine():
+    """Engine singleton com registry construído uma única vez.
+
+    IMPORTANTE: o registry é construído com AIToolsFactory(db_session=None)
+    — cada chamada de tool abre a própria SessionLocal e a fecha, evitando
+    handlers amarrados a uma session de request que já foi fechada.
+    """
     global _tool_registry, _engine
     if _engine is None:
-        _tool_registry = _build_tool_registry()
+        _tool_registry = _build_tool_registry(None)
         _engine = AIEngine(
             llm_provider=get_llm_provider(),
             tool_registry=_tool_registry,
@@ -293,8 +346,16 @@ def _get_tools():
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
-    """Main AI chat endpoint."""
+    """Main AI chat endpoint.
+
+    O nível de permissão é derivado do papel autenticado (ctx) — o valor
+    eventual enviado pelo cliente é ignorado (controle de acesso quebrado
+    se o cliente escolhesse o próprio nível). Per-tool, a checagem acontece
+    no engine (AIEngine._execute_tool), comparando tool.permission com este
+    nível.
+    """
     try:
+        permission_level = _role_to_permission_level(ctx)
         engine = _get_engine()
         engine.conversation_repo = SQLAlchemyConversationRepository(db)
         engine.message_repo = SQLAlchemyMessageRepository(db)
@@ -311,7 +372,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext
         result = engine.chat(
             message=request.message,
             conversation_id=conv_id,
-            permission_level=request.permission_level,
+            permission_level=permission_level,
         )
 
         return ChatResponse(
@@ -324,7 +385,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext
             conversation_id=conv_id,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI processing error: {str(e)}") from e
 
 
 @router.get("/tools", response_model=List[ToolInfo])

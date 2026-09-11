@@ -22,9 +22,11 @@ from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
+from app.core.config import settings
 from app.domain.automation.events import EventBus
 from app.domain.automation.workflows import WorkflowDefinition
 from app.domain.automation.policy import PolicyEngine, ApprovalEngine
+from app.core.approval_redis import RedisApprovalEngine
 from app.application.automation.workflow_engine import WorkflowEngine
 from app.application.automation.agent_engine import AgentEngine
 from app.application.automation.automations import (
@@ -43,7 +45,14 @@ router = APIRouter(prefix="/automation", tags=["automation"])
 
 _event_bus = EventBus()
 _policy_engine = PolicyEngine()
-_approval_engine = ApprovalEngine()
+# Backend da fila de aprovações escolhido por APPROVAL_QUEUE_MODE:
+# memory (default, single worker) ou redis (compartilhado entre workers —
+# produção; ver rate_limit.py / REALTIME_BACKEND para o mesmo padrão).
+_approval_engine = (
+    RedisApprovalEngine(url=settings.approval_queue_redis_url)
+    if settings.approval_queue_mode == "redis"
+    else ApprovalEngine()
+)
 _workflow_engine = WorkflowEngine(_policy_engine, _approval_engine)
 _agent_engine = AgentEngine(_policy_engine, _approval_engine, tool_registry=None)
 _workflows: Dict[str, WorkflowDefinition] = {}
@@ -88,6 +97,8 @@ class AgentExecuteRequest(BaseModel):
 
 class ApprovalRequest(BaseModel):
     approved_by: str = Field("operator", min_length=1)
+    # Se informado (e found), retoma o run pausado após aprovar.
+    resume: bool = True
 
 
 class KillSwitchRequest(BaseModel):
@@ -181,9 +192,33 @@ async def list_approvals(ctx: TenantContext = Depends(get_tenant_context)):
 
 @router.post("/approvals/{approval_id}/approve")
 async def approve_action(approval_id: str, req: ApprovalRequest, ctx: TenantContext = Depends(get_tenant_context)):
-    if _approval_engine.approve(approval_id, req.approved_by):
-        return {"success": True}
-    raise HTTPException(status_code=400, detail="Cannot approve")
+    if not _approval_engine.approve(approval_id, req.approved_by):
+        raise HTTPException(status_code=400, detail="Cannot approve")
+    resumed_run: Optional[str] = None
+    if req.resume:
+        resumed_run = _resume_paused_run(approval_id)
+    return {"success": True, "resumed_run_id": resumed_run}
+
+
+def _resume_paused_run(approval_id: str) -> Optional[str]:
+    """Após aprovar, retoma o run pausado no step que aguardava a aprovação.
+
+    O WorkflowEngine.valida binding (argumentos aprovados == executados) e
+    executa o restante do run. Em memória por processo (histórico de runs);
+    com APPROVAL_QUEUE_MODE=redis a fila em si é compartilhada entre workers.
+    """
+    approval = _approval_engine.get(approval_id)
+    if not approval or not approval.run_id:
+        return None
+    run = _workflow_engine.get_run(approval.run_id)
+    if not run:
+        return None
+    # Reconstrói a definição usada pelo run (definições vivem em _workflows).
+    definition = _workflows.get(run.workflow_id)
+    if not definition:
+        return None
+    resumed = _workflow_engine.resume_after_approval(definition, run)
+    return resumed.id
 
 
 @router.post("/approvals/{approval_id}/reject")

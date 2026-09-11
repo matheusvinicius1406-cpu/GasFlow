@@ -9,8 +9,20 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from enum import Enum
+import logging
 import uuid
 import hashlib
+
+logger = logging.getLogger("gasflow.automation.policy")
+
+
+def hash_arguments(arguments: Dict[str, Any]) -> str:
+    """Hash estável dos argumentos de uma ação (binding aprovação → execução).
+
+    Uso não-criptográfico: compara argumentos aprovados vs. executados.
+    Sem requisito de resistência a colisão adversária — não é segredo.
+    """
+    return hashlib.md5(str(sorted(arguments.items())).encode()).hexdigest()[:16]  # noqa: S324
 
 
 # ── Risk Levels ─────────────────────────────────────────
@@ -207,11 +219,9 @@ class ApprovalEngine:
         step_id: Optional[str] = None,
     ) -> Approval:
         """Create a new approval request."""
-        args_hash = hashlib.md5(str(sorted(arguments.items())).encode()).hexdigest()[:16]
-
         approval = Approval(
             action=action,
-            arguments_hash=args_hash,
+            arguments_hash=hash_arguments(arguments),
             actor=actor,
             workflow_id=workflow_id,
             run_id=run_id,
@@ -223,6 +233,38 @@ class ApprovalEngine:
         with self._lock:
             self._approvals[approval.id] = approval
         return approval
+
+    def validate_binding(self, approval_id: str, action: str, arguments: Dict[str, Any]) -> bool:
+        """Verifica se a ação a executar é exatamente a que foi aprovada.
+
+        Binding aprovado → executado: mesmo action E mesmos argumentos
+        (hash estável). Deve ser chamado ANTES de executar a ação aprovada;
+        evita que argumentos mudados entre aprovação e execução passem.
+        Falha (False) NUNCA executa a ação.
+        """
+        with self._lock:
+            approval = self._approvals.get(approval_id)
+        if not approval:
+            logger.warning("approval.binding.rejected", extra={"reason": "not_found", "approval_id": approval_id})
+            return False
+        if approval.action != action:
+            logger.warning(
+                "approval.binding.rejected",
+                extra={
+                    "reason": "action_mismatch",
+                    "approval_id": approval_id,
+                    "approved": approval.action,
+                    "requested": action,
+                },
+            )
+            return False
+        if approval.arguments_hash != hash_arguments(arguments):
+            logger.warning(
+                "approval.binding.rejected",
+                extra={"reason": "arguments_mismatch", "approval_id": approval_id, "action": action},
+            )
+            return False
+        return True
 
     def approve(self, approval_id: str, approved_by: str) -> bool:
         """Approve an approval request. One-time use."""
@@ -252,6 +294,12 @@ class ApprovalEngine:
             approval.status = ApprovalStatus.REJECTED
             approval.rejected_at = datetime.utcnow()
             return True
+
+    def get(self, approval_id: str) -> Optional[Approval]:
+        """Return a copy of the approval, if it exists."""
+        with self._lock:
+            approval = self._approvals.get(approval_id)
+            return Approval(**vars(approval).copy()) if approval else None
 
     def is_valid(self, approval_id: str) -> bool:
         """Check if an approval is valid (approved and not expired)."""

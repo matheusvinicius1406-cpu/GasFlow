@@ -50,6 +50,10 @@ Thumbs.db
 #  são versionados — os fontes do main não existem no repo, apenas dist/)
 !desktop/dist/
 
+# PyInstaller output (backend standalone do desktop) — regenerável via spec
+backend/build/
+backend/dist/
+
 # Node
 node_modules/
 
