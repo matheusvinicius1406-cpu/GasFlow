@@ -213,7 +213,7 @@ def create_coupon(
     try:
         coupon = svc.create_coupon(body.model_dump(), created_by=ctx.user_id)
     except CouponServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return _coupon_dict(coupon)
 
 
@@ -239,7 +239,7 @@ def update_coupon(
     try:
         coupon = svc.update_coupon(coupon_id, body.model_dump(exclude_none=True))
     except CouponServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return _coupon_dict(coupon)
 
 
@@ -252,7 +252,7 @@ def delete_coupon(
     try:
         coupon = svc.deactivate(coupon_id)
     except CouponServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return _coupon_dict(coupon)
 
 
@@ -268,7 +268,7 @@ def apply_coupon(
     try:
         result = svc.apply_to_order(body.order_codigo, body.code, actor_id=ctx.user_id)
     except CouponServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return {
         "order_codigo": result["order"].codigo,
         "code": result["coupon"].code,
@@ -287,7 +287,7 @@ def remove_coupon(
     try:
         result = svc.remove_from_order(body.order_codigo)
     except CouponServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     return {
         "order_codigo": result["order"].codigo,
         "restored_total": float(result["restored_total"]),

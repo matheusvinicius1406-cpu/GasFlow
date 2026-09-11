@@ -71,8 +71,8 @@ async def get_daily_report(
     # Validate date format
     try:
         datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD") from exc
 
     # Get data
     orders, payments, expenses = _get_order_data_for_date(ctx.tenant_id, date)
@@ -95,8 +95,8 @@ async def get_daily_report_pdf(
     # Validate date format
     try:
         datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD") from exc
 
     # Get data
     orders, payments, expenses = _get_order_data_for_date(ctx.tenant_id, date)

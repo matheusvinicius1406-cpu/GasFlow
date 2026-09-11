@@ -352,8 +352,8 @@ async def update_driver_status(driver_id: str, status: str, ctx: TenantContext =
             raise HTTPException(404, "Driver not found")
         try:
             new_status = DriverStatus(status)
-        except ValueError:
-            raise HTTPException(400, f"Invalid status: {status}")
+        except ValueError as exc:
+            raise HTTPException(400, f"Invalid status: {status}") from exc
         if new_status == DriverStatus.AVAILABLE:
             driver.set_available()
         elif new_status == DriverStatus.OFFLINE:

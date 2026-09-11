@@ -60,13 +60,13 @@ async def send_notification(
 
     try:
         event = CommunicationEvent(req.event)
-    except ValueError:
-        raise HTTPException(400, f"Invalid event: {req.event}")
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid event: {req.event}") from exc
 
     try:
         channel = CommunicationChannel(req.channel)
-    except ValueError:
-        raise HTTPException(400, f"Invalid channel: {req.channel}")
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid channel: {req.channel}") from exc
 
     # Check cooldown (unless forced)
     if not req.force and not service.should_send(ctx.tenant_id, req.delivery_id, event):
@@ -126,8 +126,8 @@ async def update_template(
 
     try:
         event_type = CommunicationEvent(event)
-    except ValueError:
-        raise HTTPException(400, f"Invalid event: {event}")
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid event: {event}") from exc
 
     policy = service.get_policy(ctx.tenant_id)
 

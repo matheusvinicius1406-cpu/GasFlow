@@ -48,10 +48,10 @@ async def _proxy_get(path: str) -> dict:
                 timeout=10,
             )
             return response.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.")
+        except httpx.ConnectError as exc:
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.") from exc
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 async def _proxy_post(path: str, data: Optional[dict] = None) -> dict:
@@ -64,10 +64,10 @@ async def _proxy_post(path: str, data: Optional[dict] = None) -> dict:
                 timeout=10,
             )
             return response.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.")
+        except httpx.ConnectError as exc:
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.") from exc
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── Schemas ───────────────────────────────────────────────

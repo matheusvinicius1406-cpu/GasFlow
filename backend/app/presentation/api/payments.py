@@ -228,7 +228,7 @@ async def generate_pix_payload(req: GeneratePixPayloadRequest, ctx: TenantContex
             order_codigo=req.order_codigo,
         )
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
     if not result:
         raise HTTPException(409, "Nenhuma chave PIX ativa configurada para este tenant")
     return result
@@ -263,8 +263,8 @@ async def pix_webhook(request: Request):
 
     try:
         data = await request.json()
-    except Exception:
-        raise HTTPException(400, "JSON inválido")
+    except Exception as exc:
+        raise HTTPException(400, "JSON inválido") from exc
 
     txid = (data or {}).get("txid", "")
     status = (data or {}).get("status", "CONFIRMED").upper()

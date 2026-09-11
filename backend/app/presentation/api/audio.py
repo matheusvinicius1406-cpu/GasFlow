@@ -98,8 +98,8 @@ async def transcribe_audio(req: TranscribeRequest, ctx: TenantContext = Depends(
     """Transcribe audio to text using STT provider."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid base64 audio")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio") from exc
 
     stt = _get_stt()
     result = stt.transcribe(audio_bytes, mime_type=req.mime_type, language=req.language)
@@ -118,8 +118,8 @@ async def process_audio(req: AudioProcessRequest, ctx: TenantContext = Depends(g
     """Process audio through full pipeline: STT → Conversation Gateway → AI."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid base64 audio")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio") from exc
 
     audio_msg = AudioMessage(
         provider_message_id=req.provider_message_id,

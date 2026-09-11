@@ -247,7 +247,7 @@ class CloudApiAdapter(WhatsAppProvider):
             raise WhatsAppConnectionError(
                 f"Cloud API connection failed: {e}",
                 provider="cloud_api",
-            )
+            ) from e
 
         self._raise_for_auth_and_rate(resp)
 

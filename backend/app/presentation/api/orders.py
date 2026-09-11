@@ -82,7 +82,7 @@ def create_order(
         )
         return created
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.get("/", response_model=list[OrderResponse])
@@ -140,7 +140,7 @@ def update_order_status(
         )
         return order
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.patch("/{codigo}/assign-driver", response_model=OrderResponse)
@@ -170,4 +170,4 @@ def assign_driver(
         )
         return order
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e

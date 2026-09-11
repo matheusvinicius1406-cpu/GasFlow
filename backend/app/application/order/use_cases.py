@@ -178,8 +178,8 @@ class ListOrdersUseCase:
         if status:
             try:
                 order_status = OrderStatus(status)
-            except ValueError:
-                raise ValueError(f"Status inválido: {status}")
+            except ValueError as exc:
+                raise ValueError(f"Status inválido: {status}") from exc
         return self.repository.listar_todos(status=order_status)
 
 
@@ -211,8 +211,8 @@ class UpdateOrderStatusUseCase:
 
         try:
             order_status = OrderStatus(status)
-        except ValueError:
-            raise ValueError(f"Status inválido: {status}")
+        except ValueError as exc:
+            raise ValueError(f"Status inválido: {status}") from exc
 
         # FASE 7.1: Deduct stock on CONFIRMATION
         if order_status == OrderStatus.CONFIRMED and self.inventory_repo:

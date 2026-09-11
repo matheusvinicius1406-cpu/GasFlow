@@ -67,13 +67,13 @@ class SegmentRule:
         if not isinstance(self.field, RuleField):
             try:
                 self.field = RuleField(self.field)
-            except (ValueError, KeyError):
-                raise ValueError(f"Invalid rule field: {self.field}")
+            except (ValueError, KeyError) as exc:
+                raise ValueError(f"Invalid rule field: {self.field}") from exc
         if not isinstance(self.operator, RuleOperator):
             try:
                 self.operator = RuleOperator(self.operator)
-            except (ValueError, KeyError):
-                raise ValueError(f"Invalid rule operator: {self.operator}")
+            except (ValueError, KeyError) as exc:
+                raise ValueError(f"Invalid rule operator: {self.operator}") from exc
 
     def evaluate(self, customer_metrics: dict) -> bool:
         """Evaluate this rule against customer metrics.

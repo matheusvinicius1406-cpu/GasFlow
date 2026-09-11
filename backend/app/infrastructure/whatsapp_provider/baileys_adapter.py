@@ -87,19 +87,19 @@ class BaileysAdapter(WhatsAppProvider):
                     self._last_connected_at = datetime.utcnow()
                 else:
                     raise Exception(f"HTTP {resp.status_code}")
-        except httpx.ConnectError:
+        except httpx.ConnectError as exc:
             self._connected = False
             raise WhatsAppConnectionError(
                 "Baileys service not available. " "A Baileys-based Node.js service needs to be built.",
                 provider="baileys",
-            )
+            ) from exc
         except Exception as e:
             self._connected = False
             self._last_error = str(e)
             raise WhatsAppConnectionError(
                 f"Baileys connection failed: {e}",
                 provider="baileys",
-            )
+            ) from e
 
     async def stop(self) -> None:
         """Stop Baileys session."""

@@ -6,11 +6,14 @@ Uses the existing WhatsAppConversationModel and WhatsAppMessageModel.
 """
 
 import json
+import logging
 from typing import Optional, List, Tuple
 from datetime import datetime
 
 from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("gasflow.whatsapp.repositories")
 
 from app.domain.whatsapp.conversation import (
     Conversation,
@@ -163,7 +166,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
                 filtered = {k: v for k, v in draft_data.items() if k in valid_keys}
                 draft = ConversationDraft(**filtered)
             except (json.JSONDecodeError, TypeError):
-                pass
+                logger.warning("wa.conversation.draft_json_invalid — draft descartado", exc_info=True)
         try:
             state = ConversationState(model.status)
         except ValueError:
@@ -238,7 +241,7 @@ class SQLAlchemyConversationMessageRepository(ConversationMessageRepository):
             try:
                 metadata = json.loads(model.raw_payload)
             except (json.JSONDecodeError, TypeError):
-                pass
+                logger.warning("wa.message.raw_payload_invalid — metadata vazia", exc_info=True)
         return ConversationMessage(
             id=model.id,
             conversation_id=model.conversation_id,

@@ -96,6 +96,7 @@ class ConnectionManager:
                 await ws.send_text(message)
                 self._total_events_sent += 1
             except Exception:
+                logger.debug("ws.broadcast_send_failed — connection marked dead", exc_info=True)
                 dead.append(ws)
 
         # Clean up dead connections
@@ -340,6 +341,7 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:
+        logger.debug("ws.unexpected_disconnect — cleaning up connection", exc_info=True)
         manager.disconnect(websocket)
 
 
