@@ -466,7 +466,15 @@ class AuthService:
             membership = self._get_membership(user.id, session_model.tenant_id)
             role = self._get_role(membership.role_id) if membership else None
             system_role = role.system_role if role else SystemRole.OPERATOR
-            permissions = set(role.permissions) if role else set()
+            # P0 3.2: permissões do DB (catálogo + matriz + overrides) com
+            # fallback para o JSON/dict legado quando o DB não tem catálogo.
+            try:
+                from app.application.security.permission_policy_loader import get_policy_loader
+
+                permissions = get_policy_loader().load_for_user(user.id, membership.role_id if membership else None)
+            except Exception:
+                logger.exception("policy.loader.unavailable — usando permissões do role JSON")
+                permissions = set(role.permissions) if role else set()
 
             # Update last seen
             session_repo.update_last_seen(session_model.id)

@@ -69,6 +69,31 @@ PERMISSIONS: list[tuple[str, str, str]] = [
     ("settings.read", "settings", "Visualizar configurações"),
     ("settings.write", "settings", "Alterar configurações"),
     ("audit.view", "audit", "Visualizar trilha de auditoria"),
+    # Curingas por módulo (usados pela matriz ROLE_MATRIX): o catálogo precisa
+    # conter TODOS os códigos atribuíveis para que a matriz role_permissions
+    # possa referenciá-los e o loader expandi-los.
+    ("customer.*", "customer", "Todos os direitos de clientes (wildcard)"),
+    ("order.*", "order", "Todos os direitos de pedidos (wildcard)"),
+    ("product.*", "product", "Todos os direitos de produtos (wildcard)"),
+    ("inventory.*", "inventory", "Todos os direitos de estoque (wildcard)"),
+    ("finance.*", "finance", "Todos os direitos do financeiro (wildcard)"),
+    ("whatsapp.*", "whatsapp", "Todos os direitos de WhatsApp (wildcard)"),
+    ("conversation.*", "conversation", "Todos os direitos de conversas (wildcard)"),
+    ("workflow.*", "workflow", "Todos os direitos de workflows (wildcard)"),
+    ("agent.*", "agent", "Todos os direitos do agente (wildcard)"),
+    ("automation.*", "automation", "Todos os direitos de automações (wildcard)"),
+    ("coupon.*", "coupon", "Todos os direitos de cupons (wildcard)"),
+    ("integration.*", "integration", "Todos os direitos de integrações (wildcard)"),
+    # Permissões específicas do fluxo do motorista (role DRIVER).
+    ("delivery.read.assigned", "delivery", "Visualizar entregas atribuídas a si"),
+    ("delivery.accept", "delivery", "Aceitar entrega atribuída"),
+    ("delivery.start", "delivery", "Iniciar rota de entrega"),
+    ("delivery.arrive", "delivery", "Registrar chegada no destino"),
+    ("delivery.complete", "delivery", "Concluir entrega"),
+    ("delivery.fail", "delivery", "Registrar falha de entrega"),
+    ("route.read.assigned", "driver", "Visualizar rota atribuída a si"),
+    ("location.write.self", "driver", "Enviar a própria localização"),
+    ("proof.write.assigned", "driver", "Anexar prova de entrega atribuída"),
     ("admin.*", "admin", "Acesso total (wildcard)"),
 ]
 
