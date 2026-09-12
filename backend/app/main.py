@@ -77,6 +77,57 @@ async def lifespan(app: FastAPI):
     # as executions são marcadas antes do envio (sem duplo envio).
     _automation_poll_task = None
     _automation_poll_seconds = int(os.getenv("AUTOMATION_POLL_SECONDS", "0"))
+
+    # ── Snapshot diário de estoque (P0 3.7) ─────────────────
+    # Garante o snapshot do dia no boot (idempotente) e agenda o job
+    # diário. Usa o mesmo intervalo do poller de automação (o job é
+    # no-op se já existir snapshot do dia). Desligado em TESTING.
+    if not os.getenv("TESTING"):
+        try:
+            import sqlalchemy.orm
+
+            from app.application.inventory.snapshot_service import StockDailySnapshotService
+            from app.infrastructure.database.init_db import engine as _snap_engine
+
+            _snap_session = sqlalchemy.orm.Session(bind=_snap_engine)
+            try:
+                _snap_count = StockDailySnapshotService(_snap_session, "default").ensure_initial_snapshot()
+                if _snap_count:
+                    logger.info(
+                        f"snapshot diário de estoque criado ({_snap_count} produtos)",
+                        extra={"service": "gasflow-backend"},
+                    )
+            finally:
+                _snap_session.close()
+        except Exception as exc:  # pragma: no cover — nunca derruba a API
+            logger.warning(f"snapshot diário de estoque falhou no boot: {exc}")
+
+    _snapshot_poll_task = None
+    if _automation_poll_seconds > 0 and not os.getenv("TESTING"):
+
+        async def _snapshot_poller():
+            import sqlalchemy.orm
+
+            from app.application.inventory.snapshot_service import StockDailySnapshotService
+            from app.infrastructure.database.init_db import engine as _snap_engine
+
+            while True:
+                try:
+                    session = sqlalchemy.orm.Session(bind=_snap_engine)
+                    try:
+                        StockDailySnapshotService(session, "default").run_daily_snapshot()
+                    finally:
+                        session.close()
+                except Exception as exc:  # pragma: no cover — nunca derruba a API
+                    logger.warning(f"snapshot poller falhou: {exc}")
+                await asyncio.sleep(_automation_poll_seconds)
+
+        _snapshot_poll_task = asyncio.create_task(_snapshot_poller())
+        logger.info(
+            f"snapshot poller iniciado (intervalo={_automation_poll_seconds}s)",
+            extra={"service": "gasflow-backend"},
+        )
+
     if _automation_poll_seconds > 0 and not os.getenv("TESTING"):
 
         async def _automation_poller():
@@ -118,6 +169,12 @@ async def lifespan(app: FastAPI):
         _automation_poll_task.cancel()
         try:
             await _automation_poll_task
+        except asyncio.CancelledError:
+            pass
+    if _snapshot_poll_task is not None:
+        _snapshot_poll_task.cancel()
+        try:
+            await _snapshot_poll_task
         except asyncio.CancelledError:
             pass
 

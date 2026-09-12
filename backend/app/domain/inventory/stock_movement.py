@@ -25,6 +25,9 @@ class MovementType(str, Enum):
     LOSS = "LOSS"  # Perda / quebra
     RETURN = "RETURN"  # Devolução (cancelamento de pedido)
     INITIAL_BALANCE = "INITIAL_BALANCE"  # Saldo inicial (migração)
+    # P0 (Decisão B2): troca física cheio→vazio na entrega DELIVERED.
+    # Não altera `quantity` (total) — só a composição: empty += qty.
+    DELIVERY_EXCHANGE = "DELIVERY_EXCHANGE"
 
 
 @dataclass

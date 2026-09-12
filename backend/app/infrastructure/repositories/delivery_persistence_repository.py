@@ -17,7 +17,11 @@ from app.infrastructure.repositories.delivery_persistence_model import (
     DriverSessionRecord,
     IdempotencyKeyRecord,
 )
+from app.infrastructure.repositories.inventory_model import StockMovementModel
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
@@ -178,7 +182,93 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
 
         self.db.commit()
         self.db.refresh(record)
+
+        # ── P0 (Decisão B2): troca físico cheio→vazio ──────
+        # DELIVERED: cliente devolve os vazios (quantity_empty += qty).
+        # O débito dos cheios já aconteceu na reserva (Order CONFIRMED).
+        # Reversão no CANCELLED: reverte a troca se a entrega já tinha
+        # sido DELIVERED antes (timeline registra o histórico).
+        # Best-effort: falha de estoque NUNCA reverte a transição de
+        # entrega (a entrega é fato físico consumado); o erro é logado.
+        try:
+            self._apply_b2_stock_effect(record)
+        except Exception as exc:  # pragma: no cover — nunca derruba a transição
+            logger.error(
+                "falha ao aplicar efeito de estoque B2 (delivery=%s status=%s): %s",
+                delivery_id,
+                new_status,
+                exc,
+            )
+
         return record
+
+    def _apply_b2_stock_effect(self, record: DeliveryRecord) -> None:
+        """Aplica a troca cheio→vazio (DELIVERED) ou a reversão (CANCELLED pós-DELIVERED)."""
+        from collections import Counter
+
+        from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+        from app.infrastructure.repositories.order_item_model import OrderItemModel
+
+        new_status = record.status
+        if new_status not in ("DELIVERED", "CANCELLED"):
+            return
+
+        timeline_statuses = [e.get("status") for e in (record.timeline or []) if isinstance(e, dict)]
+        if new_status == "DELIVERED":
+            # Idempotência: a troca já foi aplicada para esta entrega?
+            existing = (
+                self._filter_by_tenant(StockMovementModel)
+                .filter(
+                    StockMovementModel.reference_type == "DELIVERY",
+                    StockMovementModel.reference_id == record.delivery_id,
+                    StockMovementModel.type == "DELIVERY_EXCHANGE",
+                )
+                .first()
+            )
+            if existing:
+                return
+        else:  # CANCELLED
+            # Só reverte se a entrega estava DELIVERED antes do cancelamento.
+            if "DELIVERED" not in timeline_statuses[:-1]:
+                return
+            existing_reversal = (
+                self._filter_by_tenant(StockMovementModel)
+                .filter(
+                    StockMovementModel.reference_type == "DELIVERY",
+                    StockMovementModel.reference_id == record.delivery_id,
+                    StockMovementModel.type == "RETURN",
+                )
+                .first()
+            )
+            if existing_reversal:
+                return
+
+        # Itens do pedido vinculado — sem pedido/itens, nada a trocar.
+        items = self.db.query(OrderItemModel).filter(OrderItemModel.order_codigo == record.order_id).all()
+        if not items:
+            return
+
+        repo = SQLAlchemyInventoryRepository(self.db, self.tenant_id)
+        quantities = Counter({i.product_codigo: i.quantity for i in items})
+        for product_codigo, qty in quantities.items():
+            if new_status == "DELIVERED":
+                repo.apply_delivery_exchange(
+                    product_codigo=product_codigo,
+                    quantity=qty,
+                    reason=f"Troca cheio→vazio — entrega {record.delivery_id} (pedido #{record.order_id})",
+                    reference_type="DELIVERY",
+                    reference_id=record.delivery_id,
+                )
+            else:
+                # CANCELLED após DELIVERED: desfaz a troca — os vazios voltam
+                # (cliente/caminhão retorna os cilindros ao depósito).
+                repo.reverse_delivery_exchange(
+                    product_codigo=product_codigo,
+                    quantity=qty,
+                    reason=f"Reversão de troca — cancelamento entrega {record.delivery_id}",
+                    reference_type="DELIVERY",
+                    reference_id=record.delivery_id,
+                )
 
     def assign_delivery(
         self, delivery_id: str, driver_id: str, vehicle_id: Optional[str], version: int
