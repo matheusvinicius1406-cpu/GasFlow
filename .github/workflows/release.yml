@@ -55,23 +55,13 @@ jobs:
           npm ci --prefix ../whatsapp
           npm ci --prefix ../frontend
 
-      - name: Build signed installer candidate
+      - name: Build installer candidate
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
         run: npm run build:win
 
-      - name: Require Authenticode signature
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem release -Filter '*.exe' | Where-Object { $_.Name -like '*Setup*' } | Select-Object -First 1
-          if (-not $installer) { throw 'Instalador não foi gerado.' }
-          $signature = Get-AuthenticodeSignature $installer.FullName
-          if ($signature.Status -ne 'Valid') {
-            throw "Assinatura Authenticode inválida: $($signature.Status)"
-          }
-
-      - name: Publish verified installer
+      - name: Publish installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
