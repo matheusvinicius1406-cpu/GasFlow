@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:26-slim
 
 # Node >= 24: src/db.ts usa node:sqlite (nativo só a partir do Node 22.5+,
 # estável no 24). Node 20 quebra com ERR_UNKNOWN_BUILTIN_MODULE.
