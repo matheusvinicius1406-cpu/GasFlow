@@ -46,10 +46,9 @@ win:
   target:
     - nsis
   icon: build/icon.ico
-  publisherName: GasFlow
-  requestedExecutionLevel: asInvoker
   # Assinatura desativada: sem certificado Authenticode (CSC_LINK/CSC_KEY_PASSWORD)
   # o electron-builder trava. Windows/SmartScreen exibirá aviso nativo.
+  # electron-builder 26: publisherName migrou para signtoolOptions (só p/ assinatura).
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
