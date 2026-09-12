@@ -16,8 +16,9 @@ import { IntelligencePage } from '@/features/intelligence'
 import { SettingsPage } from '@/features/settings'
 import { CouponsPage } from '@/features/promotions'
 import { SegmentsPage, ReorderPage } from '@/features/segments'
-import { LoginPage } from '@/features/auth'
+import { LoginPage, PermissionRoute } from '@/features/auth'
 import { DriverLoginPage, DriverHomePage } from '@/features/driver'
+import { UsersPage } from '@/features/admin'
 
 export function App() {
   return (
@@ -71,6 +72,16 @@ export function App() {
         <Route path="reorder" element={<ReorderPage />} />
         <Route path="promotions" element={<CouponsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+
+        {/* Admin (P0) — guard por permissão efetiva do backend */}
+        <Route
+          path="admin/users"
+          element={
+            <PermissionRoute permissions={['user.read']}>
+              <UsersPage />
+            </PermissionRoute>
+          }
+        />
       </Route>
     </Routes>
   )

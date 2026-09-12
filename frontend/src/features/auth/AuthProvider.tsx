@@ -7,6 +7,9 @@ export interface AuthContextType {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  /** Permissões efetivas do usuário (do backend — nunca hardcode no frontend). */
+  permissions: string[]
+  hasPermission: (permission: string) => boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   isLoading: boolean
@@ -17,6 +20,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(localStorage.getItem('gasflow_token'))
+  const [permissions, setPermissions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchMe = useCallback(async () => {
@@ -29,11 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.display_name || data.username,
         role: data.role || 'OPERATOR',
       })
+      setPermissions(Array.isArray(data.permissions) ? data.permissions : [])
     } catch {
       // Token invalid — clear
       localStorage.removeItem('gasflow_token')
       setToken(null)
       setUser(null)
+      setPermissions([])
     }
   }, [])
 
@@ -68,6 +74,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: data.user?.display_name || data.user?.username || email,
       role: (data.role as User['role']) || 'OPERATOR',
     })
+    // Permissões chegam no próximo fetchMe — busca imediata para a sessão.
+    try {
+      const me = await api.auth.me()
+      setPermissions(Array.isArray(me.data.permissions) ? me.data.permissions : [])
+    } catch {
+      setPermissions([])
+    }
   }
 
   const logout = async () => {
@@ -79,7 +92,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('gasflow_token')
     setToken(null)
     setUser(null)
+    setPermissions([])
   }
+
+  // admin.* concede tudo (mesma semântica do backend TenantContext).
+  const hasPermission = useCallback(
+    (permission: string) => {
+      if (permissions.includes('admin.*')) return true
+      if (permissions.includes(permission)) return true
+      // Wildcard por módulo: inventory.* cobre inventory.adjust.
+      const resource = permission.split('.')[0]
+      return permissions.includes(`${resource}.*`)
+    },
+    [permissions]
+  )
 
   return (
     <AuthContext.Provider
@@ -87,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         token,
         isAuthenticated: !!token && !!user,
+        permissions,
+        hasPermission,
         login,
         logout,
         isLoading,
@@ -118,6 +146,31 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  return <>{children}</>
+}
+
+/** Guard por permissão: redireciona ao dashboard se não tem nenhuma delas. */
+export function PermissionRoute({
+  permissions,
+  children,
+}: {
+  permissions: string[]
+  children: ReactNode
+}) {
+  const { hasPermission, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!permissions.some((p) => hasPermission(p))) {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>

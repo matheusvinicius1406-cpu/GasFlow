@@ -58,6 +58,38 @@ export const api = {
     audit: (limit?: number) => apiClient.get('/auth/audit', { params: { limit } }),
   },
 
+  // Admin — P0 3.3 (RBAC persistido + auditoria)
+  admin: {
+    users: (params?: { search?: string; role_id?: string; status?: string }) =>
+      apiClient.get('/admin/users', { params }),
+    createUser: (data: {
+      username: string
+      email: string
+      password: string
+      display_name?: string
+      role_id?: string | null
+    }) => apiClient.post('/admin/users', data),
+    updateUser: (
+      id: string,
+      data: { username?: string; email?: string; display_name?: string; role_id?: string | null }
+    ) => apiClient.patch(`/admin/users/${id}`, data),
+    resetPassword: (id: string) => apiClient.post(`/admin/users/${id}/reset-password`),
+    deactivate: (id: string) => apiClient.post(`/admin/users/${id}/deactivate`),
+    activate: (id: string) => apiClient.post(`/admin/users/${id}/activate`),
+    roles: () => apiClient.get('/admin/roles'),
+    updateRolePermissions: (id: string, permissions: string[]) =>
+      apiClient.patch(`/admin/roles/${id}/permissions`, { permissions }),
+    audit: (params?: {
+      actor_id?: string
+      action?: string
+      resource?: string
+      from_ts?: string
+      to_ts?: string
+      offset?: number
+      limit?: number
+    }) => apiClient.get('/admin/audit', { params }),
+  },
+
   // Clients — FASE 6: search, pagination, 360
   clients: {
     list: (params?: { q?: string; tipo?: string; ativo?: boolean; page?: number; page_size?: number }) =>
