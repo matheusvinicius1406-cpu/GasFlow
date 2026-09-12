@@ -75,6 +75,15 @@ export interface BaileysEngineOptions {
   pairingCodePhone?: string;
 }
 
+/** Forma mínima dos eventos de contato do Baileys (Types/Contact). */
+interface BaileysContact {
+  id: string;
+  jid?: string;
+  name?: string;
+  notify?: string;
+  verifiedName?: string;
+}
+
 export class BaileysEngine {
   private sock: WASocket | null = null;  // exposto (leitura) p/ heartbeat do manager
   private connected = false;
@@ -82,6 +91,12 @@ export class BaileysEngine {
   private phone: string | null = null;
   private state: 'disconnected' | 'connecting' | 'qr_pending' | 'connected' = 'disconnected';
   private intentionallyStopped = false;
+  /**
+   * Catálogo de contatos 1:1 acumulado dos eventos (Baileys 6.7+ NÃO mantém
+   * mais sock.contacts — contacts.upsert/update e messaging-history.set são
+   * as fontes; messages.upsert complementa com pushName).
+   */
+  private readonly contactsStore = new Map<string, { name: string | null; pushName: string | null; verifiedName: string | null }>();
   private readonly accountId: string;
   private readonly browser: [string, string, string];
   private readonly pairingCodePhone?: string;
@@ -200,9 +215,40 @@ export class BaileysEngine {
       for (const msg of messages) {
         // mensagens de estado/protocolo sem conteúdo — ignora
         if (!msg.message) continue;
+        // Contatos aparecem também nas mensagens (pushName) — complementa o catálogo.
+        const jid = msg.key.remoteJid;
+        if (jid && jid.endsWith('@s.whatsapp.net')) {
+          this.mergeContacts([{ id: jid, notify: msg.pushName ?? undefined }]);
+        }
         onEvent('message', toIncomingShape(msg));
       }
     });
+
+    // Catálogo de contatos (Baileys 6.7+): eventos em vez de sock.contacts.
+    sock.ev.on('contacts.upsert', (cs) => this.mergeContacts(cs));
+    sock.ev.on('contacts.update', (cs) => this.mergeContacts(cs));
+    sock.ev.on('messaging-history.set', (payload) => {
+      this.mergeContacts(payload.contacts ?? []);
+      for (const chat of (payload.chats ?? []) as Array<{ id?: string; name?: string }>) {
+        if (chat.id && chat.id.endsWith('@s.whatsapp.net')) {
+          this.mergeContacts([{ id: chat.id, name: chat.name }]);
+        }
+      }
+    });
+  }
+
+  /** Mescla contatos dos eventos no catálogo em memória (jid tem precedência sobre lid). */
+  private mergeContacts(cs: Array<Partial<BaileysContact>>): void {
+    for (const c of cs) {
+      const jid = c.jid && c.jid.includes('@') ? c.jid : typeof c.id === 'string' && c.id.includes('@') ? c.id : null;
+      if (!jid) continue;
+      const prev = this.contactsStore.get(jid);
+      this.contactsStore.set(jid, {
+        name: c.name ?? prev?.name ?? null,
+        pushName: c.notify ?? prev?.pushName ?? null,
+        verifiedName: c.verifiedName ?? prev?.verifiedName ?? null,
+      });
+    }
   }
 
   /** Encerra mantendo a sessão salva (equivalente a client.destroy()). */
@@ -232,6 +278,7 @@ export class BaileysEngine {
     } catch { /* ignore */ }
     this.phone = null;
     this.qrString = null;
+    this.contactsStore.clear();
   }
 
   // ── Envio ──────────────────────────────────────────────
@@ -282,12 +329,29 @@ export class BaileysEngine {
 
   /** JIDs de contatos 1:1 — formato equivalente ao getContacts() do wwebjs. */
   getJids(): string[] {
+    const fromStore = Array.from(this.contactsStore.keys()).filter((jid) => jid.endsWith('@s.whatsapp.net'));
+    if (fromStore.length > 0) return fromStore;
+    // Fallback legado: versões antigas do Baileys mantinham sock.contacts.
     if (!this.sock) return [];
     const store = (this.sock as unknown as { contacts?: Record<string, unknown> }).contacts;
     if (!store) return [];
     return Object.keys(store).filter(
       (jid) => jid.endsWith('@s.whatsapp.net'),
     );
+  }
+
+  /** Catálogo com nomes — consumido pelo provider-manager (baileys branch). */
+  getContactEntries(): Array<{ jid: string; phone: string | null; name: string | null; pushName: string | null; businessName: string | null }> {
+    return this.getJids().map((jid) => {
+      const e = this.contactsStore.get(jid);
+      return {
+        jid,
+        phone: jid.split('@')[0] ?? null,
+        name: e?.name ?? null,
+        pushName: e?.pushName ?? null,
+        businessName: e?.verifiedName ?? null,
+      };
+    });
   }
 
   /** Checagem leve de saúde — consulta o próprio estado do socket. */

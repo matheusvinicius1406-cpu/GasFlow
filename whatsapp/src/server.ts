@@ -131,6 +131,17 @@ async function main(): Promise<void> {
     logger.info('api.started', { port: PORT, accounts: providerManager.getAccountIds() });
   });
 
+  // ── Resiliência: rejeições não capturadas não derrubam o serviço ──
+  // O Baileys às vezes lança Boom 'Connection Closed' fora de qualquer promise
+  // tratada (race do socket); sem handler, o processo morre (exit 1) e o
+  // bridge do Desktop não tem auto-restart — derruba o WhatsApp inteiro.
+  process.on('uncaughtException', (err) => {
+    logger.error('process.uncaught_exception', { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error('process.unhandled_rejection', { error: reason instanceof Error ? reason.message : String(reason) });
+  });
+
   // Graceful shutdown
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

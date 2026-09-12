@@ -248,16 +248,13 @@ class AccountInstance implements WhatsAppProvider {
   async getContacts(): Promise<WhatsAppContact[]> {
     if (!this.isConnected()) throw new Error('WhatsApp não está conectado.');
     if (this.engine === 'baileys') {
-      // Baileys não mantém catálogo rico — JIDs 1:1 visíveis no socket.
-      return this.baileys?.getJids().map((jid) => ({
-        jid,
-        phone: jid.split('@')[0] ?? null,
-        name: null,
-        pushName: null,
-        businessName: null,
-        isBusiness: false,
+      // Baileys 6.7+: catálogo acumulado dos eventos contacts.upsert/update,
+      // messaging-history.set e messages.upsert (pushName).
+      return (this.baileys?.getContactEntries() ?? []).map((c) => ({
+        ...c,
+        isBusiness: Boolean(c.businessName),
         isGroup: false,
-      })) ?? [];
+      }));
     }
     const contacts = await this.client!.getContacts();
     return contacts
