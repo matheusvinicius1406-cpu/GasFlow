@@ -45,6 +45,26 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 - Boundary test de CRM tolera campos de sync na entidade Client (checa
   `import` real, não menção textual).
 
+### 📦 Dependências e build (12/09/2026)
+
+- **Merge de 21 PRs do Dependabot na main**: GitHub Actions (upload-artifact
+  7, build-push 7, login 4, metadata 6, setup-buildx 4), imagens Docker
+  (`python:3.14-slim`, `node:26-slim` no frontend e whatsapp), pip do backend
+  (pytest ≥9.1.1, pytest-asyncio ≥1.4.0, pytest-timeout ≥2.4.0, ruff ≥0.16.5,
+  prometheus-client), npm do frontend (React 19.2, Vite 8, zod 4.5,
+  lucide-react 1.40) e do whatsapp (tsx 4.23.13, @types/node 26.5).
+- **Express 4 → 5** no serviço WhatsApp: `app._router` (removido no v5)
+  substituído por despacho direto pelo Router no alias `/send`; coerção
+  `String()` nos 15 usos de `req.params` (tipagem `string | string[]` do
+  express 5). tsc/eslint/build e 86 testes passando.
+- **Desktop**: TypeScript 5.8 → 6.0.3 e `@types/node` 22 → 24 (Electron 44
+  embute Node 24.20); `electron-builder.yml` corrigido para o schema do
+  electron-builder 26 (`publisherName` migrou para `signtoolOptions`) —
+  desbloqueia `npm run dist`. Instalador NSIS 1.1.2 gerado e validado
+  (asar + extraResources: backend exe, agent, whatsapp, frontend).
+- TypeScript mantido em **6.0.3** no frontend/whatsapp: `typescript-eslint`
+  8.70 ainda exige `<6.1` (TS 7 volta quando houver suporte).
+
 ## [1.0.0-rc.4] - 2026-09-05
 
 Resiliência do WhatsApp + integração com o app do entregador

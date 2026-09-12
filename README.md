@@ -6,7 +6,7 @@ Sistema operacional para depósitos de gás e água.
 [![Build & Push](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/build-push.yml/badge.svg)](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/build-push.yml)
 [![Coverage](https://img.shields.io/badge/cobertura-57%25-yellowgreen)](https://github.com/matheusvinicius1406-cpu/GasFlow)
 [![E2E](https://img.shields.io/badge/E2E-8%2F8-brightgreen)](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.0--rc.1-blue)](https://github.com/matheusvinicius1406-cpu/GasFlow/releases)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue)](https://github.com/matheusvinicius1406-cpu/GasFlow/releases)
 
 ## Arquitetura
 
@@ -54,6 +54,7 @@ backend/app/
   - Listas de segmentação
   - CRM de clientes
   - Campanhas de broadcast
+- ✅ App Desktop Windows (Electron) — backend, agente e WhatsApp embutidos, com auto-update
 
 ## Fluxo Principal
 
@@ -137,17 +138,28 @@ de inativos) e a IA pode corrigir o endereço na própria conversa (tool
 - SQLAlchemy
 - PostgreSQL
 - Pydantic
+- PyInstaller (backend embutido no Desktop como `gasflow-backend.exe`)
 
 ### WhatsApp (Node.js)
 - Baileys (substituiu o whatsapp-web.js — ver docs/phase16/BAILEYS_MIGRATION.md)
-- Express
+- Express 5
 - SQLite (contatos/listas/campanhas)
+
+### Frontend (React)
+- React 19 + Vite
+- TypeScript
+
+### Desktop (Electron)
+- Electron 44 + TypeScript
+- electron-builder 26 (instalador NSIS + blockmap)
+- electron-updater (auto-update via GitHub Releases)
+- Backend FastAPI embutido (PyInstaller) + agente de integração + serviço WhatsApp como subprocessos
 
 ## Setup
 
 ### Pré-requisitos
 - Docker + Docker Compose
-- OU Python 3.12+ e Node.js 20+
+- OU Python 3.12+ e Node.js 20+ (as imagens Docker oficiais usam `python:3.14-slim` e `node:26-slim`)
 
 ### Início rápido (sem Docker — um comando)
 
@@ -210,17 +222,6 @@ Consulte **[DEPLOY.md](DEPLOY.md)** para deploy, atualização, rollback,
 imagens GHCR e troubleshooting. CI/CD em `.github/workflows/`.
 
 ### Serviços (dev)
-
-| Serviço | URL | Descrição |
-|---------|-----|-----------|
-| API Backend | http://localhost:8000 | FastAPI - API principal |
-| Docs API | http://localhost:8000/docs | Swagger UI |
-| WhatsApp | http://localhost:3001 | Serviço WhatsApp |
-| WhatsApp Connect | http://localhost:3001/connect | QR Code de conexão |
-| PostgreSQL | localhost:5432 | Banco de dados |
-
-
-### Serviços
 
 | Serviço | URL | Descrição |
 |---------|-----|-----------|
@@ -366,6 +367,12 @@ cd backend && python -m mypy app/
 
 # WhatsApp
 cd whatsapp && npm run typecheck
+
+# Desktop
+cd desktop && npm run typecheck
+
+# Frontend (tsc -b roda como parte do build)
+cd frontend && npm run build
 ```
 
 ### Testes
@@ -375,10 +382,13 @@ cd whatsapp && npm run typecheck
 cd backend && python -m pytest -q          # ruff check app tests
 
 # Frontend
-cd frontend && npm test                     # npx tsc --noEmit
+cd frontend && npm test                     # vitest
 
 # WhatsApp
 cd whatsapp && npm test
+
+# Desktop
+cd desktop && npm test
 
 # E2E (stack completo real em Docker — ver docs/phase15/E2E.md)
 docker compose -f docker-compose.e2e.yml up -d --build
@@ -395,6 +405,12 @@ O app Desktop se atualiza sozinho via `electron-updater` + GitHub Releases:
    publica na Release.
 3. Apps instalados checam o canal `latest` 15s após abrir (e a cada 6h),
    baixam e instalam ao clicar em "Reiniciar e instalar" (ou ao fechar).
+
+Para gerar o instalador localmente:
+
+```bash
+cd desktop && npm run dist    # builda frontend/agent/whatsapp/backend e empacota o NSIS
+```
 
 Detalhes e logs: [`desktop/README.md`](desktop/README.md#auto-update-electron-updater--github-releases).
 
