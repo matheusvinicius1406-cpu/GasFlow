@@ -29,4 +29,4 @@ Pillow
 redis
 
 # Métricas Prometheus (/metrics)
-prometheus-client>=0.20
+prometheus-client>=0.26.0
