@@ -1,4 +1,5 @@
 fastapi
+pyinstaller==6.22.2  # empacotamento do gasflow-backend.exe (desktop)
 uvicorn[standard]
 
 # Upload de arquivos (multipart — UploadFile do FastAPI; VCF import).
