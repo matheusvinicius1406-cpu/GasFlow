@@ -13,7 +13,7 @@ Models:
 - AuthAuditModel: auth_audit_log table
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
@@ -36,6 +36,11 @@ class AuthUserModel(Base):
     status = Column(String(20), nullable=False, default="ACTIVE")  # ACTIVE, DISABLED, LOCKED
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
+    # P0 RBAC: role persistido + fluxo de senha temporária.
+    role_id = Column(String(36), nullable=True)  # → auth_roles.id (None = legacy single-admin)
+    must_change_password = Column(Boolean, nullable=False, default=False)
+    last_login_at = Column(DateTime, nullable=True)
+    created_by = Column(String(36), nullable=True)  # admin que criou o usuário
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

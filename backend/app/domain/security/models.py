@@ -115,6 +115,7 @@ class SystemRole(str, Enum):
     DRIVER = "DRIVER"
     CUSTOMER = "CUSTOMER"
     SYSTEM = "SYSTEM"
+    VIEWER = "VIEWER"  # P0: somente leitura (roadmap multimodal, papel padrão)
 
 
 @dataclass

@@ -11,7 +11,13 @@ from app.infrastructure.database.base import Base
 
 
 class InventoryModel(Base):
-    """Inventory — single source of truth for stock quantity."""
+    """Inventory — single source of truth for stock quantity.
+
+    P0 (Decisão A — aditivo): `quantity` segue sendo o TOTAL operável
+    (cheios disponíveis para venda no fluxo atual); quantity_full/
+    quantity_empty detalham a física do GLP. Backfill da migração:
+    quantity_full = quantity, quantity_empty = 0.
+    """
 
     __tablename__ = "inventory"
 
@@ -25,6 +31,8 @@ class InventoryModel(Base):
 
     __table_args__ = (UniqueConstraint("tenant_id", "product_codigo", name="uq_inventory_tenant_product"),)
     quantity = Column(Integer, nullable=False, default=0)
+    quantity_full = Column(Integer, nullable=False, default=0)  # P0: cilindros cheios
+    quantity_empty = Column(Integer, nullable=False, default=0)  # P0: cilindros vazios (devolução)
     minimum_quantity = Column(Integer, nullable=False, default=0)
     maximum_quantity = Column(Integer, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -43,6 +51,10 @@ class StockMovementModel(Base):
     )
     type = Column(String, nullable=False)  # ENTRY, SALE, ADJUSTMENT, LOSS, RETURN, INITIAL_BALANCE
     quantity = Column(Integer, nullable=False)  # Always positive
+    # P0 (Decisão B2): detalhe cheio/vazio do movimento — a entrega DELIVERED
+    # faz a troca física (1 cheio sai, 1 vazio entra) via DELIVERY_EXCHANGE.
+    quantity_full_delta = Column(Integer, nullable=False, default=0)
+    quantity_empty_delta = Column(Integer, nullable=False, default=0)
     reason = Column(Text, nullable=False)
 
     reference_type = Column(String, nullable=True)  # "ORDER", "ORDER_RETURN", "ADJUSTMENT"

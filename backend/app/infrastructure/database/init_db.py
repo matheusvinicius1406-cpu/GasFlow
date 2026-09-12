@@ -79,6 +79,12 @@ from app.infrastructure.repositories.integration_model import (  # noqa: F401
     ImportedOrderModel,
     SyncLogModel,
 )
+from app.infrastructure.repositories.rbac_model import (  # noqa: F401
+    PermissionModel,
+    RolePermissionModel,
+    UserPermissionOverrideModel,
+    StockDailySnapshotModel,
+)
 
 
 def _ensure_sqlite_columns() -> None:
@@ -109,7 +115,7 @@ def _ensure_sqlite_columns() -> None:
                 default = ""
                 if column.nullable is False:
                     default = " DEFAULT ''" if col_type == "TEXT" else " DEFAULT 0"
-                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" ' f"{col_type}{default}"))
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}{default}'))
         conn.commit()
 
 
@@ -212,12 +218,79 @@ def _ensure_schema_version() -> None:
         )
 
 
+def _backfill_stock_full_empty() -> None:
+    """P0 (Decisão A): backfill idempotente de cheios/vazios.
+
+    Colunas novas criadas por create_all/_ensure_sqlite_columns chegam com 0;
+    alinha quantity_full ao total apenas quando os dois detalhes estão
+    zerados (primeiro boot após o upgrade) — não sobrescreve estado já
+    gerenciado pela troca cheio→vazio da entrega (Decisão B2).
+    """
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE inventory SET quantity_full = quantity WHERE quantity_full = 0 AND quantity_empty = 0")
+        )
+
+
+def _seed_rbac_if_needed() -> None:
+    """P0 RBAC: popula catálogo/matriz/roles (idempotente).
+
+    Cobre os caminhos onde a migration e4f7a9b1c3d5 não roda: bancos legados
+    create_all (stampados no boot do exe) e dev/testes (create_all puro).
+    """
+    import logging
+
+    from sqlalchemy import text
+
+    from app.infrastructure.database.rbac_seed import seed_rbac
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS permissions ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "code VARCHAR(100) NOT NULL, description VARCHAR(200) NOT NULL, "
+                "module VARCHAR(50) NOT NULL, created_at DATETIME NOT NULL, "
+                "CONSTRAINT uq_permissions_code UNIQUE (code))"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS role_permissions ("
+                "role_id VARCHAR(36) NOT NULL, permission_id INTEGER NOT NULL, "
+                "PRIMARY KEY (role_id, permission_id), "
+                "CONSTRAINT uq_role_permissions_role_permission UNIQUE (role_id, permission_id))"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS user_permissions_override ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "user_id VARCHAR(36) NOT NULL, permission_id INTEGER NOT NULL, "
+                "granted BOOLEAN NOT NULL, created_by VARCHAR(36), "
+                "created_at DATETIME NOT NULL, "
+                "CONSTRAINT uq_user_perm_override_user_permission UNIQUE (user_id, permission_id))"
+            )
+        )
+        stats = seed_rbac(conn)
+
+    if stats["permissions_inserted"] or stats["matrix_rows_inserted"]:
+        logging.getLogger("gasflow.init_db").info(
+            "rbac.seed.applied",
+            extra={**stats},
+        )
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     try:
         _backup_before_migration()
         _ensure_sqlite_columns()
         _ensure_schema_version()
+        _backfill_stock_full_empty()
+        _seed_rbac_if_needed()
     except Exception:  # pragma: no cover — nunca derrubar o boot por migration
         import logging
 
