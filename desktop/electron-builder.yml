@@ -3,6 +3,9 @@ productName: GasFlow Desktop
 directories:
   output: release
   buildResources: build
+# electron-builder 26 ignora node_modules nos filtros de extraResources —
+# o hook instala as deps de produção de agent/whatsapp dentro do pacote.
+afterPack: scripts/after-pack.js
 # Auto-update (electron-updater): releases publicados no GitHub.
 # releaseType: release evita draft (drafts não são vistos pelo updater).
 publish:
