@@ -139,3 +139,8 @@ class AuthAuditModel(Base):
     user_agent = Column(String(500), nullable=False, default="")
     correlation_id = Column(String(36), nullable=True)
     details = Column(JSON, nullable=True)
+    # P0 3.3: estado anterior/posterior da mutação (snapshot sem segredos) —
+    # preenchidos pelos endpoints admin; None em eventos simples (login etc.).
+    before_json = Column(JSON, nullable=True)
+    after_json = Column(JSON, nullable=True)
+    platform = Column(String(20), nullable=False, default="")  # desktop | mobile | web | api

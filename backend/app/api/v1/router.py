@@ -31,6 +31,7 @@ from app.presentation.api.printer import router as printer_router
 from app.presentation.api.payments import router as payments_router
 from app.presentation.api.reports import router as reports_router
 from app.presentation.api.settings import router as settings_router
+from app.presentation.api.admin import router as admin_router
 from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
@@ -63,6 +64,7 @@ api_v1_router.include_router(printer_router, tags=["Printer"])
 api_v1_router.include_router(payments_router, tags=["Payments"])
 api_v1_router.include_router(reports_router, tags=["Reports"])
 api_v1_router.include_router(settings_router, tags=["Settings"])
+api_v1_router.include_router(admin_router, tags=["Admin"])
 api_v1_router.include_router(coupons_router, tags=["Coupons"])
 api_v1_router.include_router(leads_router, tags=["Leads"])
 api_v1_router.include_router(integrations_router, tags=["Integrations"])

@@ -315,6 +315,9 @@ class SQLAlchemyAuditRepository:
         user_agent: str = "",
         correlation_id: Optional[str] = None,
         details: Optional[Dict] = None,
+        before_json: Optional[Dict] = None,
+        after_json: Optional[Dict] = None,
+        platform: str = "",
     ) -> AuthAuditModel:
         import uuid
 
@@ -330,6 +333,9 @@ class SQLAlchemyAuditRepository:
             user_agent=user_agent,
             correlation_id=correlation_id,
             details=details or {},
+            before_json=before_json,
+            after_json=after_json,
+            platform=platform,
         )
         self.db.add(model)
         self.db.commit()
@@ -343,3 +349,30 @@ class SQLAlchemyAuditRepository:
             .limit(limit)
             .all()
         )
+
+    def list_filtered(
+        self,
+        tenant_id: Optional[str] = None,
+        actor_id: Optional[str] = None,
+        action: Optional[str] = None,
+        resource: Optional[str] = None,
+        from_ts: Optional[datetime] = None,
+        to_ts: Optional[datetime] = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> List[AuthAuditModel]:
+        """Filtros da tela de auditoria (P0 3.3/3.5)."""
+        query = self.db.query(AuthAuditModel)
+        if tenant_id:
+            query = query.filter(AuthAuditModel.tenant_id == tenant_id)
+        if actor_id:
+            query = query.filter(AuthAuditModel.actor_id == actor_id)
+        if action:
+            query = query.filter(AuthAuditModel.action == action)
+        if resource:
+            query = query.filter(AuthAuditModel.resource == resource)
+        if from_ts:
+            query = query.filter(AuthAuditModel.timestamp >= from_ts)
+        if to_ts:
+            query = query.filter(AuthAuditModel.timestamp <= to_ts)
+        return query.order_by(AuthAuditModel.timestamp.desc()).offset(offset).limit(limit).all()
