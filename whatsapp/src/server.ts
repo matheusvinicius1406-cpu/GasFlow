@@ -81,14 +81,16 @@ async function main(): Promise<void> {
   // Alias raiz /send → /api/whatsapp/accounts/:id/messages — contrato do
   // WhatsAppSendBridge do backend (POST {service_url}/send com accountId no
   // body). Sem isso, TODA automação (FASE 14) falhava com 404.
-  app.post('/send', express.json({ limit: '1mb' }), (req: express.Request, res: express.Response) => {
-    req.url = `/api/whatsapp/accounts/${encodeURIComponent(String(req.body?.accountId ?? 'primary'))}/messages`;
+  // Express 5: app._router foi removido — despacha direto pelo Router da API
+  // (Router é um RequestHandler chamável) com a URL relativa ao mount /api.
+  app.post('/send', express.json({ limit: '1mb' }), (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    req.url = `/whatsapp/accounts/${encodeURIComponent(String(req.body?.accountId ?? 'primary'))}/messages`;
     (req as unknown as { body: unknown }).body = {
       recipient: req.body?.recipient,
       message: req.body?.text,
       idempotency_key: req.body?.idempotencyKey,
     };
-    app._router.handle(req, res, () => res.status(404).json({ error: 'Not found' }));
+    router(req, res, next);
   });
 
   // Error handler

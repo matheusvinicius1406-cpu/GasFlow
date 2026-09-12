@@ -62,7 +62,7 @@ router.get('/whatsapp/accounts', requireAuth, (_req: Request, res: Response) => 
 
 /** Get single account status */
 router.get('/whatsapp/accounts/:id', requireAuth, (req: Request, res: Response) => {
-  const account = providerManager.getAccount(req.params.id);
+  const account = providerManager.getAccount(String(req.params.id));
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });
     return;
@@ -73,8 +73,8 @@ router.get('/whatsapp/accounts/:id', requireAuth, (req: Request, res: Response) 
 /** Start a specific account */
 router.post('/whatsapp/accounts/:id/start', requireAuth, (req: Request, res: Response) => {
   try {
-    providerManager.startAccount(req.params.id);
-    const account = providerManager.getAccount(req.params.id);
+    providerManager.startAccount(String(req.params.id));
+    const account = providerManager.getAccount(String(req.params.id));
     res.status(202).json({ message: 'Inicialização iniciada.', status: account?.getStatus() });
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : 'Erro ao iniciar conta.' });
@@ -84,7 +84,7 @@ router.post('/whatsapp/accounts/:id/start', requireAuth, (req: Request, res: Res
 /** Stop a specific account */
 router.post('/whatsapp/accounts/:id/stop', requireAuth, async (req: Request, res: Response) => {
   try {
-    await providerManager.stopAccount(req.params.id);
+    await providerManager.stopAccount(String(req.params.id));
     res.json({ message: 'Conta parada.' });
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : 'Erro ao parar conta.' });
@@ -94,7 +94,7 @@ router.post('/whatsapp/accounts/:id/stop', requireAuth, async (req: Request, res
 /** Logout a specific account */
 router.post('/whatsapp/accounts/:id/logout', requireAuth, async (req: Request, res: Response) => {
   try {
-    await providerManager.logoutAccount(req.params.id);
+    await providerManager.logoutAccount(String(req.params.id));
     res.json({ message: 'Logout realizado.' });
   } catch (err) {
     res.status(404).json({ error: err instanceof Error ? err.message : 'Erro ao fazer logout.' });
@@ -103,7 +103,7 @@ router.post('/whatsapp/accounts/:id/logout', requireAuth, async (req: Request, r
 
 /** Get QR code for a specific account */
 router.get('/whatsapp/accounts/:id/qr', requireAuth, async (req: Request, res: Response) => {
-  const account = providerManager.getAccount(req.params.id);
+  const account = providerManager.getAccount(String(req.params.id));
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });
     return;
@@ -132,7 +132,7 @@ router.get('/whatsapp/accounts/:id/qr', requireAuth, async (req: Request, res: R
 
 /** Health check for a specific account */
 router.get('/whatsapp/accounts/:id/health', requireAuth, async (req: Request, res: Response) => {
-  const account = providerManager.getAccount(req.params.id);
+  const account = providerManager.getAccount(String(req.params.id));
   if (!account) {
     res.status(404).json({ error: 'Conta não encontrada.' });
     return;
@@ -169,7 +169,7 @@ export type MessageErrorCode =
  * Supports idempotency via idempotency_key.
  */
 router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request, res: Response) => {
-  const accountId = req.params.id;
+  const accountId = String(req.params.id);
   const { recipient, message, idempotency_key } = req.body ?? {};
 
   // 1. Validate account exists
@@ -280,7 +280,7 @@ router.post('/whatsapp/accounts/:id/messages', requireAuth, async (req: Request,
  * List sent messages for an account.
  */
 router.get('/whatsapp/accounts/:id/messages', requireAuth, (req: Request, res: Response) => {
-  const accountId = req.params.id;
+  const accountId = String(req.params.id);
   const account = providerManager.getAccount(accountId);
   if (!account) {
     res.status(404).json({ error: 'ACCOUNT_NOT_FOUND', detail: 'Conta não encontrada.' });
@@ -321,7 +321,7 @@ function resolveSafeMediaPath(raw: string): string | null {
  * Suporta idempotência via idempotency_key (mesma semântica de /messages).
  */
 router.post('/whatsapp/accounts/:id/media', requireAuth, async (req: Request, res: Response) => {
-  const accountId = req.params.id;
+  const accountId = String(req.params.id);
   const { recipient, caption, data, mimetype, filename, mediaPath, idempotency_key } = req.body ?? {};
 
   // 1. Validate account exists and is connected
@@ -497,7 +497,7 @@ router.get('/contacts', requireAuth, (req: Request, res: Response) => {
 });
 
 router.get('/contacts/:id', (req: Request, res: Response) => {
-  const contact = getContactById(Number(req.params.id));
+  const contact = getContactById(Number(String(req.params.id)));
   if (!contact) { res.status(404).json({ error: 'Contato não encontrado.' }); return; }
   res.json(contact);
 });
@@ -515,7 +515,7 @@ router.get('/customers', requireAuth, (req: Request, res: Response) => {
 });
 
 router.get('/customers/:id', (req: Request, res: Response) => {
-  const customer = getCustomerWithContact(Number(req.params.id));
+  const customer = getCustomerWithContact(Number(String(req.params.id)));
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
   // Preferência de marketing incluída — backend (automações) consome p/ LGPD.
   const pref = getPreference(customer.id);
@@ -532,7 +532,7 @@ router.post('/customers/:contactId/promote', requireAuth, (req: Request, res: Re
 });
 
 router.put('/customers/:id/status', requireAuth, (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   const customer = getCustomerById(id);
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
   const status = typeof req.body?.status === 'string' ? req.body.status : '';
@@ -565,7 +565,7 @@ router.post('/customers/sync', requireAuth, async (_req: Request, res: Response)
 // ═══════════════════════════════════════════════════════════
 
 router.post('/customers/:id/opt-in', requireAuth, (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   const customer = getCustomerById(id);
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
   const source = typeof req.body?.source === 'string' ? req.body.source : 'manual';
@@ -574,7 +574,7 @@ router.post('/customers/:id/opt-in', requireAuth, (req: Request, res: Response) 
 });
 
 router.post('/customers/:id/opt-out', requireAuth, (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   const customer = getCustomerById(id);
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
   const source = typeof req.body?.source === 'string' ? req.body.source : 'manual';
@@ -613,13 +613,13 @@ router.post('/lists', requireAuth, (req: Request, res: Response) => {
 });
 
 router.get('/lists/:id', (req: Request, res: Response) => {
-  const list = getListById(Number(req.params.id));
+  const list = getListById(Number(String(req.params.id)));
   if (!list) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ ...list, contactCount: countListContacts(list.id), customerCount: countListCustomers(list.id) });
 });
 
 router.put('/lists/:id', requireAuth, (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   const name = typeof req.body?.name === 'string' && req.body.name.trim() ? req.body.name.trim() : null;
   const description = typeof req.body?.description === 'string' ? req.body.description.trim() || null : null;
@@ -633,18 +633,18 @@ router.put('/lists/:id', requireAuth, (req: Request, res: Response) => {
 });
 
 router.delete('/lists/:id', requireAuth, (req: Request, res: Response) => {
-  if (!deleteListById(Number(req.params.id))) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
+  if (!deleteListById(Number(String(req.params.id)))) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.status(204).send();
 });
 
 router.get('/lists/:id/contacts', (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ total: countListContacts(id), contacts: getListContacts(id) });
 });
 
 router.post('/lists/:id/contacts/:contactId', requireAuth, (req: Request, res: Response) => {
-  const listId = Number(req.params.id);
+  const listId = Number(String(req.params.id));
   const contactId = Number(req.params.contactId);
   if (!getListById(listId)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   if (!getContactById(contactId)) { res.status(404).json({ error: 'Contato não encontrado.' }); return; }
@@ -653,20 +653,20 @@ router.post('/lists/:id/contacts/:contactId', requireAuth, (req: Request, res: R
 });
 
 router.delete('/lists/:id/contacts/:contactId', requireAuth, (req: Request, res: Response) => {
-  const listId = Number(req.params.id);
+  const listId = Number(String(req.params.id));
   const contactId = Number(req.params.contactId);
   if (!removeContactFromList(listId, contactId)) { res.status(404).json({ error: 'Contato não está nessa lista.' }); return; }
   res.status(204).send();
 });
 
 router.get('/lists/:id/customers', (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ total: countListCustomers(id), customers: getListCustomers(id) });
 });
 
 router.post('/lists/:id/customers/:customerId', requireAuth, (req: Request, res: Response) => {
-  const listId = Number(req.params.id);
+  const listId = Number(String(req.params.id));
   const customerId = Number(req.params.customerId);
   if (!getListById(listId)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   if (!getCustomerById(customerId)) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
@@ -675,14 +675,14 @@ router.post('/lists/:id/customers/:customerId', requireAuth, (req: Request, res:
 });
 
 router.delete('/lists/:id/customers/:customerId', requireAuth, (req: Request, res: Response) => {
-  const listId = Number(req.params.id);
+  const listId = Number(String(req.params.id));
   const customerId = Number(req.params.customerId);
   if (!removeCustomerFromList(listId, customerId)) { res.status(404).json({ error: 'Cliente não está nessa lista.' }); return; }
   res.status(204).send();
 });
 
 router.post('/lists/:id/sync', requireAuth, async (req: Request, res: Response) => {
-  const id = Number(req.params.id);
+  const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   try {
     const sync = await runSync();
@@ -718,13 +718,13 @@ router.post('/campaigns', requireAuth, (req: Request, res: Response) => {
 });
 
 router.get('/campaigns/:id', (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   res.json(campaign);
 });
 
 router.post('/campaigns/:id/preview', requireAuth, (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   if (campaign.status !== 'DRAFT') { res.status(409).json({ error: 'Preview só para DRAFT.' }); return; }
   const preview = createCampaignRecipients(campaign.id, campaign.list_id);
@@ -732,7 +732,7 @@ router.post('/campaigns/:id/preview', requireAuth, (req: Request, res: Response)
 });
 
 router.post('/campaigns/:id/start', requireAuth, (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   if (campaign.status !== 'DRAFT' && campaign.status !== 'PAUSED') { res.status(409).json({ error: `Status ${campaign.status} não permite início.` }); return; }
   if (campaign.status === 'DRAFT') createCampaignRecipients(campaign.id, campaign.list_id);
@@ -741,7 +741,7 @@ router.post('/campaigns/:id/start', requireAuth, (req: Request, res: Response) =
 });
 
 router.post('/campaigns/:id/pause', requireAuth, (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   if (campaign.status !== 'RUNNING') { res.status(409).json({ error: `Status ${campaign.status} não permite pausa.` }); return; }
   updateCampaignStatus(campaign.id, 'PAUSED');
@@ -749,7 +749,7 @@ router.post('/campaigns/:id/pause', requireAuth, (req: Request, res: Response) =
 });
 
 router.post('/campaigns/:id/cancel', requireAuth, (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   if (campaign.status === 'COMPLETED' || campaign.status === 'CANCELLED') { res.status(409).json({ error: `Campanha já está ${campaign.status}.` }); return; }
   db.prepare("UPDATE campaign_recipients SET status = 'CANCELLED' WHERE campaign_id = ? AND status IN ('PENDING', 'PROCESSING')").run(campaign.id);
@@ -758,13 +758,13 @@ router.post('/campaigns/:id/cancel', requireAuth, (req: Request, res: Response) 
 });
 
 router.get('/campaigns/:id/recipients', (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   res.json({ total: getCampaignRecipients(campaign.id).length, recipients: getCampaignRecipients(campaign.id) });
 });
 
 router.get('/campaigns/:id/results', (req: Request, res: Response) => {
-  const campaign = getCampaignById(Number(req.params.id));
+  const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   res.json({ campaign: getCampaignById(campaign.id), results: getCampaignResults(campaign.id) });
 });
