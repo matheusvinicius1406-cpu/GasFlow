@@ -33,7 +33,7 @@
     "@typescript-eslint/parser": "^8.70.0",
     "eslint": "^8.57.1",
     "tsx": "^4.23.13",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "extract-zip": "^2.0.1",
