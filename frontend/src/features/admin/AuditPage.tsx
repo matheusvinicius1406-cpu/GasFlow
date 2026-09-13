@@ -78,7 +78,6 @@ export function AuditPage() {
 
   useEffect(() => {
     fetchAudit(offset)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset])
 
   const applyFilters = () => {
@@ -151,13 +150,21 @@ export function AuditPage() {
 
       {/* Filtros */}
       <div className="grid gap-2 md:grid-cols-6">
-        <Input
-          placeholder="Ator (user id)"
-          value={actorId}
-          onChange={(e) => setActorId(e.target.value)}
-          aria-label="Filtrar por ator"
-          className="md:col-span-2"
-        />
+        <>
+          <Input
+            placeholder="Ator (user id)"
+            value={actorId}
+            onChange={(e) => setActorId(e.target.value)}
+            aria-label="Filtrar por ator"
+            list="audit-actor-options"
+            className="md:col-span-2"
+          />
+          <datalist id="audit-actor-options">
+            {actorOptions.map((a) => (
+              <option key={a} value={a} />
+            ))}
+          </datalist>
+        </>
         <Select value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filtrar por ação">
           <option value="">Todas as ações</option>
           {Array.from(new Set([...ACTION_OPTIONS, ...records.map((r) => r.action)])).map((a) => (
