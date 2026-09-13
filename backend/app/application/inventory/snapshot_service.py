@@ -60,8 +60,8 @@ class StockDailySnapshotService:
 
         Retorna contadores: {"created": N, "carryover": N}.
         """
-        tz_name = tz_name or os.getenv("STOCK_SNAPSHOT_TZ", DEFAULT_TZ)
-        today = _local_today(tz_name)
+        resolved_tz = tz_name or os.getenv("STOCK_SNAPSHOT_TZ") or DEFAULT_TZ
+        today = _local_today(resolved_tz)
 
         last = self._last_snapshot_date()
         carryover = 0
@@ -82,8 +82,8 @@ class StockDailySnapshotService:
 
         No primeiro dia de operação, initial = closing = valores atuais.
         """
-        tz_name = tz_name or os.getenv("STOCK_SNAPSHOT_TZ", DEFAULT_TZ)
-        today = _local_today(tz_name)
+        resolved_tz = tz_name or os.getenv("STOCK_SNAPSHOT_TZ") or DEFAULT_TZ
+        today = _local_today(resolved_tz)
         return self._snapshot_day(today)
 
     # ── Internos ─────────────────────────────────────────────
@@ -134,15 +134,15 @@ class StockDailySnapshotService:
                 initial_empty = prev_snap.closing_empty
             else:
                 # Primeiro dia: initial = valores atuais
-                initial_full, initial_empty = full, empty
+                initial_full, initial_empty = full, empty  # type: ignore[assignment]
 
             if existing:
                 # Upsert idempotente: atualiza closing só se mudou (evita
                 # escrita redundante a cada tick do poller); initial preservado.
                 if existing.closing_full != full or existing.closing_empty != empty:
-                    existing.closing_full = full
-                    existing.closing_empty = empty
-                    existing.updated_at = datetime.utcnow()
+                    existing.closing_full = full  # type: ignore[assignment]
+                    existing.closing_empty = empty  # type: ignore[assignment]
+                    existing.updated_at = datetime.utcnow()  # type: ignore[assignment]
             else:
                 self.db.add(
                     StockDailySnapshotModel(

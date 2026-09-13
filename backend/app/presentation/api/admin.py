@@ -207,7 +207,7 @@ async def create_user(
         db.commit()
         db.refresh(user)
 
-        _audit_mutation(ctx, "USER_CREATED", "user", user.id, None, _user_snapshot(user))
+        _audit_mutation(ctx, "USER_CREATED", "user", str(user.id), None, _user_snapshot(user))
         return {"success": True, "user_id": user.id}
     finally:
         db.close()
