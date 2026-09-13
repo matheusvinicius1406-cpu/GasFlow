@@ -27,12 +27,18 @@ class OllamaProvider(LLMProvider):
         timeout: float = 60.0,
         max_tokens: int = 2048,
         temperature: float = 0.3,
+        think: bool | None = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout
         self._max_tokens = max_tokens
         self._temperature = temperature
+        # Modo thinking (qwen3): False envia "think": false (recomendado —
+        # sem isso o budget de tokens é queimado no campo `thinking` e o
+        # `content` volta vazio); True liga; None omite (server default,
+        # para modelos sem suporte a thinking).
+        self._think = think
 
     @property
     def model_name(self) -> str:
@@ -41,7 +47,7 @@ class OllamaProvider(LLMProvider):
     # ── Internals ─────────────────────────────────────────
 
     def _payload(self, messages: List[LLMMessage], temperature: float, max_tokens: int) -> Dict[str, Any]:
-        return {
+        payload: Dict[str, Any] = {
             "model": self._model,
             "messages": [{"role": m.role.value, "content": m.content} for m in messages],
             "stream": False,
@@ -50,6 +56,9 @@ class OllamaProvider(LLMProvider):
                 "num_predict": max_tokens,
             },
         }
+        if self._think is not None:
+            payload["think"] = self._think
+        return payload
 
     def _to_response(self, data: Dict[str, Any], latency_ms: float) -> LLMResponse:
         usage = LLMUsage(

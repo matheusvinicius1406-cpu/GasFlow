@@ -32,6 +32,15 @@ def test_factory_ollama(monkeypatch):
     assert isinstance(provider, OllamaProvider)
     assert provider._base_url == settings.ollama_base_url.rstrip("/")
     assert provider.model_name == settings.ollama_model
+    assert provider._think is False  # default: thinking desligado (qwen3)
+
+
+def test_factory_ollama_think_auto_omits_field(monkeypatch):
+    monkeypatch.setattr(settings, "ai_provider", "ollama")
+    monkeypatch.setattr(settings, "ollama_think", None)
+    provider = get_llm_provider()
+    assert isinstance(provider, OllamaProvider)
+    assert provider._think is None
 
 
 def test_factory_openai(monkeypatch):
@@ -115,11 +124,26 @@ def test_ollama_generate_success(monkeypatch):
     assert result.error is None
     assert result.usage.input_tokens == 12
     assert result.usage.output_tokens == 5
-    # payload trafega no formato /api/chat do Ollama
+    # payload trafega no formato /api/chat do Ollama; think desligado (qwen3)
     assert fake.post_payload["model"] == "llama3.2"
     assert fake.post_payload["stream"] is False
+    assert fake.post_payload["think"] is False
     assert fake.post_payload["messages"][0]["role"] == "user"
     assert fake.post_url == "http://localhost:11434/api/chat"
+
+
+def test_ollama_generate_think_auto_omits_field(monkeypatch):
+    fake = _patch_httpx(monkeypatch)
+    provider = OllamaProvider(model="llama3.2", think=None)
+    provider.generate([LLMMessage(role=LLMRole.USER, content="oi")])
+    assert "think" not in fake.post_payload  # server default, p/ modelos sem thinking
+
+
+def test_ollama_generate_think_enabled(monkeypatch):
+    fake = _patch_httpx(monkeypatch)
+    provider = OllamaProvider(model="qwen3:0.6b", think=True)
+    provider.generate([LLMMessage(role=LLMRole.USER, content="oi")])
+    assert fake.post_payload["think"] is True
 
 
 def test_ollama_generate_unavailable_returns_error(monkeypatch):

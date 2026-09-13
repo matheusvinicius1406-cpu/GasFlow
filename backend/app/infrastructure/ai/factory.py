@@ -21,6 +21,7 @@ def get_llm_provider() -> LLMProvider:
             timeout=settings.ai_timeout_seconds,
             max_tokens=settings.ai_max_tokens,
             temperature=settings.ai_temperature,
+            think=settings.ollama_think,
         )
     if provider == "openai":
         return OpenAIProvider(

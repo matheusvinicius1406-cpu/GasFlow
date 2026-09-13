@@ -45,6 +45,11 @@ class Settings(BaseModel):
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+    # Modo thinking (qwen3): false desliga (recomendado — sem isso o budget de
+    # tokens é queimado no campo `thinking` e o `content` volta vazio);
+    # true liga; "auto" omite o campo (server default, p/ modelos sem thinking).
+    _ollama_think_raw: str = os.getenv("OLLAMA_THINK", "false").strip().lower()
+    ollama_think: bool | None = None if _ollama_think_raw == "auto" else _ollama_think_raw in ("1", "true", "yes")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     ai_timeout_seconds: int = int(os.getenv("AI_TIMEOUT_SECONDS", "60"))

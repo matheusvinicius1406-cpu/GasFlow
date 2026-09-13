@@ -28,10 +28,25 @@ Settings (AI_PROVIDER / STT_PROVIDER / TTS_PROVIDER)
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434   # host Docker: http://host.docker.internal:11434
 OLLAMA_MODEL=llama3.2
+OLLAMA_THINK=false                       # true | false | auto (omite o campo)
 AI_TIMEOUT_SECONDS=60
 AI_MAX_TOKENS=2048
 AI_TEMPERATURE=0.3
 ```
+
+### Thinking mode (famílias qwen3/deepseek-r1)
+
+Modelos com *thinking* (ex.: `qwen3:*`) vêm com o modo ligado por padrão: sem
+controle, o budget de tokens é consumido no campo `thinking` da resposta e o
+`content` volta **vazio** (`done_reason: length`). O provider envia
+`"think": false` no payload do `/api/chat` por padrão (`OLLAMA_THINK=false`),
+que garante resposta direta. Use `OLLAMA_THINK=auto` se apontar para um
+servidor/modelo que rejeite o campo (comportamento legado: campo omitido), ou
+`true` para respostas com raciocínio.
+
+> Nota: a flag `/no_think` no prompt é **ignorada** por algumas builds do
+> Ollama — não use como mecanismo de controle; a opção de API `think` é a
+> oficial (docs.ollama.com/capabilities/thinking).
 
 Reinicie o backend (`docker compose restart backend` na stack prod).
 
