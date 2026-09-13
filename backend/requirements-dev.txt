@@ -3,3 +3,5 @@ pytest>=9.1.1
 pytest-asyncio>=1.4.0
 pytest-timeout>=2.4.0
 ruff>=0.16.5
+# CI roda `python -m mypy app` (baseline: novos arquivos nascem verificados)
+mypy==2.3.1

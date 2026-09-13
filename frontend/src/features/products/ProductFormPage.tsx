@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 
 const productSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
-  tipo: z.enum(['GAS', 'AGUA'], { required_error: 'Tipo é obrigatório' }),
+  tipo: z.enum(['GAS', 'AGUA'], { error: 'Tipo é obrigatório' }),
   preco: z.number().min(0, 'Preço não pode ser negativo'),
   estoque: z.number().int().min(0, 'Estoque não pode ser negativo'),
 })
