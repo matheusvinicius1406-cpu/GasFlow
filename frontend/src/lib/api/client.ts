@@ -50,6 +50,12 @@ export const api = {
   auth: {
     login: (username: string, password: string) =>
       apiClient.post('/auth/login', { username, password }),
+    // P0 (3.8): troca obrigatória/self-service pós-reset
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiClient.post('/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
     logout: () => apiClient.post('/auth/logout'),
     me: () => apiClient.get('/auth/me'),
     users: () => apiClient.get('/auth/users'),

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { Navigate } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 import type { User } from '@/types'
+import { ChangePasswordGate } from './ChangePasswordGate'
 
 export interface AuthContextType {
   user: User | null
@@ -10,7 +11,11 @@ export interface AuthContextType {
   /** Permissões efetivas do usuário (do backend — nunca hardcode no frontend). */
   permissions: string[]
   hasPermission: (permission: string) => boolean
+  /** P0 (3.8): true pós-reset admin — o app fica bloqueado até a troca. */
+  mustChangePassword: boolean
   login: (email: string, password: string) => Promise<void>
+  /** Troca self-service; ao sucesso, desbloqueia o app sem novo login. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   logout: () => void
   isLoading: boolean
 }
@@ -21,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(localStorage.getItem('gasflow_token'))
   const [permissions, setPermissions] = useState<string[]>([])
+  const [mustChangePassword, setMustChangePassword] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchMe = useCallback(async () => {
@@ -34,12 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.role || 'OPERATOR',
       })
       setPermissions(Array.isArray(data.permissions) ? data.permissions : [])
+      setMustChangePassword(Boolean(data.must_change_password))
     } catch {
       // Token invalid — clear
       localStorage.removeItem('gasflow_token')
       setToken(null)
       setUser(null)
       setPermissions([])
+      setMustChangePassword(false)
     }
   }, [])
 
@@ -74,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: data.user?.display_name || data.user?.username || email,
       role: (data.role as User['role']) || 'OPERATOR',
     })
+    // P0 (3.8): reset admin seta a flag — o cliente bloqueia o app até a troca.
+    setMustChangePassword(Boolean(data.user?.must_change_password))
     // Permissões chegam no próximo fetchMe — busca imediata para a sessão.
     try {
       const me = await api.auth.me()
@@ -93,6 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     setUser(null)
     setPermissions([])
+    setMustChangePassword(false)
+  }
+
+  // P0 (3.8): troca obrigatória — no sucesso o backend limpa a flag e o app desbloqueia.
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      await api.auth.changePassword(currentPassword, newPassword)
+      setMustChangePassword(false)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      throw new Error(msg || 'Não foi possível alterar a senha')
+    }
   }
 
   // admin.* concede tudo (mesma semântica do backend TenantContext).
@@ -115,7 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!token && !!user,
         permissions,
         hasPermission,
+        mustChangePassword,
         login,
+        changePassword,
         logout,
         isLoading,
       }}
@@ -134,7 +158,7 @@ export function useAuth() {
 }
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth()
 
   if (isLoading) {
     return (
@@ -146,6 +170,12 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  // P0 (3.8): senha provisória (reset admin) — nenhuma rota do app é acessível
+  // antes da troca. Sem logout, para não contornar via re-login.
+  if (mustChangePassword) {
+    return <ChangePasswordGate />
   }
 
   return <>{children}</>

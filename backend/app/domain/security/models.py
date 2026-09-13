@@ -37,6 +37,9 @@ class User:
     updated_at: datetime = field(default_factory=datetime.utcnow)
     failed_login_attempts: int = 0
     locked_until: Optional[datetime] = None
+    # P0 (3.3/3.8): reset de senha seta a flag; o próximo login informa ao
+    # cliente que a troca é obrigatória antes de seguir usando o sistema.
+    must_change_password: bool = False
 
     @property
     def is_locked(self) -> bool:

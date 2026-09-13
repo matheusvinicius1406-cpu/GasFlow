@@ -234,6 +234,7 @@ class AuthService:
             updated_at=model.updated_at,
             failed_login_attempts=model.failed_login_attempts,
             locked_until=model.locked_until,
+            must_change_password=bool(getattr(model, "must_change_password", False)),
         )
 
     def _db_session_to_domain(self, model) -> Session:
@@ -409,6 +410,8 @@ class AuthService:
                 "username": user.username,
                 "email": user.email,
                 "display_name": user.display_name,
+                # P0: cliente usa para forçar a troca de senha no próximo acesso
+                "must_change_password": bool(user.must_change_password),
             },
             "tenant_id": tenant_id,
             "role": system_role.value,
@@ -583,8 +586,15 @@ class AuthService:
             return {"success": True, "user_id": user.id}
 
     @_db_synchronized
-    def change_password(self, user_id: str, old_password: str, new_password: str) -> Dict[str, Any]:
-        """Change user password. Rehashes to bcrypt."""
+    def change_password(
+        self, user_id: str, old_password: str, new_password: str, *, clear_must_change: bool = False
+    ) -> Dict[str, Any]:
+        """Change user password. Rehashes to bcrypt.
+
+        clear_must_change=True (fluxo P0 3.8): troca obrigatória pós-reset —
+        limpa must_change_password para que o próximo login/`/auth/me` não
+        force novamente a troca.
+        """
         if self._use_db:
             user_repo = self._get_user_repo()
             user_model = user_repo.get_by_id(user_id)
@@ -592,7 +602,11 @@ class AuthService:
                 return {"success": False, "error": "User not found"}
             if not verify_password(old_password, user_model.password_hash):
                 return {"success": False, "error": "Current password is incorrect"}
-            user_repo.update(user_id, password_hash=hash_password(new_password))
+            user_repo.update(
+                user_id,
+                password_hash=hash_password(new_password),
+                **({"must_change_password": False} if clear_must_change else {}),
+            )
             self._audit(user_id, "default", AuditAction.PASSWORD_CHANGED.value, result="SUCCESS")
             return {"success": True}
         else:
@@ -602,6 +616,8 @@ class AuthService:
             if not verify_password(old_password, user.password_hash):
                 return {"success": False, "error": "Current password is incorrect"}
             user.password_hash = hash_password(new_password)
+            if clear_must_change:
+                user.must_change_password = False
             self._audit(user_id, "default", AuditAction.PASSWORD_CHANGED.value, result="SUCCESS")
             return {"success": True}
 
