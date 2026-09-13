@@ -371,6 +371,14 @@ def _runtime_tables() -> set[str]:
     return set(Base.metadata.tables.keys())
 
 
+def _seed_catalog_sizes() -> tuple[int, int]:
+    """Tamanhos esperados do catálogo, lidos do próprio módulo de seed
+    (fonte única — o teste não quebra quando o catálogo cresce)."""
+    from app.infrastructure.database.rbac_seed import PERMISSIONS, ROLE_MATRIX
+
+    return len(PERMISSIONS), len(ROLE_MATRIX)
+
+
 def _boot_seed(url: str) -> None:
     """Simula o boot após a migração: seed RBAC + AuthService init.
 
@@ -431,12 +439,13 @@ def test_legacy_db_boot_migrates_and_seeds_without_data_loss(tmp_path, monkeypat
         with eng.connect() as conn:
             estoque = conn.execute(text("SELECT estoque FROM products WHERE codigo='P99999'")).scalar_one()
             assert estoque == 10
-            # Seed RBAC completo
+            # Seed RBAC completo (quantidades exatas do catálogo da fonte)
+            expected_perms, expected_roles = _seed_catalog_sizes()
             perms = conn.execute(text("SELECT COUNT(*) FROM permissions")).scalar_one()
             roles = conn.execute(text("SELECT COUNT(*) FROM auth_roles")).scalar_one()
             admin = conn.execute(text("SELECT COUNT(*) FROM auth_users WHERE username='admin'")).scalar_one()
-        assert perms >= 40, f"catálogo de permissões incompleto: {perms}"
-        assert roles >= 5, f"roles padrão ausentes: {roles}"
+        assert perms == expected_perms, f"catálogo de permissões incompleto: {perms}/{expected_perms}"
+        assert roles == expected_roles, f"roles padrão ausentes: {roles}/{expected_roles}"
         assert admin >= 1, "usuário admin ausente"
     finally:
         eng.dispose()
@@ -459,7 +468,8 @@ def test_fresh_db_boot_creates_and_seeds_everything(tmp_path, monkeypatch):
             perms = conn.execute(text("SELECT COUNT(*) FROM permissions")).scalar_one()
             matrix = conn.execute(text("SELECT COUNT(*) FROM role_permissions")).scalar_one()
             admin = conn.execute(text("SELECT COUNT(*) FROM auth_users WHERE username='admin'")).scalar_one()
-        assert perms >= 40
+        expected_perms, _expected_roles = _seed_catalog_sizes()
+        assert perms == expected_perms, f"esperado {expected_perms} permissões, veio {perms}"
         assert matrix > 0
         assert admin >= 1
     finally:
