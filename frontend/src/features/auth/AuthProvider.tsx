@@ -4,6 +4,22 @@ import { api } from '@/lib/api/client'
 import type { User } from '@/types'
 import { ChangePasswordGate } from './ChangePasswordGate'
 
+/**
+ * P0 3.6: ponte Electron (window.gasflow do preload), quando roda no desktop.
+ * O main process valida permissões de handlers IPC nativos consultando
+ * /auth/me com o token da sessão — report login/logout/change-password.
+ */
+function electronSessionBridge() {
+  return (
+    window as unknown as {
+      gasflow?: {
+        reportSessionToken?: (token: string) => Promise<unknown>
+        notifySessionChanged?: () => Promise<unknown>
+      }
+    }
+  ).gasflow
+}
+
 export interface AuthContextType {
   user: User | null
   token: string | null
@@ -41,6 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       setPermissions(Array.isArray(data.permissions) ? data.permissions : [])
       setMustChangePassword(Boolean(data.must_change_password))
+      // Sessão restaurada do localStorage → repassa o token ao gate IPC.
+      const stored = localStorage.getItem('gasflow_token')
+      if (stored) void electronSessionBridge()?.reportSessionToken?.(stored)
     } catch {
       // Token invalid — clear
       localStorage.removeItem('gasflow_token')
@@ -84,6 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     // P0 (3.8): reset admin seta a flag — o cliente bloqueia o app até a troca.
     setMustChangePassword(Boolean(data.user?.must_change_password))
+    // P0 (3.6): token novo → gate IPC de permissões no main process.
+    void electronSessionBridge()?.reportSessionToken?.(data.token)
     // Permissões chegam no próximo fetchMe — busca imediata para a sessão.
     try {
       const me = await api.auth.me()
@@ -104,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setPermissions([])
     setMustChangePassword(false)
+    // P0 (3.6): invalida o cache de permissões do gate IPC.
+    void electronSessionBridge()?.notifySessionChanged?.()
   }
 
   // P0 (3.8): troca obrigatória — no sucesso o backend limpa a flag e o app desbloqueia.
@@ -111,6 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.auth.changePassword(currentPassword, newPassword)
       setMustChangePassword(false)
+      // P0 (3.6): senha trocada → refetch de permissões no gate IPC.
+      void electronSessionBridge()?.notifySessionChanged?.()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       throw new Error(msg || 'Não foi possível alterar a senha')

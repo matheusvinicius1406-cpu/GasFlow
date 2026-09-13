@@ -54,6 +54,10 @@ const api = {
     releaseConversation: (id) => electron_1.ipcRenderer.invoke("convs:release", { id }),
     replyConversation: (id, text) => electron_1.ipcRenderer.invoke("convs:reply", { id, text }),
     suggestReply: (id) => electron_1.ipcRenderer.invoke("convs:suggest", { id }),
+    // Sessão (P0 3.6): o renderer reporta o token pós-login e sinaliza
+    // mudanças (logout/change-password) para o gate de permissões IPC.
+    reportSessionToken: (token) => electron_1.ipcRenderer.invoke("auth:session-token", token),
+    notifySessionChanged: () => electron_1.ipcRenderer.invoke("auth:session-changed"),
     // Eventos push
     onLog: (cb) => subscribe("gasflow:log", cb),
     onAgentOutcome: (cb) => subscribe("gasflow:agent-outcome", cb),

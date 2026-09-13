@@ -60,6 +60,8 @@ const logger_1 = require("./logger");
 const ai_service_1 = require("./ai-service");
 const wa_bridge_1 = require("./wa-bridge");
 const updater_1 = require("./updater");
+// P0 3.6 — gate de permissão para handlers IPC nativos (defesa em profundidade).
+const ipc_permissions_1 = require("./ipc-permissions");
 let mainWindow = null;
 let settings = (0, config_1.loadSettings)();
 let ai;
@@ -212,6 +214,59 @@ async function startWithRetry(label: string, start: () => Promise<unknown>, atte
     }
     throw lastError instanceof Error ? lastError : new Error(`${label} não iniciou`);
 }
+// ── IPC protegido (P0 3.6) ─────────────────────────────────────
+// O token de sessão vive no localStorage da janela (mesma origem do login
+// web) — o renderer o reporta ao main a cada login/logout/change-password,
+// e o gate consulta /auth/me no backend local com cache de 30s.
+// handlers IPC protegidos (defesa em profundidade — a validação primária
+// permanece no backend via require_permission).
+function registerProtectedIpc() {
+    electron_1.ipcMain.handle("auth:session-token", (_event, token) => {
+        if (typeof token !== "string")
+            return { ok: false };
+        (0, ipc_permissions_1.registerTokenProvider)(() => token);
+        ipc_permissions_1.clearPermissionCache();
+        logger_1.logger.info("ipc.permissions", "token de sessão atualizado");
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("auth:session-changed", () => {
+        // login/logout/change-password: força refetch de permissões.
+        ipc_permissions_1.clearPermissionCache();
+        return { ok: true };
+    });
+    // finance:export-pdf → printToPDF do webContents (handler nativo).
+    (0, ipc_permissions_1.registerProtectedHandler)("finance:export-pdf", "finance.export_pdf", async (event) => {
+        const wc = event.sender;
+        const pdf = await wc.printToPDF({
+            landscape: false,
+            printBackground: true,
+            margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+        });
+        return { ok: true, pdfBase64: pdf.toString("base64") };
+    });
+    // finance:export-docx → busca o relatório diário no backend local e monta
+    // um payload Word-compatível (HTML com mso) — sem dependência nova.
+    // Sem permissão, o gate bloqueia antes de qualquer execução.
+    (0, ipc_permissions_1.registerProtectedHandler)("finance:export-docx", "finance.export_docx", async (_event, args) => {
+        const token = await ipc_permissions_1.getToken();
+        const date = args?.date ? `?date=${encodeURIComponent(args.date)}` : "";
+        const { status, body } = await ipc_permissions_1.fetchJson(`${backendUrl()}/reports/daily${date}`, {
+            Authorization: `Bearer ${token ?? ""}`,
+        });
+        if (status !== 200)
+            throw new Error(`backend respondeu ${status}`);
+        const html = [
+            "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+                "xmlns:w='urn:schemas-microsoft-com:office:word'>",
+            "<head><meta charset='utf-8'><title>GasFlow — Relatório diário</title></head>",
+            "<body><h1>GasFlow — Relatório diário</h1>",
+            `<p>${new Date().toLocaleString('pt-BR')}</p>`,
+            `<pre style="font-family:Consolas,monospace">${JSON.stringify(body, null, 2)}</pre>`,
+            "</body></html>",
+        ].join("");
+        return { ok: true, docxHtml: html };
+    });
+}
 // ── IPC de settings ─────────────────────────────────────────────
 // settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
 // Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
@@ -305,6 +360,8 @@ else {
         // Handlers de settings registrados cedo — o renderer pode chamar a
         // qualquer momento depois do preload.
         registerSettingsIpc();
+        // Gate de permissões IPC (P0 3.6) + handlers finance:export-*.
+        registerProtectedIpc();
         ai = new ai_service_1.AiService({
             baseUrl: settings.ollamaBaseUrl,
             textModel: settings.ollamaTextModel,

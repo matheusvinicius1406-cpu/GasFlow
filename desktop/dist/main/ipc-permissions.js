@@ -36,12 +36,16 @@ function setBackendBaseUrl(url) {
     backendBaseUrl = url;
 }
 function clearPermissionCache() {
+    // Limpa o cache do gate default (closure em createPermissionGate) —
+    // a variável module-level permissionCache é legada/unused.
     permissionCache = null;
+    defaultGate.resetCache();
 }
 // ── HTTP util (node:http — sem dependência nova) ─────────────
 function fetchJson(url, headers, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
-        const req = (0, node_http_1.request)(url, { headers, method: "GET" }, (res) => {
+        // agent:false — sem keep-alive/sockets presos (o gate faz ≤1 request/30s).
+        const req = (0, node_http_1.request)(url, { headers, method: "GET", agent: false }, (res) => {
             let body = "";
             res.setEncoding("utf8");
             res.on("data", (chunk) => (body += chunk));
@@ -112,6 +116,8 @@ function createPermissionGate(options = {}) {
                 throw err;
             }
         },
+        /** Invalidação explícita (login/logout no renderer → auth:session-changed). */
+        resetCache: () => (cache = null),
         _debug: {
             reset: () => (cache = null),
             stats: () => ({ cached: !!cache, fetchedAt: cache?.fetchedAt ?? null }),
@@ -133,6 +139,13 @@ function registerProtectedHandler(channel, permission, handler) {
 function PermissionGate() {
     return defaultGate;
 }
+// Reuso em index.ts (export-docx busca o relatório no backend local).
+exports.fetchJson = fetchJson;
+/** Token de sessão atual (ou null) — para chamadas autenticadas ao backend local. */
+async function getToken() {
+    return tokenProvider ? await tokenProvider() : null;
+}
+exports.getToken = getToken;
 // Export interno para testes (gate isolado com fetcher injetado).
 function forTesting() {
     return { createPermissionGate, setBackendBaseUrl };
