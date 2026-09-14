@@ -3,20 +3,34 @@
 Não dependem de Ollama/Whisper/Piper reais: transporte HTTP e subprocess
 são stubados. Validam o contrato de domínio (LLMProvider/STT/TTS) e a
 resolução por settings (AI_PROVIDER / STT_PROVIDER / TTS_PROVIDER).
+
+Item 3: a factory LLM agora respeita o toggle ai.enabled, faz health check
+com cache de 30s e degrada para NullProvider (cenário B da Fase 4.2 —
+não há fallback externo). Os testes de factory patcham o health check
+para permanecerem herméticos.
 """
 
 import httpx
+import pytest
 
 from app.core.config import settings
 from app.domain.ai.provider import LLMMessage, LLMRole, LLMResponse
-from app.infrastructure.ai.factory import get_llm_provider
+from app.infrastructure.ai.factory import get_llm_provider, reset_health_cache
 from app.infrastructure.ai.mock_provider import MockLLMProvider
+from app.infrastructure.ai.null_provider import NullProvider
 from app.infrastructure.ai.ollama_provider import OllamaProvider
 from app.infrastructure.ai.openai_provider import OpenAIProvider
 from app.infrastructure.audio.factory import get_stt_provider, get_tts_provider
 from app.infrastructure.audio.mock_providers import MockSTTProvider, MockTTSProvider
 from app.infrastructure.audio.piper_provider import PiperTTSProvider
 from app.infrastructure.audio.whisper_provider import WhisperSTTProvider
+
+
+@pytest.fixture(autouse=True)
+def _reset_health_cache():
+    reset_health_cache()
+    yield
+    reset_health_cache()
 
 
 # ── Factory LLM ─────────────────────────────────────────────
@@ -28,6 +42,8 @@ def test_factory_default_returns_mock():
 
 def test_factory_ollama(monkeypatch):
     monkeypatch.setattr(settings, "ai_provider", "ollama")
+    # Health hermético — a máquina de teste pode não ter Ollama rodando.
+    monkeypatch.setattr(OllamaProvider, "health_check", lambda self: True)
     provider = get_llm_provider()
     assert isinstance(provider, OllamaProvider)
     assert provider._base_url == settings.ollama_base_url.rstrip("/")
@@ -38,6 +54,7 @@ def test_factory_ollama(monkeypatch):
 def test_factory_ollama_think_auto_omits_field(monkeypatch):
     monkeypatch.setattr(settings, "ai_provider", "ollama")
     monkeypatch.setattr(settings, "ollama_think", None)
+    monkeypatch.setattr(OllamaProvider, "health_check", lambda self: True)
     provider = get_llm_provider()
     assert isinstance(provider, OllamaProvider)
     assert provider._think is None
@@ -49,9 +66,12 @@ def test_factory_openai(monkeypatch):
     assert isinstance(provider, OpenAIProvider)
 
 
-def test_factory_unknown_falls_back_to_mock(monkeypatch):
+def test_factory_unknown_falls_back_to_null(monkeypatch):
+    """Item 3/cenário B: provider desconhecido degrada (fail-safe), não
+    cai no mock — mock é dev/testes explícitos, nunca default silencioso
+    em produção."""
     monkeypatch.setattr(settings, "ai_provider", "xpto")
-    assert isinstance(get_llm_provider(), MockLLMProvider)
+    assert isinstance(get_llm_provider(), NullProvider)
 
 
 # ── OllamaProvider (httpx stubado) ──────────────────────────

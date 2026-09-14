@@ -23,6 +23,11 @@ class Settings(BaseModel):
 
     # Auth / Security
     admin_password: str = os.getenv("ADMIN_PASSWORD", "")
+    # Secret HS256 do access token do app do entregador (mini-JWT 15 min).
+    # OBRIGATÓRIO em produção (ver app/presentation/api/driver_mobile_auth.py):
+    # env MOBILE_JWT_SECRET (≥32 bytes) ou MOBILE_JWT_SECRET_FILE. Sem nada,
+    # dev gera/persiste um secret aleatório fora do repo; produção falha alto.
+    mobile_jwt_secret: str = os.getenv("MOBILE_JWT_SECRET", "")
     session_ttl_minutes: int = int(os.getenv("SESSION_TTL_MINUTES", "60"))
     max_failed_attempts: int = int(os.getenv("MAX_FAILED_ATTEMPTS", "5"))
     lockout_minutes: int = int(os.getenv("LOCKOUT_MINUTES", "15"))
@@ -43,6 +48,10 @@ class Settings(BaseModel):
     # Provider ativo: mock | ollama | openai. Mock é o default seguro
     # (dev/testes); produção define ollama (ou openai via API key).
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")
+    # Kill switch de emergência via env (o toggle do admin vive no quadro de
+    # configurações — system_settings chave ai.enabled, default True). O env
+    # só é consultado quando o quadro não está disponível.
+    ai_enabled: bool = os.getenv("AI_ENABLED", "true").strip().lower() in ("1", "true", "yes")
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
     # Modo thinking (qwen3): false desliga (recomendado — sem isso o budget de

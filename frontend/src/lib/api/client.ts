@@ -306,4 +306,14 @@ export const api = {
     cancel: (id: string) => apiClient.post(`/purchase-notes/${id}/cancel`),
     pdfUrl: (id: string) => `/purchase-notes/${id}/pdf`,
   },
+
+  // AI — Item 3 (IA no boot, toggle admin, sem jargão na UI)
+  ai: {
+    status: () => apiClient.get('/ai/status'),
+    test: (prompt: string) => apiClient.post('/ai/test', { prompt }),
+    settings: () => apiClient.get('/ai/settings'),
+    updateSettings: (data: { enabled?: boolean }) => apiClient.patch('/ai/settings', data),
+    downloadModel: () => apiClient.post('/ai/model/download'),
+    downloadProgress: () => apiClient.get('/ai/model/download-progress'),
+  },
 }

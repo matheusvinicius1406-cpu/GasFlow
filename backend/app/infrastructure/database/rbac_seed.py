@@ -66,6 +66,7 @@ PERMISSIONS: list[tuple[str, str, str]] = [
     ("fiscal.issue_nfe", "fiscal", "Emitir NF-e (modelo 55)"),
     ("fiscal.cancel", "fiscal", "Cancelar notas fiscais"),
     ("ai.use", "ai", "Usar módulo de Inteligência"),
+    ("ai.configure", "ai", "Configurar Inteligência (IA)"),
     ("settings.read", "settings", "Visualizar configurações"),
     ("settings.write", "settings", "Alterar configurações"),
     ("audit.view", "audit", "Visualizar trilha de auditoria"),
@@ -127,6 +128,7 @@ ROLE_MATRIX: dict[str, list[str]] = {
         "driver.view_location",
         "driver.view_history",
         "ai.use",
+        "ai.configure",
         "settings.read",
         "audit.view",
         "coupon.*",
@@ -150,6 +152,7 @@ ROLE_MATRIX: dict[str, list[str]] = {
         "coupon.read",
         "settings.read",
         "delivery.read",
+        "ai.use",
     ],
     "DRIVER": [
         "customer.read",

@@ -300,6 +300,8 @@ ROLE_PERMISSIONS = {
         "settings.read",
         "coupon.*",
         "integration.*",
+        "ai.use",
+        "ai.configure",
     ],
     SystemRole.OPERATOR: [
         "customer.read",
@@ -317,6 +319,7 @@ ROLE_PERMISSIONS = {
         "conversation.takeover",
         "coupon.read",
         "settings.read",
+        "ai.use",
     ],
     SystemRole.DRIVER: [
         "customer.read",

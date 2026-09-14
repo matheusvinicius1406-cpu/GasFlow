@@ -13,7 +13,7 @@ import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
 import { ReportsPage } from '@/features/reports'
 import { IntelligencePage } from '@/features/intelligence'
-import { SettingsPage } from '@/features/settings'
+import { SettingsPage, AISettingsPage } from '@/features/settings'
 import { CouponsPage } from '@/features/promotions'
 import { PurchaseNotesPage } from '@/features/purchase'
 import { SegmentsPage, ReorderPage } from '@/features/segments'
@@ -83,6 +83,16 @@ export function App() {
           }
         />
         <Route path="settings" element={<SettingsPage />} />
+
+        {/* Inteligência — config da IA (Item 3) — guard ai.configure */}
+        <Route
+          path="settings/ai"
+          element={
+            <PermissionRoute permissions={['ai.configure']}>
+              <AISettingsPage />
+            </PermissionRoute>
+          }
+        />
 
         {/* Admin (P0) — guard por permissão efetiva do backend */}
         <Route

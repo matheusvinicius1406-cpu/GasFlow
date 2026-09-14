@@ -1,23 +1,40 @@
 """
-AI API Endpoints — FASE 9
+AI API Endpoints — FASE 9 + Item 3
 
 POST /ai/chat — Main chat endpoint
 GET /ai/conversations — List conversations
 GET /ai/conversations/{id} — Get conversation with messages
 GET /ai/tools — List available tools
 GET /ai/audit — Get audit log
+
+Item 3 (IA no boot, toggle admin, sem jargão na UI):
+GET   /ai/status                   — status p/ o dono (ai.use)
+POST  /ai/test                     — prompt de teste (ai.use)
+GET   /ai/settings                 — config completa (ai.configure)
+PATCH /ai/settings                 — atualiza toggle/modelo/timeout (ai.configure)
+POST  /ai/model/download           — dispara pull no Ollama (ai.configure)
+GET   /ai/model/download-progress  — progresso do pull (polling JSON)
+
+Cenário B da Fase 4.2: NÃO há provider externo de fallback — quando o
+Ollama local não responde, a IA degrada com mensagem controlada.
 """
 
+import hashlib
+import json
+import threading
+import time
 import uuid
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
-from app.presentation.dependencies import get_tenant_context
+from app.presentation.dependencies import get_tenant_context, require_permission
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
 from app.infrastructure.database.dependencies import get_db
-from app.infrastructure.ai.factory import get_llm_provider
+from app.core.config import settings
+from app.infrastructure.ai.factory import get_llm_provider, is_ollama_healthy, reset_health_cache
 from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository, SQLAlchemyMessageRepository
 from app.application.ai.engine import AIEngine
 from app.application.ai.tools_impl import AIToolsFactory
@@ -425,3 +442,267 @@ def get_audit_log(limit: int = 50, ctx: TenantContext = Depends(get_tenant_conte
     """Get AI audit log."""
     engine = _get_engine()
     return engine.get_audit_log(limit=limit)
+
+
+# ═════════════════════════════════════════════════════════
+#  Item 3 — Status / Teste / Config da IA (sem jargão na UI)
+# ═════════════════════════════════════════════════════════
+
+
+def _ai_audit(
+    db: Session,
+    ctx: TenantContext,
+    action: str,
+    resource_id: str = "",
+    details: Optional[Dict[str, Any]] = None,
+    result: str = "SUCCESS",
+    before_json: Optional[Dict[str, Any]] = None,
+    after_json: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Audit trail de IA (best-effort, convenção P0 3.3).
+
+    NUNCA grava conteúdo de prompt/resposta — só metadados (latência,
+    provider, hash do prompt quando aplicável).
+    """
+    try:
+        from app.infrastructure.repositories.auth_model import AuthAuditModel
+
+        db.add(
+            AuthAuditModel(
+                id=str(uuid.uuid4()),
+                actor_id=ctx.user_id,
+                actor_type="USER",
+                tenant_id=ctx.tenant_id,
+                action=action,
+                resource="ai",
+                resource_id=resource_id,
+                result=result,
+                timestamp=datetime.utcnow(),
+                ip_address="",
+                user_agent="",
+                platform="backend",
+                details=details,
+                before_json=before_json,
+                after_json=after_json,
+            )
+        )
+        db.commit()
+    except Exception:  # pragma: no cover — audit nunca derruba a operação
+        db.rollback()
+
+
+class AiStatus(BaseModel):
+    # Texto pronto para a UI — sem "Ollama", sem "qwen3" (guard 3.6).
+    state: str = Field(description="ready | preparing | unavailable | disabled")
+    message: str
+    progress: Optional[int] = None
+    provider: str = Field(description="local | none — nunca exposto na UI principal")
+
+
+class AiTestRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=500)
+
+
+class AiTestResponse(BaseModel):
+    response: str
+    provider: str = Field(description="local | online | none")
+    error: Optional[str] = None
+
+
+class AiSettingsIn(BaseModel):
+    enabled: Optional[bool] = None
+    model: Optional[str] = Field(default=None, max_length=100)
+    timeout_seconds: Optional[int] = Field(default=None, ge=5, le=300)
+
+
+class AiSettingsOut(BaseModel):
+    enabled: bool
+    provider: str
+    model: str
+    timeout_seconds: int
+    last_health_check: Optional[str] = None
+
+
+def _ai_enabled_from_db(db: Session) -> bool:
+    from app.application.settings.settings_service import SettingsService
+
+    return bool(SettingsService(db).get_value("ai.enabled", True))
+
+
+def _ai_settings_from_db(db: Session) -> AiSettingsOut:
+    from app.application.settings.settings_service import SettingsService
+
+    svc = SettingsService(db)
+    return AiSettingsOut(
+        enabled=bool(svc.get_value("ai.enabled", True)),
+        provider=settings.ai_provider,
+        model=settings.ollama_model,
+        timeout_seconds=settings.ai_timeout_seconds,
+        last_health_check=None,
+    )
+
+
+@router.get("/status", response_model=AiStatus)
+def ai_status(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("ai.use")),
+):
+    """Status da IA para o dono do depósito — sem termos técnicos.
+
+    Estado derivado: disabled (toggle off) → ready (Ollama respondeu) →
+    unavailable (Ollama não respondeu).    "preparing" é emitido pelo desktop durante o download do modelo via IPC (não vem daqui).
+    """
+    if not _ai_enabled_from_db(db):
+        return AiStatus(state="disabled", message="Inteligência desativada nas configurações.", provider="none")
+
+    if settings.ai_provider == "mock":
+        return AiStatus(state="ready", message="IA pronta (modo demonstração).", provider="local")
+
+    if is_ollama_healthy():
+        return AiStatus(state="ready", message="IA pronta.", provider="local")
+    return AiStatus(state="unavailable", message="IA temporariamente indisponível.", provider="none")
+
+
+@router.post("/test", response_model=AiTestResponse)
+def ai_test(
+    body: AiTestRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("ai.use")),
+):
+    """Teste rápido: envia um prompt ao provider ativo e devolve a resposta.
+
+    Auditoria registra provider + latência + hash do prompt — nunca o
+    conteúdo (regra de privacidade do Item 3).
+    """
+    start = time.monotonic()
+    enabled = _ai_enabled_from_db(db)
+    provider = get_llm_provider()
+    from app.domain.ai.provider import LLMMessage, LLMRole
+
+    result = provider.generate([LLMMessage(role=LLMRole.USER, content=body.prompt)])
+    latency_ms = (time.monotonic() - start) * 1000
+    provider_label = "local" if provider.model_name != "none" else "none"
+
+    _ai_audit(
+        db,
+        ctx,
+        action="ai.test.prompt",
+        details={
+            "provider": provider_label,
+            "model": provider.model_name,
+            "latency_ms": round(latency_ms, 1),
+            "prompt_hash": hashlib.sha256(body.prompt.encode("utf-8")).hexdigest()[:16],
+            "success": result.error is None,
+        },
+        result="SUCCESS" if result.error is None else "FAILURE",
+    )
+
+    error = result.error
+    if error or not enabled:
+        if not enabled:
+            message = "Inteligência desativada nas configurações."
+        elif error is not None and (
+            error in ("AI_DISABLED",) or error.startswith(("LLM_UNAVAILABLE", "LLM_HTTP_ERROR"))
+        ):
+            message = "IA temporariamente indisponível."
+        else:
+            message = error or "Erro desconhecido."
+        return AiTestResponse(response="", provider=provider_label, error=message)
+    return AiTestResponse(response=result.content, provider=provider_label)
+
+
+@router.get("/settings", response_model=AiSettingsOut)
+def get_ai_settings(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("ai.configure")),
+):
+    """Config completa da IA (tela Admin → Inteligência)."""
+    return _ai_settings_from_db(db)
+
+
+@router.patch("/settings", response_model=AiSettingsOut)
+def patch_ai_settings(
+    body: AiSettingsIn,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("ai.configure")),
+):
+    """Atualiza toggle da IA (e, no futuro, modelo/timeout por settings).
+
+    Auditoria com snapshot before/after (convenção P0 3.3).
+    """
+    from app.application.settings.settings_service import SettingsService
+
+    before = _ai_settings_from_db(db).model_dump()
+    svc = SettingsService(db)
+    if body.enabled is not None:
+        svc.update("ai.enabled", bool(body.enabled), updated_by=ctx.user_id)
+    reset_health_cache()
+    after = _ai_settings_from_db(db).model_dump()
+    _ai_audit(db, ctx, action="ai.settings.changed", before_json=before, after_json=after)
+    return _ai_settings_from_db(db)
+
+
+# ── Download de modelo (pull) — polling simples, sem SSE ──
+
+_download_state: Dict[str, Any] = {"active": False, "percent": None, "error": None}
+_download_lock = threading.Lock()
+
+
+@router.post("/model/download", status_code=202)
+def download_model(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("ai.configure")),
+):
+    """Dispara `POST /api/pull` no Ollama em background (retorna 202).
+
+    Cenário B: o modelo só vem do Ollama local — não há download externo.
+    Progresso via GET /ai/model/download-progress (polling).
+    """
+    import httpx
+
+    if not _ai_enabled_from_db(db):
+        raise HTTPException(status_code=409, detail="IA desativada nas configurações.")
+    with _download_lock:
+        if _download_state["active"]:
+            return {"started": False, "detail": "Download já em andamento."}
+        _download_state.update({"active": True, "percent": 0, "error": None})
+
+    model = settings.ollama_model
+
+    def _pull() -> None:
+        try:
+            with httpx.Client(timeout=3600.0) as client:
+                with client.stream(
+                    "POST", f"{settings.ollama_base_url.rstrip('/')}/api/pull", json={"name": model}
+                ) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                        except ValueError:
+                            continue
+                        total = data.get("total") or 0
+                        done = data.get("completed") or 0
+                        if total:
+                            _download_state["percent"] = min(99, int(done * 100 / total))
+                        if data.get("error"):
+                            _download_state["error"] = str(data["error"])[:200]
+            _download_state["percent"] = 100
+            reset_health_cache()
+        except Exception as exc:  # noqa: BLE001 — erro vira estado, não exceção
+            _download_state["error"] = f"Download falhou: {type(exc).__name__}"
+        finally:
+            with _download_lock:
+                _download_state["active"] = False
+
+    threading.Thread(target=_pull, daemon=True, name="ai-model-pull").start()
+    _ai_audit(db, ctx, action="ai.model.download", resource_id=model)
+    return {"started": True, "model": model}
+
+
+@router.get("/model/download-progress")
+def download_progress(ctx: TenantContext = Depends(require_permission("ai.configure"))):
+    """Progresso do pull (polling JSON — simples e suficiente p/ Electron)."""
+    return dict(_download_state)

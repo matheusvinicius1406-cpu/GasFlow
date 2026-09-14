@@ -30,8 +30,18 @@ DEFAULT_SETTINGS = [
         "Métodos de pagamento disponíveis",
     ),
     ("delivery_estimation_mode", "operations", "heuristic", "heuristic ou osrm"),
+    # ── IA (Item 3) ─────────────────────────────────────────
+    # Toggle admin da IA. O provider_factory lê esta chave em runtime;
+    # desligar aqui derruba TODA a IA (Copilot, WhatsApp agent) de imediato,
+    # sem restart. Fallback externo não existe (Fase 4.2, cenário B).
+    ("ai.enabled", "ai", True, "Ativar Inteligência (IA)"),
+    # ── App do Entregador (LGPD) ────────────────────────────
+    # Janela de trabalho do motorista: localização só é aceita dentro dela
+    # (driver_location_service). "HH:MM"; suporta travessia de meia-noite.
+    ("driver.work_hours.start", "operations", "06:00", "Início do horário de trabalho (rastreamento)"),
+    ("driver.work_hours.end", "operations", "22:00", "Fim do horário de trabalho (rastreamento)"),
     ("dark_mode", "appearance", False, "Tema escuro no frontend"),
     ("brand_color", "appearance", "#E30613", "Cor primária do GasFlow"),
 ]
 
-SETTING_CATEGORIES = ("general", "whatsapp", "notifications", "integrations", "operations", "appearance")
+SETTING_CATEGORIES = ("general", "whatsapp", "notifications", "integrations", "operations", "appearance", "ai")

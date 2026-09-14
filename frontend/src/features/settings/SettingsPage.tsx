@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, User, Shield, RefreshCw, CreditCard, SlidersHorizontal, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Settings, User, Shield, RefreshCw, CreditCard, SlidersHorizontal, Users, Brain } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -24,11 +25,12 @@ interface UserProfile {
 
 export function SettingsPage() {
   const { logout } = useAuth()
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'payments' | 'system' | 'permissions'
+    'profile' | 'payments' | 'system' | 'permissions' | 'intelligence'
   >('profile')
 
   const fetchProfile = useCallback(async () => {
@@ -89,6 +91,15 @@ export function SettingsPage() {
         <Button variant={activeTab === 'permissions' ? 'default' : 'ghost'} onClick={() => setActiveTab('permissions')}>
           <Users className="h-4 w-4 mr-1" /> Usuários e Permissões
         </Button>
+        {/* Inteligência (Item 3) — só aparece para quem pode configurar a IA */}
+        {profile?.permissions?.includes('ai.configure') && (
+          <Button
+            variant={activeTab === 'intelligence' ? 'default' : 'ghost'}
+            onClick={() => navigate('/settings/ai')}
+          >
+            <Brain className="h-4 w-4 mr-1" /> Inteligência
+          </Button>
+        )}
       </div>
 
       {activeTab === 'payments' ? (
