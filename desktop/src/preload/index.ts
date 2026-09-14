@@ -23,6 +23,14 @@ const api = {
     syncAgent: (integrationId) => electron_1.ipcRenderer.invoke("agent:sync", { integrationId }),
     // IA (Ollama)
     aiStatus: () => electron_1.ipcRenderer.invoke("ai:status"),
+    // IA no boot (Item 3): status do setup, download e eventos
+    aiSetupStatus: () => electron_1.ipcRenderer.invoke("ai:setup-status"),
+    aiSetupRetry: () => electron_1.ipcRenderer.invoke("ai:setup-retry"),
+    aiDownloadModel: (model) => electron_1.ipcRenderer.invoke("ai:setup-download", model),
+    onAiStatusChanged: (cb) => subscribe("ai:status-changed", cb),
+    onAiDownloadProgress: (cb) => subscribe("ai:download-progress", cb),
+    // App do Entregador (Fase 1): localização em tempo real via relay
+    onDriverLocation: (cb) => subscribe("gasflow:driver-location", cb),
     whisperStatus: () => electron_1.ipcRenderer.invoke("ai:whisper-status"),
     extractFromHtml: (html, model) => electron_1.ipcRenderer.invoke("ai:extract-html", { html, model }),
     extractFromImage: (base64, model) => electron_1.ipcRenderer.invoke("ai:extract-image", { base64, model }),

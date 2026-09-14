@@ -14,6 +14,11 @@ export interface Settings {
   waApiKey: string;
   waAutoReply: boolean;
   updateChannel?: string;
+  // App do Entregador — relay na nuvem (Fase 1). Vazio = desligado.
+  relayEnabled?: boolean;
+  relayUrl?: string; // ex.: https://gasflow-relay.fly.dev
+  relayToken?: string; // RELAY_TOKEN compartilhado
+  relayTenant?: string; // identificador do depósito
 }
 
 const DEFAULTS: Settings = {
