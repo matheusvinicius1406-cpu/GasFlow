@@ -4,6 +4,22 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔧 Correções — WhatsApp (14/09/2026)
+
+- **Recuperação por caminho de desconexão** no provider: `logged_out` (401)
+  agora apaga as credenciais (`baileys_auth/<id>/`) com guard de re-entrância,
+  timeout de 10s e erro logado, antes do re-init (antes: `disconnect()`
+  mantinha as creds → loop com sessão inválida); 428/440 limpam apenas a
+  sessão Signal (preserva creds.json) com backoff e escalam para wipe após
+  3 falhas; 515 tem restart único antes de tratar como 428.
+- **Telemetria de diagnóstico**: evento `close` do Baileys propaga
+  `statusCode`/texto do Boom (`account.connection_closed`), toda transição
+  de estado emite `account.state_transition` e o contador
+  `disconnectsByReason` é exposto nos endpoints de health.
+- Runbook de re-pareamento (QR) em `docs/whatsapp-recovery-runbook.md` —
+  diagnóstico do incidente de 06/09: o loop real era 408 com QR nunca
+  pareado (nem 401, nem 428). Suíte: 86 → 94 testes.
+
 ### 🚀 Funcionalidades — App do Entregador, Fase 1 (14/09/2026)
 
 - **Mobile auth** (`/auth/mobile/login|refresh|logout`): access token 15min

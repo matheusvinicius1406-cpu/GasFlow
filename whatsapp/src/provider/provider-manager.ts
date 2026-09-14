@@ -39,7 +39,8 @@ export interface AccountStatus {
 
 // ── Constants ────────────────────────────────────────────
 
-const RECONNECT_BASE_DELAY_MS = 5_000;
+/** Base do backoff (env WA_RECONNECT_BASE_MS; override p/ testes/ops). */
+const RECONNECT_BASE_DELAY_MS = Number(process.env.WA_RECONNECT_BASE_MS || 5_000);
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_JITTER_RATIO = 0.3;
 /** Teto por tentativa (5s * 2^4 = 80s) — após isso mantém 80s com jitter. */
@@ -126,7 +127,7 @@ function toProviderContact(contact: Contact): WhatsAppContact {
 
 // ── AccountInstance ──────────────────────────────────────
 
-class AccountInstance implements WhatsAppProvider {
+export class AccountInstance implements WhatsAppProvider {
   readonly id: string;
   readonly name: string;
   private client: Client | null = null;
@@ -142,14 +143,40 @@ class AccountInstance implements WhatsAppProvider {
   private lastConnectedAt: string | null = null;
   private messageListeners: Array<(msg: unknown) => void> = [];
 
+  // ── Recovery de desconexões (incidente 2026-09-06 — loop de 408/QR) ──
+  /** Guard de re-entrância: só um ciclo de wipe de credenciais por vez. */
+  private recoveringFromLogout = false;
+  /** Limpezas Signal consecutivas sem conectar — >3 escala p/ wipe (caminho A). */
+  private signalClearAttempts = 0;
+  /** Restarts 515 consecutivos — ≥2 trata como caminho B (sessão Signal). */
+  private restartAttempts = 0;
+  /** Telemetria: desconexões por motivo (exposto no /health p/ diagnóstico). */
+  private readonly disconnectsByReason = new Map<string, number>();
+  /** Timeout do logout no recovery (env WA_LOGOUT_TIMEOUT_MS; overridable p/ testes). */
+  private logoutTimeoutMs = Number(process.env.WA_LOGOUT_TIMEOUT_MS || 10_000);
+
+  /** Toda transição emite log estruturado — próximo incidente sai diagnosticável. */
+  private transition(to: WhatsAppConnectionState, reason: string, extra: Record<string, unknown> = {}): void {
+    const from = this.state;
+    this.state = to;
+    if (to === 'disconnected' || to === 'qr_pending') {
+      this.disconnectsByReason.set(reason, (this.disconnectsByReason.get(reason) ?? 0) + 1);
+    }
+    logger.info('account.state_transition', { account: this.id, engine: this.engine, from, to, reason, ...extra });
+  }
+
+  /** Contadores por motivo — consumido pelo endpoint de health/debug. */
+  getDisconnectStats(): Record<string, number> {
+    return Object.fromEntries(this.disconnectsByReason);
+  }
+
+  readonly engine: EngineName;
+
   constructor(config: AccountConfig) {
     this.id = config.id;
     this.name = config.name;
     this.engine = resolveEngineForAccount(config.id);
-    logger.info('account.engine_selected', { accountId: this.id, engine: this.engine });
   }
-
-  private engine: EngineName;
 
   getStatus(): WhatsAppStatus {
     // hasQr expira em 60s (mesmo TTL do endpoint /qr) — sem isso o FE
@@ -206,14 +233,14 @@ class AccountInstance implements WhatsAppProvider {
     this.intentionallyStopped = true;
     this.clearReconnectTimer();
     await this.teardownClient();
-    this.state = 'disconnected';
+    this.transition('disconnected', 'intentional_stop');
   }
 
   async logout(): Promise<void> {
     this.intentionallyStopped = true;
     this.clearReconnectTimer();
     this.stopHeartbeat();
-    this.state = 'disconnected';
+    this.transition('disconnected', 'manual_logout');
     this.qrString = null;
     this.qrGeneratedAtMs = null;
     this.reconnectAttempts = 0;
@@ -373,7 +400,7 @@ class AccountInstance implements WhatsAppProvider {
     this.client = client;
 
     client.on('qr', (qr: string) => {
-      this.state = 'qr_pending';
+      this.transition('qr_pending', 'qr');
       this.qrString = qr;
       this.qrGeneratedAtMs = Date.now();
       logger.info('account.qr_generated', { accountId: this.id, engine: this.engine });
@@ -385,7 +412,7 @@ class AccountInstance implements WhatsAppProvider {
     });
 
     client.on('ready', () => {
-      this.state = 'connected';
+      this.transition('connected', 'connected');
       this.qrString = null;
       this.reconnectAttempts = 0;
       this.lastConnectedAt = new Date().toISOString();
@@ -404,13 +431,13 @@ class AccountInstance implements WhatsAppProvider {
 
     client.on('auth_failure', (message: string) => {
       logger.error('account.auth_failed', { account: this.id, message });
-      this.state = 'disconnected';
+      this.transition('disconnected', 'auth_failure');
       this.qrString = null;
     });
 
     client.on('disconnected', (reason: string) => {
       logger.warn('account.disconnected', { account: this.id, reason });
-      this.state = 'disconnected';
+      this.transition('disconnected', reason);
       this.stopHeartbeat();
       accountConnected.set({ account: this.id, engine: this.engine }, 0);
       this.scheduleReconnect();
@@ -424,18 +451,35 @@ class AccountInstance implements WhatsAppProvider {
 
     client.initialize().catch((err) => {
       logger.error('account.initialize.failed', { account: this.id, error: err instanceof Error ? err.message : String(err) });
-      this.state = 'disconnected';
+      this.transition('disconnected', 'init_failed');
       this.scheduleReconnect();
     });
   }
 
   /** Inicialização via Baileys (WebSocket puro, sem Chromium). */
   private createAndInitializeBaileys(): void {
+    logger.debug('account.engine_selected', { accountId: this.id, engine: this.engine });
     const engine = new BaileysEngine({ accountId: this.id });
     this.baileys = engine;
 
-    const dispatch = (event: string, payload?: unknown): void => {
-      switch (event) {
+    engine.connect((event, payload) => this.handleEngineEvent(event, payload)).catch((err) => {
+      logger.error('account.initialize.failed', {
+        account: this.id,
+        engine: 'baileys',
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.transition('disconnected', 'init_failed');
+      this.scheduleReconnect();
+    });
+  }
+
+  /**
+   * Handler central dos eventos do engine.
+   * Público de propósito: permite testar recovery (logged_out/428/515)
+   * injetando um engine fake, sem Baileys/Chromium.
+   */
+  handleEngineEvent(event: string, payload?: unknown): void {
+    switch (event) {
         case 'qr':
           this.state = 'qr_pending';
           this.qrString = String(payload ?? '');
@@ -447,10 +491,12 @@ class AccountInstance implements WhatsAppProvider {
           this.reconnectAttempts = 0;
           break;
         case 'ready':
-          this.state = 'connected';
+          this.transition('connected', 'connected');
           this.qrString = null;
           this.qrGeneratedAtMs = null;
           this.reconnectAttempts = 0;
+          this.signalClearAttempts = 0;
+          this.restartAttempts = 0;
           this.lastConnectedAt = new Date().toISOString();
           this.phone = (payload as { phone?: string | null } | undefined)?.phone ?? null;
           accountConnected.set({ account: this.id, engine: this.engine }, 1);
@@ -458,43 +504,102 @@ class AccountInstance implements WhatsAppProvider {
           logger.info('account.connected', { account: this.id, phone: this.phone, engine: 'baileys' });
           this.scheduleCrmSync();
           break;
-        case 'disconnected':
-          logger.warn('account.disconnected', { account: this.id, reason: String(payload ?? 'unknown'), engine: 'baileys' });
-          this.state = 'disconnected';
+        case 'disconnected': {
+          const reason = String(payload ?? 'unknown');
+          logger.warn('account.disconnected', { account: this.id, reason, engine: 'baileys' });
+          this.transition('disconnected', reason);
           this.stopHeartbeat();
           accountConnected.set({ account: this.id, engine: this.engine }, 0);
+          if (reason === '515') {
+            // Caminho C: restart required — uma reconexão limpa resolve;
+            // se repetir em sequência, tratar como caminho B.
+            this.restartAttempts += 1;
+            if (this.restartAttempts >= 2) {
+              this.handleSignalSessionLoss('515_persistent');
+              break;
+            }
+            logger.warn('account.recovery.restart_required', { account: this.id, attempt: this.restartAttempts });
+            this.scheduleReconnect();
+            break;
+          }
+          if (reason === '428' || reason === '440') {
+            // Caminho B: connection closed / conflict — sessão Signal
+            // dessincronizada. Device continua válido: NÃO apagar creds.
+            this.handleSignalSessionLoss(reason);
+            break;
+          }
           this.scheduleReconnect();
           break;
-        case 'logged_out':
-          // Sessão deslogada no servidor (creds locais viram lixo). Reconectar
-          // com as mesmas creds dá Bad MAC/No session record até esgotar as
-          // tentativas. Auto-recovery: apaga credenciais e recomeça com QR.
-          logger.warn('account.logged_out', { account: this.id, engine: 'baileys', action: 'wipe-creds-and-restart' });
-          this.state = 'disconnected';
+        }
+        case 'logged_out': {
+          // Caminho A (401): device invalidado no servidor — as credenciais
+          // locais viram lixo. Reconectar com elas reproduz o loop
+          // (logged_out → re-init com creds mortas → logged_out...).
+          // Recovery: logout() apaga baileys_auth/<id>/ e re-init reabre QR.
+          if (this.recoveringFromLogout) {
+            logger.warn('account.logged_out.suppressed', { account: this.id, reason: 'recovery_already_running' });
+            break;
+          }
+          this.recoveringFromLogout = true;
+          logger.warn('account.logged_out', {
+            account: this.id,
+            engine: this.engine,
+            action: 'wipe-creds-and-restart',
+          });
+          this.transition('disconnected', 'logged_out_401');
           this.stopHeartbeat();
           accountConnected.set({ account: this.id, engine: this.engine }, 0);
           this.reconnectAttempts = 0;
-          void this.teardownClient().then(() => {
+          this.signalClearAttempts = 0;
+          this.restartAttempts = 0;
+          const engineRef = this.baileys;
+          const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+            Promise.race([
+              p,
+              new Promise<never>((_, rej) =>
+                setTimeout(() => rej(new Error('logout timeout')), ms).unref?.()),
+            ]);
+          const finishRecovery = (): void => {
+            // null APÓS o logout — logout() com referência viva é o que garante
+            // o rmSync do auth dir (e não é no-op).
+            this.baileys = null;
+            this.recoveringFromLogout = false;
             if (!this.intentionallyStopped) this.createAndInitializeClient();
+          };
+          if (!engineRef) {
+            finishRecovery();
+            break;
+          }
+          void withTimeout(engineRef.logout(), this.logoutTimeoutMs)
+            .catch((err: unknown) => {
+              // Erro do logout é LOGADO, não engolido (ex.: socket meio-morto).
+              logger.error('account.logout_failed', {
+                account: this.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            })
+            .finally(finishRecovery);
+          break;
+        }
+        case 'close': {
+          // Telemetria bruta do close do Baileys (statusCode + texto do Boom).
+          const info = (payload ?? {}) as { statusCode: number | null; reason: string; errorText: string };
+          logger.warn('account.connection_closed', {
+            account: this.id,
+            statusCode: info.statusCode,
+            reason: info.reason,
+            errorText: info.errorText,
           });
           break;
+        }
         case 'message':
           for (const listener of this.messageListeners) {
             try { listener(payload); } catch { /* ignore listener errors */ }
           }
           break;
-      }
-    };
-
-    engine.connect(dispatch).catch((err) => {
-      logger.error('account.initialize.failed', {
-        account: this.id,
-        engine: 'baileys',
-        error: err instanceof Error ? err.message : String(err),
-      });
-      this.state = 'disconnected';
-      this.scheduleReconnect();
-    });
+      default:
+        break;
+    }
   }
 
   // ── Heartbeat (mantém a sessão ativa) ────────────────
@@ -579,7 +684,7 @@ class AccountInstance implements WhatsAppProvider {
   private lastReconnectAt: string | null = null;
 
   private scheduleReconnect(): void {
-    if (this.intentionallyStopped || this.reconnectTimer) return;
+    if (this.intentionallyStopped || this.reconnectTimer || this.recoveringFromLogout) return;
     // Runtime ativo: client (wwebjs) ou engine (baileys) — sem ele não há o que reconectar.
     const hasRuntime = this.engine === 'baileys' ? this.baileys !== null : this.client !== null;
     if (!hasRuntime) return;
@@ -629,6 +734,46 @@ class AccountInstance implements WhatsAppProvider {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  /**
+   * Caminho B (428/440/515-persistente + Bad MAC/No session record): a sessão
+   * Signal local dessincronizou, mas o device segue válido no servidor —
+   * NUNCA apagar credenciais aqui. Limpa session/sender-key/pre-key
+   * (preserva creds.json + app-state) e reconecta; o backoff existente
+   * continua valendo. 3 falhas seguidas → escala p/ caminho A (wipe
+   * completo) como último recurso, com log explícito.
+   */
+  private handleSignalSessionLoss(reason: string): void {
+    this.signalClearAttempts += 1;
+    if (this.signalClearAttempts > 3) {
+      logger.error('account.recovery.signal_clear_escalated', {
+        account: this.id,
+        attempts: this.signalClearAttempts - 1,
+        reason,
+        action: 'wipe-creds-and-restart',
+      });
+      this.signalClearAttempts = 0;
+      const engine = this.baileys;
+      if (!engine) return;
+      void engine.logout()
+        .catch((err: unknown) => logger.error('account.logout_failed', { account: this.id, error: String(err) }))
+        .finally(() => {
+          this.baileys = null;
+          if (!this.intentionallyStopped) this.createAndInitializeClient();
+        });
+      return;
+    }
+    logger.warn('account.recovery.signal_session_clear', {
+      account: this.id,
+      reason,
+      attempt: this.signalClearAttempts,
+    });
+    const engine = this.baileys;
+    // Reconexão pelo backoff exponencial existente (5s→80s) — sem martelada.
+    void Promise.resolve(engine ? engine.clearSignalSession() : undefined).then(() => {
+      this.scheduleReconnect();
+    });
   }
 
   private clearReconnectTimer(): void {

@@ -55,7 +55,18 @@ export type EngineEvent =
   | 'ready'
   | 'disconnected'
   | 'logged_out'
+  | 'close'
   | 'message';
+
+/** Payload do evento 'close' — telemetria do diagnóstico de loops (Fase 1/3). */
+export interface CloseEventPayload {
+  /** Status HTTP do Boom (401 logged_out, 408 timeout, 428 connection closed, 515 restart, 440 conflict). */
+  statusCode: number | null;
+  /** Razão bruta (String(statusCode) ou 'unknown') — mesmo valor do evento 'disconnected'. */
+  reason: string;
+  /** Classificação do erro pelo output.payload do Boom, quando disponível. */
+  errorText: string;
+}
 
 export interface BaileysIncomingMessage {
   id?: string | { _serialized?: string };
@@ -193,11 +204,19 @@ export class BaileysEngine {
 
       if (connection === 'close') {
         this.connected = false;
-        const statusCode = (lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
-        const reason = statusCode !== undefined ? String(statusCode) : 'unknown';
+        const statusCode = (lastDisconnect?.error as Boom | undefined)?.output?.statusCode ?? null;
+        const reason = statusCode !== null ? String(statusCode) : 'unknown';
+        const errorText = String(
+          (lastDisconnect?.error as Boom | undefined)?.output?.payload?.text ??
+          (lastDisconnect?.error as Error | undefined)?.message ?? 'unknown',
+        );
         const loggedOut = statusCode === DisconnectReason.loggedOut;
 
         if (this.intentionallyStopped) return;
+
+        // Telemetria SEMPRE: todo close carrega statusCode/reason — sem isso o
+        // próximo loop é indiagnóstico (lição do incidente de 408, 2026-09-06).
+        onEvent('close', { statusCode, reason, errorText });
 
         if (loggedOut) {
           this.state = 'disconnected';
@@ -251,27 +270,39 @@ export class BaileysEngine {
     }
   }
 
-  /** Encerra mantendo a sessão salva (equivalente a client.destroy()). */
+  /**
+   * Encerra o socket SEM destruir listeners nem afetar a sessão em disco.
+   *
+   * Corrigido (incidente logged_out/recovery): antes este método chamava
+   * removeAllListeners(), o que quebrava o fluxo já em andamento — o manager
+   * aguardava eventos da instância antiga (ex.: conclusão do logout) enquanto
+   * a nova subia. Quem zera `intentionallyStopped` e listeners é connect().
+   */
   async disconnect(): Promise<void> {
-    this.intentionallyStopped = true;
     this.connected = false;
     this.state = 'disconnected';
     const sock = this.sock;
     this.sock = null;
     if (!sock) return;
     try {
-      // TypedEventEmitter do Baileys exige nome de evento no TS; em runtime é um EventEmitter comum.
-      (sock.ev as unknown as { removeAllListeners: () => void }).removeAllListeners();
       sock.end(new Error('intentional disconnect'));
     } catch { /* socket já fechado */ }
   }
 
-  /** Invalida a sessão no servidor e apaga credenciais locais. */
+  /**
+   * Invalida a sessão no servidor (se houver socket vivo) e apaga TODAS as
+   * credenciais locais (creds.json + chaves Signal). Ao contrário do
+   * disconnect(), NÃO preserva nada — é o caminho do re-pareamento.
+   *
+   * Não exige socket vivo: num logged_out o socket normalmente já morreu;
+   * o server-side logout (sock.logout()) é best-effort e a limpeza local
+   * (fs.rmSync em baileys_auth/<accountId>/) é o efeito garantido.
+   */
   async logout(): Promise<void> {
     const sock = this.sock;
     try {
       if (sock) await sock.logout();
-    } catch { /* sessão pode já estar inválida */ }
+    } catch { /* sessão pode já estar inválida ou socket morto — segue */ }
     await this.disconnect();
     try {
       fs.rmSync(path.join(AUTH_DIR, this.accountId), { recursive: true, force: true });
@@ -279,6 +310,28 @@ export class BaileysEngine {
     this.phone = null;
     this.qrString = null;
     this.contactsStore.clear();
+  }
+
+  /**
+   * Apaga APENAS a sessão Signal dessincronizada, preservando creds.json e
+   * app-state (caminho B — erro 428 Bad MAC/No session record: o device é
+   * válido no servidor, só as chaves de sessão locais corromperam).
+   */
+  async clearSignalSession(): Promise<void> {
+    const sessionDir = path.join(AUTH_DIR, this.accountId);
+    if (!fs.existsSync(sessionDir)) return;
+    const removed: string[] = [];
+    for (const name of fs.readdirSync(sessionDir)) {
+      if (!SIGNAL_SESSION_PREFIXES.some((p) => name.startsWith(p))) continue;
+      try {
+        fs.rmSync(path.join(sessionDir, name), { recursive: true, force: true });
+        removed.push(name);
+      } catch { /* segue — arquivo pode estar travado pelo SO */ }
+    }
+    logger.warn('baileys.signal_session_cleared', {
+      accountId: this.accountId,
+      removedCount: removed.length,
+    });
   }
 
   // ── Envio ──────────────────────────────────────────────
@@ -410,3 +463,11 @@ export function toIncomingShape(msg: WAMessage): BaileysIncomingMessage & { raw:
     raw: msg,
   };
 }
+
+/** Caminho do auth dir (exposto p/ diagnóstico e testes). */
+export function getAuthDir(): string {
+  return AUTH_DIR;
+}
+
+/** Padrões de arquivo da sessão Signal (usado em clearSignalSession e testes). */
+export const SIGNAL_SESSION_PREFIXES = ['session-', 'sender-key-', 'pre-key-'];

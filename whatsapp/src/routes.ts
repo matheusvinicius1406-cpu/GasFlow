@@ -138,7 +138,13 @@ router.get('/whatsapp/accounts/:id/health', requireAuth, async (req: Request, re
     return;
   }
   const healthy = await account.healthCheck();
-  res.status(healthy ? 200 : 503).json({ healthy, ...account.getStatus() });
+  res.status(healthy ? 200 : 503).json({
+    healthy,
+    ...account.getStatus(),
+    // Telemetria de desconexões por motivo (diagnóstico de loops).
+    disconnectsByReason: account.getDisconnectStats(),
+    reconnect: account.getReconnectStats(),
+  });
 });
 
 
@@ -459,7 +465,13 @@ router.get('/whatsapp/health', async (_req: Request, res: Response) => {
     return;
   }
   const healthy = await account.healthCheck();
-  res.status(healthy ? 200 : 503).json({ healthy, ...account.getStatus() });
+  res.status(healthy ? 200 : 503).json({
+    healthy,
+    ...account.getStatus(),
+    // Telemetria de desconexões por motivo (diagnóstico de loops).
+    disconnectsByReason: account.getDisconnectStats(),
+    reconnect: account.getReconnectStats(),
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
