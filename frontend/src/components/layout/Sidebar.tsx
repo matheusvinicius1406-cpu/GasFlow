@@ -16,6 +16,7 @@ import {
   Repeat,
   Ticket,
   FileText,
+  Monitor,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/brand/BrandLogo'
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Segmentos', href: '/segments', icon: Filter },
   { label: 'Recompra', href: '/reorder', icon: Repeat },
   { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
+  { label: 'WhatsApp Web', href: '/whatsapp/web', icon: Monitor },
   { label: 'Entregas', href: '/deliveries', icon: Truck },
   { label: 'Motoristas', href: '/drivers', icon: UserCog },
   { label: 'Produtos', href: '/products', icon: Package },

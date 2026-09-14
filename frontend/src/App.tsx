@@ -5,7 +5,7 @@ import { DashboardPage } from '@/features/dashboard'
 import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
 import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/customers'
 import { ContactsCrmPage } from '@/features/contacts/ContactsCrmPage'
-import { WhatsAppPage, CampaignWizardPage, CampaignResultsPage, AutomationsPage } from '@/features/whatsapp'
+import { WhatsAppPage, CampaignWizardPage, CampaignResultsPage, AutomationsPage, WhatsAppWebPanelPage } from '@/features/whatsapp'
 import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
@@ -57,6 +57,16 @@ export function App() {
 
         {/* Other modules */}
         <Route path="whatsapp" element={<WhatsAppPage />} />
+
+        {/* WhatsApp Web panel (protótipo, flag waWebPanel.enabled no desktop) — guard whatsapp.read */}
+        <Route
+          path="whatsapp/web"
+          element={
+            <PermissionRoute permissions={['whatsapp.read']}>
+              <WhatsAppWebPanelPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="whatsapp/campaigns/new" element={<CampaignWizardPage />} />
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />
         <Route path="whatsapp/automations" element={<AutomationsPage />} />
