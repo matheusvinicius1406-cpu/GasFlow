@@ -211,12 +211,29 @@ def _authenticate_driver(authorization: Optional[str] = Header(None)) -> Dict[st
 
         session_repo = SQLAlchemyDriverSessionRepository(db)
         record = session_repo.get_session(token)
-        if not record:
-            raise HTTPException(401, detail="Invalid or expired token")
-        # Check expiry
-        if record.expires_at and record.expires_at < datetime.utcnow():
-            raise HTTPException(401, detail="Token expired")
-        return record.to_dict()
+        if record:
+            # Check expiry
+            if record.expires_at and record.expires_at < datetime.utcnow():
+                raise HTTPException(401, detail="Token expired")
+            return record.to_dict()
+
+        # Fallback mobile (App do Entregador): access token JWT com escopo
+        # "mobile" também autentica nas rotas de motorista — são rotas mobile
+        # por definição. Rotas desktop seguem rejeitando (só olham a tabela
+        # de sessões web). Falha de JWT → 401 (comportamento original).
+        try:
+            from app.presentation.api.driver_mobile_auth import verify_access_token
+
+            payload = verify_access_token(token)
+            return {
+                "token": token,
+                "driver_id": payload["sub"],
+                "tenant_id": payload.get("tenant_id", "default"),
+                "role": payload.get("role", "DRIVER"),
+                "scope": payload.get("scope", "mobile"),
+            }
+        except HTTPException as exc:
+            raise HTTPException(401, detail="Invalid or expired token") from exc
     finally:
         db.close()
 

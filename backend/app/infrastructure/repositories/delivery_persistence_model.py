@@ -171,6 +171,53 @@ class OutboxEntry(Base):
     error_message = Column(Text, nullable=True)
 
 
+class DriverRefreshTokenRecord(Base):
+    """Refresh token do app mobile (App do Entregador — Fase 1).
+
+    Token opaco de 7 dias, DB-backed (mesmo modelo do DriverSessionRecord).
+    Rotação a cada refresh; reuso de um token já rotacionado revoga a família
+    inteira (detecção de replay — regra de segurança do prompt 3.1).
+    """
+
+    __tablename__ = "driver_refresh_tokens"
+
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_driver_refresh_token"),
+        Index("ix_driver_refresh_family", "family_id"),
+        Index("ix_driver_refresh_driver", "driver_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # Hash SHA-256 do refresh token — o token literal NUNCA toca o banco
+    # (auditoria de segurança: vazamento do DB não compromete sessões).
+    token = Column(String(64), nullable=False)
+    family_id = Column(String(36), nullable=False)  # rotação mantém a família
+    driver_id = Column(String(36), nullable=False)
+    tenant_id = Column(String, default="default", nullable=False)
+    status = Column(String(20), default="ACTIVE")  # ACTIVE | ROTATED | REVOKED
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class OfflineSyncLogRecord(Base):
+    """Delta sync log (App do Entregador): mudanças por entidade p/ /driver/sync.
+
+    Cada mutação de entrega grava uma linha; o mobile pede o delta desde o
+    último timestamp e detecta exclusões via action=DELETED.
+    """
+
+    __tablename__ = "offline_sync_log"
+
+    __table_args__ = (Index("ix_sync_log_tenant_time", "tenant_id", "changed_at"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String, default="default", nullable=False)
+    entity_type = Column(String(50), nullable=False)  # delivery | route | driver
+    entity_id = Column(String(36), nullable=False)
+    action = Column(String(20), nullable=False)  # CREATED | UPDATED | DELETED
+    changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class DriverSessionRecord(Base):
     """Persistent driver session — replaces in-memory sessions store."""
 

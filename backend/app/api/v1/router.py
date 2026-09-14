@@ -24,6 +24,7 @@ from app.presentation.api.automation import router as automation_router
 from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
 from app.presentation.api.driver_v1 import router as driver_v1_router
+from app.presentation.api.driver_mobile_auth import router as driver_mobile_router
 from app.presentation.api.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
 from app.presentation.api.communication import router as communication_router
@@ -58,6 +59,7 @@ api_v1_router.include_router(ai_router, tags=["AI"])
 api_v1_router.include_router(audio_router, tags=["Audio"])
 api_v1_router.include_router(automation_router, tags=["Automation"])
 api_v1_router.include_router(driver_v1_router, tags=["Driver"])
+api_v1_router.include_router(driver_mobile_router, tags=["Driver Mobile"])
 api_v1_router.include_router(dispatch_router, tags=["Dispatch"])
 api_v1_router.include_router(operations_router, tags=["Operations"])
 api_v1_router.include_router(communication_router, tags=["Communication"])

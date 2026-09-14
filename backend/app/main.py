@@ -31,6 +31,7 @@ from app.presentation.api.auth import router as auth_router
 from app.presentation.api.delivery_ops import router as delivery_ops_router
 from app.presentation.api.dashboard import router as dashboard_router
 from app.presentation.api.driver_api import router as driver_api_router
+from app.presentation.api.driver_mobile_auth import router as driver_mobile_router
 from app.presentation.api.printer import router as printer_router
 from app.presentation.api.payments import router as payments_router
 from app.presentation.api.reports import router as reports_router
@@ -102,6 +103,26 @@ async def lifespan(app: FastAPI):
                 _snap_session.close()
         except Exception as exc:  # pragma: no cover — nunca derruba a API
             logger.warning(f"snapshot diário de estoque falhou no boot: {exc}")
+
+    # ── LGPD: purge de localizações antigas (App do Entregador) ──
+    # Retenção de 90 dias (driver_locations + offline_sync_log). Idempotente,
+    # roda no boot e depois 1x/dia junto do loop de snapshots.
+    if not os.getenv("TESTING"):
+        try:
+            import sqlalchemy.orm
+
+            from app.application.delivery.driver_location_service import purge_old_locations
+            from app.infrastructure.database.init_db import engine as _purge_engine
+
+            _purge_session = sqlalchemy.orm.Session(bind=_purge_engine)
+            try:
+                _purged = purge_old_locations(_purge_session)
+                if _purged:
+                    logger.info(f"LGPD purge: {_purged} localizações antigas removidas")
+            finally:
+                _purge_session.close()
+        except Exception as exc:  # pragma: no cover — nunca derruba a API
+            logger.warning(f"purge de localizações falhou no boot: {exc}")
 
     _snapshot_poll_task = None
     if _automation_poll_seconds > 0 and not os.getenv("TESTING"):
@@ -256,6 +277,7 @@ app.include_router(automation_router)
 app.include_router(auth_router)
 app.include_router(delivery_ops_router)
 app.include_router(driver_api_router)
+app.include_router(driver_mobile_router)
 app.include_router(printer_router)
 app.include_router(payments_router)
 app.include_router(reports_router)

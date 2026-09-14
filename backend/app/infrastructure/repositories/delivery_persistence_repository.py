@@ -5,6 +5,9 @@ Replaces the in-memory store with real database persistence.
 Single source of truth for delivery lifecycle.
 """
 
+import hashlib
+import uuid
+
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -15,6 +18,8 @@ from app.infrastructure.repositories.delivery_persistence_model import (
     DriverLocationRecord,
     OutboxEntry,
     DriverSessionRecord,
+    DriverRefreshTokenRecord,
+    OfflineSyncLogRecord,
     IdempotencyKeyRecord,
 )
 from app.infrastructure.repositories.inventory_model import StockMovementModel
@@ -519,6 +524,127 @@ class SQLAlchemyOutboxRepository:
 
 
 # ── Driver Session Repository ──────────────────────────
+
+
+class SQLAlchemyDriverRefreshTokenRepository:
+    """Refresh tokens do mobile — rotação com detecção de replay.
+
+    Regras (prompt App do Entregador 7): rotação a cada uso; reuso de token
+    já rotacionado revoga a família inteira.
+
+    Os tokens são armazenados APENAS como hash SHA-256 (segurança: vazamento
+    do banco não permite usar nem forjar sessões); as consultas recebem o
+    token literal e hasheiam na entrada.
+    """
+
+    @staticmethod
+    def _hash(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create_family(
+        self, token: str, driver_id: str, tenant_id: str, expires_at: datetime
+    ) -> DriverRefreshTokenRecord:
+        record = DriverRefreshTokenRecord(
+            token=self._hash(token),
+            family_id=str(uuid.uuid4()),
+            driver_id=driver_id,
+            tenant_id=tenant_id,
+            status="ACTIVE",
+            expires_at=expires_at,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def get_active(self, token: str) -> Optional[DriverRefreshTokenRecord]:
+        return (
+            self.db.query(DriverRefreshTokenRecord)
+            .filter(
+                DriverRefreshTokenRecord.token == self._hash(token),
+                DriverRefreshTokenRecord.status == "ACTIVE",
+            )
+            .first()
+        )
+
+    def get_any(self, token: str) -> Optional[DriverRefreshTokenRecord]:
+        return (
+            self.db.query(DriverRefreshTokenRecord).filter(DriverRefreshTokenRecord.token == self._hash(token)).first()
+        )
+
+    def rotate(
+        self, old: DriverRefreshTokenRecord, new_token: str, new_expires_at: datetime
+    ) -> DriverRefreshTokenRecord:
+        """Marca o antigo como ROTATED e cria o novo na mesma família."""
+        old.status = "ROTATED"
+        record = DriverRefreshTokenRecord(
+            token=self._hash(new_token),
+            family_id=old.family_id,
+            driver_id=old.driver_id,
+            tenant_id=old.tenant_id,
+            status="ACTIVE",
+            expires_at=new_expires_at,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def revoke_family(self, family_id: str):
+        self.db.query(DriverRefreshTokenRecord).filter(
+            DriverRefreshTokenRecord.family_id == family_id,
+            DriverRefreshTokenRecord.status.in_(("ACTIVE", "ROTATED")),
+        ).update({"status": "REVOKED"}, synchronize_session=False)
+        self.db.commit()
+
+    def revoke_all_for_driver(self, driver_id: str):
+        self.db.query(DriverRefreshTokenRecord).filter(
+            DriverRefreshTokenRecord.driver_id == driver_id,
+            DriverRefreshTokenRecord.status == "ACTIVE",
+        ).update({"status": "REVOKED"}, synchronize_session=False)
+        self.db.commit()
+
+
+class SQLAlchemyOfflineSyncLogRepository:
+    """Delta sync log — alimenta GET /driver/sync?since= do mobile."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def record_change(self, tenant_id: str, entity_type: str, entity_id: str, action: str) -> None:
+        self.db.add(
+            OfflineSyncLogRecord(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                action=action,
+            )
+        )
+        self.db.commit()
+
+    def changes_since(self, tenant_id: str, since: datetime, limit: int = 500) -> List[OfflineSyncLogRecord]:
+        return (
+            self.db.query(OfflineSyncLogRecord)
+            .filter(
+                OfflineSyncLogRecord.tenant_id == tenant_id,
+                OfflineSyncLogRecord.changed_at > since,
+            )
+            .order_by(OfflineSyncLogRecord.changed_at.asc())
+            .limit(limit)
+            .all()
+        )
+
+    def purge_older_than(self, cutoff: datetime) -> int:
+        deleted = (
+            self.db.query(OfflineSyncLogRecord)
+            .filter(OfflineSyncLogRecord.changed_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
 
 
 class SQLAlchemyDriverSessionRepository:
