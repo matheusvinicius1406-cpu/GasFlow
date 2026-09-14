@@ -4,6 +4,22 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🧪 Protótipo — Painel WhatsApp Web (14/09/2026)
+
+- **Híbrido WhatsApp Web no desktop (F0–F5)**: WebContentsView com WhatsApp
+  Web dentro da janela do GasFlow, para **apenas pairing, status e
+  visibilidade operacional** — o envio continua 100% no Baileys. Uma view por
+  conta (`persist:wa-web-<accountId>`), UA Chrome pinado, permissões negadas
+  (câmera/mic/geo/notificações), healthcheck de presença (sem scraping).
+- **Feature flag `waWebPanel.enabled` (default OFF)**: com a flag off,
+  nenhum WebContentsView é instanciado e a página React mostra "desativado".
+- Tela `/whatsapp/web` (guard `whatsapp.read`): abas por conta com badges de
+  estado, botões abrir/re-parear/fechar, bounds sincronizados via
+  ResizeObserver e push de status view → main → React (≤5s).
+- Documentação em `docs/whatsapp-web-panel.md` (backup de `Partitions/`,
+  expectativa de duas sessões independentes, riscos e plano de teste manual
+  por fase). Suítes: desktop 29 → **41**, frontend 189 → **194**.
+
 ### 🔧 Correções — WhatsApp (14/09/2026)
 
 - **Recuperação por caminho de desconexão** no provider: `logged_out` (401)
