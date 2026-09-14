@@ -36,6 +36,7 @@ from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
 from app.presentation.api.contacts_crm import router as contacts_crm_router
+from app.presentation.api.purchase_notes import router as purchase_notes_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -69,3 +70,4 @@ api_v1_router.include_router(coupons_router, tags=["Coupons"])
 api_v1_router.include_router(leads_router, tags=["Leads"])
 api_v1_router.include_router(integrations_router, tags=["Integrations"])
 api_v1_router.include_router(contacts_crm_router, tags=["Contacts CRM"])
+api_v1_router.include_router(purchase_notes_router, tags=["Purchase Notes"])

@@ -15,6 +15,7 @@ import { ReportsPage } from '@/features/reports'
 import { IntelligencePage } from '@/features/intelligence'
 import { SettingsPage } from '@/features/settings'
 import { CouponsPage } from '@/features/promotions'
+import { PurchaseNotesPage } from '@/features/purchase'
 import { SegmentsPage, ReorderPage } from '@/features/segments'
 import { LoginPage, PermissionRoute } from '@/features/auth'
 import { DriverLoginPage, DriverHomePage } from '@/features/driver'
@@ -71,6 +72,16 @@ export function App() {
         <Route path="segments" element={<SegmentsPage />} />
         <Route path="reorder" element={<ReorderPage />} />
         <Route path="promotions" element={<CouponsPage />} />
+
+        {/* Notas de compra (Item 2) — guard por permissão efetiva do backend */}
+        <Route
+          path="purchase-notes"
+          element={
+            <PermissionRoute permissions={['purchase.read']}>
+              <PurchaseNotesPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="settings" element={<SettingsPage />} />
 
         {/* Admin (P0) — guard por permissão efetiva do backend */}

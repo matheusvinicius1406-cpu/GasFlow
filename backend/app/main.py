@@ -40,6 +40,7 @@ from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
 from app.presentation.api.contacts_crm import router as contacts_crm_router
+from app.presentation.api.purchase_notes import router as purchase_notes_router
 from app.presentation.api.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
 from app.presentation.api.communication import router as communication_router
@@ -271,6 +272,7 @@ app.include_router(coupons_router)
 app.include_router(leads_router)
 app.include_router(integrations_router)
 app.include_router(contacts_crm_router)
+app.include_router(purchase_notes_router)
 
 # Seed das configurações padrão (idempotente)
 from sqlalchemy.orm import Session as DBSession
@@ -334,6 +336,7 @@ if _frontend_dist and _Path(_frontend_dist).is_dir():
         leads_router,
         integrations_router,
         contacts_crm_router,
+        purchase_notes_router,
     ]
     for _r in _root_routers:
         app.include_router(_r, prefix="/api")

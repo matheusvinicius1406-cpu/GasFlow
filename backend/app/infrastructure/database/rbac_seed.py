@@ -95,6 +95,13 @@ PERMISSIONS: list[tuple[str, str, str]] = [
     ("location.write.self", "driver", "Enviar a própria localização"),
     ("proof.write.assigned", "driver", "Anexar prova de entrega atribuída"),
     ("admin.*", "admin", "Acesso total (wildcard)"),
+    # Notas de compra internas (Item 2 — sem SEFAZ).
+    ("purchase.read", "purchase", "Visualizar notas de compra"),
+    ("purchase.create", "purchase", "Criar notas de compra"),
+    ("purchase.update", "purchase", "Editar notas de compra (DRAFT)"),
+    ("purchase.confirm", "purchase", "Confirmar notas de compra (entrada de estoque)"),
+    ("purchase.cancel", "purchase", "Cancelar notas de compra (DRAFT)"),
+    ("purchase.*", "purchase", "Todos os direitos de notas de compra (wildcard)"),
 ]
 
 # Matriz role → permissões (espelha ROLE_PERMISSIONS + novas do roadmap).
@@ -124,6 +131,7 @@ ROLE_MATRIX: dict[str, list[str]] = {
         "audit.view",
         "coupon.*",
         "integration.*",
+        "purchase.*",
     ],
     "OPERATOR": [
         "customer.read",
@@ -163,6 +171,7 @@ ROLE_MATRIX: dict[str, list[str]] = {
         "inventory.read",
         "finance.read",
         "delivery.read",
+        "purchase.read",
         "settings.read",
     ],
     "CUSTOMER": ["order.read", "product.read"],

@@ -244,6 +244,38 @@ function registerProtectedIpc() {
         });
         return { ok: true, pdfBase64: pdf.toString("base64") };
     });
+    // purchase:export-pdf → printToPDF do webContents (handler nativo).
+    // Recebe HTML já autorizado (o backend só devolve html para purchase.read);
+    // aqui o gate garante purchase.read também na barreira IPC.
+    (0, ipc_permissions_1.registerProtectedHandler)("purchase:export-pdf", "purchase.read", async (_event, args) => {
+        const html = args?.html;
+        const filename = typeof args?.filename === "string" ? args.filename : "nota-compra.pdf";
+        if (typeof html !== "string" || !html)
+            throw new Error("html ausente");
+        const { BrowserWindow } = require("electron");
+        // Janela offscreen dedicada: o printToPDF usa o conteúdo da nota,
+        // não a view atual do app.
+        const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+        try {
+            await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+            const pdf = await win.webContents.printToPDF({
+                landscape: false,
+                printBackground: true,
+                margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+            });
+            const { shell } = require("electron");
+            const { writeFile } = require("node:fs/promises");
+            const { tmpdir } = require("node:os");
+            const { join } = require("node:path");
+            const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const outPath = join(tmpdir(), safeName);
+            await writeFile(outPath, pdf);
+            await shell.openPath(outPath);
+            return { ok: true, path: outPath };
+        } finally {
+            win.destroy();
+        }
+    });
     // finance:export-docx → busca o relatório diário no backend local e monta
     // um payload Word-compatível (HTML com mso) — sem dependência nova.
     // Sem permissão, o gate bloqueia antes de qualquer execução.

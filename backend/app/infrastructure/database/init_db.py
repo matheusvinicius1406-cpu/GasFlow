@@ -85,6 +85,10 @@ from app.infrastructure.repositories.rbac_model import (  # noqa: F401
     UserPermissionOverrideModel,
     StockDailySnapshotModel,
 )
+from app.infrastructure.repositories.purchase_note_model import (  # noqa: F401
+    PurchaseNoteModel,
+    PurchaseNoteItemModel,
+)
 
 
 def _ensure_sqlite_columns() -> None:

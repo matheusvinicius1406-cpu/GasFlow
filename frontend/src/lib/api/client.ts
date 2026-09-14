@@ -279,4 +279,31 @@ export const api = {
     lists: () => apiClient.get('/whatsapp/lists'),
     campaigns: () => apiClient.get('/whatsapp/campaigns'),
   },
+
+  // Purchase Notes — Item 2 (notas de compra internas, sem SEFAZ)
+  purchaseNotes: {
+    list: (params?: { supplier?: string; status?: string; from?: string; to?: string }) =>
+      apiClient.get('/purchase-notes', { params }),
+    get: (id: string) => apiClient.get(`/purchase-notes/${id}`),
+    create: (data: {
+      supplier_name: string
+      supplier_cnpj?: string
+      issue_date?: string
+      observations?: string
+      items: { product_codigo: string; quantity: number; unit_price: number }[]
+    }) => apiClient.post('/purchase-notes', data),
+    update: (
+      id: string,
+      data: {
+        supplier_name?: string
+        supplier_cnpj?: string
+        issue_date?: string
+        observations?: string
+        items?: { product_codigo: string; quantity: number; unit_price: number }[]
+      }
+    ) => apiClient.patch(`/purchase-notes/${id}`, data),
+    confirm: (id: string) => apiClient.post(`/purchase-notes/${id}/confirm`),
+    cancel: (id: string) => apiClient.post(`/purchase-notes/${id}/cancel`),
+    pdfUrl: (id: string) => `/purchase-notes/${id}/pdf`,
+  },
 }

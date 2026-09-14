@@ -31,6 +31,8 @@ const api = {
     // Envio de pedidos + saúde
     sendOrders: (integrationId, orders) => electron_1.ipcRenderer.invoke("orders:send", { integrationId, orders }),
     gasflowHealth: () => electron_1.ipcRenderer.invoke("gasflow:health"),
+    // Notas de compra (Item 2): PDF via printToPDF em janela offscreen
+    exportPdf: (html, filename) => electron_1.ipcRenderer.invoke("purchase:export-pdf", { html, filename }),
     // Diálogos
     pickImage: () => electron_1.ipcRenderer.invoke("dialog:pick-image"),
     pickAudio: () => electron_1.ipcRenderer.invoke("dialog:pick-audio"),
