@@ -128,14 +128,13 @@ def _isolated_stock_db():
 def test_cancelled_delivery_does_not_change_stock():
     """CANCELLED (antes de entregar) não altera o estoque; invariante mantida.
 
-    Reserva (CONFIRMED) é revertida pelo fluxo ORDER_RETURN; a entrega
-    cancelada não gera DELIVERY_EXCHANGE nem toca quantity_empty.
+    Decisão B3(a): sem débito no CONFIRMED, cancelar a entrega antes de
+    DELIVERED é no-op — não gera SALE nem RETURN de DELIVERY.
     """
     from app.infrastructure.repositories.delivery_persistence_repository import (
         SQLAlchemyDeliveryPersistenceRepository,
     )
     from app.infrastructure.repositories.inventory_model import InventoryModel, StockMovementModel
-    from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
     from app.infrastructure.repositories.order_item_model import OrderItemModel
     from app.infrastructure.repositories.product_model import ProductModel
 
@@ -155,29 +154,20 @@ def test_cancelled_delivery_does_not_change_stock():
         )
         db.commit()
 
-        inv_repo = SQLAlchemyInventoryRepository(db)
-        inv_repo.deduct_stock_atomic("P77777", 4, reason="Venda", reference_type="ORDER", reference_id="777777")
-        assert db.query(InventoryModel).first().quantity == 6
-
         delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
         delivery_repo.create_delivery("d-p0-1", "777777")
         delivery_repo.assign_delivery("d-p0-1", "drv", None, 1)
         cancelled = delivery_repo.cancel_delivery("d-p0-1", 2)
         assert cancelled is not None and cancelled.status == "CANCELLED"
 
-        # Reversão da reserva (caminho real de cancelamento de pedido)
-        inv_repo.return_stock_atomic(
-            "P77777", 4, reason="Devolução — cancelamento", reference_type="ORDER_RETURN", reference_id="777777"
-        )
-
         inv = db.query(InventoryModel).first()
         assert inv.quantity == 10
         assert inv.quantity_full == 10
         assert inv.quantity_empty == 0
-        # Entrega cancelada não gerou troca
+        # Entrega cancelada antes de DELIVERED não gerou movimento algum
         assert (
             db.query(StockMovementModel)
-            .filter(StockMovementModel.type == "DELIVERY_EXCHANGE", StockMovementModel.reference_id == "d-p0-1")
+            .filter(StockMovementModel.reference_type == "DELIVERY", StockMovementModel.reference_id == "d-p0-1")
             .count()
             == 0
         )
@@ -206,10 +196,9 @@ def test_daily_snapshot_closes_correctly():
         service = StockDailySnapshotService(db, "default")
         service.run_daily_snapshot()
 
-        # Movimenta: vende 3 cheios (reserva), entrega 1 (troca)
+        # Movimenta: entrega debita 3 cheios (3 devolvidos como vazios)
         repo = SQLAlchemyInventoryRepository(db)
-        repo.deduct_stock_atomic("P88888", 3, reason="Venda", reference_type="ORDER", reference_id="888001")
-        repo.apply_delivery_exchange("P88888", 1, reason="Troca", reference_type="DELIVERY", reference_id="dp0-1")
+        repo.deliver_stock_atomic("P88888", 3, reason="Venda", reference_type="DELIVERY", reference_id="dp0-1")
 
         # Tick seguinte do poller (mesmo dia): atualiza o closing do dia
         service.run_daily_snapshot()
@@ -222,14 +211,14 @@ def test_daily_snapshot_closes_correctly():
 
         snaps = {s.snapshot_date: s for s in db.query(StockDailySnapshotModel).all()}
         # Dia 1: initial = 10/2 (primeiro dia, estado no primeiro tick);
-        # closing = estado final do dia (7 cheios, 3 vazios)
+        # closing = estado final do dia (7 cheios, 5 vazios)
         assert snaps[day1].initial_full == 10
         assert snaps[day1].initial_empty == 2
         assert snaps[day1].closing_full == 7
-        assert snaps[day1].closing_empty == 3
+        assert snaps[day1].closing_empty == 5
         # Dia 2: initial == closing(dia 1) — cadeia encadeada
         assert snaps[day2].initial_full == 7
-        assert snaps[day2].initial_empty == 3
+        assert snaps[day2].initial_empty == 5
     finally:
         db.close()
         engine.dispose()

@@ -268,8 +268,9 @@ def test_transaction_rollback_on_stock_update_failure(db):
 # ═══════════════════════════════════════════════════════════
 
 
-def test_order_confirm_deducts_stock(db):
-    """PROOF: Confirming order deducts stock atomically."""
+def test_order_confirm_does_not_debit_stock(db):
+    """PROOF (Decisão B3a): Confirming order does NOT deduct stock —
+    débito acontece na entrega DELIVERED."""
     seed_product(db)
     seed_client(db)
     repo = SQLAlchemyInventoryRepository(db)
@@ -311,13 +312,14 @@ def test_order_confirm_deducts_stock(db):
     )
     update_uc.execute(order.codigo, "CONFIRMED")
 
-    # Stock should now be 7
+    # Stock STILL 10 — pedido não debita (Decisão B3a)
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 7
+    assert inv.quantity == 10
 
 
 def test_order_cancel_returns_stock(db):
-    """PROOF: Cancelling order returns stock."""
+    """PROOF (Decisão B3a): Cancelling order never touches stock —
+    nada foi debitado na confirmação."""
     seed_product(db)
     seed_client(db)
     repo = SQLAlchemyInventoryRepository(db)
@@ -352,12 +354,12 @@ def test_order_cancel_returns_stock(db):
         order_item_repo=item_repo,
     )
 
-    # Confirm → deduct
+    # Confirm → sem débito (Decisão B3a)
     update_uc.execute(order.codigo, "CONFIRMED")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 7
+    assert inv.quantity == 10
 
-    # Cancel → return
+    # Cancel → stock ainda 10 (nada foi debitado)
     update_uc.execute(order.codigo, "CANCELLED")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 10
@@ -414,7 +416,7 @@ def test_multi_item_partial_failure_rollback(db):
 
 
 def test_order_same_deduction_twice(db):
-    """PROOF: Same order cannot generate two SALE movements."""
+    """PROOF (Decisão B3a): Same order confirmed twice → 0 SALE, stock = 10."""
     seed_product(db)
     seed_client(db)
     repo = SQLAlchemyInventoryRepository(db)
@@ -449,20 +451,19 @@ def test_order_same_deduction_twice(db):
         order_item_repo=item_repo,
     )
 
-    # First confirm → succeeds, stock deducted
+    # First confirm → succeeds, stock unchanged (Decisão B3a)
     update_uc.execute(order.codigo, "CONFIRMED")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 7
+    assert inv.quantity == 10
 
-    # Second confirm → idempotent (movement blocked by reference constraint)
-    # The order can be re-confirmed, but the SALE movement is idempotent
+    # Second confirm → idempotent, still no movement
     update_uc.execute(order.codigo, "CONFIRMED")
 
-    # CRITICAL: Stock should still be 7, NOT 4
+    # CRITICAL: Stock should still be 10 (pedido não debita)
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 7
+    assert inv.quantity == 10
 
-    # Only ONE SALE movement should exist
+    # NO SALE movement should exist for the order
     sales = (
         db.query(StockMovementModel)
         .filter(
@@ -471,11 +472,11 @@ def test_order_same_deduction_twice(db):
         )
         .count()
     )
-    assert sales == 1
+    assert sales == 0
 
 
 def test_order_cancel_idempotent(db):
-    """PROOF: Double cancel generates only one RETURN."""
+    """PROOF (Decisão B3a): Double cancel generates no movements."""
     seed_product(db)
     seed_client(db)
     repo = SQLAlchemyInventoryRepository(db)
@@ -510,10 +511,10 @@ def test_order_cancel_idempotent(db):
         order_item_repo=item_repo,
     )
 
-    # Confirm → stock becomes 7
+    # Confirm → stock unchanged (Decisão B3a)
     update_uc.execute(order.codigo, "CONFIRMED")
 
-    # Cancel → stock becomes 10
+    # Cancel → stock still 10
     update_uc.execute(order.codigo, "CANCELLED")
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 10
@@ -527,7 +528,7 @@ def test_order_cancel_idempotent(db):
         )
         .count()
     )
-    assert returns == 1  # Only one RETURN
+    assert returns == 0  # Nothing was deducted, nothing to return
 
 
 # ═══════════════════════════════════════════════════════════
@@ -686,7 +687,8 @@ def test_movement_immutable(db):
 
 
 def test_cancel_after_confirm_returns_stock(db):
-    """Scenario A: CONFIRMED → SALE → CANCEL → RETURN."""
+    """Scenario A (Decisão B3a): CONFIRMED → CANCEL → no movements,
+    stock unchanged (débito é na entrega DELIVERED)."""
     seed_product(db)
     seed_client(db)
     repo = SQLAlchemyInventoryRepository(db)
@@ -721,7 +723,7 @@ def test_cancel_after_confirm_returns_stock(db):
         order_item_repo=item_repo,
     )
 
-    # Confirm → SALE
+    # Confirm → sem SALE (Decisão B3a)
     update_uc.execute(order.codigo, "CONFIRMED")
     sale_count = (
         db.query(StockMovementModel)
@@ -731,9 +733,9 @@ def test_cancel_after_confirm_returns_stock(db):
         )
         .count()
     )
-    assert sale_count == 1
+    assert sale_count == 0
 
-    # Cancel → RETURN
+    # Cancel → sem RETURN (nada foi debitado)
     update_uc.execute(order.codigo, "CANCELLED")
     return_count = (
         db.query(StockMovementModel)
@@ -743,7 +745,7 @@ def test_cancel_after_confirm_returns_stock(db):
         )
         .count()
     )
-    assert return_count == 1
+    assert return_count == 0
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 10  # Back to original

@@ -120,7 +120,10 @@ def _ensure_sqlite_columns() -> None:
 
 
 SCHEMA_VERSION = (
-    2  # v2: colunas CRM de clients (has_name, is_whatsapp, last_interaction_at, last_sync_at, marketing_status)
+    3  # v3: Decisão B3(a) — débito de estoque movido do pedido CONFIRMED
+    # para a entrega DELIVERED (reversão one-shot dos débitos prematuros;
+    # ver _revert_premature_stock_debits e docs/migrations/2026-09-delivery-debit.md).
+    # v2: colunas CRM de clients (has_name, is_whatsapp, last_interaction_at, last_sync_at, marketing_status)
 )
 
 
@@ -283,6 +286,202 @@ def _seed_rbac_if_needed() -> None:
         )
 
 
+def _revert_premature_stock_debits() -> None:
+    """Decisão B3(a) v3: reverte débitos prematuros de pedidos CONFIRMED.
+
+    A versão anterior debitava estoque no Order CONFIRMED (reserva). Com a
+    mudança da regra (débito só na entrega DELIVERED), pedidos confirmados
+    e ainda não entregues ficariam com estoque debitado para sempre.
+
+    One-shot e idempotente (marca de controle em system_settings):
+    1. Pedidos CONFIRMED (não CANCELLED/DELIVERED) com movimento SALE
+       reference_type=ORDER e sem entrega DELIVERED:
+       credita de volta quantity/quantity_full via movimento
+       RESERVATION_REVERSAL (reference_id = `revert:<codigo>`).
+    2. Pedidos DELIVERED sem entrega DELIVERED correspondente (finalizados
+       pelo fluxo antigo do pedido): idem — a entrega real vai debitá-los
+       de novo (SALE DELIVERY), sem duplo débito líquido.
+    3. Pedidos CANCELLED com SALE ORDER sem RETURN correspondente:
+       credita de volta (o fluxo antigo podia ter deixado débito órfão).
+    4. Audit trail em auth_audit_log (SYSTEM/MIGRATION).
+    5. Marca a execução — rodar 2x não faz nada.
+    """
+    import json
+    import logging
+    import uuid
+    from datetime import datetime
+
+    from sqlalchemy import text
+
+    MARKER = "stock_debit_migration_v3"
+    log = logging.getLogger("gasflow.init_db")
+
+    with engine.begin() as conn:
+        done = conn.execute(text("SELECT value FROM system_settings WHERE id = :id"), {"id": MARKER}).fetchone()
+        if done:
+            return
+
+        # Uma linha por (order, product): a constraint de idempotência é
+        # (reference_type, reference_id, product_codigo, type) — a SALE do
+        # pedido antigo existe, o par de reversão usa type RESERVATION_REVERSAL.
+        candidates = conn.execute(
+            text(
+                """
+                SELECT m.reference_id AS order_codigo, m.product_codigo AS product_codigo,
+                       m.quantity AS quantity
+                FROM stock_movements m
+                WHERE m.reference_type = 'ORDER'
+                  AND m.type = 'SALE'
+                  AND m.reference_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM stock_movements r
+                      WHERE r.reference_type = 'RESERVATION_REVERSAL'
+                        AND r.reference_id = m.reference_id
+                        AND r.product_codigo = m.product_codigo
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM stock_movements r2
+                      WHERE r2.reference_type = 'ORDER_RETURN'
+                        AND r2.reference_id = m.reference_id
+                        AND r2.product_codigo = m.product_codigo
+                  )
+                """
+            )
+        ).fetchall()
+
+        reverted = 0
+        skipped = 0
+        for row in candidates:
+            order_codigo = row.order_codigo
+            product_codigo = row.product_codigo
+            qty = int(row.quantity or 0)
+            if qty <= 0:
+                continue
+
+            order = conn.execute(
+                text("SELECT status FROM orders WHERE codigo = :codigo"),
+                {"codigo": order_codigo},
+            ).fetchone()
+            if order is None:
+                skipped += 1
+                continue
+            status = str(order.status or "")
+
+            delivery_delivered = conn.execute(
+                text("SELECT 1 FROM delivery_records WHERE order_id = :oid AND status = 'DELIVERED' LIMIT 1"),
+                {"oid": order_codigo},
+            ).fetchone()
+            # CONFIRMED não entregue = débito prematuro.
+            # DELIVERED sem entrega real = será debitado pela entrega —
+            # reverter agora evita duplo débito líquido.
+            premature = (status == "CONFIRMED" and not delivery_delivered) or (
+                status == "DELIVERED" and not delivery_delivered
+            )
+            # CANCELLED com débito órfão (sem devolução) também reverte.
+            orphan_cancel = status == "CANCELLED"
+            if not (premature or orphan_cancel):
+                skipped += 1
+                continue
+
+            inv = conn.execute(
+                text("SELECT id FROM inventory WHERE product_codigo = :code LIMIT 1"),
+                {"code": product_codigo},
+            ).fetchone()
+            if inv is None:
+                skipped += 1
+                continue
+
+            balances = conn.execute(
+                text(
+                    "SELECT quantity, quantity_full, quantity_empty FROM inventory WHERE product_codigo = :code LIMIT 1"
+                ),
+                {"code": product_codigo},
+            ).fetchone()
+            if balances is None:
+                skipped += 1
+                continue
+            balance_before = int(balances.quantity or 0)
+            full_before = int(balances.quantity_full or 0)
+            empty_before = int(balances.quantity_empty or 0)
+
+            conn.execute(
+                text(
+                    "UPDATE inventory SET quantity = quantity + :qty, "
+                    "quantity_full = quantity_full + :qty, updated_at = :now "
+                    "WHERE product_codigo = :code"
+                ),
+                {"qty": qty, "now": datetime.utcnow(), "code": product_codigo},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO stock_movements (product_codigo, type, quantity, "
+                    "quantity_full_delta, quantity_empty_delta, reason, reference_type, "
+                    "reference_id, balance_before, balance_after, created_at) "
+                    "VALUES (:code, 'RESERVATION_REVERSAL', :qty, :qty, 0, :reason, "
+                    "'RESERVATION_REVERSAL', :ref, :bb, :ba, :now)"
+                ),
+                {
+                    "code": product_codigo,
+                    "qty": qty,
+                    "reason": f"Migration v3 — reversão de débito prematuro do pedido #{order_codigo}",
+                    "ref": f"revert:{order_codigo}",
+                    "bb": balance_before,
+                    "ba": balance_before + qty,
+                    "now": datetime.utcnow(),
+                },
+            )
+
+            conn.execute(
+                text(
+                    "INSERT INTO auth_audit_log (id, actor_id, actor_type, tenant_id, action, "
+                    "resource, resource_id, result, timestamp, ip_address, user_agent, platform, details) "
+                    "VALUES (:id, 'system', 'SYSTEM', 'default', 'stock.migration.revert', "
+                    "'inventory', :ref, 'SUCCESS', :ts, '', '', 'desktop', :details)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "ref": f"revert:{order_codigo}",
+                    "ts": datetime.utcnow(),
+                    "details": json.dumps(
+                        {
+                            "order_codigo": order_codigo,
+                            "product_codigo": product_codigo,
+                            "quantity": qty,
+                            "full_before": full_before,
+                            "empty_before": empty_before,
+                            "order_status": status,
+                        }
+                    ),
+                },
+            )
+            reverted += 1
+
+        conn.execute(
+            text(
+                "INSERT INTO system_settings (id, category, value, description, is_editable, updated_at) "
+                "VALUES (:id, 'operations', :value, :description, 0, :ts)"
+            ),
+            {
+                "id": MARKER,
+                "value": json.dumps(
+                    {
+                        "reverted": reverted,
+                        "skipped": skipped,
+                        "executed_at": datetime.utcnow().isoformat(),
+                    }
+                ),
+                "description": "Decisão B3(a): migração one-shot de débito de estoque (v3)",
+                "ts": datetime.utcnow(),
+            },
+        )
+
+    if reverted:
+        log.warning(
+            "stock.migration.v3.applied",
+            extra={"reverted": reverted, "skipped": skipped},
+        )
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     try:
@@ -290,6 +489,7 @@ def init_db():
         _ensure_sqlite_columns()
         _ensure_schema_version()
         _backfill_stock_full_empty()
+        _revert_premature_stock_debits()
         _seed_rbac_if_needed()
     except Exception:  # pragma: no cover — nunca derrubar o boot por migration
         import logging

@@ -1,10 +1,13 @@
 """
 Order Use Cases — FASE 7.1
 
-CRITICAL CHANGE: Stock operations use Inventory (single source of truth).
-- Stock validated against Inventory.quantity (not Product.estoque)
-- Stock deducted when order CONFIRMED (not at creation)
-- Stock returned when order CANCELLED
+CRITICAL CHANGE (Decisão B3(a), 14/09/2026): estoque só é debitado quando a
+ENTREGA é finalizada (DELIVERED) — ver delivery_persistence_repository.
+- Stock validated against Inventory.quantity (not Product.estoque) at creation
+- Order CONFIRMED NÃO debita mais (o caminhão pode sair com reserva; o
+  débito é o fato físico da entrega)
+- Order CANCELLED não mexe no estoque (nada foi debitado); a reversão do
+  débito acontece no cancelamento da ENTREGA após DELIVERED
 - All inventory operations are atomic (single transaction)
 """
 
@@ -23,7 +26,7 @@ class CreateOrderUseCase:
     """Create a new order with multiple items.
 
     Stock is validated against Inventory but NOT deducted at creation.
-    Deduction happens when order is CONFIRMED.
+    Deduction happens when the DELIVERY is completed (Decisão B3a).
     """
 
     def __init__(
@@ -64,7 +67,7 @@ class CreateOrderUseCase:
         available = self._available_stock(product)
         if available < quantity:
             raise ValueError(
-                f"Estoque insuficiente para {product.nome}. " f"Disponível: {available}, solicitado: {quantity}"
+                f"Estoque insuficiente para {product.nome}. Disponível: {available}, solicitado: {quantity}"
             )
 
         unit_price = product.preco
@@ -184,11 +187,12 @@ class ListOrdersUseCase:
 
 
 class UpdateOrderStatusUseCase:
-    """Update order status with inventory integration.
+    """Update order status.
 
-    FASE 7.1:
-    - CONFIRMED → deduct stock atomically
-    - CANCELLED → return stock atomically (if already deducted)
+    Decisão B3(a): CONFIRMED/CANCELLED do pedido NÃO tocam estoque.
+    O débito acontece na entrega DELIVERED (delivery_persistence_repository
+    → deliver_stock_atomic) e a reversão no cancelamento da entrega pós-
+    DELIVERED (reverse_delivery_stock_atomic).
     """
 
     def __init__(
@@ -207,77 +211,36 @@ class UpdateOrderStatusUseCase:
         from app.domain.order.entity import TERMINAL_STATUSES
 
         if order.status in TERMINAL_STATUSES:
-            raise ValueError(f"Pedido {codigo} está em status {order.status.value} " f"e não pode ser alterado")
+            raise ValueError(f"Pedido {codigo} está em status {order.status.value} e não pode ser alterado")
 
         try:
             order_status = OrderStatus(status)
         except ValueError as exc:
             raise ValueError(f"Status inválido: {status}") from exc
 
-        # FASE 7.1: Deduct stock on CONFIRMATION
-        if order_status == OrderStatus.CONFIRMED and self.inventory_repo:
-            self._deduct_stock(order)
-
-        # FASE 7.1: Return stock on CANCELLATION
-        if order_status == OrderStatus.CANCELLED and self.inventory_repo:
-            self._return_stock(order)
+        # Decisão B3(a): nenhuma movimentação de estoque aqui.
+        # CONFIRMED é apenas confirmação comercial; CANCELLED não devolve
+        # nada porque nada foi debitado (o débito é na entrega DELIVERED).
 
         return self.repository.atualizar_status(codigo, order_status)
 
     def _deduct_stock(self, order: Order):
-        """Deduct stock for all order items atomically. Idempotent."""
-        if self.order_item_repo:
-            items = self.order_item_repo.listar_por_pedido(order.codigo)
-        else:
-            items = []
+        """Deprecated (Decisão B3a): débito movido para a entrega DELIVERED.
 
-        for item in items:
-            try:
-                self.inventory_repo.deduct_stock_atomic(
-                    product_codigo=item.product_codigo,
-                    quantity=item.quantity,
-                    reason=f"Venda — Pedido #{order.codigo}",
-                    reference_type="ORDER",
-                    reference_id=order.codigo,
-                )
-            except ValueError as e:
-                # If already deducted (idempotency), skip
-                if "já registrado" in str(e):
-                    continue
-                raise
+        Mantido apenas como documentação da mudança — não é mais chamado.
+        """
+        raise NotImplementedError(
+            "Débito de estoque agora acontece na entrega DELIVERED (deliver_stock_atomic) — Decisão B3(a)."
+        )
 
     def _return_stock(self, order: Order):
-        """Return stock for all order items. Only if stock was previously deducted."""
-        if self.order_item_repo:
-            items = self.order_item_repo.listar_por_pedido(order.codigo)
-        else:
-            items = []
-
-        for item in items:
-            # Check if stock was actually deducted for this product in this order
-            existing_sale = self.inventory_repo.get_movement_by_reference(
-                "ORDER",
-                order.codigo,
-                product_codigo=item.product_codigo,
-                movement_type="SALE",
-            )
-            if not existing_sale:
-                # No stock was deducted for this product — skip
-                continue
-
-            try:
-                self.inventory_repo.return_stock_atomic(
-                    product_codigo=item.product_codigo,
-                    quantity=item.quantity,
-                    reason=f"Devolução — cancelamento Pedido #{order.codigo}",
-                    reference_type="ORDER_RETURN",
-                    reference_id=order.codigo,
-                )
-            except ValueError as e:
-                # If already returned (idempotency), skip
-                if "já registrada" in str(e):
-                    continue
-                raise
+        """Deprecated (Decisão B3a): reversão movida para o cancelamento da
+        entrega (reverse_delivery_stock_atomic). Não é mais chamado.
+        """
+        raise NotImplementedError(
+            "Reversão de estoque agora acontece no cancelamento da entrega "
+            "pós-DELIVERED (reverse_delivery_stock_atomic) — Decisão B3(a)."
+        )
 
 
 class AssignDriverUseCase:
@@ -293,7 +256,7 @@ class AssignDriverUseCase:
         from app.domain.order.entity import TERMINAL_STATUSES
 
         if order.status in TERMINAL_STATUSES:
-            raise ValueError(f"Pedido {codigo} está em status {order.status.value} " f"e não pode ser alterado")
+            raise ValueError(f"Pedido {codigo} está em status {order.status.value} e não pode ser alterado")
 
         driver = self.driver_repo.buscar_por_codigo(driver_codigo)
         if not driver or not driver.ativo:

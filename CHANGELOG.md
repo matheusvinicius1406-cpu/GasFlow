@@ -4,6 +4,18 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔄 Mudanças de negócio (14/09/2026)
+
+- **Débito de estoque na entrega (Decisão B3a)**: o estoque só é debitado
+  quando a entrega é finalizada (`DELIVERED`) — 1 cheio sai e 1 vazio entra
+  (`deliver_stock_atomic`, commit único e idempotente). O pedido `CONFIRMED`
+  não debita mais; `CANCELLED` do pedido é no-op; cancelamento da entrega
+  após `DELIVERED` reverte o débito (`reverse_delivery_stock_atomic`).
+  Migração v3 one-shot e idempotente no boot reverte débitos prematuros de
+  pedidos antigos (movimento `RESERVATION_REVERSAL` + auditoria em
+  `auth_audit_log`; marca em `system_settings`).
+  Ver `docs/migrations/2026-09-delivery-debit.md`.
+
 ### 🚀 Funcionalidades
 
 - **CRM ↔ WhatsApp (contatos)**: push automático de contatos do WhatsApp

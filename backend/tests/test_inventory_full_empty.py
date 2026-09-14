@@ -1,22 +1,22 @@
-"""Testes P0 3.7 — Estoque cheios/vazios (Decisão B2) + snapshot diário.
+"""Testes P0 3.7 — Estoque cheios/vazios + snapshot diário.
 
-Cobre o ciclo completo da Decisão B2:
-- CONFIRMED: reserva quantity + quantity_full (deduct_stock_atomic)
-- DELIVERED: troca físico cheio→vazio (quantity_empty += qty), idempotente
-- CANCELLED antes de DELIVERED: reversão da reserva (fluxo ORDER_RETURN)
-- CANCELLED depois de DELIVERED: reversão da troca
+Atualizado para a Decisão B3(a) (14/09/2026): o débito da venda acontece
+na entrega DELIVERED (deliver_stock_atomic — debita quantity/quantity_full
+e credita quantity_empty); o pedido não debita mais no CONFIRMED.
+- Order CONFIRMED: nenhuma movimentação (débito é na entrega)
+- DELIVERED: debita cheios + credita vazios, idempotente
+- CANCELLED antes de DELIVERED: no-op
+- CANCELLED depois de DELIVERED: reversão (RETURN DELIVERY)
 - Snapshot diário: idempotente, initial == closing do dia anterior
 
 Invariante mantida em todos os testes:
     quantity == quantity_full
 
-Nota sobre a invariante: com a Decisão A confirmada (`quantity` = cheios
-operáveis/vendáveis — semântica FASE 7.1 preservada, sem risco de oversell)
-e a Decisão B2 (DELIVERED toca apenas quantity_empty), a composição real é
-quantity == quantity_full; quantity_empty é rastreado em paralelo (física
-da troca). A invariante quantity == full + empty só valeria se a troca
-também creditasse quantity — o que conflitaria com B2 e com a checagem
-de estoque vendável do deduct_stock_atomic.
+Nota sobre a invariante: `quantity` = cheios operáveis (semântica FASE 7.1
+preservada, sem risco de oversell); quantity_empty é rastreado em paralelo
+(física da troca). A invariante quantity == full + empty só valeria se a
+troca também creditasse quantity — o que conflitaria com a checagem de
+estoque vendável do débito atômico.
 """
 
 from __future__ import annotations
@@ -133,20 +133,16 @@ def test_order_confirmed_reserves_full(db):
 # ═══════════════════════════════════════════════════════════
 
 
-def test_delivery_finalized_adds_empty(db):
-    """DELIVERED troca físico: quantity_empty += qty; total e full inalterados.
+def test_delivery_finalized_debits_and_credits_empty(db):
+    """DELIVERED debita cheios (quantity/full) e credita vazios.
 
     Fluxo completo via repositório de entregas (mesmo caminho das APIs):
-    reserva (CONFIRMED) → entrega DELIVERED.
+    pedido confirmado (sem débito) → entrega DELIVERED debita.
     """
     _seed(db, full=10, empty=2)
     _seed_order_items(db, "000001", [("P00001", 4)])
-    inv_repo = SQLAlchemyInventoryRepository(db)
 
-    # Reserva no CONFIRMED
-    inv_repo.deduct_stock_atomic("P00001", 4, reason="Venda", reference_type="ORDER", reference_id="000001")
-
-    # Entrega: DELIVERED dispara a troca (hook do persistence repo)
+    # Entrega: DELIVERED dispara o débito (hook do persistence repo)
     delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
     delivery_repo.create_delivery("d-1", "000001", customer_name="Cliente")
     delivery_repo.assign_delivery("d-1", "drv-1", None, 1)
@@ -155,31 +151,29 @@ def test_delivery_finalized_adds_empty(db):
 
     assert result is not None and result.status == "DELIVERED"
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 6  # total operável inalterado pela troca
-    assert inv.quantity_full == 6  # cheios já debitados na reserva
+    assert inv.quantity == 6  # 10 - 4 entregues
+    assert inv.quantity_full == 6
     assert inv.quantity_empty == 6  # 2 + 4 devolvidos pelo cliente
 
-    exchange = (
+    sale = (
         db.query(StockMovementModel)
         .filter(
-            StockMovementModel.type == "DELIVERY_EXCHANGE",
+            StockMovementModel.type == "SALE",
             StockMovementModel.reference_type == "DELIVERY",
             StockMovementModel.reference_id == "d-1",
         )
         .first()
     )
-    assert exchange is not None
-    assert exchange.quantity_empty_delta == 4
-    assert exchange.quantity_full_delta == 0
+    assert sale is not None
+    assert sale.quantity_empty_delta == 4
+    assert sale.quantity_full_delta == -4
     _assert_invariant(db)
 
 
-def test_delivery_exchange_idempotent(db):
-    """Chamar a troca 2x não duplica movimento nem credita vazios 2x."""
+def test_delivery_debit_idempotent(db):
+    """Chamar o débito da entrega 2x não duplica movimento nem debita 2x."""
     _seed(db, full=5, empty=0)
     _seed_order_items(db, "000002", [("P00001", 3)])
-    inv_repo = SQLAlchemyInventoryRepository(db)
-    inv_repo.deduct_stock_atomic("P00001", 3, reason="Venda", reference_type="ORDER", reference_id="000002")
 
     delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
     delivery_repo.create_delivery("d-2", "000002")
@@ -187,14 +181,14 @@ def test_delivery_exchange_idempotent(db):
     delivery_repo.complete_delivery("d-2", 2)
 
     # Re-executa o efeito manualmente (o hook é idempotente por movimento)
-    delivery_repo._apply_b2_stock_effect(delivery_repo.get_delivery("d-2"))
+    delivery_repo._apply_delivery_stock_effect(delivery_repo.get_delivery("d-2"))
 
-    exchanges = (
+    sales = (
         db.query(StockMovementModel)
-        .filter(StockMovementModel.type == "DELIVERY_EXCHANGE", StockMovementModel.reference_id == "d-2")
+        .filter(StockMovementModel.type == "SALE", StockMovementModel.reference_id == "d-2")
         .count()
     )
-    assert exchanges == 1
+    assert sales == 1
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity_empty == 3  # creditado uma única vez
@@ -208,61 +202,54 @@ def test_delivery_exchange_idempotent(db):
 # ═══════════════════════════════════════════════════════════
 
 
-def test_cancelled_before_delivery_reverts_reservation(db):
-    """CANCELLED antes de DELIVERED: estoque volta exatamente ao estado inicial."""
+def test_cancelled_before_delivery_no_stock_change(db):
+    """CANCELLED antes de DELIVERED: no-op — estoque inalterado."""
     _seed(db, full=10, empty=0)
     _seed_order_items(db, "000003", [("P00001", 4)])
-    inv_repo = SQLAlchemyInventoryRepository(db)
-    inv_repo.deduct_stock_atomic("P00001", 4, reason="Venda", reference_type="ORDER", reference_id="000003")
 
     delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
     delivery_repo.create_delivery("d-3", "000003")
     delivery_repo.assign_delivery("d-3", "drv-1", None, 1)
-    delivery_repo.cancel_delivery("d-3", 2)
-
-    # Reversão da reserva (fluxo ORDER_RETURN existente)
-    inv_repo.return_stock_atomic(
-        "P00001", 4, reason="Devolução — cancelamento", reference_type="ORDER_RETURN", reference_id="000003"
-    )
+    cancelled = delivery_repo.cancel_delivery("d-3", 2)
+    assert cancelled is not None and cancelled.status == "CANCELLED"
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity == 10
     assert inv.quantity_full == 10
     assert inv.quantity_empty == 0
 
-    # Entrega cancelada NÃO gerou troca
-    exchanges = (
+    # Entrega cancelada NÃO gerou débito nem reversão
+    delivery_movements = (
         db.query(StockMovementModel)
-        .filter(StockMovementModel.type == "DELIVERY_EXCHANGE", StockMovementModel.reference_id == "d-3")
+        .filter(StockMovementModel.reference_type == "DELIVERY", StockMovementModel.reference_id == "d-3")
         .count()
     )
-    assert exchanges == 0
+    assert delivery_movements == 0
     _assert_invariant(db)
 
 
-def test_cancelled_after_delivery_reverts_exchange(db):
-    """CANCELLED após DELIVERED: reversão da troca (vazios retornam)."""
+def test_cancelled_after_delivery_reverts_debit(db):
+    """CANCELLED após DELIVERED: reversão do débito (cheios voltam, vazios saem)."""
     _seed(db, full=10, empty=0)
     _seed_order_items(db, "000004", [("P00001", 4)])
-    inv_repo = SQLAlchemyInventoryRepository(db)
-    inv_repo.deduct_stock_atomic("P00001", 4, reason="Venda", reference_type="ORDER", reference_id="000004")
 
     delivery_repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
     delivery_repo.create_delivery("d-4", "000004")
     delivery_repo.arrive_delivery("d-4", 1)
-    delivery_repo.complete_delivery("d-4", 2)  # DELIVERED: troca aplicada
+    delivery_repo.complete_delivery("d-4", 2)  # DELIVERED: débito aplicado
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     assert inv.quantity_empty == 4
+    assert inv.quantity == 6
 
     # Cancelamento após a entrega: dispara a reversão via _transition
     cancelled = delivery_repo.cancel_delivery("d-4", 3)
     assert cancelled is not None and cancelled.status == "CANCELLED"
 
     inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
-    assert inv.quantity == 6  # total operável inalterado
-    assert inv.quantity_empty == 0  # troca desfeita (clamp seguro)
-    assert inv.quantity_full == 6
+    assert inv.quantity == 10  # cheios devolvidos ao estoque
+    assert inv.quantity_empty == 0  # vazios removidos (clamp seguro)
+    assert inv.quantity_full == 10
 
     reversal = (
         db.query(StockMovementModel)
@@ -275,6 +262,7 @@ def test_cancelled_after_delivery_reverts_exchange(db):
     )
     assert reversal is not None
     assert reversal.quantity_empty_delta == -4
+    assert reversal.quantity_full_delta == 4
     _assert_invariant(db)
 
 
@@ -292,7 +280,8 @@ def test_daily_snapshot_idempotent(db):
     first = service.run_daily_snapshot()
     assert first["created"] == 1
 
-    # Movimenta estoque e roda de novo no mesmo dia: closing atualiza, initial preservado
+    # Movimenta estoque (ENTRADA de compra) e roda de novo no mesmo dia:
+    # closing atualiza, initial preservado
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 5, reason="Compra")
     second = service.run_daily_snapshot()
@@ -317,9 +306,9 @@ def test_snapshot_initial_matches_previous_closing(db):
     today_snap = db.query(StockDailySnapshotModel).first()
     day1 = today_snap.snapshot_date
 
-    # Movimenta (venda de 4 cheios) e simula o dia seguinte
+    # Movimenta (entrega debita 4 cheios) e simula o dia seguinte
     repo = SQLAlchemyInventoryRepository(db)
-    repo.deduct_stock_atomic("P00001", 4, reason="Venda", reference_type="ORDER", reference_id="000005")
+    repo.deliver_stock_atomic("P00001", 4, reason="Venda", reference_type="DELIVERY", reference_id="d-snap")
 
     day2 = day1 + timedelta(days=1)
     service._snapshot_day(day2)

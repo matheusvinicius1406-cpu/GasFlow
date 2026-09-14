@@ -271,8 +271,9 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             product_codigo=product_codigo,
             type=MovementType.SALE.value,
             quantity=quantity,
-            # P0 (Decisão B2): a reserva em CONFIRMED debita cheios (o caminhão
-            # sai com cilindros cheios). quantity_empty_delta = 0.
+            # Débito genérico de venda: debita cheios, não toca vazios.
+            # O fluxo de ENTREGA usa deliver_stock_atomic (Decisão B3a),
+            # que também credita quantity_empty.
             quantity_full_delta=-quantity,
             quantity_empty_delta=0,
             reason=reason,
@@ -293,7 +294,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             "movement": self._movement_to_entity(movement_model),
         }
 
-    def apply_delivery_exchange(
+    def deliver_stock_atomic(
         self,
         product_codigo: str,
         quantity: int,
@@ -301,18 +302,23 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         reference_type: Optional[str] = None,
         reference_id: Optional[str] = None,
     ) -> dict:
-        """P0 (Decisão B2): troca física cheio→vazio na entrega DELIVERED.
+        """Decisão B3(a): débito da venda na ENTREGA (DELIVERED).
 
-        O cliente devolve os vazios: quantity_empty += quantity.
-        `quantity` (total) e `quantity_full` NÃO mudam aqui — os cheios já
-        foram debitados na reserva (Order CONFIRMED, deduct_stock_atomic).
-        Idempotente: único movimento DELIVERY_EXCHANGE por
-        (reference_type, reference_id, product_codigo) — protegido pela
-        constraint uq_stock_movements_reference_product_type.
+        Efeito físico da entrega em UM único commit:
+        - quantity (cheios operáveis) -= quantity
+        - quantity_full -= quantity
+        - quantity_empty += quantity (cliente devolve os vazios)
+
+        Invariante quantity == quantity_full preservada; quantity_empty é
+        rastreamento paralelo da física da troca.
+
+        Idempotente por (reference_type, reference_id, product_codigo, SALE)
+        — protegido pela constraint uq_stock_movements_reference_product_type.
+        Estoque insuficiente levanta ValueError e NÃO registra movimento.
         """
         now = datetime.utcnow()
 
-        # Idempotency (per product + type) — reuse the SALE check pattern
+        # Idempotency (per product + type)
         if reference_type and reference_id:
             existing = (
                 self._filter_by_tenant(StockMovementModel)
@@ -320,7 +326,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
                     StockMovementModel.reference_type == reference_type,
                     StockMovementModel.reference_id == reference_id,
                     StockMovementModel.product_codigo == product_codigo,
-                    StockMovementModel.type == MovementType.DELIVERY_EXCHANGE.value,
+                    StockMovementModel.type == MovementType.SALE.value,
                 )
                 .first()
             )
@@ -329,25 +335,37 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
                     f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}"
                 )
 
+        # Atomic UPDATE: only succeeds if quantity >= requested
+        result = self.db.execute(
+            text(
+                "UPDATE inventory SET quantity = quantity - :qty, "
+                "quantity_full = quantity_full - :qty, "
+                "quantity_empty = quantity_empty + :qty, "
+                "updated_at = :now "
+                "WHERE product_codigo = :code AND quantity >= :qty"
+            ),
+            {"qty": quantity, "now": now, "code": product_codigo},
+        )
+
+        if result.rowcount == 0:
+            self.db.rollback()
+            inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
+            if not inv:
+                raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
+            raise ValueError(f"Estoque insuficiente. Disponível: {inv.quantity}, solicitado: {quantity}")
+
+        # Read the updated inventory
         inv_model = (
             self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         )
-        if not inv_model:
-            self.db.rollback()
-            raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
-
-        balance_before = inv_model.quantity
-        balance_after = balance_before  # total unchanged — composition only
-
-        empty_before = inv_model.quantity_empty
-        inv_model.quantity_empty = empty_before + quantity
-        inv_model.updated_at = now
+        balance_before = inv_model.quantity + quantity  # reverse the update
+        balance_after = inv_model.quantity
 
         movement_model = StockMovementModel(
             product_codigo=product_codigo,
-            type=MovementType.DELIVERY_EXCHANGE.value,
+            type=MovementType.SALE.value,
             quantity=quantity,
-            quantity_full_delta=0,
+            quantity_full_delta=-quantity,
             quantity_empty_delta=quantity,
             reason=reason,
             reference_type=reference_type,
@@ -360,7 +378,6 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
 
         # SINGLE COMMIT — atomic
         self.db.commit()
-        self.db.refresh(inv_model)
         self.db.refresh(movement_model)
 
         return {
@@ -368,7 +385,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             "movement": self._movement_to_entity(movement_model),
         }
 
-    def reverse_delivery_exchange(
+    def reverse_delivery_stock_atomic(
         self,
         product_codigo: str,
         quantity: int,
@@ -376,11 +393,14 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         reference_type: Optional[str] = None,
         reference_id: Optional[str] = None,
     ) -> dict:
-        """P0 (Decisão B2): desfaz a troca cheio→vazio (CANCELLED após DELIVERED).
+        """Decisão B3(a): reverte a entrega (CANCELLED após DELIVERED).
 
-        quantity_empty -= quantity (clamp em 0) e movemento RETURN dedicado
-        (idempotente por reference) para trilha de auditoria. O total
-        `quantity` não muda.
+        Inverso exato de deliver_stock_atomic:
+        - quantity (cheios operáveis) += quantity
+        - quantity_full += quantity
+        - quantity_empty -= quantity (clamp em 0)
+
+        Idempotente por (reference_type, reference_id, product_codigo, RETURN).
         """
         now = datetime.utcnow()
 
@@ -408,10 +428,12 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
 
         balance_before = inv_model.quantity
-        balance_after = balance_before  # total inalterado — só composição
+        balance_after = balance_before + quantity
 
         empty_before = inv_model.quantity_empty
         actual_removed = min(empty_before, quantity)  # clamp: nunca negativo
+        inv_model.quantity = balance_after
+        inv_model.quantity_full = (inv_model.quantity_full or 0) + quantity
         inv_model.quantity_empty = empty_before - actual_removed
         inv_model.updated_at = now
 
@@ -419,7 +441,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             product_codigo=product_codigo,
             type=MovementType.RETURN.value,
             quantity=quantity,
-            quantity_full_delta=0,
+            quantity_full_delta=quantity,
             quantity_empty_delta=-actual_removed,
             reason=reason,
             reference_type=reference_type,
