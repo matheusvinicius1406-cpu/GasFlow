@@ -67,6 +67,8 @@ const config_1 = require("./config");
 const gasflow_1 = require("./gasflow");
 const logger_1 = require("./logger");
 const ai_service_1 = require("./ai-service");
+const ai_setup_1 = require("./ai-setup");
+const relay_client_1 = require("./relay-client");
 const wa_bridge_1 = require("./wa-bridge");
 const updater_1 = require("./updater");
 // P0 3.6 — gate de permissão para handlers IPC nativos (defesa em profundidade).
@@ -78,6 +80,8 @@ let backend;
 let bridge;
 let waBridge;
 let assistant = null;
+let aiSetup = null;
+let relayClient = null;
 // ── Helpers ──────────────────────────────────────────────────────────
 function backendPort() {
     const m = settings.gasflowApiUrl.match(/:(\d+)/);
@@ -254,6 +258,39 @@ function registerProtectedIpc() {
         });
         return { ok: true, pdfBase64: pdf.toString("base64") };
     });
+    // purchase:export-pdf → printToPDF do webContents (handler nativo).
+    // Recebe HTML já autorizado (o backend só devolve html para purchase.read);
+    // aqui o gate garante purchase.read também na barreira IPC.
+    (0, ipc_permissions_1.registerProtectedHandler)("purchase:export-pdf", "purchase.read", async (_event, args) => {
+        const html = args?.html;
+        const filename = typeof args?.filename === "string" ? args.filename : "nota-compra.pdf";
+        if (typeof html !== "string" || !html)
+            throw new Error("html ausente");
+        const { BrowserWindow } = require("electron");
+        // Janela offscreen dedicada: o printToPDF usa o conteúdo da nota,
+        // não a view atual do app.
+        const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+        try {
+            await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+            const pdf = await win.webContents.printToPDF({
+                landscape: false,
+                printBackground: true,
+                margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+            });
+            const { shell } = require("electron");
+            const { writeFile } = require("node:fs/promises");
+            const { tmpdir } = require("node:os");
+            const { join } = require("node:path");
+            const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const outPath = join(tmpdir(), safeName);
+            await writeFile(outPath, pdf);
+            await shell.openPath(outPath);
+            return { ok: true, path: outPath };
+        }
+        finally {
+            win.destroy();
+        }
+    });
     // finance:export-docx → busca o relatório diário no backend local e monta
     // um payload Word-compatível (HTML com mso) — sem dependência nova.
     // Sem permissão, o gate bloqueia antes de qualquer execução.
@@ -326,6 +363,51 @@ function ensureAssistant() {
     });
     return assistant;
 }
+// ── IA no boot (Item 3) ─────────────────────────────────────────────
+// Fire-and-forget: detecção/instalação/download do modelo rodam em
+// background — NUNCA bloqueiam a janela. Cenário B da Fase 4.2: não existe
+// serviço externo; sem Ollama local a IA degrada com mensagem controlada.
+function ensureAiSetup() {
+    if (aiSetup)
+        return aiSetup;
+    aiSetup = new ai_setup_1.AiSetupRunner({
+        baseUrl: settings.ollamaBaseUrl,
+        modelName: settings.ollamaTextModel,
+        notifyOwner: async (opts) => {
+            const { dialog } = await Promise.resolve().then(() => __importStar(require("electron")));
+            const { response } = await dialog.showMessageBox(mainWindow, opts);
+            return response === 0; // botão "Baixar agora"
+        },
+        onProgress: (p) => {
+            if (mainWindow && !mainWindow.isDestroyed())
+                mainWindow.webContents.send("ai:download-progress", p);
+        },
+        onStatusChanged: (s) => {
+            if (mainWindow && !mainWindow.isDestroyed())
+                mainWindow.webContents.send("ai:status-changed", s);
+        },
+        saveState: (s) => {
+            settings = (0, ai_setup_1.mergeAiState)(settings, s);
+            (0, config_1.saveSettings)(settings);
+        },
+    });
+    return aiSetup;
+}
+function registerAiSetupIpc() {
+    electron_1.ipcMain.handle("ai:setup-status", () => (aiSetup ? aiSetup.getStatus() : { state: "detecting" }));
+    electron_1.ipcMain.handle("ai:setup-retry", () => {
+        const runner = ensureAiSetup();
+        void runner.run().catch((e) => logger_1.logger.warn("ai.setup", `retry: ${e.message}`));
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("ai:setup-download", (_event, model) => {
+        const runner = ensureAiSetup();
+        if (typeof model === "string" && model)
+            runner.modelName = model;
+        void runner.pullModel(runner.modelName).catch((e) => logger_1.logger.warn("ai.setup", `pull: ${e.message}`));
+        return { ok: true };
+    });
+}
 // ── Janela ───────────────────────────────────────────────────────────
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
@@ -372,6 +454,8 @@ else {
         registerSettingsIpc();
         // Gate de permissões IPC (P0 3.6) + handlers finance:export-*.
         registerProtectedIpc();
+        // Item 3: handlers de status/download da IA (antes do runAiSetup).
+        registerAiSetupIpc();
         ai = new ai_service_1.AiService({
             baseUrl: settings.ollamaBaseUrl,
             textModel: settings.ollamaTextModel,
@@ -407,6 +491,27 @@ else {
         }
         void startWithRetry("agent", () => ensureAgentBridge().start())
             .catch((e) => logger_1.logger.warn("app", `agente: ${e.message}`));
+        // Item 3: IA em background — detecção/consentimento/download nunca
+        // bloqueiam o boot (a janela já está aberta aqui).
+        void ensureAiSetup()
+            .run()
+            .catch((e) => logger_1.logger.warn("ai.setup", `boot: ${e.message}`));
+        // App do Entregador (Fase 1): relay outbound p/ localização em tempo
+        // real. Desligado por padrão (relayEnabled=false no settings.json).
+        if (settings.relayEnabled && settings.relayUrl) {
+            relayClient = new relay_client_1.RelayClient({
+                relayUrl: settings.relayUrl,
+                tenantId: settings.relayTenant || "default",
+                token: settings.relayToken || "",
+                log: (scope, message) => logger_1.logger.info(scope, message),
+                onLocation: (payload) => {
+                    if (mainWindow && !mainWindow.isDestroyed())
+                        mainWindow.webContents.send("gasflow:driver-location", payload);
+                },
+                onStatus: (s) => logger_1.logger.info("relay", `status: ${s}`),
+            });
+            relayClient.start();
+        }
         electron_1.app.on("activate", () => {
             if (electron_1.BrowserWindow.getAllWindows().length === 0)
                 createWindow();

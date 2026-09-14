@@ -4,6 +4,57 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🚀 Funcionalidades — App do Entregador, Fase 1 (14/09/2026)
+
+- **Mobile auth** (`/auth/mobile/login|refresh|logout`): access token 15min
+  (mini-JWT HS256 stdlib, escopo `mobile`) + refresh 7d com rotação e
+  detecção de replay (reuso revoga a família), rate limit 10 login/min/IP.
+  Sem dependência nova (sem PyJWT). `_authenticate_driver` aceita sessão DB
+  ou JWT mobile — desktop continua isolado. Ver `docs/driver-app.md`.
+- **LGPD no rastreamento**: location em lote com janela de trabalho
+  (`driver.work_hours.start/end`, admin edita; fora → 403 + audit),
+  retenção de 90 dias com purge idempotente no boot, audit de cada
+  acesso/ingestão (sem coordenadas no log).
+- **Delta sync** `GET /driver/sync?since=` com tabela `offline_sync_log`.
+- **Relay na nuvem** (`relay/`): FastAPI + WS registry + cache de última
+  posição; Dockerfile/fly.toml prontos — **deploy não executado** (decisão:
+  código local; ver `relay/DEPLOY.md`).
+- **Desktop relay-client**: WebSocket outbound com backoff 1s→60s,
+  settings `relay*`, IPC `gasflow:driver-location`.
+- **Scaffold mobile** (`mobile/`): lógica pura testada (fila offline com
+  client_action_id/backoff/cap 5min, work-hours fail-closed, fallback
+  LAN→nuvem→offline) + telas RN do MVP escritas.
+- **Testes**: +11 backend (`test_driver_mobile.py`), +6 relay, +4 desktop,
+  +9 mobile lógicos.
+
+### 🚀 Funcionalidades — Item 3: IA no boot (14/09/2026)
+
+- **IA pronta no primeiro boot**: `desktop/src/main/ai-setup.ts` detecta o
+  Ollama em background (nunca bloqueia o app), pede consentimento antes de
+  instalar (~800 MB, uma vez) e baixa o modelo com progresso via IPC
+  (`ai:status-changed`, `ai:download-progress`). Retry 3x com backoff;
+  qualquer falha vira estado `unavailable` — o boot jamais é afetado.
+  Ver `docs/ai-setup.md`.
+- **Factory de LLM com toggle admin**: `ai.enabled` (default ON) no quadro
+  de configurações derruba toda a IA em runtime, sem restart. Health check
+  do Ollama cacheado por 30s (timeout 2s); Ollama indisponível →
+  `NullProvider` (degradação graciosa — cenário B da Fase 4.2: **sem**
+  fallback externo, dados nunca saem da máquina). Provider desconhecido
+  degrada em vez de cair no mock.
+- **Tela Admin → Inteligência** (`/settings/ai`, permissão `ai.configure`):
+  status sem jargão ("IA pronta" / "Preparando IA… 45%" / "IA local
+  indisponível"), toggle "Ativar Inteligência", seção Avançado colapsada e
+  teste rápido. Nenhum termo técnico fora do Avançado.
+- **Endpoints `/ai/status`, `/ai/test`, `/ai/settings` (GET/PATCH),
+  `/ai/model/download`(+progress)** com RBAC (`ai.use`/`ai.configure`) e
+  auditoria (`ai.settings.changed` com before/after, `ai.test.prompt` com
+  **hash** do prompt — nunca conteúdo).
+- **RBAC**: permissão `ai.configure` nova (MANAGER); `ai.use` concedida a
+  OPERATOR (catálogo + matriz + fallback de domínio).
+- **Testes**: +9 backend (`test_ai_provider.py`), +6 desktop
+  (`ai-setup.test.ts`), +5 frontend (`AISettings.test.tsx`). Suítes:
+  backend 1434 ✓, frontend 189 ✓, desktop 25 ✓; mypy/ruff/tsc limpos.
+
 ### 🔄 Mudanças de negócio (14/09/2026)
 
 - **Débito de estoque na entrega (Decisão B3a)**: o estoque só é debitado
