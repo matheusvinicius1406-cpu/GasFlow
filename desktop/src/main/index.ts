@@ -61,6 +61,8 @@ const ai_service_1 = require("./ai-service");
 const ai_setup_1 = require("./ai-setup");
 const relay_client_1 = require("./relay-client");
 const wa_bridge_1 = require("./wa-bridge");
+// Protótipo WhatsApp Web (pairing/status apenas — envio segue no Baileys).
+const wa_web_panel_1 = require("./wa-web-panel");
 const updater_1 = require("./updater");
 // P0 3.6 — gate de permissão para handlers IPC nativos (defesa em profundidade).
 const ipc_permissions_1 = require("./ipc-permissions");
@@ -73,6 +75,7 @@ let waBridge;
 let assistant = null;
 let aiSetup = null;
 let relayClient = null;
+let waWebPanel = null;
 // ── Helpers ──────────────────────────────────────────────────────────
 function backendPort() {
     const m = settings.gasflowApiUrl.match(/:(\d+)/);
@@ -306,6 +309,85 @@ function registerProtectedIpc() {
 // ── IPC de settings ─────────────────────────────────────────────
 // settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
 // Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
+// ── WhatsApp Web panel (protótipo, flag waWebPanel.enabled) ─────
+// Handlers só existem com a flag ON; com a flag OFF o painel é null e as
+// chamadas do renderer respondem { ok:false, disabled:true }.
+function ensureWaWebPanel() {
+    if (!waWebPanel && settings.waWebPanel?.enabled === true) {
+        waWebPanel = wa_web_panel_1.createPanelIfEnabled(settings, {
+            attachView: (view) => {
+                if (mainWindow && !mainWindow.isDestroyed())
+                    mainWindow.contentView.addChildView(view);
+            },
+            detachView: (view) => {
+                try {
+                    mainWindow?.contentView.removeChildView(view);
+                }
+                catch { /* janela fechada */ }
+            },
+        });
+        if (waWebPanel) {
+            waWebPanel.onStatus = (status) => {
+                if (mainWindow && !mainWindow.isDestroyed())
+                    mainWindow.webContents.send("gasflow:wa-web-status", status);
+                else
+                    bridge?.broadcast?.("gasflow:wa-web-status", status);
+            };
+        }
+    }
+    return waWebPanel;
+}
+
+function registerWaWebPanelIpc() {
+    const guard = async () => {
+        const panel = ensureWaWebPanel();
+        if (!panel)
+            throw new Error("Painel WhatsApp Web está desativado (waWebPanel.enabled=false).");
+        return panel;
+    };
+    electron_1.ipcMain.handle("wa-web:statuses", () => {
+        const panel = waWebPanel;
+        return { ok: true, enabled: Boolean(panel), statuses: panel ? panel.getStatuses() : wa_web_panel_1.WA_WEB_ACCOUNTS.map((id) => ({ accountId: id, state: "closed", lastEventAt: null, lastError: null })) };
+    });
+    electron_1.ipcMain.handle("wa-web:show", async (_event, args) => {
+        const panel = await guard();
+        const accountId = typeof args?.accountId === "string" ? args.accountId : "primary";
+        const bounds = args?.bounds && typeof args.bounds === "object" ? args.bounds : undefined;
+        await panel.show(accountId, bounds);
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("wa-web:bounds", async (_event, args) => {
+        const panel = waWebPanel;
+        if (!panel)
+            return { ok: false, disabled: true };
+        if (args?.bounds && typeof args.bounds === "object")
+            panel.setBounds(args.bounds);
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("wa-web:hide", async (_event, args) => {
+        const panel = waWebPanel;
+        if (!panel)
+            return { ok: false, disabled: true };
+        panel.hide(typeof args?.accountId === "string" ? args.accountId : "primary");
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("wa-web:re-pair", async (_event, args) => {
+        const panel = await guard();
+        const accountId = typeof args?.accountId === "string" ? args.accountId : "primary";
+        await panel.rePair(accountId);
+        return { ok: true };
+    });
+    electron_1.ipcMain.handle("wa-web:close", async (_event, args) => {
+        const panel = waWebPanel;
+        if (!panel)
+            return { ok: false, disabled: true };
+        panel.close(typeof args?.accountId === "string" ? args.accountId : "primary");
+        return { ok: true };
+    });
+}
+// ── IPC de settings ─────────────────────────────────────────────
+// settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
+// Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
 function registerSettingsIpc() {
     electron_1.ipcMain.handle("settings:setWaEnabled", async (_event, enabled) => {
         const next = enabled === true;
@@ -428,7 +510,19 @@ function createWindow() {
     });
     mainWindow.once("ready-to-show", () => mainWindow?.show());
     void mainWindow.loadURL(backendUrl());
-    mainWindow.on("closed", () => (mainWindow = null));
+    mainWindow.on("closed", () => {
+        // Janela fechando: as views do painel WA Web precisam sair do
+        // contentView (attachView as adicionou); sem isso o close quebra.
+        try {
+            if (waWebPanel) {
+                for (const status of waWebPanel.getStatuses()) {
+                    waWebPanel.hide(status.accountId);
+                }
+            }
+        }
+        catch { /* best-effort */ }
+        mainWindow = null;
+    });
 }
 // ── Lifecycle ────────────────────────────────────────────────────────
 const gotLock = electron_1.app.requestSingleInstanceLock();
@@ -443,6 +537,10 @@ else {
         registerSettingsIpc();
         // Gate de permissões IPC (P0 3.6) + handlers finance:export-*.
         registerProtectedIpc();
+        // Protótipo WhatsApp Web (flag waWebPanel.enabled, default OFF):
+        // handlers registrados sempre (respondem disabled com flag off);
+        // o painel só nasce quando a flag liga.
+        registerWaWebPanelIpc();
         // Item 3: handlers de status/download da IA (antes do runAiSetup).
         registerAiSetupIpc();
         ai = new ai_service_1.AiService({
@@ -480,6 +578,14 @@ else {
         }
         void startWithRetry("agent", () => ensureAgentBridge().start())
             .catch((e) => logger_1.logger.warn("app", `agente: ${e.message}`));
+        // Protótipo WA Web: painel nasce só com flag on (default OFF) —
+        // attach/detach das views fica na janela (createWindow/closed).
+        if (settings.waWebPanel?.enabled === true) {
+            ensureWaWebPanel();
+        }
+        else {
+            logger_1.logger.info("wa-web-panel", "flag desligada — painel não instanciado");
+        }
         // Item 3: IA em background — detecção/consentimento/download nunca
         // bloqueiam o boot (a janela já está aberta aqui).
         void ensureAiSetup()
@@ -505,6 +611,12 @@ else {
             if (electron_1.BrowserWindow.getAllWindows().length === 0)
                 createWindow();
         });
+    });
+    electron_1.app.on("before-quit", () => {
+        try {
+            waWebPanel?.closeAll();
+        }
+        catch { /* best-effort */ }
     });
     electron_1.app.on("window-all-closed", () => {
         void bridge?.stop();

@@ -56,6 +56,14 @@ const api = {
     waGetQr: (accountId) => electron_1.ipcRenderer.invoke("wa:get-qr", { accountId }),
     waSend: (accountId, recipient, text) => electron_1.ipcRenderer.invoke("wa:send", { accountId, recipient, text }),
     waSetAutoReply: (enabled) => electron_1.ipcRenderer.invoke("wa:auto-reply", { enabled }),
+    // WhatsApp Web panel (protótipo, flag waWebPanel.enabled)
+    waWebStatuses: () => electron_1.ipcRenderer.invoke("wa-web:statuses"),
+    waWebShow: (accountId, bounds) => electron_1.ipcRenderer.invoke("wa-web:show", { accountId, bounds }),
+    waWebBounds: (bounds) => electron_1.ipcRenderer.invoke("wa-web:bounds", { bounds }),
+    waWebHide: (accountId) => electron_1.ipcRenderer.invoke("wa-web:hide", { accountId }),
+    waWebRePair: (accountId) => electron_1.ipcRenderer.invoke("wa-web:re-pair", { accountId }),
+    waWebClose: (accountId) => electron_1.ipcRenderer.invoke("wa-web:close", { accountId }),
+    onWaWebStatus: (cb) => subscribe("gasflow:wa-web-status", cb),
     // Conversas WhatsApp (gateway do backend)
     listConversations: () => electron_1.ipcRenderer.invoke("convs:list"),
     getConversation: (id) => electron_1.ipcRenderer.invoke("convs:get", { id }),

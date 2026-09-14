@@ -23,6 +23,7 @@ const DEFAULTS = {
     waPort: 3101,
     waApiKey: "",
     waAutoReply: false,
+    waWebPanel: { enabled: false },
 };
 function generateKey(prefix) {
     return `${prefix}-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;

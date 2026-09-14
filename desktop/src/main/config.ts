@@ -19,6 +19,9 @@ export interface Settings {
   relayUrl?: string; // ex.: https://gasflow-relay.fly.dev
   relayToken?: string; // RELAY_TOKEN compartilhado
   relayTenant?: string; // identificador do depósito
+  // Protótipo WhatsApp Web embutido (WebContentsView) — pairing/status
+  // apenas; envio continua no Baileys. Default OFF (nenhuma view criada).
+  waWebPanel?: { enabled?: boolean };
 }
 
 const DEFAULTS: Settings = {
@@ -36,6 +39,7 @@ const DEFAULTS: Settings = {
     waPort: 3101,
     waApiKey: "",
     waAutoReply: false,
+    waWebPanel: { enabled: false },
 };
 
 function generateKey(prefix: string): string {
