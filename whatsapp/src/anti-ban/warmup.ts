@@ -9,7 +9,7 @@
  * dependência externa — o serviço usa SQLite local, não o Redis do compose).
  */
 
-import { db } from '../db';
+import { db } from '../db.js';
 
 const WARMUP_LADDER = [50, 100, 200, 350, 500, 700, 1000];
 

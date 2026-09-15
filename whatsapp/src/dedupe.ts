@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import { cleanOrphanMemberships, deleteLidContacts, dedupeByName, type DedupeResult } from './db';
-import { logger } from './log';
+import { cleanOrphanMemberships, deleteLidContacts, dedupeByName, type DedupeResult } from './db.js';
+import { logger } from './log.js';
 
 /**
  * Deduplicação da base de contatos:

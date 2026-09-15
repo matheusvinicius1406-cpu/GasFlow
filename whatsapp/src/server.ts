@@ -1,14 +1,14 @@
 import 'dotenv/config';
 import express from 'express';
-import { CONNECT_PAGE_HTML } from './connect-page';
-import { closeDb, countLists, insertList } from './db';
-import { providerManager } from './provider/provider-manager';
-import { router } from './routes';
-import { startWorker } from './broadcast';
-import { forwardIncomingMessage, type RawIncomingMessage } from './incoming';
-import { logger } from './log';
-import { requireAuth } from './auth';
-import { renderMetrics, METRICS_CONTENT_TYPE } from './metrics';
+import { CONNECT_PAGE_HTML } from './connect-page.js';
+import { closeDb, countLists, insertList } from './db.js';
+import { providerManager } from './provider/provider-manager.js';
+import { router } from './routes.js';
+import { startWorker } from './broadcast.js';
+import { forwardIncomingMessage, type RawIncomingMessage } from './incoming.js';
+import { logger } from './log.js';
+import { requireAuth } from './auth.js';
+import { renderMetrics, METRICS_CONTENT_TYPE } from './metrics.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
   // Push de contatos → CRM (backend). Dispara no boot (após conectar) e
   // fica disponível manualmente via POST /api/whatsapp/crm-sync.
   // Import tardio: falha de rede nunca derruba o serviço.
-  const { syncAllToCrm } = await import('./crm-sync');
+  const { syncAllToCrm } = await import('./crm-sync.js');
   const crmSyncTimer = setTimeout(() => {
     void syncAllToCrm().catch(() => { /* tolerante */ });
   }, 30_000); // aguarda contas conectarem
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
 
   app.post('/api/whatsapp/crm-sync', requireAuth, (req: express.Request, res: express.Response) => {
     const accountId = String(req.body?.accountId || 'primary');
-    void import('./crm-sync').then(({ syncAccountToCrm }) => syncAccountToCrm(accountId))
+    void import('./crm-sync.js').then(({ syncAccountToCrm }) => syncAccountToCrm(accountId))
       .then((result) => res.json(result))
       .catch((err) => res.status(500).json({ error: err instanceof Error ? err.message : 'crm-sync failed' }));
   });

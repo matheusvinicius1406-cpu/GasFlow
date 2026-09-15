@@ -1,4 +1,4 @@
-import { db, addCustomerToList, getLists } from './db';
+import { db, addCustomerToList, getLists } from './db.js';
 
 /**
  * Regras de população automática das listas de clientes do Marcos Gás.

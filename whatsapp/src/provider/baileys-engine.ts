@@ -42,7 +42,7 @@ import {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
-import { logger } from '../log';
+import { logger } from '../log.js';
 
 /** Logger dedicado do Baileys (pino) — padrão da lib; silencioso por padrão. */
 const baileysLogger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'error' });

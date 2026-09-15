@@ -14,9 +14,9 @@
  * O forwarder é tolerante a falhas: nunca derruba o serviço WhatsApp.
  */
 
-import { normalizePhone } from './normalize';
-import { providerManager } from './provider/provider-manager';
-import { logger } from './log';
+import { normalizePhone } from './normalize.js';
+import { providerManager } from './provider/provider-manager.js';
+import { logger } from './log.js';
 
 const BACKEND_URL = (process.env.GASFLOW_BACKEND_URL || '').replace(/\/+$/, '');
 const SERVICE_KEY = process.env.GASFLOW_SERVICE_KEY || process.env.MARCOS_GAS_API_KEY || '';

@@ -5,9 +5,9 @@ import {
   insertContact,
   rebindContactJid,
   updateContact,
-} from './db';
-import { normalizePhone } from './normalize';
-import type { WhatsAppContact } from './provider/types';
+} from './db.js';
+import { normalizePhone } from './normalize.js';
+import type { WhatsAppContact } from './provider/types.js';
 
 export interface SyncResult {
   fetched: number;
@@ -90,7 +90,7 @@ export function upsertContacts(valuesList: ContactValues[]): SyncResult {
  */
 export async function runSync(): Promise<SyncResult> {
   // Import tardio evita dependência circular (provider -> nada de sync).
-  const { providerManager } = await import('./provider/provider-manager');
+  const { providerManager } = await import('./provider/provider-manager.js');
   const primaryAccount = providerManager.getAccount("primary"); if (!primaryAccount) throw new Error("Primary account not found"); const waContacts = await primaryAccount.getContacts();
   return upsertContacts(waContacts.map(mapToValues));
 }

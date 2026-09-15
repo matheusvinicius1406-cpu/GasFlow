@@ -6,18 +6,18 @@
  * volume responsável, não mascarar automação.
  */
 
-export { gaussianRandom, gaussianDelayMs } from './gaussian';
+export { gaussianRandom, gaussianDelayMs } from './gaussian.js';
 export {
   checkRate,
   recordSend,
   currentUsage,
   type RateCheckResult,
-} from './limiter';
+} from './limiter.js';
 export {
   dailyLimit,
   sentToday,
   recordSent,
   hasDailyBudget,
   warmupDayNumber,
-} from './warmup';
-export { isQuietHour, nextAllowedTime, getConfig, type QuietHoursConfig } from './quiet-hours';
+} from './warmup.js';
+export { isQuietHour, nextAllowedTime, getConfig, type QuietHoursConfig } from './quiet-hours.js';

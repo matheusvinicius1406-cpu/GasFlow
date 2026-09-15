@@ -11,7 +11,7 @@
  * - WA_RECIPIENT_COOLDOWN_MIN (default 60)
  */
 
-import { db } from '../db';
+import { db } from '../db.js';
 
 const MINUTE_CAP = Math.max(1, Number(process.env.WA_MINUTE_CAP ?? 20));
 const HOURLY_CAP = Math.max(1, Number(process.env.WA_HOURLY_CAP ?? 200));

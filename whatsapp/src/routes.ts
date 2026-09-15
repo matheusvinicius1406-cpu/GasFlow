@@ -2,8 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import QRCode from 'qrcode';
-import { requireAuth } from './auth';
-import { providerManager } from './provider/provider-manager';
+import { requireAuth } from './auth.js';
+import { providerManager } from './provider/provider-manager.js';
 import {
   db,
   addContactToList,
@@ -39,12 +39,12 @@ import {
   renameList,
   updateCampaignStatus,
   updateCustomerStatus,
-} from './db';
-import { runDedupe } from './dedupe';
-import { seedListsFromRules } from './list-seed';
-import { runSync } from './sync';
-import { checkRate, recordSend } from './anti-ban';
-import { logger } from './log';
+} from './db.js';
+import { runDedupe } from './dedupe.js';
+import { seedListsFromRules } from './list-seed.js';
+import { runSync } from './sync.js';
+import { checkRate, recordSend } from './anti-ban/index.js';
+import { logger } from './log.js';
 
 export const router = Router();
 
@@ -152,8 +152,8 @@ router.get('/whatsapp/accounts/:id/health', requireAuth, async (req: Request, re
 // FASE 5: Message Sending with Idempotency
 // ═══════════════════════════════════════════════════════════
 
-import { normalizePhone } from './normalize';
-import { insertSentMessage, markSentMessageSent, markSentMessageFailed, findSentMessageByKey, listSentMessages } from './db';
+import { normalizePhone } from './normalize.js';
+import { insertSentMessage, markSentMessageSent, markSentMessageFailed, findSentMessageByKey, listSentMessages } from './db.js';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -485,7 +485,7 @@ router.post('/contacts/sync', requireAuth, async (_req: Request, res: Response) 
     const dedupe = runDedupe();
     // Push dos contatos ao CRM do backend (fire-and-forget, tolerante a falhas).
     // Import tardio evita dependência circular (routes → provider → crm-sync).
-    void import('./crm-sync')
+    void import('./crm-sync.js')
       .then(({ syncAllToCrm }) => syncAllToCrm())
       .catch(() => {
         /* tolerante: sync local já foi feito */
@@ -561,7 +561,7 @@ router.post('/customers/sync', requireAuth, async (_req: Request, res: Response)
     cleanOrphanMemberships();
     const dedupe = runDedupe();
     // Mesma semântica de /contacts/sync: empurra contatos ao CRM.
-    void import('./crm-sync')
+    void import('./crm-sync.js')
       .then(({ syncAllToCrm }) => syncAllToCrm())
       .catch(() => {
         /* tolerante */
@@ -699,7 +699,7 @@ router.post('/lists/:id/sync', requireAuth, async (req: Request, res: Response) 
   try {
     const sync = await runSync();
     cleanOrphanMemberships();
-    void import('./crm-sync')
+    void import('./crm-sync.js')
       .then(({ syncAllToCrm }) => syncAllToCrm())
       .catch(() => {
         /* tolerante */

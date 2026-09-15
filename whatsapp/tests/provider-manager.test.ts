@@ -8,6 +8,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MockWhatsAppProvider } from './mocks/mock-provider';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 // ═══════════════════════════════════════════════════════════
 // MOCK PROVIDER TESTS

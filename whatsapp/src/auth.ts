@@ -11,7 +11,7 @@
 
 import { timingSafeEqual } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { logger } from './log';
+import { logger } from './log.js';
 
 const API_KEY = process.env.MARCOS_GAS_API_KEY;
 const ALLOW_INSECURE_AUTH = process.env.ALLOW_INSECURE_AUTH === 'true'

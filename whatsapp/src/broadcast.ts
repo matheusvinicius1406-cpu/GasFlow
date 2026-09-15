@@ -14,10 +14,10 @@
  * cooldown por destinatário, quiet hours e pacing gaussiano.
  */
 
-import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db';
-import { providerManager } from './provider/provider-manager';
-import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban';
-import { logger } from './log';
+import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db.js';
+import { providerManager } from './provider/provider-manager.js';
+import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban/index.js';
+import { logger } from './log.js';
 
 // Pacing gaussiano: média 3s, desvio 1s (env WA_SEND_MEAN_MS / WA_SEND_STDEV_MS).
 // WA_SEND_MIN/MAX_INTERVAL_MS continuam válidos como piso/teto para compatibilidade.

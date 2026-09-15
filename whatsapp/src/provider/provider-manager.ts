@@ -15,11 +15,15 @@
  */
 
 import fs from 'node:fs';
-import { Client, LocalAuth, MessageMedia, type Contact } from 'whatsapp-web.js';
-import { BaileysEngine } from './baileys-engine';
-import type { WhatsAppContact, WhatsAppProvider, WhatsAppQr, WhatsAppStatus, MessagePayload, SendResult, MediaPayload, SendMediaResult, WhatsAppConnectionState } from './types';
-import { logger } from '../log';
-import { messagesSentTotal, messagesFailedTotal, accountConnected, reconnectAttemptsTotal } from '../metrics';
+import whatsappWebJS from 'whatsapp-web.js';
+// CJS interop em ESM: whatsapp-web.js não expõe named exports.
+const { Client, LocalAuth, MessageMedia } = whatsappWebJS;
+type Contact = whatsappWebJS.Contact;
+type WWebClient = InstanceType<typeof Client>;
+import { BaileysEngine } from './baileys-engine.js';
+import type { WhatsAppContact, WhatsAppProvider, WhatsAppQr, WhatsAppStatus, MessagePayload, SendResult, MediaPayload, SendMediaResult, WhatsAppConnectionState } from './types.js';
+import { logger } from '../log.js';
+import { messagesSentTotal, messagesFailedTotal, accountConnected, reconnectAttemptsTotal } from '../metrics.js';
 
 // ── Types ────────────────────────────────────────────────
 
@@ -130,7 +134,7 @@ function toProviderContact(contact: Contact): WhatsAppContact {
 export class AccountInstance implements WhatsAppProvider {
   readonly id: string;
   readonly name: string;
-  private client: Client | null = null;
+  private client: WWebClient | null = null;
   private baileys: BaileysEngine | null = null;
   private state: WhatsAppConnectionState = 'disconnected';
   private qrString: string | null = null;
@@ -285,7 +289,7 @@ export class AccountInstance implements WhatsAppProvider {
     }
     const contacts = await this.client!.getContacts();
     return contacts
-      .filter((c) => {
+      .filter((c: Contact) => {
         const jid = c.id._serialized;
         return (
           !jid.endsWith('@broadcast') &&
@@ -660,7 +664,7 @@ export class AccountInstance implements WhatsAppProvider {
     this.crmSyncTimer = setTimeout(() => {
       this.crmSyncTimer = null;
       if (this.state !== 'connected') return;
-      void import('../crm-sync')
+      void import('../crm-sync.js')
         .then(({ syncAccountToCrm }) => syncAccountToCrm(this.id))
         .then((result) => {
           if (!result.ok && result.error) {
