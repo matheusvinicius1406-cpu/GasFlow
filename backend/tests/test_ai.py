@@ -603,8 +603,8 @@ class TestPromptInjection:
     def test_system_prompt_isolation(self):
         """User text should not override system prompt."""
         # System prompt explicitly says not to follow user instructions
-        assert "RULES" in SYSTEM_PROMPT
-        assert "Never" in SYSTEM_PROMPT or "Nunca" in SYSTEM_PROMPT
+        assert "REGRAS" in SYSTEM_PROMPT
+        assert "Nunca" in SYSTEM_PROMPT
 
     def test_no_eval_in_code(self):
         """No eval/exec in AI code."""

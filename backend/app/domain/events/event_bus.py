@@ -57,6 +57,10 @@ class EventType(str, Enum):
     PAYMENT_CONFIRMED = "payment.confirmed"
     PAYMENT_PENDING = "payment.pending"
 
+    # WhatsApp events
+    WHATSAPP_MESSAGE_RECEIVED = "whatsapp.message_received"
+    WHATSAPP_ORDER_CREATED = "whatsapp.order_created"
+
 
 @dataclass
 class DomainEvent:
@@ -200,6 +204,25 @@ def publish_driver_event(
         aggregate_id=driver_id,
         actor_id=driver_id,
         actor_type="DRIVER",
+        data=data or {},
+    )
+    _global_bus.publish(event)
+    return event
+
+
+def publish_whatsapp_event(
+    event_type: EventType,
+    conversation_id: int,
+    tenant_id: str,
+    data: Optional[Dict] = None,
+):
+    """Publish a WhatsApp lifecycle event (message received, order created via chat)."""
+    event = DomainEvent(
+        type=event_type,
+        tenant_id=tenant_id,
+        aggregate_id=str(conversation_id),
+        actor_id="",
+        actor_type="AI",
         data=data or {},
     )
     _global_bus.publish(event)

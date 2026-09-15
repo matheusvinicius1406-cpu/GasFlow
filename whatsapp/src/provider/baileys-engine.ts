@@ -451,12 +451,21 @@ export function toIncomingShape(msg: WAMessage): BaileysIncomingMessage & { raw:
     (m?.videoMessage?.caption as string | undefined) ??
     (m?.documentMessage?.caption as string | undefined) ??
     '';
+  // Era LID: APENAS JIDs 1:1 @lid viram PN via remoteJidAlt. Outros hosts
+  // (@g.us, status@broadcast, @newsletter) mantêm o JID original — o
+  // incoming.ts filtra por author/@broadcast. Converter o alt de status@
+  // broadcast criava conversas-fantasma com o telefone de quem postou status.
+  const alt = (msg.key as { remoteJidAlt?: string }).remoteJidAlt ?? '';
+  const isGroup = jid.endsWith('@g.us');
+  const isBroadcast = jid.endsWith('@broadcast');
+  const isLid = jid.endsWith('@lid');
+  const from = isLid && alt.endsWith('@s.whatsapp.net') ? alt : jid;
   return {
     id: msg.key.id ?? undefined,
-    from: jid,
+    from,
     fromMe: Boolean(msg.key.fromMe),
-    // Em grupos o participante vem em participant — mantém a regra do incoming.ts
-    author: jid.endsWith('@g.us') ? (msg.key.participant ?? undefined) : undefined,
+    // Em grupos/broadcast o participante vem em participant — mantém a regra do incoming.ts
+    author: isGroup || isBroadcast ? (msg.key.participant ?? undefined) : undefined,
     body,
     type,
     timestamp: Number(msg.messageTimestamp ?? 0),

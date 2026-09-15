@@ -115,6 +115,9 @@ class MessageGateway:
             "stock_rechecks_failed": 0,
             "outbound_sent": 0,
             "outbound_failed": 0,
+            "echo_skipped": 0,
+            "acks_skipped": 0,
+            "faq_answered": 0,
         }
         self._metrics_lock = threading.Lock()
 
@@ -168,6 +171,26 @@ class MessageGateway:
         # 6. Find or create conversation
         conversation = self._get_or_create_conversation(message)
 
+        # 6.5 Anti-loop: eco do próprio bot chegando pela outra conta → ignora.
+        if self._is_own_echo(conversation, message.text):
+            self._inc_metric("echo_skipped")
+            return {
+                "status": "skipped",
+                "error": "BOT_ECHO",
+                "conversation_id": conversation.id,
+                "outbound": None,
+            }
+
+        # 6.6 CRM: garante cliente cadastrado (auto-cadastro + upgrade de nome
+        # com o pushName do WhatsApp). Tolerante a falhas.
+        try:
+            customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
+            if customer and not conversation.customer_codigo:
+                conversation.customer_codigo = customer["codigo"]
+                self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+        except Exception:
+            logger.debug("wa.gateway.ensure_customer_failed", exc_info=True)
+
         # 7. Idempotency check
         if self.conversation_repo.find_duplicate_message(message.provider_message_id):
             self._inc_metric("duplicate_messages")
@@ -184,6 +207,12 @@ class MessageGateway:
         )
         self.message_repo.create(incoming_msg)
 
+        # Notifica o operador (som no frontend) sobre a nova mensagem do cliente.
+        self._notify_new_message(
+            conversation,
+            extra={"sender": "customer", "preview": (message.text or "")[:80]},
+        )
+
         # 9. Check if human operator is active
         if conversation.state == ConversationState.HUMAN_ACTIVE:
             return {"status": "human_active", "conversation_id": conversation.id, "outbound": None}
@@ -192,6 +221,20 @@ class MessageGateway:
         if HUMAN_REQUEST.search(message.text):
             self._inc_metric("human_handoffs")
             return self._request_human_handoff(conversation, message)
+
+        # 10.5 Filtro de pertinência: ACKs (ok/valeu/obrigado) fecham o ciclo
+        # sem resposta — a IA só fala quando tem algo útil a dizer.
+        if self._is_ack(message.text) and not conversation.draft:
+            self._inc_metric("acks_skipped")
+            return {"status": "skipped", "error": "ACK_NO_REPLY", "conversation_id": conversation.id, "outbound": None}
+
+        # 10.6 FAQ determinístico: preço/entrega/pagamento/horário com resposta
+        # correta e direta (nunca "não entendi" para pergunta direta).
+        faq = self._faq_reply(message)
+        if faq:
+            self._inc_metric("faq_answered")
+            self._notify_new_message(conversation)
+            return self._build_outbound(conversation.id, message.sender_phone, message.account_id, faq)
 
         # 11. Expire stale drafts
         self._expire_draft(conversation)
@@ -317,6 +360,297 @@ class MessageGateway:
         except Exception:
             logger.debug("wa.gateway.client_lookup_failed", exc_info=True)
         return None
+
+    # ── Nome do contato (pushName do WhatsApp / cadastro) ──
+    _AUTONAME_RE = re.compile(r"^Cliente \d{4}$")
+
+    @staticmethod
+    def _wa_name_from(message: WhatsAppMessage) -> Optional[str]:
+        """Extrai o pushName/notifyName do payload bruto do bridge."""
+        raw = message.raw or {}
+        for key in ("sender_name", "pushname", "notifyName"):
+            v = raw.get(key)
+            if isinstance(v, str) and v.strip():
+                return v.strip()[:80]
+        return None
+
+    # ── Anti-loop bot↔bot ──
+    # Com 2 contas conectadas, o eco do próprio bot chega como mensagem de
+    # cliente na outra conta (mesmo pushName/botão). Regra: se o texto da
+    # mensagem é idêntico à ÚLTIMA mensagem que NOSSO sistema enviou para
+    # essa conversa, ignora (não processa, não responde).
+    def _is_own_echo(self, conversation: Conversation, text: str) -> bool:
+        try:
+            recent = self.message_repo.list_by_conversation(conversation.id, limit=5)
+            for m in reversed(recent):
+                if m.direction == "OUTGOING":
+                    return (m.content or "").strip() == (text or "").strip()
+                if m.direction == "INCOMING":
+                    return False
+            return False
+        except Exception:
+            logger.debug("wa.gateway.echo_check_failed", exc_info=True)
+            return False
+
+    # ── Cadastro automático de cliente novo (era LID/self-service) ──
+    def _ensure_customer(self, phone: str, wa_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Garante que existe um Customer para o telefone da conversa.
+
+        Resolve o cadastro existente; se não houver e o repositório suportar
+        escrita, cadastra automaticamente (nome = contato do WhatsApp quando
+        disponível, senão 'Cliente <últimos dígitos>'). Se o cliente já existe
+        com nome auto-gerado e o WhatsApp fornece pushName, atualiza o nome.
+        Retorna o dict de resolução no mesmo formato de _resolve_customer, ou None.
+        """
+        resolved = self._resolve_customer(phone)
+        if resolved:
+            # Upgrade de nome: cadastro antigo auto-gerado + pushName disponível
+            if wa_name and self._AUTONAME_RE.match(resolved.get("nome", "")):
+                try:
+                    client = self.customer_repo.buscar_por_codigo(resolved["codigo"])
+                    if client:
+                        client.nome = wa_name
+                        client.has_name = True
+                        updated = self.customer_repo.atualizar(client)
+                        resolved["nome"] = updated.nome
+                        logger.info(
+                            "wa.gateway.customer_name_upgraded", extra={"codigo": updated.codigo, "nome": updated.nome}
+                        )
+                except Exception:
+                    logger.debug("wa.gateway.name_upgrade_failed", exc_info=True)
+            return resolved
+        if not self.customer_repo or not hasattr(self.customer_repo, "criar"):
+            return None
+        try:
+            from app.domain.client.entity import Client
+
+            nome = (wa_name or "").strip() or f"Cliente {phone[-4:]}"
+            codigo = self.customer_repo.proximo_codigo()
+            client = Client(
+                codigo=codigo,
+                nome=nome,
+                telefone=phone,
+                rua="A informar",
+                numero="S/N",
+                bairro="A informar",
+                has_name=bool(wa_name),
+                is_whatsapp=True,
+                tipo="CONSUMER",
+            )
+            created = self.customer_repo.criar(client)
+            logger.info("wa.gateway.customer_autoregistered", extra={"codigo": created.codigo, "phone": phone})
+            return {"codigo": created.codigo, "nome": created.nome, "telefone": created.telefone}
+        except Exception:
+            logger.warning("wa.gateway.autoregister_failed", exc_info=True)
+            return None
+
+    # ── FAQ determinístico (preço/entrega/pagamento) — responde o que foi
+    # perguntado com dado REAL, sem depender do LLM ──
+    _PRICE_Q_RE = re.compile(
+        r"\b(quanto|qual (o|o valor|o preço|o preco)|valor|preço|preco|custa|"
+        r"ta|tá|esta|tá o)\b[^?!\.]{0,40}\b(gas|gás|agua|água|botijão|botijao|galão|galao|p13|p45)\b|"
+        r"\b(gas|gás|agua|água|botijão|botijao|galão|galao|p13|p45)\b[^?!\.]{0,30}\b(quanto|valor|preço|preco|custa)\b",
+        re.IGNORECASE,
+    )
+    _DELIVERY_Q_RE = re.compile(
+        r"\b(entreg\w*|leva\w*|consegue\w*|roda\w*|fazem)\b[^?!.]{0,30}\b(agora|hoje|já|ja|rápido|rapido)\b|"
+        r"\b(agora|hoje|já|ja)\b[^?!.]{0,20}\b(entrega|tem entrega)\b",
+        re.IGNORECASE,
+    )
+    _PAYMENT_Q_RE = re.compile(
+        r"\b(forma[s]? de pagamento|pagamento|pix|cartão|cartao|dinheiro|crédito|credito|débito|debito)\b",
+        re.IGNORECASE,
+    )
+    _HOURS_Q_RE = re.compile(
+        r"\b(hora|horário|horario|aberto|abre|fecha|funciona)\b",
+        re.IGNORECASE,
+    )
+
+    # ACKs: mensagens que fecham o ciclo e NÃO merecem resposta.
+    _ACK_RE = re.compile(
+        r"^(ok|ok!|ok\.||ok, obrigado|obg|obrigado|obrigada|valeu|vlw|vlw!|"
+        r"brigado|brigada|show|perfeito|blz|beleza|combinado|fechado|top|joia|joia!|"
+        r"👍|👍🏻|🙌|\s*)$",
+        re.IGNORECASE,
+    )
+
+    def _catalog_lines(self, limit: int = 6) -> List[str]:
+        """Linhas de catálogo (nome + preço) para respostas de preço/menu."""
+        if not self.product_repo:
+            return []
+        try:
+            products = [p for p in self.product_repo.listar_todos() if getattr(p, "ativo", True)]
+            return [f"• {p.nome} — R$ {float(p.preco):.2f}" for p in products[:limit]]
+        except Exception:
+            logger.debug("wa.gateway.catalog_lines_failed", exc_info=True)
+            return []
+
+    def _answer_price(self, message: WhatsAppMessage) -> Optional[str]:
+        """Responde pergunta de preço com o preço real do catálogo."""
+        if not self.product_repo:
+            return None
+        t = (message.text or "").lower()
+        if not self._PRICE_Q_RE.search(t):
+            return None
+        try:
+            products = [p for p in self.product_repo.listar_todos() if getattr(p, "ativo", True)]
+        except Exception:
+            return None
+        if not products:
+            return None
+        # produto específico citado?
+        specific = []
+        for p in products:
+            nome_l = (p.nome or "").lower()
+            for word in re.findall(r"[a-zà-ú0-9]{3,}", nome_l):
+                if len(word) >= 3 and word in t:
+                    specific.append(p)
+                    break
+        if specific:
+            lines = [f"• {p.nome}: R$ {float(p.preco):.2f}" for p in specific]
+            reply = "Aqui está: " + " | ".join(lines)
+        else:
+            lines = [f"• {p.nome}: R$ {float(p.preco):.2f}" for p in products[:6]]
+            reply = "Nossos preços:\n" + "\n".join(lines)
+        reply += "\n\nQuer pedir? Manda tipo 'quero 1 gás' que eu confirmo tudo com você!"
+        return reply
+
+    def _answer_delivery(self) -> Optional[str]:
+        """Responde pergunta de entrega/rapidez."""
+        return (
+            "Sim, entregamos! Normalmente em até 40 minutos na nossa região. "
+            "Quer pedir algo? Manda tipo 'quero 1 gás' com seu endereço que eu registro na hora!"
+        )
+
+    def _answer_payment(self) -> Optional[str]:
+        return (
+            "Aceitamos dinheiro, PIX e cartão (crédito ou débito na entrega). "
+            "Se precisar de troco, me fala o valor que você vai pagar!"
+        )
+
+    def _answer_hours(self) -> Optional[str]:
+        return "Funcionamos todos os dias, das 7h às 19h. Fora desse horário você pode mandar mensagem que a gente responde assim que abrir!"
+
+    def _notify_new_message(self, conversation: Conversation, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Publica evento realtime (WebSocket) de nova mensagem — o frontend
+        toca o som de notificação e atualiza as listas. Tolerante a falhas."""
+        try:
+            from app.domain.events.event_bus import EventType, publish_whatsapp_event
+
+            publish_whatsapp_event(
+                EventType.WHATSAPP_MESSAGE_RECEIVED,
+                conversation.id,
+                tenant_id="default",
+                data={
+                    "conversation_id": conversation.id,
+                    "customer_phone": conversation.customer_phone,
+                    **(extra or {}),
+                },
+            )
+        except Exception:
+            logger.debug("wa.gateway.notify_failed", exc_info=True)
+
+    def _is_ack(self, text: str) -> bool:
+        """True se a mensagem é um fechamento (ok/valeu/obrigado) — não responder."""
+        t = (text or "").strip().lower()
+        if not t or len(t) > 30:
+            return False
+        return bool(self._ACK_RE.match(t))
+
+    def _faq_reply(self, message: WhatsAppMessage) -> Optional[str]:
+        """Resposta determinística para perguntas diretas de atendimento.
+        Retorna None se não for FAQ (seguir para o detector de pedido/IA)."""
+        if self._answer_price(message):
+            return self._answer_price(message)
+        if self._DELIVERY_Q_RE.search(message.text or ""):
+            return self._answer_delivery()
+        if self._PAYMENT_Q_RE.search(message.text or "") and "?" in (message.text or ""):
+            return self._answer_payment()
+        if self._HOURS_Q_RE.search(message.text or "") and "?" in (message.text or ""):
+            return self._answer_hours()
+        return None
+
+    # ── Detector determinístico de pedido (não depende de LLM) ──
+    _PRODUCT_WORDS = (
+        ("agua", ("agua", "água", "galão", "galao", "garrafão", "garrafa")),
+        ("gas", ("gas", "gás", "botijão", "botijao", "p13", "p45", "gls")),
+    )
+    _ORDER_PATTERNS = re.compile(
+        r"\b(quero|queria|preciso|me manda|manda|me traz|traz|pedir|peço|peco|"
+        r"comprar|compra|solicitar|encomendar|adicionar)\b",
+        re.IGNORECASE,
+    )
+    _QTY_WORDS = {
+        "um": 1,
+        "uma": 1,
+        "dois": 2,
+        "duas": 2,
+        "tres": 3,
+        "três": 3,
+        "quatro": 4,
+        "cinco": 5,
+        "seis": 6,
+        "dez": 10,
+    }
+
+    _NEGATION_RE = re.compile(
+        r"\b(nao|não)\s+(quero|queria|preciso|manda|me manda|traz|me traz|pedir|comprar)\b",
+        re.IGNORECASE,
+    )
+
+    @staticmethod
+    def _product_variants(w: str) -> set:
+        """Gera variações singular/plural de uma palavra de produto."""
+        v = {w, w + "s"}
+        if w.endswith("ao"):
+            stem = w[:-2]
+            v |= {stem + "oes", stem + "ões"}
+        elif w.endswith("ão"):
+            stem = w[:-2]
+            v |= {stem + "oes", stem + "aos"}
+        return v
+
+    @classmethod
+    def _detect_order(cls, text: str) -> Optional[List[Dict[str, Any]]]:
+        """Extrai itens de pedido de linguagem natural simples.
+
+        Reconhece: "quero 1 gas", "manda 2 galões de água", "preciso de um botijão",
+        "quero 3 gas e 2 agua" (multi-item). Ignora negações ("não quero gás").
+        Retorna [{product_term, quantity}] ou None se não parecer pedido.
+        """
+        if not text or cls._NEGATION_RE.search(text):
+            return None
+        tokens = re.findall(r"[a-zà-ú0-9]+", text.lower())
+        connectives = {"de", "do", "da", "para", "pra"}
+        items: List[Dict[str, Any]] = []
+        explicit_qty = False
+        for prod_key, words in cls._PRODUCT_WORDS:
+            variants: set = set()
+            for w in words:
+                variants |= cls._product_variants(w)
+            for idx, tok in enumerate(tokens):
+                if tok not in variants:
+                    continue
+                qty = 1
+                # olha até 3 tokens atrás por quantidade (dígito ou palavra)
+                for j in range(idx - 1, max(idx - 4, -1), -1):
+                    prev = tokens[j]
+                    if prev.isdigit():
+                        qty = int(prev)
+                        explicit_qty = True
+                        break
+                    if prev in cls._QTY_WORDS:
+                        qty = cls._QTY_WORDS[prev]
+                        break
+                    if prev in connectives or prev in variants:
+                        continue
+                    break
+                items.append({"product_term": prod_key, "quantity": max(1, min(qty, 50))})
+                break
+        # pede com verbo ("quero gás") OU quantidade explícita ("2 galões de água")
+        if not items or (not cls._ORDER_PATTERNS.search(text) and not explicit_qty):
+            return None
+        return items
 
     def _handle_media_message(self, message: WhatsAppMessage) -> Dict[str, Any]:
         """Handle non-text messages with a safe fallback."""
@@ -464,6 +798,19 @@ class MessageGateway:
                     self.conversation_repo.update_state(conversation.id, ConversationState.ORDER_CREATED)
                     self.conversation_repo.update_draft(conversation.id, None)
                     order_data = result.data
+                    # Evento realtime: pedido criado via WhatsApp (o módulo de
+                    # Pedidos atualiza na hora via invalidação de query).
+                    try:
+                        from app.domain.events.event_bus import EventType, publish_order_event
+
+                        publish_order_event(
+                            EventType.ORDER_CREATED,
+                            str(order_data.get("order_codigo", "")),
+                            tenant_id="default",
+                            data={"source": "WHATSAPP", "conversation_id": conversation.id},
+                        )
+                    except Exception:
+                        logger.debug("wa.gateway.order_event_failed", exc_info=True)
                     return {
                         "success": True,
                         "message": (
@@ -523,6 +870,12 @@ class MessageGateway:
 
     def _route_to_ai(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
         """Route message through the AI engine."""
+        # 0. Detector determinístico: "quero 1 gás", "manda 2 galões de água".
+        # Rápido, não depende de LLM, e nunca responde com lixo de classificação.
+        detected = self._detect_order(message.text)
+        if detected:
+            return self._handle_detected_order(conversation, message, detected)
+
         # Resolve customer
         customer = self._resolve_customer(message.sender_phone)
 
@@ -532,9 +885,20 @@ class MessageGateway:
             self.conversation_repo.update_customer(conversation.id, customer["codigo"])
 
         # Build AI context (truncated to prevent context overflow)
+        # RAG-lite: conhecimento do negócio (catálogo com preços reais + regras
+        # de atendimento) injetado no prompt — a IA responde com dado verdadeiro.
         context_prefix = ""
+        catalog = self._catalog_lines()
+        if catalog:
+            context_prefix += "[Catalogo real com precos]:\n" + "\n".join(catalog) + "\n"
+        context_prefix += (
+            "[Regras do negocio]: entrega em ate 40min na regiao; pagamento em dinheiro, "
+            "PIX ou cartao na entrega; aceitamos troco (pergunte 'troco pra quanto?'); "
+            "horario 7h as 19h; para pedir, confirme item, quantidade, endereco completo "
+            "(rua, numero, bairro, referencia) e forma de pagamento.\n"
+        )
         if customer:
-            context_prefix = f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
+            context_prefix += f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
         if conversation.draft:
             draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]
             context_prefix += f"[Draft atual: {draft_json}]\n"
@@ -592,6 +956,57 @@ class MessageGateway:
             conversation.account_id,
             reply,
         )
+
+    # ── Pedido detectado deterministicamente ─────────────
+    def _handle_detected_order(
+        self, conversation: Conversation, message: WhatsAppMessage, items: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Cliente pediu em linguagem simples ("quero 1 gás"): monta draft
+        direto, com preço/estoque reais, e pede confirmação."""
+        # Garante cliente cadastrado (auto-cadastro com nome do WA quando houver)
+        customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
+        if customer and not conversation.customer_codigo:
+            conversation.customer_codigo = customer["codigo"]
+            self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+
+        draft = self._build_order_draft(conversation, {"items": items}, message)
+        if not draft:
+            # Não achou produto correspondente — mostra catálogo com preços reais
+            return self._build_outbound(
+                conversation.id,
+                message.sender_phone,
+                message.account_id,
+                self._catalog_menu(),
+            )
+        conversation.draft = draft
+        conversation.transition_to(ConversationState.AWAITING_CONFIRMATION)
+        self.conversation_repo.update_draft(conversation.id, draft)
+        self.conversation_repo.update_state(conversation.id, ConversationState.AWAITING_CONFIRMATION)
+        return self._build_outbound(
+            conversation.id,
+            message.sender_phone,
+            conversation.account_id,
+            self._format_draft_confirmation(draft),
+        )
+
+    def _catalog_menu(self) -> str:
+        """Menu do catálogo com preços reais (resposta padrão quando a IA
+        não entende — nunca mais spam de reformulação)."""
+        lines = ["Oi! Sou o assistente da GasFlow.", "", "Nosso catálogo:"]
+        found = False
+        if self.product_repo:
+            try:
+                products = self.product_repo.listar_todos()
+                for p in products[:8]:
+                    lines.append(f"• {p.nome} — R$ {float(p.preco):.2f}")
+                    found = True
+            except Exception:
+                logger.debug("wa.gateway.catalog_lookup_failed", exc_info=True)
+        if not found:
+            lines.append("• Gás (P13/P45) e Água (galão 20L) — consulte preços")
+        lines += ["", "Para pedir, mande algo como: *quero 1 gás* ou *2 galões de água*."]
+        lines.append("Pode também falar com um atendente digitando *atendente*.")
+        return "\n".join(lines)
 
     def _build_order_draft(
         self, conversation: Conversation, entities: Dict[str, Any], message: WhatsAppMessage

@@ -34,6 +34,9 @@ export interface RawIncomingMessage {
   body?: string;
   type?: string;
   timestamp?: number;
+  /** Nome do contato no WhatsApp (pushName do Baileys / notifyName do wwebjs). */
+  pushName?: string;
+  notifyName?: string;
 }
 
 export interface IncomingForwardOptions {
@@ -81,6 +84,9 @@ export function createIncomingForwarder(opts: IncomingForwardOptions) {
       text: raw.body ?? '',
       message_type: raw.type ? String(raw.type).toUpperCase() : 'TEXT',
       from_me: false,
+      // Nome do contato no celular de quem recebe (pushName) — o backend usa
+      // para auto-cadastro/upgrade do cliente no CRM.
+      sender_name: (raw.pushName ?? raw.notifyName ?? '').trim() || undefined,
       timestamp: raw.timestamp ? new Date(Number(raw.timestamp) * 1000).toISOString() : undefined,
     };
   }
@@ -133,6 +139,9 @@ export function createIncomingForwarder(opts: IncomingForwardOptions) {
     if (raw.author) return;
     const from = raw.from ?? '';
     if (!from || !from.includes('@')) return;
+    // Era LID: JIDs @lid e canais/status não são telefones — não criar conversa.
+    // (O Baileys 7 fornece remoteJidAlt com o PN real; o engine já normaliza.)
+    if (from.endsWith('@lid') || from.endsWith('@broadcast') || from.endsWith('@newsletter')) return;
 
     const payload = buildPayload(accountId, raw);
     // Sem telefone utilizável (8–20 dígitos) o backend rejeitaria (422) —

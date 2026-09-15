@@ -266,10 +266,16 @@ class AIEngine:
                 "requires_confirmation": False,
             }
 
-        # If LOW confidence, ask for clarification
+        # If LOW confidence — resposta curta de ATENDIMENTO (não de consultas
+        # internas). No WhatsApp, quem fala é CLIENTE: o texto precisa convidar
+        # a fazer pedido, não oferecer "financeiro/estoque". Combate também o
+        # loop bot↔bot: a resposta não parece convite a conversar.
         if intent.confidence == Confidence.LOW:
             return {
-                "message": "Não tenho certeza do que você precisa. Pode reformular sua pergunta?",
+                "message": (
+                    "Sou o assistente do depósito. Para pedir, mande algo como "
+                    "'quero 1 gás' — depois confirmo endereço e troco com você."
+                ),
                 "intent": intent.type.value,
                 "requires_confirmation": False,
             }

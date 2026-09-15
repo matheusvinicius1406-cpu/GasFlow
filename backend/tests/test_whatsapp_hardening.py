@@ -417,9 +417,10 @@ class TestCustomerOwnership:
         assert conv.customer_codigo == "000001"
 
     def test_unknown_customer(self, gateway, sample_data, repos):
+        # Auto-cadastro: cliente desconhecido é registrado e vinculado à conversa.
         result = gateway.process_incoming(_make_msg(phone="5511000000000", text="Olá"))
         conv = repos["conv_repo"].find_by_id(result["conversation_id"])
-        assert conv.customer_codigo is None
+        assert conv.customer_codigo is not None
 
 
 # ═══════════════════════════════════════════════════════════

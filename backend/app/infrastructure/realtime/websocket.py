@@ -190,10 +190,10 @@ def setup_realtime_bridge():
     """Subscribe the WebSocket manager to the Event Bus."""
     bus = get_event_bus()
 
-    # Subscribe to delivery, driver and order events
+    # Subscribe to delivery, driver, order and whatsapp events
     for event_type in EventType:
         prefix = event_type.value.split(".", 1)[0]
-        if prefix in ("delivery", "driver", "order"):
+        if prefix in ("delivery", "driver", "order", "whatsapp"):
             bus.subscribe(event_type, _event_to_ws)
 
     logger.info("Realtime bridge: Event Bus → WebSocket connected")

@@ -305,7 +305,7 @@ def gateway(repos, db):
     )
 
 
-def _make_msg(phone="5511999887766", text="Olá", account="primary", msg_id=None, from_me=False):
+def _make_msg(phone="5511999887766", text="Olá", account="primary", msg_id=None, from_me=False, sender_name=None):
     """Helper to build incoming message dict."""
     return {
         "account_id": account,
@@ -314,6 +314,7 @@ def _make_msg(phone="5511999887766", text="Olá", account="primary", msg_id=None
         "text": text,
         "message_type": "TEXT",
         "from_me": from_me,
+        "sender_name": sender_name,
     }
 
 
@@ -397,9 +398,20 @@ class TestCustomerResolution:
         assert conv.customer_codigo == "000001"
 
     def test_unknown_customer(self, gateway, sample_data, repos):
+        # Auto-cadastro: cliente desconhecido é registrado no CRM e vinculado
+        # à conversa (comportamento acordado no spec do módulo WhatsApp).
         result = gateway.process_incoming(_make_msg(phone="5511000000000", text="Olá"))
         conv = repos["conv_repo"].find_by_id(result["conversation_id"])
-        assert conv.customer_codigo is None
+        assert conv.customer_codigo is not None
+
+    def test_unknown_customer_gets_pushname(self, gateway, sample_data, repos):
+        # pushName do WhatsApp vira nome do cliente auto-cadastrado.
+        result = gateway.process_incoming(_make_msg(phone="5511000000000", text="Olá", sender_name="João das Neves"))
+        conv = repos["conv_repo"].find_by_id(result["conversation_id"])
+        client = repos["client_repo"].buscar_por_telefone("5511000000000")
+        assert client is not None
+        assert client.nome == "João das Neves"
+        assert conv.customer_codigo == client.codigo
 
 
 class TestLastInteractionBump:
