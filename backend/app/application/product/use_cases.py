@@ -23,6 +23,9 @@ class CreateProductUseCase:
             tipo=data["tipo"],
             preco=data["preco"],
             estoque=data.get("estoque", 0),
+            cartao_habilitado=data.get("cartao_habilitado", False),
+            preco_cartao_1x=data.get("preco_cartao_1x"),
+            preco_cartao_2x=data.get("preco_cartao_2x"),
             ativo=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -72,6 +75,12 @@ class UpdateProductUseCase:
             product.estoque = data["estoque"]
         if data.get("ativo") is not None:
             product.ativo = data["ativo"]
+        if data.get("cartao_habilitado") is not None:
+            product.cartao_habilitado = data["cartao_habilitado"]
+        if "preco_cartao_1x" in data:
+            product.preco_cartao_1x = data["preco_cartao_1x"]
+        if "preco_cartao_2x" in data:
+            product.preco_cartao_2x = data["preco_cartao_2x"]
 
         product.updated_at = datetime.utcnow()
         return self.repository.atualizar(product)

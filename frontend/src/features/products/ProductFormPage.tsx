@@ -11,12 +11,20 @@ import { Input } from '@/components/ui/Input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 
-const productSchema = z.object({
-  nome: z.string().min(1, 'Nome é obrigatório'),
-  tipo: z.enum(['GAS', 'AGUA'], { error: 'Tipo é obrigatório' }),
-  preco: z.number().min(0, 'Preço não pode ser negativo'),
-  estoque: z.number().int().min(0, 'Estoque não pode ser negativo'),
-})
+const productSchema = z
+  .object({
+    nome: z.string().min(1, 'Nome é obrigatório'),
+    tipo: z.enum(['GAS', 'AGUA'], { error: 'Tipo é obrigatório' }),
+    preco: z.number().min(0, 'Preço não pode ser negativo'),
+    estoque: z.number().int().min(0, 'Estoque não pode ser negativo'),
+    cartao_habilitado: z.boolean(),
+    preco_cartao_1x: z.number().min(0).nullable(),
+    preco_cartao_2x: z.number().min(0).nullable(),
+  })
+  .refine(
+    (d) => !d.cartao_habilitado || (d.preco_cartao_1x !== null && d.preco_cartao_1x > 0),
+    { message: 'Informe o valor 1x no cartão', path: ['preco_cartao_1x'] },
+  )
 
 type ProductFormData = z.infer<typeof productSchema>
 
@@ -34,12 +42,18 @@ export function ProductFormPage() {
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       estoque: 0,
+      cartao_habilitado: false,
+      preco_cartao_1x: null,
+      preco_cartao_2x: null,
     },
   })
+  const cartaoHabilitado = watch('cartao_habilitado')
 
   useEffect(() => {
     if (product && isEdit) {
@@ -48,6 +62,9 @@ export function ProductFormPage() {
         tipo: product.tipo as 'GAS' | 'AGUA',
         preco: product.preco,
         estoque: product.estoque,
+        cartao_habilitado: product.cartao_habilitado ?? false,
+        preco_cartao_1x: product.preco_cartao_1x ?? null,
+        preco_cartao_2x: product.preco_cartao_2x ?? null,
       })
     }
   }, [product, isEdit, reset])
@@ -166,6 +183,59 @@ export function ProductFormPage() {
                   <p className="text-xs text-destructive">{errors.estoque.message}</p>
                 )}
               </div>
+            </div>
+
+            {/* Pagamento no cartão (opcional por produto) */}
+            <div className="space-y-3 rounded-lg border p-4">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={cartaoHabilitado}
+                  onChange={(e) => {
+                    setValue('cartao_habilitado', e.target.checked)
+                    if (!e.target.checked) {
+                      setValue('preco_cartao_1x', null)
+                      setValue('preco_cartao_2x', null)
+                    }
+                  }}
+                />
+                Habilitar pagamento no cartão
+              </label>
+              {cartaoHabilitado && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label htmlFor="preco_cartao_1x" className="text-sm font-medium text-foreground">
+                      Valor no cartão 1x (R$) *
+                    </label>
+                    <Input
+                      id="preco_cartao_1x"
+                      type="number"
+                      step="0.01"
+                      {...register('preco_cartao_1x', { valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                    {errors.preco_cartao_1x && (
+                      <p className="text-xs text-destructive">{errors.preco_cartao_1x.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="preco_cartao_2x" className="text-sm font-medium text-foreground">
+                      Valor no cartão 2x (R$)
+                    </label>
+                    <Input
+                      id="preco_cartao_2x"
+                      type="number"
+                      step="0.01"
+                      {...register('preco_cartao_2x', { valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                    {errors.preco_cartao_2x && (
+                      <p className="text-xs text-destructive">{errors.preco_cartao_2x.message}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

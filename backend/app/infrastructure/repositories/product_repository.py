@@ -23,6 +23,9 @@ class SQLAlchemyProductRepository(TenantMixin, ProductRepository):
             nome=model.nome,
             tipo=model.tipo,
             preco=model.preco,
+            cartao_habilitado=bool(model.cartao_habilitado),
+            preco_cartao_1x=model.preco_cartao_1x,
+            preco_cartao_2x=model.preco_cartao_2x,
             estoque=model.estoque,
             ativo=model.ativo,
             created_at=model.created_at,
@@ -37,6 +40,9 @@ class SQLAlchemyProductRepository(TenantMixin, ProductRepository):
                 model.nome = entity.nome
                 model.tipo = entity.tipo
                 model.preco = entity.preco
+                model.cartao_habilitado = entity.cartao_habilitado
+                model.preco_cartao_1x = entity.preco_cartao_1x
+                model.preco_cartao_2x = entity.preco_cartao_2x
                 model.estoque = entity.estoque
                 model.ativo = entity.ativo
                 return model
@@ -47,6 +53,9 @@ class SQLAlchemyProductRepository(TenantMixin, ProductRepository):
             nome=entity.nome,
             tipo=entity.tipo,
             preco=entity.preco,
+            cartao_habilitado=entity.cartao_habilitado,
+            preco_cartao_1x=entity.preco_cartao_1x,
+            preco_cartao_2x=entity.preco_cartao_2x,
             estoque=entity.estoque,
             ativo=entity.ativo,
         )

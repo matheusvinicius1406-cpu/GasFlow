@@ -23,6 +23,11 @@ class Product:
     preco: float
     estoque: int = 0
 
+    # Pagamento no cartão (opcional): habilitado + valores 1x/2x.
+    cartao_habilitado: bool = False
+    preco_cartao_1x: Optional[float] = None
+    preco_cartao_2x: Optional[float] = None
+
     id: Optional[int] = None
     ativo: bool = True
     created_at: Optional[datetime] = None

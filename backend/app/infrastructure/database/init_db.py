@@ -124,7 +124,10 @@ def _ensure_sqlite_columns() -> None:
 
 
 SCHEMA_VERSION = (
-    3  # v3: Decisão B3(a) — débito de estoque movido do pedido CONFIRMED
+    4  # v4: Reorganização estrutural (docs/reorg-plan.md) — limpeza TOTAL do
+    # banco (clients, whatsapp_conversations/messages, ai_conversations/messages)
+    # + catálogo real (2 produtos: Água R$10, Gás P13 R$120 com cartão 1x/2x).
+    # v3: Decisão B3(a) — débito de estoque movido do pedido CONFIRMED
     # para a entrega DELIVERED (reversão one-shot dos débitos prematuros;
     # ver _revert_premature_stock_debits e docs/migrations/2026-09-delivery-debit.md).
     # v2: colunas CRM de clients (has_name, is_whatsapp, last_interaction_at, last_sync_at, marketing_status)
@@ -486,6 +489,85 @@ def _revert_premature_stock_debits() -> None:
         )
 
 
+def _reorg_cleanup() -> None:
+    """v4 — Limpeza TOTAL do banco + catálogo real (docs/reorg-plan.md §2).
+
+    Decisão do dono (15/09/2026): zerar clientes/conversas/dados de teste e
+    recomeçar com números reais. One-shot e idempotente (marcador em
+    system_settings). O backup do arquivo é feito por _backup_before_migration.
+
+    Apaga: clients, whatsapp_conversations, whatsapp_messages,
+    ai_conversations, ai_messages, ai_audit_log, site_leads, segments,
+    coupons/coupon_redemptions, purchase_notes* (se existirem com dados).
+    Re-seeda: catálogo com 2 produtos reais informados pelo dono.
+    NUNCA toca: auth_*, permissions, role_permissions, system_settings.
+    """
+    import logging
+    from sqlalchemy import text
+
+    MARKER = "reorg_cleanup_v4"
+    logger = logging.getLogger("gasflow.init_db")
+
+    with engine.begin() as conn:
+        try:
+            row = conn.execute(text("SELECT value FROM system_settings WHERE id = :k"), {"k": MARKER}).fetchone()
+        except Exception:
+            row = None  # tabela ainda não existe — segue e cria via INSERT
+        if row:
+            return  # já executada
+
+        logger.warning("reorg.v4.cleanup_start")
+
+        # Apaga dados de operação/teste (ordem respeita FKs lógicas).
+        for table in (
+            "whatsapp_messages",
+            "whatsapp_conversations",
+            "ai_messages",
+            "ai_conversations",
+            "ai_audit_logs",
+            "site_leads",
+            "segments",
+            "coupon_redemptions",
+            "coupons",
+            "purchase_note_items",
+            "purchase_notes",
+            "clients",
+            "products",
+        ):
+            try:
+                conn.execute(text(f"DELETE FROM {table}"))
+            except Exception:
+                # Tabela pode não existir em bases novas — seguir.
+                pass
+
+        # ── Catálogo REAL informado pelo dono ──
+        # Água 20L: R$ 10,00 (dinheiro/pix/débito)
+        # Gás P13:  R$ 120,00 (dinheiro/pix/débito) | cartão 1x R$ 125 | 2x R$ 130
+        conn.execute(
+            text(
+                """INSERT INTO products
+                (tenant_id, codigo, nome, tipo, preco, cartao_habilitado,
+                 preco_cartao_1x, preco_cartao_2x, estoque, ativo, created_at, updated_at)
+                VALUES
+                ('default', '000001', 'Galao de Agua 20L', 'AGUA', 10.0, 0, NULL, NULL, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('default', '000002', 'Botijao de Gas P13 (13kg)', 'GAS', 120.0, 1, 125.0, 130.0, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""
+            )
+        )
+
+        conn.execute(
+            text(
+                """INSERT INTO system_settings (id, category, value, description, is_editable, updated_by, updated_at)
+                VALUES (:k, 'operations', :v, :d, 0, 'migration', CURRENT_TIMESTAMP)"""
+            ),
+            {
+                "k": MARKER,
+                "v": '{"done": true, "date": "2026-09-15"}',
+                "d": "Reorganizacao estrutural v4: limpeza total + catalogo real",
+            },
+        )
+        logger.warning("reorg.v4.cleanup_done")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     try:
@@ -494,6 +576,7 @@ def init_db():
         _ensure_schema_version()
         _backfill_stock_full_empty()
         _revert_premature_stock_debits()
+        _reorg_cleanup()
         _seed_rbac_if_needed()
     except Exception:  # pragma: no cover — nunca derrubar o boot por migration
         import logging

@@ -90,12 +90,21 @@ def test_ensure_sqlite_columns_is_idempotent(old_schema_db):
 
 
 def test_init_db_end_to_end_on_old_database(old_schema_db):
-    """Boot completo: create_all + migration → INSERT com colunas novas funciona."""
+    """Boot completo: create_all + migration → INSERT com colunas novas funciona.
+
+    v4 (reorg): a migration de limpeza total APAGA clients existentes — o
+    dado legado 'Cliente Antigo' não sobrevive ao boot (decisão do dono,
+    docs/reorg-plan.md §2). O novo INSERT volta a base para 1 registro.
+    """
     from app.infrastructure.database.init_db import init_db
 
     init_db()
 
     c = sqlite3.connect(old_schema_db)
+    # Limpeza total: o cliente legado foi removido pela migration v4.
+    legado = c.execute("SELECT COUNT(*) FROM clients WHERE nome = 'Cliente Antigo'").fetchone()[0]
+    assert legado == 0
+
     c.execute(
         "INSERT INTO clients (tenant_id, codigo, nome, telefone, rua, numero, bairro,"
         " ativo, has_name, is_whatsapp, marketing_status)"
@@ -104,7 +113,7 @@ def test_init_db_end_to_end_on_old_database(old_schema_db):
     c.commit()
     total = c.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
     c.close()
-    assert total == 2
+    assert total == 1
 
 
 def test_schema_version_recorded_and_idempotent(old_schema_db):

@@ -53,6 +53,9 @@ export interface Product {
   preco: number
   estoque: number
   ativo: boolean
+  cartao_habilitado: boolean
+  preco_cartao_1x: number | null
+  preco_cartao_2x: number | null
   created_at: string
   updated_at: string
 }

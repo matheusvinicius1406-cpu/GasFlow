@@ -12,6 +12,9 @@ class ProductCreate(BaseModel):
     tipo: str
     preco: float
     estoque: int = 0
+    cartao_habilitado: bool = False
+    preco_cartao_1x: Optional[float] = None
+    preco_cartao_2x: Optional[float] = None
 
 
 class ProductUpdate(BaseModel):
@@ -20,6 +23,9 @@ class ProductUpdate(BaseModel):
     preco: Optional[float] = None
     estoque: Optional[int] = None
     ativo: Optional[bool] = None
+    cartao_habilitado: Optional[bool] = None
+    preco_cartao_1x: Optional[float] = None
+    preco_cartao_2x: Optional[float] = None
 
 
 class ProductResponse(BaseModel):
@@ -31,5 +37,8 @@ class ProductResponse(BaseModel):
     preco: float
     estoque: int
     ativo: bool
+    cartao_habilitado: bool = False
+    preco_cartao_1x: Optional[float] = None
+    preco_cartao_2x: Optional[float] = None
     created_at: datetime
     updated_at: datetime
