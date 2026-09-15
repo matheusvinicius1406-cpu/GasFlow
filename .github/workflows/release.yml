@@ -59,7 +59,9 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
-        run: npm run build:win
+        # --publish never: em build de tag o electron-builder tentaria publicar
+        # aqui e morreria sem GH_TOKEN (o publish correto é o step seguinte).
+        run: npm run build:win -- --publish never
 
       - name: Publish installer
         env:
