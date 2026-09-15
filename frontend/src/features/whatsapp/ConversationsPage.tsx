@@ -5,7 +5,7 @@
  * Shows conversation list, detail with messages, and takeover/release.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { MessageSquare, User, Bot, Headphones, ArrowLeft, Send, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -28,6 +28,7 @@ interface ConversationInfo {
   account_id: string
   customer_phone: string
   customer_codigo: string | null
+  contact_name: string | null
   state: string
   human_operator: string | null
   message_count: number
@@ -73,6 +74,34 @@ function formatTime(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** (91) 8137-6879 | +55 91 8137-6879 — tolerant a tamanhos variados. */
+function formatPhone(phone: string): string {
+  const d = phone.replace(/\D/g, '')
+  if (d.length === 13 && d.startsWith('55')) {
+    return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`
+  }
+  if (d.length === 12 && d.startsWith('55')) {
+    return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`
+  }
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return phone
+}
+
+/** Nome de exibição: contato do celular > nome do cadastro > telefone formatado. */
+function displayName(conv: Pick<ConversationInfo, 'contact_name' | 'customer_codigo' | 'customer_phone'>): string {
+  return conv.contact_name || conv.customer_codigo || formatPhone(conv.customer_phone)
+}
+
+function senderLabel(sender: string): string {
+  switch (sender) {
+    case 'customer': return 'Cliente'
+    case 'assistant': return 'IA'
+    case 'human': return 'Você'
+    default: return sender
+  }
 }
 
 
@@ -126,10 +155,10 @@ function ConversationList({
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <User className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm truncate">
-                        {conv.customer_codigo || conv.customer_phone}
+                        {displayName(conv)}
                       </span>
                       <Badge variant={getStateColor(conv.state)} className="text-xs flex-shrink-0">
                         {getStateLabel(conv.state)}
@@ -160,16 +189,25 @@ function ConversationDetailPanel({
   onTakeover,
   onRelease,
   onSendReply,
+  replyError,
 }: {
   detail: ConversationDetail
   onBack: () => void
   onTakeover: () => void
   onRelease: () => void
   onSendReply: (text: string) => void
+  replyError?: string | null
 }) {
   const [replyText, setReplyText] = useState('')
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const isHumanActive = detail.state === 'HUMAN_ACTIVE'
   const isHumanPending = detail.state === 'HUMAN_PENDING'
+
+  // Auto-scroll para a última mensagem
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [detail.messages])
 
   const handleSend = () => {
     if (!replyText.trim()) return
@@ -187,10 +225,10 @@ function ConversationDetailPanel({
           </Button>
           <div>
             <h3 className="font-semibold">
-              {detail.customer_codigo || detail.customer_phone}
+              {displayName(detail)}
             </h3>
             <p className="text-xs text-muted-foreground">
-              {detail.customer_phone} • {detail.account_id}
+              {formatPhone(detail.customer_phone)} • conta {detail.account_id}
             </p>
           </div>
         </div>
@@ -243,51 +281,54 @@ function ConversationDetailPanel({
         </Card>
       )}
 
-      {/* Messages */}
+      {/* Messages — estilo WhatsApp: bolhas alinhadas, auto-scroll no fim */}
       <Card>
-        <CardContent className="p-4 max-h-96 overflow-y-auto">
-          <div className="space-y-3">
-            {detail.messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.direction === 'OUTGOING' ? 'justify-end' : 'justify-start'}`}
-              >
+        <CardContent className="p-4">
+          <div ref={scrollRef} className="max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              {detail.messages.map((msg) => (
                 <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                    msg.direction === 'OUTGOING'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
+                  key={msg.id}
+                  className={`flex ${msg.direction === 'OUTGOING' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className="flex items-center gap-1 mb-1">
-                    {msg.sender === 'customer' && <User className="h-3 w-3" />}
-                    {msg.sender === 'assistant' && <Bot className="h-3 w-3" />}
-                    {msg.sender === 'human' && <Headphones className="h-3 w-3" />}
-                    <span className="text-xs opacity-70">{msg.sender}</span>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                      msg.direction === 'OUTGOING'
+                        ? 'bg-primary text-primary-foreground rounded-br-sm'
+                        : 'bg-muted rounded-bl-sm'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      {msg.sender === 'customer' && <User className="h-3 w-3" />}
+                      {msg.sender === 'assistant' && <Bot className="h-3 w-3" />}
+                      {msg.sender === 'human' && <Headphones className="h-3 w-3" />}
+                      <span className="text-xs opacity-70">{senderLabel(msg.sender)}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    <p className="text-xs opacity-50 mt-1 text-right">{formatTime(msg.created_at)}</p>
                   </div>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  <p className="text-xs opacity-50 mt-1">{formatTime(msg.created_at)}</p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Reply (only when human active) */}
-      {isHumanActive && (
-        <div className="flex gap-2">
-          <Input
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            placeholder="Digite sua resposta..."
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          />
-          <Button onClick={handleSend} disabled={!replyText.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
+      {/* Reply — sempre disponível (auto-assume ao responder) */}
+      {replyError && (
+        <p className="text-xs text-destructive">{replyError}</p>
       )}
+      <div className="flex gap-2">
+        <Input
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          placeholder="Digite sua resposta... (envia pelo WhatsApp e assume a conversa)"
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+        />
+        <Button onClick={handleSend} disabled={!replyText.trim()}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   )
 }
@@ -300,6 +341,7 @@ export function ConversationsPage() {
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [replyError, setReplyError] = useState<string | null>(null)
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -334,6 +376,13 @@ export function ConversationsPage() {
     if (selectedId) fetchDetail(selectedId)
   }, [selectedId, fetchDetail])
 
+  // Polling do thread aberto: mensagens novas aparecem ao vivo (estilo WhatsApp)
+  useEffect(() => {
+    if (!selectedId) return
+    const interval = setInterval(() => fetchDetail(selectedId), 5000)
+    return () => clearInterval(interval)
+  }, [selectedId, fetchDetail])
+
   const handleTakeover = async () => {
     if (!selectedId) return
     try {
@@ -356,11 +405,15 @@ export function ConversationsPage() {
 
   const handleSendReply = async (text: string) => {
     if (!selectedId) return
+    setReplyError(null)
     try {
       await apiClient.post(`/whatsapp/conversations/${selectedId}/reply`, { text })
       fetchDetail(selectedId)
-    } catch {
-      // silent
+    } catch (err) {
+      const detailMsg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Falha ao enviar a resposta. Tente novamente.'
+      setReplyError(detailMsg)
     }
   }
 
@@ -404,6 +457,7 @@ export function ConversationsPage() {
             onTakeover={handleTakeover}
             onRelease={handleRelease}
             onSendReply={handleSendReply}
+            replyError={replyError}
           />
         )}
       </div>

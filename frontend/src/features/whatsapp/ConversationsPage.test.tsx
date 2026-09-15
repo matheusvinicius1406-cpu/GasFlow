@@ -101,7 +101,7 @@ describe('ConversationsPage', () => {
     // A mensagem aparece na prévia da lista e no detalhe → usar getAllByText
     expect(screen.getAllByText('Quero um P13').length).toBeGreaterThan(0)
     expect(screen.getByText('Ótimo! Qual endereço?')).toBeInTheDocument()
-    expect(screen.getByText('customer')).toBeInTheDocument()
+    expect(screen.getByText('Cliente')).toBeInTheDocument()
   })
 
   it('shows the draft summary in the detail panel', async () => {

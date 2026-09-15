@@ -43,6 +43,9 @@ export function realtimeQueryKeys(eventType: string): string[][] {
   if (eventType.startsWith('order.')) {
     return [['orders'], ['dashboard']]
   }
+  if (eventType.startsWith('whatsapp.')) {
+    return [['whatsapp-conversations'], ['orders'], ['dashboard'], ['customers']]
+  }
   return []
 }
 
