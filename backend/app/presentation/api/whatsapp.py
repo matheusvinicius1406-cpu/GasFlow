@@ -12,11 +12,14 @@ Service Authentication:
 """
 
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.orm import Session
 
 import httpx
+
+from app.infrastructure.database.dependencies import get_db
 
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
@@ -143,14 +146,64 @@ class WhatsAppSendMessageRequest(BaseModel):
 
 
 @router.post("/accounts/{account_id}/messages")
-async def send_message(account_id: str, data: WhatsAppSendMessageRequest):
-    """Send a message via a specific WhatsApp account."""
+async def send_message(account_id: str, data: WhatsAppSendMessageRequest, db: Session = Depends(get_db)):
+    """Send a message via a specific WhatsApp account.
+
+    Persiste o envio na thread do CRM (direction=OUTGOING, sender=human)
+    para que mensagens manuais/API apareçam nas Conversas (fix D1 — ver
+    docs/whatsapp-fix-spec.md). Falha de persistência NUNCA bloqueia o envio.
+    """
     payload = data.model_dump()
     if not payload.get("idempotency_key"):
         import uuid
 
         payload["idempotency_key"] = str(uuid.uuid4())
-    return await _proxy_post(f"/whatsapp/accounts/{account_id}/messages", payload)
+    result = await _proxy_post(f"/whatsapp/accounts/{account_id}/messages", payload)
+
+    # ── Persistência CRM (outbound) — tolerante a falhas ─────────────
+    if isinstance(result, dict) and result.get("success"):
+        try:
+            import re as _re
+
+            from app.domain.whatsapp.conversation import Conversation, ConversationMessage, ConversationState
+            from app.infrastructure.whatsapp.repositories import (
+                SQLAlchemyConversationMessageRepository,
+                SQLAlchemyConversationRepository,
+            )
+
+            # Mesma regra de normalização do gateway (dígitos, lstrip 0, min 8).
+            digits = _re.sub(r"\D", "", payload["recipient"]).lstrip("0")
+            if len(digits) >= 8:
+                conv_repo = SQLAlchemyConversationRepository(db)
+                msg_repo = SQLAlchemyConversationMessageRepository(db)
+                conv = conv_repo.find_by_phone_and_account(digits, account_id)
+                if not conv:
+                    conv = conv_repo.create(
+                        Conversation(
+                            account_id=account_id,
+                            customer_phone=digits,
+                            state=ConversationState.IDLE,
+                        )
+                    )
+                msg_repo.create(
+                    ConversationMessage(
+                        conversation_id=conv.id,
+                        direction="OUTGOING",
+                        sender="human",
+                        content=payload["message"],
+                        message_type="TEXT",
+                        metadata={
+                            "provider_message_id": result.get("messageId"),
+                            "idempotency_key": payload["idempotency_key"],
+                            "origin": "api_send",
+                        },
+                    )
+                )  # repo.create já atualiza last_message/last_message_at da conversa
+        except Exception:
+            import logging
+
+            logging.getLogger("gasflow.whatsapp.bridge").warning("falha ao persistir outbound no CRM", exc_info=True)
+    return result
 
 
 @router.get("/accounts/{account_id}/messages")
