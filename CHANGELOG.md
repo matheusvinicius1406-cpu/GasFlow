@@ -75,7 +75,9 @@ Implementação completa do `docs/reorg-plan.md` (F1–F6):
   whatsapp_conversations/messages, ai_* e afins zerados no boot + catálogo
   real semeado — Água 20L R$10 e Gás P13 R$120 (cartão 1x R$125 / 2x R$130).
   `auth_*`, `system_settings` e RBAC intocados. Backup automático pré-migration.
-- Suítes: backend 1446 ✅, frontend 194 ✅, whatsapp 94 ✅, desktop 41 ✅,
+- Suítes: backend 1446 ✅, frontend 193 ✅ (194 − 1 teste do
+  IntelligencePage deletado com a rota; +3 novos do Copilot/WhatsApp),
+  whatsapp 94 ✅, desktop 41 ✅,
   mobile 9 ✅.
 
 ### 🧪 Protótipo — Painel WhatsApp Web (14/09/2026)

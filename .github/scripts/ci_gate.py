@@ -77,7 +77,41 @@ def check_jobs(repo: str, run_id: int, token: str) -> None:
     print("Gate OK: backend/frontend/whatsapp/agent verdes no commit da tag.")
 
 
+def dry_run() -> int:
+    """Validação local sem esperar conclusão de CI (--dry-run).
+
+    Confere: credenciais/variáveis presentes, conectividade com a API
+    (query barata do repositório) e formato do SHA. Não bloqueia nem
+    espera runs — serve para validar o setup antes de criar a tag.
+    """
+    token = os.environ.get("GH_TOKEN")
+    repo = os.environ.get("REPO")
+    sha = os.environ.get("SHA", "")
+
+    if not token:
+        print("dry-run: GH_TOKEN não definido.")
+        return 1
+    if not repo or "/" not in repo:
+        print("dry-run: REPO deve ser 'owner/repo'.")
+        return 1
+    if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha.lower()):
+        print("dry-run: SHA deve ser um commit SHA de 40 hex chars.")
+        return 1
+
+    try:
+        data = api_get(f"/repos/{repo}", token)
+        print(f"dry-run OK: API acessível para '{data.get('full_name', repo)}'.")
+        print("dry-run OK: GH_TOKEN, REPO e SHA válidos.")
+        return 0
+    except Exception as exc:  # urllib.HTTPError, timeout etc.
+        print(f"dry-run FALHOU: API inacessível: {exc}")
+        return 1
+
+
 def main() -> None:
+    if "--dry-run" in sys.argv:
+        sys.exit(dry_run())
+
     token = os.environ["GH_TOKEN"]
     repo = os.environ["REPO"]
     sha = os.environ["SHA"]
