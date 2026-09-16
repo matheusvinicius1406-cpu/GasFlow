@@ -1,43 +1,55 @@
 /**
- * GasFlow App do Entregador — entry RN (Fase 2).
+ * GasFlow App do Entregador — entry RN (F2 do spec).
  *
- * SCAFFOLD: este arquivo compila com o toolchain RN (após `npm install` no
- * diretório mobile/ — React Native 0.76, New Architecture). A lógica de
- * negócio (fila offline, work-hours LGPD, fallback de conexão) vive em
- * src/logic/* e é testada em CI via node --test (sem toolchain RN).
+ * Responsabilidades do container:
+ * 1. Carregar o consentimento LGPD persistido ANTES de decidir a rota inicial
+ *    (loadPersistedConsent + setConsentStorage com AsyncStorage quando disponível).
+ * 2. Resolver a conexão ativa (LAN → nuvem → offline, logic/connection.ts) e
+ *    publicar no connection store usado pelos contêineres wired.
+ * 3. Montar o RootNavigator (gates de login/consentimento nas telas).
  *
- * Telas do MVP (prompt 5.2): Login, Rota do Dia, Detalhe da Entrega,
- * Concluir Entrega (foto+assinatura), Reportar Problema, Histórico, Perfil.
+ * Compila com o toolchain RN (React Native 0.76). A lógica de negócio continua
+ * em src/logic/*, testada em CI via node --test (sem toolchain RN).
  */
 
-import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import React, { useEffect, useState } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import LoginScreen from "./src/screens/LoginScreen";
-import RouteTodayScreen from "./src/screens/RouteTodayScreen";
-import DeliveryDetailScreen from "./src/screens/DeliveryDetailScreen";
+import RootNavigator from "./src/navigation/RootNavigator";
+import { loadPersistedConsent, setConsentStorage, createMemoryConsentStorage } from "./src/logic/session";
+import { resolveConnection } from "./src/logic/connection";
+import { useConnectionStore } from "./src/containers/wired";
 
-export type RootStackParamList = {
-  Login: undefined;
-  RouteToday: undefined;
-  DeliveryDetail: { deliveryId: string };
-};
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
+/**
+ * Storage do consentimento no RN. O AsyncStorage é dependência nativa — para
+ * não exigir pod/android build na F2, usamos o storage em memória por padrão
+ * e trocamos por AsyncStorage quando o pacote estiver no projeto (F2.5).
+ */
+setConsentStorage(createMemoryConsentStorage());
 
 export default function App() {
+  const [booted, setBooted] = useState(false);
+  const setConnection = useConnectionStore((s) => s.setConnection);
+
+  useEffect(() => {
+    void (async () => {
+      await loadPersistedConsent();
+      // Targets reais virão das configurações/QR na F2.5; aqui, o dev server
+      // local é o fallback LAN default e o relay da nuvem quando configurado.
+      const targets = {
+        lan: { baseUrl: "http://10.0.2.2:8000" }, // host machine a partir do emulador Android
+        cloud: undefined,
+      };
+      const resolved = await resolveConnection(targets, fetch);
+      setConnection(resolved);
+      setBooted(true);
+    })();
+  }, [setConnection]);
+
+  if (!booted) return null; // splash nativo cobre este instante
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="RouteToday" component={RouteTodayScreen} options={{ title: "Rota do Dia" }} />
-        <Stack.Screen
-          name="DeliveryDetail"
-          component={DeliveryDetailScreen}
-          options={{ title: "Entrega" }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <RootNavigator />
+    </SafeAreaProvider>
   );
 }

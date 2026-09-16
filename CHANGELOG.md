@@ -4,6 +4,33 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 📱 F2 — Mobile RN: navegação com gates + consentimento LGPD + fila offline ponta a ponta (16/09/2026)
+
+Implementação da F2 do `docs/entregas-cupons-spec.md`:
+
+- **RootNavigator com gates** (`src/navigation/`): login → consentimento →
+  rota do dia → detalhe da entrega. Swipe desabilitado nos gates (não puláveis);
+  splash mínimo enquanto o consentimento persistido carrega (sem flash).
+- **ConsentScreen LGPD (B3)**: bloqueante no 1º login, texto sem jargão (o quê,
+  quando, retenção 90 dias, quem vê), checkbox obrigatória. Registro com data +
+  `CONSENT_VERSION` no store zustand (`logic/session.ts`) com storage injetável
+  (memória nos testes; AsyncStorage entra na F2.5). Termo antigo ou storage
+  quebrado = fail-closed (pede de novo).
+- **Fila offline ponta a ponta (C4.3)**: contêineres wired (`src/containers/`)
+  ligam as telas ao store + `OfflineQueue` + `POST /driver/deliveries/:id/:action`
+  com `client_action_id` no corpo. Sem rede: ação fica `pending` e reenvia no
+  flush ao reconectar; duplicata nunca chega ao servidor (1 POST por id).
+- **API pura (`logic/api.ts`)**: login `/auth/mobile/login`, entregas e ações
+  com baseUrl/fetch/token injetáveis — testável em node --test.
+- Fix de dependências (`react-native-screens` 4.x, `react-native-permissions`
+  5.x — versões nos package.json não existiam mais no registry) e do script de
+  teste para glob (`node --test "tests/**/*.test.ts"` — Node 24/Windows não
+  aceita diretório como alvo).
+- Sem build nativo nesta fase (F2.5) — typecheck `tsc` cobre telas+navigator
+  e suíte de lógica roda em CI.
+- Testes: +7 mobile (5 consent gate fail-closed/versão do termo/persistência,
+  2 replay offline→synced + não-duplicação). Suíte: mobile 16 ✅.
+
 ### 🗺️ F1b — Mapa do operador com posição dos entregadores (16/09/2026)
 
 Implementação da F1b do `docs/entregas-cupons-spec.md`:
