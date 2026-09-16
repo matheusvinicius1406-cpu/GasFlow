@@ -8,12 +8,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, MapPin, Clock, CheckCircle, XCircle, RefreshCw, LogOut, Package, Pause, Play, Navigation } from 'lucide-react'
+import { Truck, MapPin, Clock, CheckCircle, XCircle, RefreshCw, LogOut, Package, Pause, Play, Navigation, BellRing } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useRealtime } from '@/lib/hooks/useRealtime'
+import { isRelevantEvent, type RealtimeServerMessage } from '@/lib/realtime'
+import { useNotifySound } from '@/lib/hooks/useNotifySound'
+
+/** Eventos que significam "nova entrega pra você" (backend roteia p/ driver:{id}). */
+const ASSIGNMENT_EVENTS = new Set(['delivery.assigned', 'delivery.created', 'dispatch.assigned'])
 
 interface Delivery {
   delivery_id: string
@@ -97,8 +103,11 @@ export function DriverHomePage() {
   const [gpsEnabled, setGpsEnabled] = useState(false)
   const [lastGpsUpdate, setLastGpsUpdate] = useState<string | null>(null)
   const [detailDelivery, setDetailDelivery] = useState<Delivery | null>(null)
+  const [assignmentToast, setAssignmentToast] = useState<string | null>(null)
   const gpsWatchId = useRef<number | null>(null)
+  const latestPosition = useRef<GeolocationPosition | null>(null)
   const navigate = useNavigate()
+  const { play } = useNotifySound()
 
   const token = localStorage.getItem('driver_token')
 
@@ -125,6 +134,9 @@ export function DriverHomePage() {
     }
   }, [token, navigate])
 
+  // Intervalo de rastreio (vem do /driver/me — settings driver.tracking.interval_seconds).
+  const trackingIntervalRef = useRef(120)
+
   const fetchProfile = useCallback(async () => {
     if (!token) return
     try {
@@ -135,37 +147,61 @@ export function DriverHomePage() {
         const data = await response.json()
         setDriverName(data.name || 'Motorista')
         setDriverStatus(data.status || 'AVAILABLE')
+        if (data.tracking_interval_seconds) {
+          trackingIntervalRef.current = Math.max(15, Number(data.tracking_interval_seconds) || 120)
+        }
       }
     } catch { /* silent */ }
   }, [token])
 
-  // GPS Tracking
+  // Realtime: notificação de nova entrega atribuída (F1a — <10s).
+  // O backend roteia delivery.assigned para o canal driver:{id} da sessão.
+  useRealtime({
+    token,
+    onEvent: useCallback((message: RealtimeServerMessage) => {
+      if (!isRelevantEvent(message) || !message.event?.type) return
+      if (!ASSIGNMENT_EVENTS.has(message.event.type)) return
+      play()
+      setAssignmentToast('Nova entrega atribuída!')
+      window.setTimeout(() => setAssignmentToast(null), 6000)
+      fetchDeliveries()
+    }, [play, fetchDeliveries]),
+  })
+
+  // GPS Tracking — watchPosition captura a posição mais precisa disponível,
+  // mas o ENVIO é throttleado pelo intervalo configurável (settings
+  // driver.tracking.interval_seconds, default 120s — decisão F1a).
+  const gpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const startGpsTracking = useCallback(() => {
     if (!navigator.geolocation) return
     gpsWatchId.current = navigator.geolocation.watchPosition(
-      async (position) => {
-        if (!token) return
-        try {
-          await fetch('/api/v1/driver/location', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              speed: position.coords.speed,
-              bearing: position.coords.heading,
-            }),
-          })
-          setLastGpsUpdate(new Date().toLocaleTimeString())
-        } catch { /* silent */ }
+      (position) => {
+        latestPosition.current = position
+        setLastGpsUpdate(new Date().toLocaleTimeString())
       },
       () => { /* permission denied */ },
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
     )
+    // Timer de envio independente do watch — respeita o intervalo da bateria.
+    gpsTimerRef.current = setInterval(() => {
+      const position = latestPosition.current
+      if (!position || !token) return
+      void fetch('/api/v1/driver/location', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          speed: position.coords.speed,
+          bearing: position.coords.heading,
+        }),
+      }).catch(() => { /* silent */ })
+    }, trackingIntervalRef.current * 1000)
     setGpsEnabled(true)
   }, [token])
 
@@ -174,12 +210,19 @@ export function DriverHomePage() {
       navigator.geolocation.clearWatch(gpsWatchId.current)
       gpsWatchId.current = null
     }
+    if (gpsTimerRef.current !== null) {
+      clearInterval(gpsTimerRef.current)
+      gpsTimerRef.current = null
+    }
     setGpsEnabled(false)
   }, [])
 
   // Cleanup GPS on unmount
   useEffect(() => {
-    return () => { if (gpsWatchId.current !== null) navigator.geolocation.clearWatch(gpsWatchId.current) }
+    return () => {
+      if (gpsWatchId.current !== null) navigator.geolocation.clearWatch(gpsWatchId.current)
+      if (gpsTimerRef.current !== null) clearInterval(gpsTimerRef.current)
+    }
   }, [])
 
   // Availability toggle
@@ -306,6 +349,14 @@ export function DriverHomePage() {
 
   return (
     <div className="space-y-4 p-4">
+      {/* Notificação de nova atribuição (realtime, F1a) */}
+      {assignmentToast && (
+        <div className="flex items-center gap-2 rounded-md bg-primary/10 p-3 text-sm font-medium text-primary ring-1 ring-primary/30">
+          <BellRing className="h-4 w-4 animate-pulse" />
+          {assignmentToast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

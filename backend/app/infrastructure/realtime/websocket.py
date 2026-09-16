@@ -138,7 +138,13 @@ class ConnectionManager:
             await self.broadcast_to_channel(f"delivery:{aggregate_id}", event_data)
 
         # 3. Driver channel (if driver-related)
-        driver_id = data.get("driver_id", "") or (aggregate_id if event_type.startswith("driver.") else "")
+        driver_id = data.get("driver_id", "")
+        if not driver_id and event_type.startswith("driver."):
+            driver_id = aggregate_id
+        if not driver_id and event_type.startswith("delivery.") and str(event.get("actor_type", "")) == "DRIVER":
+            # delivery.assigned é publicado com o motorista como actor — o app
+            # do entregador precisa ouvir (notificação <10s da F1a).
+            driver_id = str(event.get("actor_id", ""))
         if driver_id:
             await self.broadcast_to_channel(f"driver:{driver_id}", event_data)
 
@@ -302,10 +308,17 @@ async def websocket_endpoint(
         else:
             channel = f"tenant:{meta['tenant_id']}"
 
-    # Security: ensure channel matches tenant
+    # Security: ensure channel matches tenant. Driver sessions attach to their
+    # own driver:{id} channel (o nome não contém o tenant) — permitido apenas
+    # para o próprio driver_id da sessão.
     if meta["tenant_id"] and meta["tenant_id"] not in channel:
-        await websocket.close(code=4003, reason="Forbidden: tenant mismatch")
-        return
+        if meta.get("role") == "DRIVER" and meta.get("driver_id"):
+            if channel != f"driver:{meta['driver_id']}":
+                await websocket.close(code=4003, reason="Forbidden: channel mismatch")
+                return
+        else:
+            await websocket.close(code=4003, reason="Forbidden: tenant mismatch")
+            return
 
     manager = get_ws_manager()
     await manager.connect(websocket, channel, meta)

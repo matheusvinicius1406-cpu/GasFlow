@@ -107,6 +107,54 @@ async def test_broadcast_to_channel_with_no_connections_is_noop():
     assert manager.get_stats()["total_events_sent"] == 0
 
 
+# ── F1a: roteamento de assignment para o canal do motorista ──
+
+
+@pytest.mark.asyncio
+async def test_delivery_assigned_routes_to_driver_channel():
+    """delivery.assigned (actor = DRIVER) deve chegar no canal driver:{id}.
+
+    O assignment publica o motorista como actor_id/actor_type=DRIVER (sem
+    driver_id em data) — sem este roteamento o app do entregador nunca
+    recebe a notificação <10s (F1a).
+    """
+    manager = ConnectionManager()
+    ws_driver = FakeWS(1)
+    await manager.connect(ws_driver, "driver:drv7", {})
+
+    event = DomainEvent(
+        type=EventType.DELIVERY_ASSIGNED,
+        tenant_id="t1",
+        aggregate_id="d9",
+        actor_id="drv7",
+        actor_type="DRIVER",
+        data={},
+    )
+    await manager.broadcast_event(event)
+
+    msgs = [json.loads(m) for m in ws_driver.sent]
+    assert msgs[0]["event"]["type"] == "delivery.assigned"
+
+
+@pytest.mark.asyncio
+async def test_delivery_assigned_without_driver_actor_stays_off_driver_channels():
+    """Assignment sem actor DRIVER (ex.: sistema) não inventa canal de driver."""
+    manager = ConnectionManager()
+    ws_driver = FakeWS(1)
+    await manager.connect(ws_driver, "driver:drv7", {})
+
+    event = DomainEvent(
+        type=EventType.DELIVERY_ASSIGNED,
+        tenant_id="t1",
+        aggregate_id="d9",
+        actor_type="SYSTEM",
+        data={},
+    )
+    await manager.broadcast_event(event)
+
+    assert ws_driver.sent == []
+
+
 # ── Event → channel routing ─────────────────────────────
 
 

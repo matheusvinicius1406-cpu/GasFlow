@@ -63,6 +63,7 @@ class DriverMeResponse(BaseModel):
     status: str
     active: bool
     tenant_id: str
+    tracking_interval_seconds: int = 120
 
 
 class DriverDeliverySummary(BaseModel):
@@ -412,6 +413,19 @@ async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
         model = repo.find_by_id_as_model(ctx["driver_id"])
         if not model:
             raise HTTPException(404, detail="Driver not found")
+
+        # Intervalo de rastreio configurável (F1a) — lido do quadro de
+        # configurações; default 120s se a chave não existir (pré-seed).
+        tracking_interval = 120
+        try:
+            from app.application.settings.settings_service import SettingsService
+
+            settings_svc = SettingsService(db)
+            raw = settings_svc.get_value("driver.tracking.interval_seconds", 120)
+            tracking_interval = max(15, int(raw))
+        except Exception:
+            pass
+
         return DriverMeResponse(
             driver_id=model.codigo,
             name=model.nome,
@@ -419,6 +433,7 @@ async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
             status=model.status or "AVAILABLE",
             active=model.ativo,
             tenant_id=model.tenant_id or "default",
+            tracking_interval_seconds=tracking_interval,
         )
     finally:
         db.close()

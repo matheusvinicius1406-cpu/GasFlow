@@ -7,8 +7,24 @@ import { RealtimeBridge } from '@/components/realtime/RealtimeBridge'
 import { UpdateNotifier } from '@/components/UpdateNotifier'
 import { FloatingCopilot } from '@/components/copilot/FloatingCopilot'
 
+/**
+ * Sessão de entregador ativa no mesmo app (F1a): o motorista logado em
+ * /driver não pode ver módulos admin. Se existe driver_token e NÃO há
+ * token de operador, a sessão é exclusivamente de entregador — o layout
+ * admin não deve renderizar navegação/canal de operador. (Com os dois
+ * tokens, o operador apenas visitou /driver — layout admin intacto.)
+ */
+function isDriverOnlySession(): boolean {
+  if (typeof window === 'undefined') return false
+  return !!window.localStorage.getItem('driver_token') && !window.localStorage.getItem('gasflow_token')
+}
+
 export function DashboardLayout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+
+  if (isDriverOnlySession()) {
+    return <Outlet />
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

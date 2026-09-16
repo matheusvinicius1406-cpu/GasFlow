@@ -4,6 +4,27 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🚀 F1a — Entregador desktop: sessão, notificação e rastreio configurável (16/09/2026)
+
+Implementação da F1a do `docs/entregas-cupons-spec.md` (fase 1 de 9):
+
+- **Notificação de atribuição em tempo real (<10s)**: dois fixes no roteamento
+  do WebSocket — `delivery.assigned` (publicado com o motorista como actor
+  `DRIVER`) agora roteia também para o canal `driver:{id}`; e o check de tenant
+  do `/ws` não fecha mais conexões de motorista com 4003 (canal `driver:{id}`
+  não contém o tenant; permitido apenas para o próprio `driver_id` da sessão).
+- **Guard de sessão no desktop**: com `driver_token` ativo e sem token de
+  operador, `DashboardLayout` renderiza só o app do motorista (sem sidebar,
+  header, RealtimeBridge de operador ou IA flutuante). Operador visitando
+  `/driver` (os dois tokens presentes) mantém o layout admin intacto.
+- **Intervalo de rastreio configurável**: nova setting
+  `driver.tracking.interval_seconds` (default **120s**, min 15, categoria
+  operations) exposta em `GET /driver/me`; o app do motorista throttleia o
+  envio de GPS pelo intervalo (watchPosition continua capturando a melhor
+  posição, o envio é que respeita a bateria).
+- Testes: +2 backend (roteamento assignment → driver channel; sem actor
+  DRIVER não roteia). Suítes: backend 1448 ✅, frontend 193 ✅, desktop 41 ✅.
+
 ### 🏗️ Reorganização Estrutural — v1.1.6 (16/09/2026)
 
 Implementação completa do `docs/reorg-plan.md` (F1–F6):

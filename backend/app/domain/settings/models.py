@@ -40,6 +40,12 @@ DEFAULT_SETTINGS = [
     # (driver_location_service). "HH:MM"; suporta travessia de meia-noite.
     ("driver.work_hours.start", "operations", "06:00", "Início do horário de trabalho (rastreamento)"),
     ("driver.work_hours.end", "operations", "22:00", "Fim do horário de trabalho (rastreamento)"),
+    (
+        "driver.tracking.interval_seconds",
+        "operations",
+        120,
+        "Intervalo de envio de posição pelo app do entregador (segundos)",
+    ),
     ("dark_mode", "appearance", False, "Tema escuro no frontend"),
     ("brand_color", "appearance", "#E30613", "Cor primária do GasFlow"),
 ]
