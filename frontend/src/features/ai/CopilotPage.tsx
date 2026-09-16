@@ -17,7 +17,7 @@ interface ChatMessage {
   timestamp: string;
 }
 
-export function CopilotPage() {
+export function CopilotPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,13 +80,15 @@ export function CopilotPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)]">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Copilot</h1>
-        <Badge variant="outline">
-          <Bot className="h-3 w-3 mr-1" /> GasFlow AI
-        </Badge>
-      </div>
+    <div className={embedded ? 'flex h-full flex-col' : 'flex flex-col h-[calc(100vh-2rem)]'}>
+      {!embedded && (
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-foreground">Copilot</h1>
+          <Badge variant="outline">
+            <Bot className="h-3 w-3 mr-1" /> GasFlow AI
+          </Badge>
+        </div>
+      )}
 
       {/* Messages */}
       <Card className="flex-1 overflow-hidden flex flex-col">

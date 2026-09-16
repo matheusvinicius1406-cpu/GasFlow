@@ -1,1 +1,0 @@
-export { IntelligencePage } from './IntelligencePage'

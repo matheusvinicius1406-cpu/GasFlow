@@ -4,15 +4,21 @@ import { ProtectedRoute } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
 import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/customers'
-import { ContactsCrmPage } from '@/features/contacts/ContactsCrmPage'
-import { WhatsAppPage, CampaignWizardPage, CampaignResultsPage, AutomationsPage, WhatsAppWebPanelPage } from '@/features/whatsapp'
+import {
+  ContactsCrmPage,
+  CampaignWizardPage,
+  CampaignResultsPage,
+  CampaignHistoryPage,
+  AutomationsPage,
+  WhatsAppAccountsPage,
+  WhatsAppModulePage,
+} from '@/features/whatsapp'
 import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
 import { ReportsPage } from '@/features/reports'
-import { IntelligencePage } from '@/features/intelligence'
 import { SettingsPage, AISettingsPage } from '@/features/settings'
 import { CouponsPage } from '@/features/promotions'
 import { PurchaseNotesPage } from '@/features/purchase'
@@ -47,7 +53,6 @@ export function App() {
         <Route path="customers/new" element={<CustomerFormPage />} />
         <Route path="customers/:codigo" element={<CustomerDetailPage />} />
         <Route path="customers/:codigo/edit" element={<CustomerFormPage />} />
-        <Route path="contacts" element={<ContactsCrmPage />} />
 
         {/* Products */}
         <Route path="products" element={<ProductsPage />} />
@@ -55,21 +60,22 @@ export function App() {
         <Route path="products/:codigo" element={<ProductDetailPage />} />
         <Route path="products/:codigo/edit" element={<ProductFormPage />} />
 
-        {/* Other modules */}
-        <Route path="whatsapp" element={<WhatsAppPage />} />
-
-        {/* WhatsApp Web panel (protótipo, flag waWebPanel.enabled no desktop) — guard whatsapp.read */}
-        <Route
-          path="whatsapp/web"
-          element={
-            <PermissionRoute permissions={['whatsapp.read']}>
-              <WhatsAppWebPanelPage />
-            </PermissionRoute>
-          }
-        />
+        {/* WhatsApp — módulo único (reorg F2): conversas na home, contatos/campanhas/automações como sub-rotas.
+            WhatsApp Web vira seção de Contas & Conexão (reorg F3), sem rota própria. */}
+        <Route path="whatsapp" element={<WhatsAppModulePage />} />
+        <Route path="whatsapp/contacts" element={<ContactsCrmPage />} />
+        <Route path="whatsapp/campaigns" element={<CampaignHistoryPage />} />
         <Route path="whatsapp/campaigns/new" element={<CampaignWizardPage />} />
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />
         <Route path="whatsapp/automations" element={<AutomationsPage />} />
+        <Route
+          path="whatsapp/accounts"
+          element={
+            <PermissionRoute permissions={['whatsapp.read']}>
+              <WhatsAppAccountsPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="deliveries" element={<DeliveriesPage />} />
         <Route path="drivers" element={<DriversPage />} />
         <Route path="drivers/new" element={<DriverFormPage />} />
@@ -78,7 +84,6 @@ export function App() {
         <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="intelligence" element={<IntelligencePage />} />
         <Route path="segments" element={<SegmentsPage />} />
         <Route path="reorder" element={<ReorderPage />} />
         <Route path="promotions" element={<CouponsPage />} />

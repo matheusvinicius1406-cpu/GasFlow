@@ -1,47 +1,16 @@
 import { X } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  Users,
-  MessageSquare,
-  Truck,
-  UserCog,
-  Package,
-  Warehouse,
-  DollarSign,
-  BarChart3,
-  Brain,
-  Settings,
-  Filter,
-  Repeat,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { BrandMark } from '@/components/brand/BrandLogo'
+import { NavTree } from './nav'
 
 interface MobileSidebarProps {
   isOpen: boolean
   onClose: () => void
 }
 
-const navItems = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
-  { label: 'Clientes', href: '/customers', icon: Users },
-  { label: 'Segmentos', href: '/segments', icon: Filter },
-  { label: 'Recompra', href: '/reorder', icon: Repeat },
-  { label: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
-  { label: 'Entregas', href: '/deliveries', icon: Truck },
-  { label: 'Motoristas', href: '/drivers', icon: UserCog },
-  { label: 'Produtos', href: '/products', icon: Package },
-  { label: 'Estoque', href: '/inventory', icon: Warehouse },
-  { label: 'Financeiro', href: '/finance', icon: DollarSign },
-  { label: 'Relatórios', href: '/reports', icon: BarChart3 },
-  { label: 'Inteligência', href: '/intelligence', icon: Brain },
-  { label: 'Configurações', href: '/settings', icon: Settings },
-]
-
+/**
+ * Sidebar mobile — mesma árvore de 8 grupos do desktop (reorg F2).
+ */
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   if (!isOpen) return null
 
@@ -62,27 +31,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
           </Button>
         </div>
 
-        <nav className="space-y-1 p-4">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.href}
-              to={item.href}
-              end={item.href === '/'}
-              onClick={onClose}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <NavTree onNavigate={onClose} />
       </aside>
     </>
   )

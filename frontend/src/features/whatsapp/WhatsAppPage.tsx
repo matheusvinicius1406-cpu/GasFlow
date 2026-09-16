@@ -13,10 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
+import { Page, PageHeader, PageTitle, Section } from '@/components/layout/Page'
 import { ConversationsPage } from './ConversationsPage'
-import { CampaignHistoryPage } from './CampaignHistoryPage'
-import { AutomationsPage } from './AutomationsPage'
+import { WhatsAppWebPanelPage } from './WhatsAppWebPanelPage'
 import { apiClient } from '@/lib/api/client'
 
 interface WhatsAppAccount {
@@ -213,7 +212,7 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
   )
 }
 
-function WhatsAppAccountsView() {
+export function WhatsAppAccountsPage() {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -246,8 +245,10 @@ function WhatsAppAccountsView() {
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
+      <Page>
+        <PageHeader>
+          <PageTitle subtitle="Estado das contas WhatsApp do GasFlow.">Contas & Conexão</PageTitle>
+        </PageHeader>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <WifiOff className="h-12 w-12 text-destructive mb-4" />
@@ -259,24 +260,23 @@ function WhatsAppAccountsView() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </Page>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie as contas WhatsApp do GasFlow
-          </p>
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Gerencie as contas WhatsApp conectadas ao GasFlow.">
+          Contas & Conexão
+        </PageTitle>
+        <div className="flex items-center gap-2">
+          <Button onClick={fetchAccounts} variant="outline">
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
         </div>
-        <Button onClick={fetchAccounts} variant="outline">
-          <RefreshCw className="h-4 w-4" />
-          Atualizar
-        </Button>
-      </div>
+      </PageHeader>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -337,36 +337,21 @@ function WhatsAppAccountsView() {
           </CardContent>
         </Card>
       )}
-    </div>
+
+      {/* WhatsApp Web — seção operacional (reorg F3): mesma flag waWebPanel.enabled; sem rota própria */}
+      <Section title="WhatsApp Web">
+        <WhatsAppWebPanelPage embedded />
+      </Section>
+    </Page>
   )
 }
 
-// ── Main Export with Tabs ──────────────────────────────
-
-export function WhatsAppPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
-      <Tabs defaultValue="accounts">
-        <TabsList>
-          <TabsTrigger value="accounts">Contas</TabsTrigger>
-          <TabsTrigger value="conversations">Conversas</TabsTrigger>
-          <TabsTrigger value="campaigns">Campanhas</TabsTrigger>
-          <TabsTrigger value="automations">Automações</TabsTrigger>
-        </TabsList>
-        <TabsContent value="accounts">
-          <WhatsAppAccountsView />
-        </TabsContent>
-        <TabsContent value="conversations">
-          <ConversationsPage />
-        </TabsContent>
-        <TabsContent value="campaigns">
-          <CampaignHistoryPage />
-        </TabsContent>
-        <TabsContent value="automations">
-          <AutomationsPage />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+/**
+ * Home do módulo WhatsApp (reorg F2) — conversas como tela principal.
+ * Contatos, Campanhas, Automações e Contas & Conexão são rotas próprias
+ * (/whatsapp/contacts, /whatsapp/campaigns, /whatsapp/automations,
+ * /whatsapp/accounts) acessíveis pelo grupo WhatsApp da sidebar.
+ */
+export function WhatsAppModulePage() {
+  return <ConversationsPage />
 }

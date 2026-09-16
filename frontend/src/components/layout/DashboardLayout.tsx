@@ -5,6 +5,7 @@ import { Header } from './Header'
 import { MobileSidebar } from './MobileSidebar'
 import { RealtimeBridge } from '@/components/realtime/RealtimeBridge'
 import { UpdateNotifier } from '@/components/UpdateNotifier'
+import { FloatingCopilot } from '@/components/copilot/FloatingCopilot'
 
 export function DashboardLayout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
@@ -37,6 +38,9 @@ export function DashboardLayout() {
 
       {/* Auto-update (Electron) — canto inferior direito */}
       <UpdateNotifier />
+
+      {/* IA — bolinha flutuante (reorg F4); não é item de menu */}
+      <FloatingCopilot />
     </div>
   )
 }

@@ -13,7 +13,7 @@ vi.mock('@/lib/api/client', () => ({
 }))
 
 import { apiClient } from '@/lib/api/client'
-import { WhatsAppPage } from './WhatsAppPage'
+import { WhatsAppAccountsPage } from './WhatsAppPage'
 
 const connectedAccount = {
   id: 'primary',
@@ -31,7 +31,7 @@ const disconnectedAccount = {
   lastConnectedAt: null,
 }
 
-describe('WhatsAppPage', () => {
+describe('WhatsAppAccountsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiClient.get).mockResolvedValue({ data: { accounts: [] } })
@@ -39,7 +39,7 @@ describe('WhatsAppPage', () => {
   })
 
   it('shows the empty state when no accounts are configured', async () => {
-    renderWithProviders(<WhatsAppPage />)
+    renderWithProviders(<WhatsAppAccountsPage />)
     await waitFor(() => {
       expect(screen.getByText('Nenhuma conta configurada')).toBeInTheDocument()
     })
@@ -49,7 +49,7 @@ describe('WhatsAppPage', () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: { accounts: [connectedAccount, disconnectedAccount] },
     })
-    renderWithProviders(<WhatsAppPage />)
+    renderWithProviders(<WhatsAppAccountsPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Principal')).toBeInTheDocument()
@@ -66,7 +66,7 @@ describe('WhatsAppPage', () => {
 
   it('shows the service-unavailable card when the fetch fails', async () => {
     vi.mocked(apiClient.get).mockRejectedValueOnce(new Error('network'))
-    renderWithProviders(<WhatsAppPage />)
+    renderWithProviders(<WhatsAppAccountsPage />)
 
     await waitFor(() => {
       expect(screen.getByText('Serviço Indisponível')).toBeInTheDocument()
@@ -77,7 +77,7 @@ describe('WhatsAppPage', () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: { accounts: [disconnectedAccount] },
     })
-    renderWithProviders(<WhatsAppPage />)
+    renderWithProviders(<WhatsAppAccountsPage />)
 
     const connect = await screen.findByRole('button', { name: /Conectar/i })
     // act: o handler do clique é assíncrono (post + refresh) — sem o act(),

@@ -55,7 +55,11 @@ const STATE_BADGE: Record<WaWebStatus['state'], { variant: 'success' | 'warning'
   closed: { variant: 'secondary', label: 'Fechado' },
 }
 
-export function WhatsAppWebPanelPage() {
+/**
+ * @param embedded quando true, renderiza sem o cabeçalho próprio — usado como
+ * seção "WhatsApp Web" dentro de Contas & Conexão (reorg F3, rota /whatsapp/web removida).
+ */
+export function WhatsAppWebPanelPage({ embedded = false }: { embedded?: boolean } = {}) {
   const bridge = useRef<WaWebBridge | undefined>(undefined)
   const placeholderRef = useRef<HTMLDivElement | null>(null)
   const [statuses, setStatuses] = useState<Record<string, WaWebStatus>>({})
@@ -162,7 +166,7 @@ export function WhatsAppWebPanelPage() {
   if (!hasBridge) {
     return (
       <div className="space-y-6">
-        <Header />
+        {!embedded && <Header />}
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
             Este painel só está disponível no aplicativo desktop do GasFlow.
@@ -183,7 +187,7 @@ export function WhatsAppWebPanelPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Header />
+        {!embedded && <Header />}
         <ErrorState message="Não foi possível carregar o painel WhatsApp Web." onRetry={load} />
       </div>
     )
@@ -192,7 +196,7 @@ export function WhatsAppWebPanelPage() {
   if (enabled === false) {
     return (
       <div className="space-y-6">
-        <Header />
+        {!embedded && <Header />}
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
             O painel WhatsApp Web está desativado nas configurações do aplicativo.
@@ -207,7 +211,7 @@ export function WhatsAppWebPanelPage() {
 
   return (
     <div className="space-y-6">
-      <Header />
+      {!embedded && <Header />}
 
       {/* Abas por conta (F2 — partições distintas, contas coexistem) */}
       <div className="flex items-center gap-2" role="tablist" aria-label="Contas WhatsApp">
