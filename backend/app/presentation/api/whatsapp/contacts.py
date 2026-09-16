@@ -1,12 +1,15 @@
 """
 Contacts CRM API — sincronização WhatsApp ↔ clientes, VCF e enriquecimento.
 
-Endpoints (sob /clients/contacts — o CRUD completo de clientes continua em
-/clients, isto é a superfície específica de contatos/WhatsApp):
-    POST /clients/contacts/sync-batch   — lote do serviço WhatsApp (upsert por telefone)
-    POST /clients/contacts/import-vcf   — importar arquivo .vcf (parser próprio, sem dep nova)
-    GET  /clients/contacts/export-vcf   — exportar clientes como .vcf
-    POST /clients/contacts/{codigo}/enrich — enriquecimento de endereço via LLM
+Endpoints (sob /whatsapp/contacts — reorg F5; o CRUD completo de clientes
+continua em /clients, isto é a superfície específica de contatos/WhatsApp):
+    POST /whatsapp/contacts/sync-batch     — lote do serviço WhatsApp (upsert por telefone)
+    POST /whatsapp/contacts/sync           — dispara coleta no serviço WhatsApp (proxy)
+    POST /whatsapp/contacts/import-vcf     — importar arquivo .vcf (parser próprio, sem dep nova)
+    GET  /whatsapp/contacts/export-vcf     — exportar clientes como .vcf
+    POST /whatsapp/contacts/reactivate     — reativação de inativos (opt-in only)
+    POST /whatsapp/contacts/{codigo}/enrich — enriquecimento de endereço via LLM
+    GET  /whatsapp/contacts                — listagem com filtros de WhatsApp
 
 Autenticação: get_tenant_context (usuário do CRM).
 """
@@ -29,7 +32,7 @@ from app.presentation.dependencies import (
     require_whatsapp_service,
 )
 
-router = APIRouter(prefix="/clients/contacts", tags=["contacts-crm"])
+router = APIRouter(prefix="/whatsapp/contacts", tags=["contacts-crm"])
 
 
 class ContactSyncItem(BaseModel):
@@ -74,6 +77,18 @@ def _repo(db: Session, ctx: TenantContext) -> SQLAlchemyClientRepository:
 
 def _svc(db: Session, ctx: TenantContext) -> ContactService:
     return ContactService(_repo(db, ctx))
+
+
+@router.post("/sync")
+async def sync_contacts():
+    """Dispara a coleta de contatos no serviço WhatsApp (proxy legado).
+
+    Reorg F5: antes era POST /whatsapp/contacts/sync no router de contas;
+    agora vive no namespace unificado de contatos.
+    """
+    from app.presentation.api.whatsapp.accounts import _proxy_post
+
+    return await _proxy_post("/contacts/sync")
 
 
 @router.post("/sync-batch")

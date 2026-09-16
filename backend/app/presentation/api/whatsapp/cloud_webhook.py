@@ -129,7 +129,7 @@ async def _process_and_reply(message: dict) -> bool:
     from app.infrastructure.ai.factory import get_llm_provider
     from app.application.ai.engine import AIEngine
     from app.application.whatsapp.gateway import MessageGateway
-    from app.presentation.api.whatsapp_gateway import _build_tool_registry
+    from app.presentation.api.whatsapp.gateway import _build_tool_registry
 
     db = SessionLocal()
     try:

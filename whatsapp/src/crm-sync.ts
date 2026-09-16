@@ -2,8 +2,7 @@
  * CRM Sync — empurra contatos do WhatsApp para o CRM do backend.
  *
  * Origem dos contatos: catálogo 1:1 do engine (getJids no Baileys;
- * getContacts no wwebjs, já normalizado pelo provider-manager).
- * Destino: POST {GASFLOW_BACKEND_URL}/clients/contacts/sync-batch com
+ * getContacts no wwebjs, já normalizado pelo provider-manager). * Destino: POST {GASFLOW_BACKEND_URL}/whatsapp/contacts/sync-batch com
  * header X-GasFlow-Key (mesma chave do bridge de entrada).
  *
  * Tolerante a falhas: erro de rede nunca derruba o serviço; lotes de 100.
@@ -48,7 +47,7 @@ export async function syncAccountToCrm(accountId: string): Promise<CrmSyncResult
   for (let i = 0; i < payload.length; i += BATCH_SIZE) {
     const batch = payload.slice(i, i + BATCH_SIZE);
     try {
-      const res = await fetch(`${BACKEND_URL}/clients/contacts/sync-batch`, {
+      const res = await fetch(`${BACKEND_URL}/whatsapp/contacts/sync-batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

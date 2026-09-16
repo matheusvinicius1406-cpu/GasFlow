@@ -15,39 +15,39 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.infrastructure.database.init_db import init_db
-from app.presentation.api.health import router as health_router
+from app.presentation.api.core.health import router as health_router
 from app.presentation.api.clients import router as client_router
 from app.presentation.api.orders import router as orders_router
-from app.presentation.api.products import router as products_router
-from app.presentation.api.delivery import router as delivery_router
-from app.presentation.api.whatsapp import router as whatsapp_router
-from app.presentation.api.inventory import router as inventory_router
-from app.presentation.api.finance import router as finance_router
+from app.presentation.api.catalog.products import router as products_router
+from app.presentation.api.logistics.delivery import router as delivery_router
+from app.presentation.api.whatsapp.accounts import router as whatsapp_router
+from app.presentation.api.catalog.inventory import router as inventory_router
+from app.presentation.api.finance.finance import router as finance_router
 from app.presentation.api.ai import router as ai_router
-from app.presentation.api.whatsapp_gateway import router as whatsapp_gateway_router
+from app.presentation.api.whatsapp.gateway import router as whatsapp_gateway_router
 from app.presentation.api.audio import router as audio_router
 from app.presentation.api.automation import router as automation_router
-from app.presentation.api.auth import router as auth_router
-from app.presentation.api.delivery_ops import router as delivery_ops_router
-from app.presentation.api.dashboard import router as dashboard_router
-from app.presentation.api.driver_api import router as driver_api_router
-from app.presentation.api.driver_mobile_auth import router as driver_mobile_router
+from app.presentation.api.core.auth import router as auth_router
+from app.presentation.api.logistics.delivery_ops import router as delivery_ops_router
+from app.presentation.api.core.dashboard import router as dashboard_router
+from app.presentation.api.logistics.driver_api import router as driver_api_router
+from app.presentation.api.logistics.driver_mobile_auth import router as driver_mobile_router
 from app.presentation.api.printer import router as printer_router
-from app.presentation.api.payments import router as payments_router
-from app.presentation.api.reports import router as reports_router
-from app.presentation.api.settings import router as settings_router
-from app.presentation.api.admin import router as admin_router
+from app.presentation.api.finance.payments import router as payments_router
+from app.presentation.api.finance.reports import router as reports_router
+from app.presentation.api.core.settings import router as settings_router
+from app.presentation.api.core.admin import router as admin_router
 from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
-from app.presentation.api.contacts_crm import router as contacts_crm_router
+from app.presentation.api.whatsapp.contacts import router as contacts_crm_router
 from app.presentation.api.purchase_notes import router as purchase_notes_router
-from app.presentation.api.dispatch import router as dispatch_router
+from app.presentation.api.logistics.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
 from app.presentation.api.communication import router as communication_router
 from app.presentation.api.segmentation import router as segmentation_router
 from app.presentation.api.reorder import router as reorder_router
-from app.presentation.api.whatsapp_automation import router as whatsapp_automation_router
+from app.presentation.api.whatsapp.automation import router as whatsapp_automation_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging

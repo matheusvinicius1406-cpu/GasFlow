@@ -117,7 +117,7 @@ def test_mobile_login_wrong_password(client):
 
 
 def test_access_token_rejects_garbage_and_wrong_scope(client, driver_credentials):
-    from app.presentation.api.driver_mobile_auth import issue_access_token, verify_access_token
+    from app.presentation.api.logistics.driver_mobile_auth import issue_access_token, verify_access_token
     from fastapi import HTTPException
 
     # válido passa
@@ -126,13 +126,13 @@ def test_access_token_rejects_garbage_and_wrong_scope(client, driver_credentials
 
     # escopo desktop → rejeitado
     desktop_token = issue_access_token("654321", "default", expires_minutes=5)
-    from app.presentation.api import driver_mobile_auth as mod
+    from app.presentation.api.logistics import driver_mobile_auth as mod
 
     original = mod.verify_access_token
     import hmac as _hmac
     import hashlib as _hashlib
     import json as _json
-    from app.presentation.api.driver_mobile_auth import _b64url, _jwt_secret
+    from app.presentation.api.logistics.driver_mobile_auth import _b64url, _jwt_secret
 
     def _forge(scope_value: str) -> str:
         header = {"alg": "HS256", "typ": "JWT"}

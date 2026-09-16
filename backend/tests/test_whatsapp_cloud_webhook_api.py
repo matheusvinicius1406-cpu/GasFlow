@@ -75,7 +75,7 @@ def client(monkeypatch) -> TestClient:
     # Reimporta o módulo para recapturar os env vars lidos no import.
     import importlib
 
-    import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+    import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
     importlib.reload(webhook_module)
     from fastapi import FastAPI
@@ -91,7 +91,7 @@ def client_unconfigured(monkeypatch) -> TestClient:
     monkeypatch.delenv("WHATSAPP_CLOUD_API_VERIFY_TOKEN", raising=False)
     import importlib
 
-    import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+    import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
     importlib.reload(webhook_module)
     from fastapi import FastAPI

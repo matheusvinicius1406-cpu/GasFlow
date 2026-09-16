@@ -7,36 +7,36 @@ Existing root-level endpoints remain for backward compatibility.
 
 from fastapi import APIRouter
 
-from app.presentation.api.health import router as health_router
+from app.presentation.api.core.health import router as health_router
 from app.presentation.api.clients import router as client_router
 from app.presentation.api.orders import router as orders_router
-from app.presentation.api.products import router as products_router
-from app.presentation.api.delivery import router as delivery_router
-from app.presentation.api.whatsapp import router as whatsapp_router
-from app.presentation.api.inventory import router as inventory_router
-from app.presentation.api.finance import router as finance_router
+from app.presentation.api.catalog.products import router as products_router
+from app.presentation.api.logistics.delivery import router as delivery_router
+from app.presentation.api.whatsapp.accounts import router as whatsapp_router
+from app.presentation.api.catalog.inventory import router as inventory_router
+from app.presentation.api.finance.finance import router as finance_router
 from app.presentation.api.ai import router as ai_router
-from app.presentation.api.whatsapp_gateway import router as whatsapp_gateway_router
-from app.presentation.api.whatsapp_cloud_webhook import router as whatsapp_cloud_webhook_router
+from app.presentation.api.whatsapp.gateway import router as whatsapp_gateway_router
+from app.presentation.api.whatsapp.cloud_webhook import router as whatsapp_cloud_webhook_router
 from app.presentation.api.alerts_webhook import router as alerts_webhook_router
 from app.presentation.api.audio import router as audio_router
 from app.presentation.api.automation import router as automation_router
-from app.presentation.api.auth import router as auth_router
-from app.presentation.api.delivery_ops import router as delivery_ops_router
-from app.presentation.api.driver_v1 import router as driver_v1_router
-from app.presentation.api.driver_mobile_auth import router as driver_mobile_router
-from app.presentation.api.dispatch import router as dispatch_router
+from app.presentation.api.core.auth import router as auth_router
+from app.presentation.api.logistics.delivery_ops import router as delivery_ops_router
+from app.presentation.api.logistics.driver_v1 import router as driver_v1_router
+from app.presentation.api.logistics.driver_mobile_auth import router as driver_mobile_router
+from app.presentation.api.logistics.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
 from app.presentation.api.communication import router as communication_router
 from app.presentation.api.printer import router as printer_router
-from app.presentation.api.payments import router as payments_router
-from app.presentation.api.reports import router as reports_router
-from app.presentation.api.settings import router as settings_router
-from app.presentation.api.admin import router as admin_router
+from app.presentation.api.finance.payments import router as payments_router
+from app.presentation.api.finance.reports import router as reports_router
+from app.presentation.api.core.settings import router as settings_router
+from app.presentation.api.core.admin import router as admin_router
 from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
-from app.presentation.api.contacts_crm import router as contacts_crm_router
+from app.presentation.api.whatsapp.contacts import router as contacts_crm_router
 from app.presentation.api.purchase_notes import router as purchase_notes_router
 
 api_v1_router = APIRouter(prefix="/api/v1")

@@ -149,14 +149,14 @@ class TestDriverAuth:
         pass  # Tested via API integration
 
     def test_token_required(self, store, setup_data):
-        from app.presentation.api.driver_api import _authenticate_driver
+        from app.presentation.api.logistics.driver_api import _authenticate_driver
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException):
             _authenticate_driver(None)
 
     def test_invalid_token(self, store, setup_data):
-        from app.presentation.api.driver_api import _authenticate_driver
+        from app.presentation.api.logistics.driver_api import _authenticate_driver
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException):
@@ -269,7 +269,7 @@ class TestIdempotency:
     def test_duplicate_action_same_key(self, store, setup_data):
         """Same idempotency_key → one effect."""
         import uuid as _uuid
-        from app.presentation.api.driver_api import _check_idempotency, _record_idempotency
+        from app.presentation.api.logistics.driver_api import _check_idempotency, _record_idempotency
 
         key = f"idem-unique-{_uuid.uuid4().hex[:12]}"  # Unique per run
         assert _check_idempotency(key) is None  # First time
@@ -279,13 +279,13 @@ class TestIdempotency:
         assert result["idempotent_replay"]
 
     def test_different_keys_independent(self, store, setup_data):
-        from app.presentation.api.driver_api import _check_idempotency, _record_idempotency
+        from app.presentation.api.logistics.driver_api import _check_idempotency, _record_idempotency
 
         _record_idempotency("key-1")
         assert _check_idempotency("key-2") is None
 
     def test_no_key_always_proceeds(self, store, setup_data):
-        from app.presentation.api.driver_api import _check_idempotency
+        from app.presentation.api.logistics.driver_api import _check_idempotency
 
         assert _check_idempotency(None) is None
         assert _check_idempotency("") is None
@@ -391,7 +391,7 @@ class TestSync:
 
     def test_sync_idempotent(self, store, setup_data):
         """Same idempotency key → accepted, no double effect."""
-        from app.presentation.api.driver_api import _record_idempotency, _check_idempotency
+        from app.presentation.api.logistics.driver_api import _record_idempotency, _check_idempotency
 
         key = "sync-key-1"
         _record_idempotency(key)
@@ -406,41 +406,41 @@ class TestSync:
 
 class TestAllowedActions:
     def test_pending_can_accept(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("PENDING")
         assert actions["can_accept"]
         assert not actions["can_start"]
 
     def test_assigned_can_start(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("ASSIGNED")
         assert actions["can_start"]
         assert not actions["can_complete"]
 
     def test_en_route_can_arrive(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("EN_ROUTE")
         assert actions["can_arrive"]
         assert actions["can_fail"]
 
     def test_arrived_can_complete(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("ARRIVED")
         assert actions["can_complete"]
         assert actions["can_fail"]
 
     def test_delivered_no_actions(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("DELIVERED")
         assert not any(actions.values())
 
     def test_failed_no_actions(self):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         actions = _allowed_actions("FAILED")
         assert not any(actions.values())
@@ -580,7 +580,7 @@ class TestAdversarial:
     """18. Replay offline?"""
 
     def test_18_offline_replay(self, store, setup_data):
-        from app.presentation.api.driver_api import _record_idempotency, _check_idempotency
+        from app.presentation.api.logistics.driver_api import _record_idempotency, _check_idempotency
 
         key = "replay-001"
         _record_idempotency(key)
@@ -589,7 +589,7 @@ class TestAdversarial:
     """19. Out-of-order action?"""
 
     def test_19_out_of_order(self, store, setup_data):
-        from app.presentation.api.driver_api import _allowed_actions
+        from app.presentation.api.logistics.driver_api import _allowed_actions
 
         # Can't complete before arriving
         assert not _allowed_actions("EN_ROUTE")["can_complete"]
@@ -676,7 +676,7 @@ class TestAdversarial:
     """32. Sync flood?"""
 
     def test_32_sync_idempotent(self, store, setup_data):
-        from app.presentation.api.driver_api import _record_idempotency
+        from app.presentation.api.logistics.driver_api import _record_idempotency
         from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyIdempotencyRepository
         from app.infrastructure.database.init_db import engine as db_engine
         from sqlalchemy.orm import Session as DBSession
@@ -723,7 +723,7 @@ class TestAdversarial:
     """37. Mass assignment?"""
 
     def test_37_mass_assignment(self, store, setup_data):
-        from app.presentation.api.driver_api import ActionRequest
+        from app.presentation.api.logistics.driver_api import ActionRequest
 
         d = store["deliveries"]["del-a"]
         # Driver API doesn't expose tenant_id/user_id mutation
@@ -736,7 +736,7 @@ class TestAdversarial:
     """38. Secret leakage?"""
 
     def test_38_no_secrets(self):
-        from app.presentation.api.driver_api import DriverDeliverySummary
+        from app.presentation.api.logistics.driver_api import DriverDeliverySummary
 
         dto = DriverDeliverySummary(
             delivery_id="d1",
@@ -773,7 +773,7 @@ class TestAdversarial:
     """42. Payload too large?"""
 
     def test_42_compact_dto(self):
-        from app.presentation.api.driver_api import DriverDeliverySummary
+        from app.presentation.api.logistics.driver_api import DriverDeliverySummary
 
         dto = DriverDeliverySummary(
             delivery_id="d1",

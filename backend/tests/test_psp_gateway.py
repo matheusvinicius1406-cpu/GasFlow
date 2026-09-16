@@ -21,7 +21,7 @@ from app.infrastructure.payment.psp_gateway import (
     create_psp_gateway,
     verify_webhook_signature,
 )
-from app.presentation.api.payments import router as payments_router
+from app.presentation.api.finance.payments import router as payments_router
 
 
 # ── Gateway unit tests ─────────────────────────────────
@@ -107,7 +107,7 @@ def test_signature_roundtrip():
 
 # ── Webhook endpoint ───────────────────────────────────
 
-import app.presentation.api.payments as payments_module
+import app.presentation.api.finance.payments as payments_module
 
 
 def _make_client() -> TestClient:

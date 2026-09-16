@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client(monkeypatch):
     """TestClient com o _proxy_get stubbed para ecoar o path encaminhado."""
-    import app.presentation.api.whatsapp as whatsapp_module
+    import app.presentation.api.whatsapp.accounts as whatsapp_module
 
     captured = {}
 

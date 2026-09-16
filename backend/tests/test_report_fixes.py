@@ -539,7 +539,7 @@ class TestCloudApiWebhookEndpoint:
     def app_client(self, monkeypatch):
         # Secret obrigatório (fail-closed) — setado direto no módulo pois o
         # handler lê o global em tempo de chamada.
-        import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+        import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
         monkeypatch.setattr(webhook_module, "APP_SECRET", "test-webhook-secret")
         test_app = FastAPI()
@@ -548,7 +548,7 @@ class TestCloudApiWebhookEndpoint:
             yield c
 
     def test_missing_secret_fails_closed(self, monkeypatch):
-        import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+        import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
         monkeypatch.setattr(webhook_module, "APP_SECRET", "")
         test_app = FastAPI()
@@ -567,7 +567,7 @@ class TestCloudApiWebhookEndpoint:
 
     def test_message_processed_and_reply_sent(self, app_client, monkeypatch):
         """Fluxo completo: assinatura → MessageGateway → resposta enviada."""
-        import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+        import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
         sent: list = []
 
@@ -605,7 +605,7 @@ class TestCloudApiWebhookEndpoint:
 
     def test_processing_failure_does_not_break_webhook(self, app_client, monkeypatch):
         """Erro no pipeline de uma mensagem → 200 (Meta não reenvia em loop)."""
-        import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+        import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
         async def failing_process(message):
             raise RuntimeError("boom")
@@ -622,7 +622,7 @@ class TestCloudApiWebhookEndpoint:
         assert res.json()["failed"] == 1
 
     def test_verify_subscription_handshake(self, monkeypatch):
-        import app.presentation.api.whatsapp_cloud_webhook as webhook_module
+        import app.presentation.api.whatsapp.cloud_webhook as webhook_module
 
         monkeypatch.setattr(webhook_module, "VERIFY_TOKEN", "verify-token")
         test_app = FastAPI()

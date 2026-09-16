@@ -532,7 +532,7 @@ async def operator_reply(
         conv_repo.takeover(conversation_id, "Operador")
 
     # 2. Envio REAL via serviço WhatsApp.
-    from app.presentation.api.whatsapp import _proxy_post
+    from app.presentation.api.whatsapp.accounts import _proxy_post
 
     send_result = await _proxy_post(
         f"/whatsapp/accounts/{conv.account_id}/messages",

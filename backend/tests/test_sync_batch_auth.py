@@ -1,7 +1,7 @@
 """
 sync-batch Auth Matrix — endpoint de máquina-para-máquina.
 
-POST /clients/contacts/sync-batch deve:
+POST /whatsapp/contacts/sync-batch deve:
 - aceitar SOMENTE a chave de serviço (X-GasFlow-Key igual a
   WHATSAPP_SERVICE_KEY/MARCOS_GAS_API_KEY do backend);
 - rejeitar JWT válido de usuário (sem fallback Bearer) — um token vazado
@@ -32,7 +32,7 @@ def admin_token(client):
 
 def _post(client, headers):
     return client.post(
-        "/clients/contacts/sync-batch",
+        "/whatsapp/contacts/sync-batch",
         json={"contacts": [{"telefone": "11999999999", "nome": "Teste"}]},
         headers=headers,
     )
@@ -78,7 +78,7 @@ class TestSyncBatchLastInteraction:
     def test_iso_timestamp_is_parsed_and_syncs(self, client, monkeypatch):
         monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
         res = client.post(
-            "/clients/contacts/sync-batch",
+            "/whatsapp/contacts/sync-batch",
             json={
                 "contacts": [
                     {
@@ -98,7 +98,7 @@ class TestSyncBatchLastInteraction:
     def test_tz_aware_timestamp_is_accepted(self, client, monkeypatch):
         monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
         res = client.post(
-            "/clients/contacts/sync-batch",
+            "/whatsapp/contacts/sync-batch",
             json={
                 "contacts": [
                     {
@@ -117,7 +117,7 @@ class TestSyncBatchLastInteraction:
         """Valor inválido é descartado (sem 422, sem erro no item)."""
         monkeypatch.setattr(settings, "whatsapp_service_key", "secret-key-123")
         res = client.post(
-            "/clients/contacts/sync-batch",
+            "/whatsapp/contacts/sync-batch",
             json={
                 "contacts": [
                     {

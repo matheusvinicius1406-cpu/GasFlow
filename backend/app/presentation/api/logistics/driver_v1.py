@@ -10,7 +10,7 @@ The legacy /api/driver/v1/* routes are maintained for backward compatibility.
 
 from fastapi import APIRouter, Depends, Header
 from typing import Optional
-from app.presentation.api.driver_api import (
+from app.presentation.api.logistics.driver_api import (
     # Handlers
     handle_driver_login,
     handle_driver_logout,

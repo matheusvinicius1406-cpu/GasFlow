@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_model import ClientModel
 from app.domain.client.entity import Client
-from app.presentation.api.whatsapp_gateway import _build_tool_registry
+from app.presentation.api.whatsapp.gateway import _build_tool_registry
 from app.domain.ai.tools import ToolType, ToolPermission
 
 

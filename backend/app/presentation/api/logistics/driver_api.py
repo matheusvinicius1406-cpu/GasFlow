@@ -222,7 +222,7 @@ def _authenticate_driver(authorization: Optional[str] = Header(None)) -> Dict[st
         # por definição. Rotas desktop seguem rejeitando (só olham a tabela
         # de sessões web). Falha de JWT → 401 (comportamento original).
         try:
-            from app.presentation.api.driver_mobile_auth import verify_access_token
+            from app.presentation.api.logistics.driver_mobile_auth import verify_access_token
 
             payload = verify_access_token(token)
             return {

@@ -212,7 +212,7 @@ class TestPaymentServicePix:
 @pytest.fixture()
 def app_client(monkeypatch):
     """TestClient com get_payment_service substituído por service in-memory."""
-    from app.presentation.api import payments as payments_module
+    from app.presentation.api.finance import payments as payments_module
 
     service = PaymentService()
     monkeypatch.setattr(payments_module, "get_payment_service", lambda: service)

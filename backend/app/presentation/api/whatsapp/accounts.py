@@ -242,16 +242,10 @@ async def logout_session():
 
 
 # ── Contacts ──────────────────────────────────────────────
-
-
-@router.get("/contacts")
-async def list_contacts(limit: int = 50, offset: int = 0):
-    return await _proxy_get(f"/contacts?limit={limit}&offset={offset}")
-
-
-@router.post("/contacts/sync")
-async def sync_contacts():
-    return await _proxy_post("/contacts/sync")
+# Reorg F5: os endpoints de CONTATOS do CRM mudaram de namespace.
+#   GET/POST /whatsapp/contacts/* → app.presentation.api.whatsapp.contacts
+# (listagem do CRM, sync, sync-batch, VCF, reativação, enrich).
+# Mantidos aqui apenas os proxies de serviço WhatsApp sem conflito de rota.
 
 
 @router.post("/crm-sync")
