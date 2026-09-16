@@ -19,6 +19,7 @@ vi.mock('@/lib/api/hooks', () => ({
   useCreateDelivery: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAssignDelivery: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDeliveryStatus: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDriverLocations: () => ({ data: [] }),
 }))
 
 import { DeliveriesPage } from '../DeliveriesPage'

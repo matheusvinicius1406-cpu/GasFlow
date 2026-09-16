@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { StatCard } from '@/components/ui/StatCard'
 import { apiClient } from '@/lib/api/client'
+import { DriverMap } from '@/components/map/DriverMap'
+import type { DriverMapPoint } from '@/components/map/DriverMap'
 import type { DeliveryDriver } from '@/types'
 
 interface DriverWithLocation extends DeliveryDriver {
@@ -88,6 +90,17 @@ export function DriversPage() {
   const availableCount = drivers.filter(d => d.status === 'AVAILABLE').length
   const onlineWithGPS = drivers.filter(d => locations[d.codigo]?.is_stale === false).length
 
+  // F1b: pontos para o mapa — posições + nome do motorista quando conhecido.
+  const mapPoints: DriverMapPoint[] = Object.entries(locations).map(([driverId, loc]) => ({
+    driver_id: driverId,
+    name: drivers.find(d => d.codigo === driverId)?.nome,
+    latitude: loc.lat,
+    longitude: loc.lng,
+    timestamp: loc.timestamp,
+    is_stale: loc.is_stale,
+    age_seconds: loc.age_seconds,
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -111,6 +124,14 @@ export function DriversPage() {
         <StatCard title="Disponíveis" value={availableCount} icon={Truck} />
         <StatCard title="Com GPS" value={onlineWithGPS} icon={MapPin} />
       </div>
+
+      {/* F1b: mapa do operador — posições em tempo quase real (polling 30s no hook) */}
+      <Card>
+        <CardHeader><CardTitle>Mapa de Motoristas</CardTitle></CardHeader>
+        <CardContent>
+          <DriverMap points={mapPoints} className="h-72" />
+        </CardContent>
+      </Card>
 
       {drivers.length === 0 ? (
         <EmptyState

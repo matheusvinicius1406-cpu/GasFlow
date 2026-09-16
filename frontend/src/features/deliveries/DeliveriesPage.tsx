@@ -15,7 +15,10 @@ import {
   useCreateDelivery,
   useAssignDelivery,
   useUpdateDeliveryStatus,
+  useDriverLocations,
 } from '@/lib/api/hooks'
+import { DriverMap } from '@/components/map/DriverMap'
+import type { DriverMapPoint } from '@/components/map/DriverMap'
 import type { DeliveryDriverExtended } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'default'; icon: typeof Truck }> = {
@@ -80,12 +83,19 @@ export function DeliveriesPage() {
   const { data: deliveriesData, isLoading, error, refetch } = useDeliveries(statusFilter ? { status: statusFilter } : undefined)
   const { data: driversData } = useDeliveryDrivers()
   const { data: summary } = useDeliverySummary()
+  const { data: locations } = useDriverLocations()
   const createDelivery = useCreateDelivery()
   const assignDelivery = useAssignDelivery()
   const updateStatus = useUpdateDeliveryStatus()
 
   const deliveries = deliveriesData?.deliveries ?? []
   const drivers = driversData?.drivers ?? []
+
+  // F1b: pontos do mapa — posições + nome do motorista quando conhecido.
+  const mapPoints: DriverMapPoint[] = (locations ?? []).map((loc) => ({
+    ...loc,
+    name: drivers.find(d => d.id === loc.driver_id)?.name,
+  }))
 
   const handleCreateDelivery = async () => {
     if (!newDelivery.order_id || !newDelivery.customer_codigo || !newDelivery.customer_name) return
@@ -224,12 +234,22 @@ export function DeliveriesPage() {
 
       {/* Summary Stats */}
       {summary && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard title="Total Entregas" value={summary.deliveries.total} icon={Package} />
-          <StatCard title="Motoristas Disponíveis" value={`${summary.drivers.available}/${summary.drivers.total}`} icon={Truck} />
-          <StatCard title="Pendentes" value={summary.deliveries.by_status?.PENDING ?? 0} icon={Clock} />
-          <StatCard title="Em Rota" value={summary.deliveries.by_status?.EN_ROUTE ?? 0} icon={Truck} />
-        </div>
+        <>
+          <div className="grid gap-4 md:grid-cols-4">
+            <StatCard title="Total Entregas" value={summary.deliveries.total} icon={Package} />
+            <StatCard title="Motoristas Disponíveis" value={`${summary.drivers.available}/${summary.drivers.total}`} icon={Truck} />
+            <StatCard title="Pendentes" value={summary.deliveries.by_status?.PENDING ?? 0} icon={Clock} />
+            <StatCard title="Em Rota" value={summary.deliveries.by_status?.EN_ROUTE ?? 0} icon={Truck} />
+          </div>
+
+          {/* F1b: mapa do operador — posição dos entregadores (polling 30s) */}
+          <Card>
+            <CardHeader><CardTitle>Mapa de Entregadores</CardTitle></CardHeader>
+            <CardContent>
+              <DriverMap points={mapPoints} className="h-80" />
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Status Filters */}

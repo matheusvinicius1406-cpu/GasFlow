@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from './client'
+import { api, apiClient } from './client'
 import type { Client, Product, Order, OrderDetail, OrderCreateInput, Customer360, PaginatedResponse, InventoryItem, StockMovement, Delivery, DeliveryDriverExtended, FinancePayment, Receivable, FinanceExpense, CashMovement } from '@/types'
 
 // ── Dashboard Hook ───────────────────────────────────────
@@ -420,6 +420,18 @@ export function useSetMinimum() {
 
 // ── Delivery Hooks — Bloco A ───────────────────────────
 
+export interface DriverLocationPoint {
+  driver_id: string
+  latitude: number
+  longitude: number
+  accuracy?: number | null
+  speed?: number | null
+  bearing?: number | null
+  timestamp: string
+  is_stale: boolean
+  age_seconds?: number
+}
+
 export function useDeliveries(params?: { status?: string; driver_id?: string }) {
   return useQuery({
     queryKey: ['deliveries', params],
@@ -437,6 +449,22 @@ export function useDeliveryDrivers(params?: { status?: string }) {
       const { data } = await api.deliveryOps.listDrivers(params)
       return data as { drivers: DeliveryDriverExtended[]; count: number }
     },
+  })
+}
+
+/**
+ * Posições GPS dos entregadores para o mapa do operador (F1b).
+ * Polling de 30s (padrão do repo — driver.location_updated NÃO vai por WS:
+ * refetch storms; ver lib/realtime.ts).
+ */
+export function useDriverLocations() {
+  return useQuery({
+    queryKey: ['driver-locations'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/delivery/locations')
+      return (data?.locations ?? []) as DriverLocationPoint[]
+    },
+    refetchInterval: 30000,
   })
 }
 

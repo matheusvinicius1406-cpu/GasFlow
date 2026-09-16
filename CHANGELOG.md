@@ -4,6 +4,23 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🗺️ F1b — Mapa do operador com posição dos entregadores (16/09/2026)
+
+Implementação da F1b do `docs/entregas-cupons-spec.md`:
+
+- **`DriverMap` (Leaflet + tiles OSM, sem API key)**: componente único
+  reutilizável — marcadores circulares verdes (posição fresca) ou cinza
+  (`is_stale`, >5min no backend), popup com nome e idade da posição,
+  fitBounds automático, estado vazio instrutivo.
+- **Páginas Entregas e Motoristas** (decisão do dono): mesmo componente nas
+  duas telas; nomes dos motoristas juntados às posições no cliente.
+- **Hook `useDriverLocations`**: consome o `GET /delivery/locations` (que já
+  existia) com **polling de 30s** (padrão do repo — posição não vai por WS
+  para evitar refetch storms, ver `lib/realtime.ts`).
+- Sem coordenadas em logs/telemetria (LGPD).
+- Testes: +3 frontend (`DriverMap` com Leaflet mockado: vazio, render,
+  cleanup). Suítes: frontend 196 ✅, backend 1448 ✅ (F1a).
+
 ### 🚀 F1a — Entregador desktop: sessão, notificação e rastreio configurável (16/09/2026)
 
 Implementação da F1a do `docs/entregas-cupons-spec.md` (fase 1 de 9):
