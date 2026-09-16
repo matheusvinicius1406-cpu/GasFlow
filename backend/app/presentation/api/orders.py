@@ -4,6 +4,7 @@ Order API Routes — FASE 7.1
 Passes inventory_repo to use cases for atomic stock operations.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,6 +37,24 @@ from app.domain.events.event_bus import (
     EventType,
     publish_order_event,
 )
+
+
+logger = logging.getLogger("gasflow.orders")
+
+
+def _safe_auto_print(order_id: str, tenant_id: str, order_status: str, order_data: dict) -> None:
+    """F3: dispara o auto-print sem nunca falhar a requisição de status."""
+    try:
+        from app.application.delivery.auto_print_trigger import AutoPrintTrigger
+
+        AutoPrintTrigger().maybe_auto_print(
+            order_id=order_id,
+            tenant_id=tenant_id,
+            order_status=order_status,
+            order_data=order_data,
+        )
+    except Exception:  # pragma: no cover — defesa extra; trigger já engole erros
+        logger.exception("auto_print_hook_error", extra={"order_id": order_id})
 
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -136,6 +155,23 @@ def update_order_status(
                 "status": order.status.value,
                 "total": order.total,
                 "client_codigo": order.client_codigo,
+            },
+        )
+        # F3 — auto-print: se o pedido entrou em status elegível
+        # (setting printer.auto_print.min_status), cria o job uma única vez.
+        _safe_auto_print(
+            order_id=order.codigo,
+            tenant_id=ctx.tenant_id,
+            order_status=order.status.value,
+            order_data={
+                "codigo": order.codigo,
+                "client_name": getattr(order, "client_name", "") or "Cliente",
+                "client_address": getattr(order, "address_snapshot", "") or "",
+                "items": [],
+                "total": order.total,
+                "payment_method": "",
+                "notes": "",
+                "created_at": order.created_at.isoformat() if getattr(order, "created_at", None) else "",
             },
         )
         return order

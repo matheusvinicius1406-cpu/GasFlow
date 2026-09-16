@@ -48,6 +48,16 @@ DEFAULT_SETTINGS = [
     ),
     ("dark_mode", "appearance", False, "Tema escuro no frontend"),
     ("brand_color", "appearance", "#E30613", "Cor primária do GasFlow"),
+    # ── Impressão em tempo real (F3) ────────────────────────
+    # Auto-print só dispara para pedidos nestes status (lista separada
+    # por vírgula). Default "PAID,CONFIRMED": pedido novo sem filtro
+    # imprimiria lixo (itens em draft, cancelados, etc.).
+    (
+        "printer.auto_print.min_status",
+        "operations",
+        "PAID,CONFIRMED",
+        "Status que disparam auto-print (lista separada por vírgula)",
+    ),
 ]
 
 SETTING_CATEGORIES = ("general", "whatsapp", "notifications", "integrations", "operations", "appearance", "ai")

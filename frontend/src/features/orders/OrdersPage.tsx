@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingCart, Plus, Search } from 'lucide-react'
+import { ShoppingCart, Plus, Search, Printer } from 'lucide-react'
 import { useOrders } from '@/lib/api/hooks'
+import { apiClient } from '@/lib/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -10,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
 
@@ -35,10 +37,24 @@ const sourceLabels: Record<string, string> = {
 export function OrdersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all')
+  const [printingOrder, setPrintingOrder] = useState<string | null>(null)
+  const toast = useToast()
 
   const { data: orders, isLoading, error, refetch } = useOrders(
     statusFilter === 'all' ? undefined : statusFilter
   )
+
+  const handlePrint = async (orderId: string) => {
+    setPrintingOrder(orderId)
+    try {
+      await apiClient.post('/printer/print', { order_id: orderId })
+      toast.success('Pedido enviado para impressão', `#${orderId}`)
+    } catch {
+      toast.error('Falha ao imprimir', `Verifique a impressora e tente novamente (#${orderId}).`)
+    } finally {
+      setPrintingOrder(null)
+    }
+  }
 
   const filteredOrders = (orders ?? []).filter((order) => {
     if (!search) return true
@@ -138,48 +154,61 @@ export function OrdersPage() {
           <CardContent>
             <div className="space-y-3">
               {filteredOrders.map((order) => (
-                <Link
+                <div
                   key={order.codigo}
-                  to={`/orders/${order.codigo}`}
                   className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-accent/50"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">#{order.codigo}</p>
-                      <StatusBadge status={order.status} />
-                      <Badge variant="outline" className="text-xs">
-                        {sourceLabels[order.source] ?? order.source}
+                  <Link to={`/orders/${order.codigo}`} className="flex-1">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">#{order.codigo}</p>
+                        <StatusBadge status={order.status} />
+                        <Badge variant="outline" className="text-xs">
+                          {sourceLabels[order.source] ?? order.source}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Cliente: {order.client_codigo}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(order.created_at)}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-foreground">
+                        {formatCurrency(order.total)}
+                      </p>
+                      <Badge
+                        variant={
+                          order.payment_status === 'PAID'
+                            ? 'success'
+                            : order.payment_status === 'FAILED'
+                            ? 'destructive'
+                            : 'secondary'
+                        }
+                        className="text-xs"
+                      >
+                        {order.payment_status === 'PAID'
+                          ? 'Pago'
+                          : order.payment_status === 'PENDING'
+                          ? 'Pendente'
+                          : order.payment_status}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Cliente: {order.client_codigo}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(order.created_at)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-foreground">
-                      {formatCurrency(order.total)}
-                    </p>
-                    <Badge
-                      variant={
-                        order.payment_status === 'PAID'
-                          ? 'success'
-                          : order.payment_status === 'FAILED'
-                          ? 'destructive'
-                          : 'secondary'
-                      }
-                      className="text-xs"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Imprimir pedido ${order.codigo}`}
+                      disabled={printingOrder === order.codigo}
+                      onClick={() => handlePrint(order.codigo)}
                     >
-                      {order.payment_status === 'PAID'
-                        ? 'Pago'
-                        : order.payment_status === 'PENDING'
-                        ? 'Pendente'
-                        : order.payment_status}
-                    </Badge>
+                      <Printer className="h-4 w-4" />
+                      {printingOrder === order.codigo ? 'Imprimindo...' : 'Imprimir'}
+                    </Button>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           </CardContent>

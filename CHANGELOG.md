@@ -4,6 +4,32 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🖨️ F3 — Impressão em tempo real + zap do entregador (16/09/2026)
+
+Implementação da F3 do `docs/entregas-cupons-spec.md` (§3.4):
+
+- **Filtro de status no auto-print** (setting `printer.auto_print.min_status`,
+  default `PAID,CONFIRMED`): o auto-print só cria job quando o pedido entra
+  em um dos status configurados — sem filtro, todo pedido novo viraria
+  impressão. Idempotente por pedido (evento repetido não reimprime; falha
+  do agente libera a marca para nova tentativa). Gatilho plugado no
+  `PATCH /orders/{codigo}/status` via `_safe_auto_print` (nunca falha a
+  requisição). Impressão manual (botão/reprint) nunca é bloqueada.
+- **Zap do entregador na atribuição** (`driver_notification.py`): ao atribuir
+  uma entrega (`AssignmentService.assign`), enfileira uma execução no
+  executor de automações existente (sem fila paralela; envio pelo fluxo
+  `process-pending`/poller com pacing/anti-ban). Idempotente por
+  (delivery_id, driver_id): mesma dupla não reenvia; reatribuição para
+  outro entregador cria nova execução. Sem telefone cadastrado ou com erro
+  de infraestrutura, a atribuição segue intacta (log + skip).
+  Template default configurável via setting
+  `driver.assignment_notification_template`.
+- **Botão "Imprimir" na página de Pedidos**: chama `POST /printer/print`,
+  com toast de sucesso/erro e estado de carregamento por pedido.
+- Testes: backend +11 (filtro/idempotência do auto-print; dedup e hook da
+  notificação) · frontend +2 (botão chama API; toast de erro/sucesso).
+  `renderWithProviders` agora inclui `ToastProvider`.
+
 ### 📱 F2 — Mobile RN: navegação com gates + consentimento LGPD + fila offline ponta a ponta (16/09/2026)
 
 Implementação da F2 do `docs/entregas-cupons-spec.md`:

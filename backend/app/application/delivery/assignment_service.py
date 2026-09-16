@@ -9,17 +9,25 @@ Ensures atomic operation:
 5. Assign delivery to driver
 6. Update driver status
 7. Publish domain event
-8. Commit transaction
+8. Enfileira zap do entregador (F3, idempotente — falha não desfaz)
+9. Commit transaction
 
 If any step fails: ROLLBACK entire operation.
 """
 
+import logging
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+from app.infrastructure.repositories.whatsapp_automation_repository import (
+    SQLAlchemyAutomationRepository,
+)
 from app.infrastructure.repositories.vehicle_repository import VehicleRepository
 from app.domain.events.event_bus import publish_delivery_event, publish_driver_event, EventType
+
+
+logger = logging.getLogger("gasflow.assignment")
 
 
 class AssignmentService:
@@ -104,6 +112,14 @@ class AssignmentService:
                 EventType.DRIVER_UNAVAILABLE, driver_codigo, tenant_id, data={"reason": "delivery_assigned"}
             )
 
+            # 7. Zap do entregador (F3): enfileira notificação no executor de
+            # automações existente (idempotente por delivery+driver). Falha
+            # aqui NUNCA desfaz a atribuição — só registra o erro.
+            try:
+                self._notify_driver(delivery_id, tenant_id, driver, driver_codigo)
+            except Exception:  # pragma: no cover — defesa extra; _notify_driver já engole
+                logger.exception("driver_notification_error", extra={"delivery_id": delivery_id})
+
             return {
                 "success": True,
                 "driver_codigo": driver_codigo,
@@ -117,6 +133,48 @@ class AssignmentService:
         except Exception:
             self.db.rollback()
             raise
+
+    def _notify_driver(self, delivery_id: str, tenant_id: str, driver, driver_codigo: str) -> None:
+        """
+        Enfileira o zap do entregador na atribuição (F3).
+
+        Falhas de infraestrutura (settings/DB/executor) NUNCA derrubam a
+        atribuição — logam e seguem. Sem telefone cadastrado, pula cedo.
+        """
+        from app.infrastructure.database.init_db import engine
+        from sqlalchemy.orm import Session as _Session
+        from app.application.delivery.driver_notification import DriverAssignmentNotifier
+        from app.application.settings.settings_service import SettingsService
+
+        phone = (driver.telefone or "").strip() if driver.telefone else ""
+        if not phone:
+            logger.warning(
+                "driver_notification_skipped_no_phone",
+                extra={"delivery_id": delivery_id, "driver": driver_codigo},
+            )
+            return
+
+        session = _Session(bind=engine)
+        try:
+            template = None
+            try:
+                template = SettingsService(session).get_value("driver.assignment_notification_template", None)
+            except Exception:
+                template = None  # sem settings, usa o template default
+            notifier = DriverAssignmentNotifier(SQLAlchemyAutomationRepository(session, tenant_id))
+            notifier.notify_assignment(
+                delivery_id=delivery_id,
+                driver_codigo=driver_codigo,
+                payload={
+                    "driver_name": driver.nome or "",
+                    "customer_phone": phone,
+                },
+                template=template if isinstance(template, str) and "{{" in template else None,
+            )
+        except Exception:
+            logger.exception("driver_notification_error", extra={"delivery_id": delivery_id, "driver": driver_codigo})
+        finally:
+            session.close()
 
     def release(
         self,
