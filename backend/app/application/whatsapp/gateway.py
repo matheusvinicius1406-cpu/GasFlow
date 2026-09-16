@@ -126,6 +126,7 @@ class MessageGateway:
         self._rate_lock = threading.Lock()
 
         # ── Coupon offer cap (F4): 1 oferta por conversa ──
+        # TODO(prod): Mover para Redis para persistir entre reinícios do backend.
         self._coupon_offered: Dict[str, float] = {}  # conv_key -> timestamp
         self._COUPON_OFFER_TTL = 1800  # 30 min
 

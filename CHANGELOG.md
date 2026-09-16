@@ -50,6 +50,27 @@ Implementação da F3 do `docs/entregas-cupons-spec.md` (§3.4):
 - **Rate limit** no auto-cadastro: 3 tentativas/telefone/hora, 5/IP/hora
   (MVP em memória).
 
+### 🧪 F4.5 — Refinamento e testes (16/09/2026)
+
+- **Bugfix**: código do cupom de indicação usava apenas 1 char aleatório
+  (`INDICA-{token[:8]}`), causando colisão UNIQUE. Corrigido para 12 chars.
+- **Bugfix**: código do cupom de indicado (`BEMVINDO-{codigo}`) colidia
+  quando o mesmo telefone se cadastrava duas vezes. Adicionado sufixo UUID.
+- **Testes backend**: +9 `test_referral_service.py` (service), +10
+  `test_ai_referral_tools.py` (tools IA). Total suite: 1532→1551.
+- **Testes frontend**: +5 `ClientCouponsTab.test.tsx`, +4
+  `ClientReferralsTab.test.tsx`, +3 `CouponsPage.invite-link.test.tsx`.
+- **TODOs de produção**:
+  - `tools_impl.py`: IP não disponível em contexto WhatsApp (rate limit IP
+    inefetivo).
+  - `gateway.py`: cap 1/conversa em memória, precisa Redis para persistir.
+- **R1 verificado**: rate limit IP (5/hora) não funciona em contexto WhatsApp
+  porque o IP não é extraído do webhook. Apenas phone (3/hora) é efetivo.
+- **R2 verificado**: prompt instrui corretamente sobre token GF-INV-,
+  coleta de dados, register_referral e cap 1/conversa.
+- **Cap 1/conversa**: in-memory dict com TTL 30min — não testável como
+  unitário; documentado como integration-only.
+
 ### 📱 F2 — Mobile RN: navegação com gates + consentimento LGPD + fila offline ponta a ponta (16/09/2026)
 
 Implementação da F2 do `docs/entregas-cupons-spec.md`:

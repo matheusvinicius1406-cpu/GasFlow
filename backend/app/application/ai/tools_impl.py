@@ -499,6 +499,7 @@ class AIToolsFactory:
         """Retorna erro se rate limit excedido, senão None.
 
         Limites: 3 tentativas/telefone/hora, 5 tentativas/IP/hora.
+        # TODO(prod): IP não é passado no contexto WhatsApp — limitar a phone apenas.
         """
         now = time.time()
         # Por telefone: 3/hora

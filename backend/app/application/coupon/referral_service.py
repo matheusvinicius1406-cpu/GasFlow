@@ -97,7 +97,7 @@ class ReferralService:
 
         token = f"{TOKEN_PREFIX}{secrets.token_urlsafe(TOKEN_LENGTH)}"
         referrer_coupon = self._create_referral_coupon(
-            code=f"INDICA-{token[:8].upper()}",
+            code=f"INDICA-{token[len(TOKEN_PREFIX):len(TOKEN_PREFIX)+12].upper()}",
             value=value,
             coupon_type=coupon_type,
             owner_codigo=referrer_client_codigo,
@@ -166,7 +166,7 @@ class ReferralService:
         # Cupom do indicado — mesmo valor do do indicador (G1)
         value, coupon_type = self._reference_offer()
         referred_coupon = self._create_referral_coupon(
-            code=f"BEMVINDO-{client.codigo}",
+            code=f"BEMVINDO-{client.codigo}-{uuid.uuid4().hex[:6].upper()}",
             value=value,
             coupon_type=coupon_type,
             owner_codigo=client.codigo,
