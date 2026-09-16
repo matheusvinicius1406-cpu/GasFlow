@@ -4,6 +4,42 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🏗️ Reorganização Estrutural — v1.1.6 (16/09/2026)
+
+Implementação completa do `docs/reorg-plan.md` (F1–F6):
+
+- **Sidebar em 8 grupos** (era 18 itens chapados): Dashboard, WhatsApp
+  (Conversas/Contatos/Campanhas/Automações/Contas & Conexão), Pedidos,
+  Entregas (Entregas/Motoristas), Clientes (Lista/Segmentos/Recompra/Cupons),
+  Produtos & Estoque (Produtos/Estoque/Notas de Compra), Financeiro &
+  Relatórios, Configurações (Geral/Usuários/Auditoria/IA). Grupos colapsáveis
+  que abrem sozinhos conforme a rota; fonte única em `nav.tsx` compartilhada
+  entre desktop e mobile.
+- **Módulo WhatsApp único**: rota `/contacts` removida — Contatos virou sub-rota
+  `/whatsapp/contacts` (feature `contacts` absorvida pelo módulo whatsapp);
+  `/whatsapp` agora é a home de Conversas; Campanhas em `/whatsapp/campaigns`;
+  **Contas & Conexão** em `/whatsapp/accounts` (guard `whatsapp.read`) com a
+  seção **WhatsApp Web** embutida (mesma flag `waWebPanel.enabled`) — rota
+  `/whatsapp/web` removida.
+- **IA como bolinha flutuante** (`FloatingCopilot`): FAB canto inferior-direito
+  + slide-over com o chat do Copilot, persistência no localStorage, oculto em
+  login/driver. Rota `/intelligence` e `IntelligencePage` **deletados**.
+- **Backend em pastas por módulo** (`presentation/api/`): `whatsapp/`
+  (accounts, gateway, automation, cloud_webhook, contacts), `catalog/`
+  (products, inventory), `logistics/` (delivery*, dispatch, driver*),
+  `finance/` (finance, payments, reports), `core/` (auth, health, settings,
+  admin, dashboard). **Rotas de API preservadas** — única exceção:
+  `/clients/contacts` → **`/whatsapp/contacts`** (consumidor único = nossa UI;
+  serviço WhatsApp atualizado em `crm-sync.ts`).
+- **POST /whatsapp/contacts/sync** movido para o namespace de contatos
+  (mesma semântica de proxy ao serviço Node).
+- **Limpeza total do banco (migration v4, `reorg_cleanup_v4`)**: clients,
+  whatsapp_conversations/messages, ai_* e afins zerados no boot + catálogo
+  real semeado — Água 20L R$10 e Gás P13 R$120 (cartão 1x R$125 / 2x R$130).
+  `auth_*`, `system_settings` e RBAC intocados. Backup automático pré-migration.
+- Suítes: backend 1446 ✅, frontend 194 ✅, whatsapp 94 ✅, desktop 41 ✅,
+  mobile 9 ✅.
+
 ### 🧪 Protótipo — Painel WhatsApp Web (14/09/2026)
 
 - **Híbrido WhatsApp Web no desktop (F0–F5)**: WebContentsView com WhatsApp

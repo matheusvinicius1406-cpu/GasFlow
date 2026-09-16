@@ -1,6 +1,6 @@
 # Plano de Reorganização Estrutural — GasFlow
 
-**Data:** 15/09/2026 · **Status:** 📋 AGUARDANDO APROVAÇÃO — sem código executado ainda
+**Data:** 15/09/2026 · **Status:** ✅ EXECUTADO (F1–F6) — release v1.1.6 (16/09/2026). Decisões do §6 resolvidas: limpeza TOTAL do banco aprovada; preços reais semeados (Água 20L R$10, Gás P13 R$120 cartão 1x R$125/2x R$130); Segmentos/Recompra/Cupons como sub-itens de Clientes; WhatsApp Web como seção de Contas & Conexão.
 **Origem:** pedido do dono — consolidar módulos, limpar banco, frontend sofisticado, IA como bolinha flutuante.
 
 ---
