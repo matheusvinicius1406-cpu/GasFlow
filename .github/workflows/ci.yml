@@ -43,7 +43,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -72,7 +72,7 @@ jobs:
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # node:sqlite (src/db.ts) exige Node >= 22.5; imagem prod usa 24
           node-version: "24"
@@ -95,7 +95,7 @@ jobs:
         working-directory: agent
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Boot E2E stack (postgres + redis + backend + frontend/nginx)
         run: docker compose -f docker-compose.e2e.yml up -d --build
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
