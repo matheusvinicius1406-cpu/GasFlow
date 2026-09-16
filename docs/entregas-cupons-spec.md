@@ -1,8 +1,9 @@
 # Spec — Entregas, Cupons/Indicação, Comunidade e Organizador de Contatos
 
-**Data:** 16/09/2026 · **Status:** 📋 AGUARDANDO APROVAÇÃO — sem código executado
+**Data:** 16/09/2026 · **Status:** 📋 AGUARDANDO APROVAÇÃO — spec executável (v2) — nenhum código de feature executado
 **Origem:** pedido do dono — consolidar o módulo de entregas, criar indicação com cupons, comunidade de clientes e organizador de contatos.
-**Decisões do dono já travadas:** app do entregador em paralelo (desktop + mobile RN), estoque no entregador (C1), sugestão + confirmação do operador (C3), cupom de indicação com valor igual e limite de 10/mês (G1/G2), ordem de execução mantida conforme plano original.
+**Decisões do dono já travadas:** app do entregador em paralelo (desktop + mobile RN), estoque no entregador com modelo detalhado (C1 — §3.3.1), sugestão + confirmação do operador (C3), cupom de indicação com valor igual e limite de 10/mês (G1/G2), auto-cadastro por IA na conversa (§5), fases com critérios de aceitação objetivos (§6).
+**Prompts por fase:** `docs/entregas-cupons-prompts.md` (colar no início de cada sessão de codificação).
 
 ---
 
@@ -36,7 +37,7 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 | C3 | **Sugere + operador confirma** (design atual do `dispatch_engine` mantido; atribuição automática descartada) |
 | G1 | **Mesmo valor de cupom** para indicador e indicado |
 | G2 | **Limite de 10 indicações/mês** por cliente |
-| Ordem | Mantida a do plano original (seção 8) |
+| Ordem | Ajustada na v2: F1+F2 fundidas (entregador+rastreio), contatos antecipado para F6, inteligente para F7 (§6) |
 
 ---
 
@@ -75,6 +76,15 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 - Evento "carregamento": operador registra N cheios no entregador (tela de Motoristas) → audit.
 - Despacho: filtro de elegibilidade = tem cheio + disponível + distância; UI mostra a sugestão do `dispatch_engine` com a explicação já gerada; operador confirma.
 
+### 3.3.1 C1 — Modelo de estoque do entregador (detalhe)
+| Pergunta | Decisão |
+|---|---|
+| Carregamento | **Manual**: entregador declara "peguei N cheios" no app → operador confirma na base → evento `loading` com audit. Sem carga automática. |
+| Débito da base | **Só na entrega confirmada** (`deliver_stock_atomic` intocado). O carregamento é **empréstimo temporário** (`full_tanks_loaded += N`) e **não** debita a base — conta dupla é bug. A cada entrega, `full_tanks_loaded` decrementa e a base debita uma única vez. |
+| Avaria/perda | Lançamento "avaria" no app com **motivo obrigatório**; debita `full_tanks_loaded` e o estoque da base, com audit `stock.damage`. |
+| Vazios | Contagem separada `empty_tanks_returned`; reconciliação no fim do turno: carga − entregas − avarias = cheios restantes + vazios devolvidos. |
+| Divergência | Fora da tolerância (config `driver.stock.tolerance`, default 2): alerta ao operador + **bloqueio de novas cargas** até reconciliação manual. |
+
 ### 3.4 Impressão em tempo real
 - Filtro do auto-print: só pedidos `PAID`/`CONFIRMED` (config `printer.auto_print.min_status`).
 - Zap do entregador: na atribuição de entrega, envio automático do resumo (endereço, itens, pagamento) via módulo WhatsApp para o telefone do motorista — reusa o executor de automações existente (idempotente por entrega).
@@ -83,7 +93,7 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 ### 3.5 Cupons como link de auto-cadastro + indicação
 - Cupom ganha `invite_token` (link único). Fluxo:
   1. Admin cria cupom → link gerado (ou cupom de indicação gerado por cliente).
-  2. Novo cliente recebe o link → **canal a decidir** (ver §5): (a) IA captura o cadastro na conversa (link vira parâmetro de contexto); ou (b) mini-form web público.
+  2. Novo cliente recebe o link → **cadastro capturado pela IA na conversa** (decisão §5; link/código do cupom entra como contexto).
   3. Sistema registra `referred_by` + novo cliente.
   4. Ambos ganham cupom (mesmo valor, limite 10 indicações/mês/cliente, validade 90 dias).
   5. Cupons ficam no perfil do cliente (aba "Meus cupons" no CRM).
@@ -109,7 +119,7 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 ### 3.9 Relatórios com gráficos
 - Instalar `recharts`; telas: entregas por período, por entregador, por região (bairro), tempo médio de entrega (da atribuição ao `DELIVERED`), comparativo de performance.
 - Dados: endpoints de reports existentes + novos agregados do 3.8.
-- Refresh manual; export PDF/CSV fica para depois (F2).
+- Refresh manual; export PDF entra na F9 (critério de aceitação), via printToPDF do Electron (padrão das notas de compra).
 
 ---
 
@@ -124,28 +134,36 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 | Comunidade fora do nosso controle (ban do WhatsApp) | Anti-ban já existe (pacing/caps); Community nativo reduz risco de grupo informal |
 | Renomeador corromper nomes reais | Preview obrigatório + audit + nada sobrescrito sem confirmação (I3) |
 | CI quebrado (E2E boot + Trivy CVEs na imagem backend) pré-existente desde 10/09 | Não bloqueia desenvolvimento, mas **corrigir antes da release que fechar estas fases** |
+| **`release.yml` sem gate de CI** — publica mesmo com CI vermelho | **Tarefa pré-F1:** gate no release — job de release só roda se os 4 jobs de teste do CI passarem no mesmo commit (alternativa: rodar os testes dentro do próprio `release.yml` antes do build). Hoje: CI vermelho desde 10/09 → toda release pode publicar código quebrado sem perceber. |
 
 ---
 
-## 5. Decisão pendente (única, não bloqueia o início)
+## 5. Decisão: canal do auto-cadastro por cupom — ✅ DECIDIDO (a)
 
-- **Canal do auto-cadastro por cupom (Bloco 7, passo 2):**
-  (a) IA captura o cadastro direto na conversa do WhatsApp (link/código do cupom entra como contexto) — mais aderente ao produto, sem página pública;
-  (b) mini-form web público (link do cupom abre formulário) — mais simples, mas exige página nova + honeypot/anti-spam.
-  Proposta: **(a)**, com (b) como fase 2 se a captura pela IA mostrar atrito.
+**Decisão: IA captura o cadastro na conversa do WhatsApp.** Obrigatória antes da F4; não bloqueia F1–F3.
 
----
-
-## 6. Fases de execução (ordem mantida pelo dono)
-
-| Fase | Bloco | Entrega | Validação |
+| Opção | Prós | Contras | Trabalho |
 |---|---|---|---|
-| **F1** | 1 | Desktop do entregador consolidado (sessão, notificação de atribuição) + telas finais do mobile RN | Suítes desktop/frontend/mobile + fluxo manual das 2 pontas |
-| **F2** | 2 | Mapa do operador com posição do entregador + intervalo configurável | Testes de UI + LGPD re-run (403 fora da janela, audit) |
-| **F3** | 4 | Auto-print com filtro + zap do entregador na atribuição | Impressão real GT710 + idempotência do zap |
-| **F4** | 7 | Referral + link/cupom auto-cadastro + cupons no perfil + tool IA | Testes backend (limites, validade, 1/pedido) + e2e do fluxo de indicação |
-| **F5** | 8 | Convite do Community pós-cadastro + filtro de campanha | Envio manual para grupo de teste |
-| **F6** | 3 | `driver_stock` + elegibilidade + UI sugestão/confirmar | Testes de consistência de estoque + despacho com explicação |
-| **F7** | 9 | Renomeador em lote + códigos + conflitos sinalizados | Preview/review manual + audit |
-| **F8** | 5 | Mapa de calor por bairro (30d default) | Contagens vs SQL direto |
-| **F9** | 6 | Relatórios com Recharts | Suítes frontend + smoke visual |
+| **(a) IA na conversa** ✅ | Zero frontend novo; aderente ao produto; captura natural na conversa | Depende do prompt da IA funcionar 100%; depende do número pareado; risco de abuso | Baixo |
+| (b) Mini-form web público (fallback) | Independente do WhatsApp; controle total de validação | Página nova; captcha; rate limit; LGPD de formulário | Médio-Alto |
+
+Fallback: se a captura pela IA mostrar atrito no fluxo real, migra-se para (b) **sem descartar o backend** (mesmos endpoints).
+
+---
+
+## 6. Fases de execução (v2 — F1+F2 fundidas; contatos antecipado p/ F6; critérios objetivos)
+
+> **Pré-F1 (tarefa):** gate de CI no `release.yml` — release só roda com os 4 jobs de teste verdes no mesmo commit (ver §4).
+> **Requisito transversal:** fases que usam o módulo WhatsApp (F3, F4, F5) exigem **WhatsApp v1.1.6+** (módulo unificado — versões anteriores não têm a API necessária).
+
+| Fase | Bloco | Entrega | Critério de aceitação | Validação |
+|---|---|---|---|---|
+| **F1** | 1+2 | Entregador **desktop MVP** consolidado (login, lista, status, confirmação, notificação de atribuição) **+** mapa do operador com posição em tempo real + intervalo configurável | Entregador vê entrega nova em **<10s** após atribuição; operador vê posição em **<60s** | Suítes desktop/frontend + LGPD re-run (403 fora da janela, audit) |
+| **F2** | 1 | **Mobile RN**: telas finais (login, lista, detalhe, confirmar) sobre a lógica offline já testada + consentimento LGPD no 1º login | App abre **offline**, mostra entregas em cache, confirma entrega e **sincroniza ao voltar** | Suíte mobile + fluxo offline manual |
+| **F3** | 4 | Auto-print com filtro + zap do entregador na atribuição | Pedido pago imprime em **<5s** na térmica 80mm; zap chega em **<30s** | Impressão real GT710 + idempotência do zap |
+| **F4** | 7 | Referral + auto-cadastro por IA (canal §5) + cupons no perfil + tool IA | Fluxo indicação→cadastro→cupom nos dois perfis em **<2min**; IA oferece cupom na próxima conversa | Testes backend (limites 10/mês, validade 90d, 1/pedido) + e2e da indicação |
+| **F5** | 8 | Convite do Community pós-cadastro + filtro de campanha | Cliente entra via link **pós-cadastro**; só admin publica | Envio manual para grupo de teste |
+| **F6** | 9 | **Organizador + renomeador de contatos** (antecipado: base de dados limpa antes dos blocos dependentes) | **100%** dos contatos com código sequencial; **zero duplicatas** após renomeação em lote | Preview/review + audit por contato |
+| **F7** | 3 | **Entrega inteligente**: `driver_stock` (§3.3.1) + elegibilidade + UI sugestão/confirmar | Sugestão acerta o entregador mais próximo com estoque em **>90%** (medido em 50 pedidos reais) | Testes de consistência de estoque + despacho |
+| **F8** | 5 | Mapa de calor por bairro (30d default) | Renderiza em **<3s** com 90 dias de dados; filtrável por período | Contagens vs SQL direto |
+| **F9** | 6 | Relatórios com Recharts + export PDF | Gráficos carregam em **<2s**; exportação PDF funciona | Suítes frontend + smoke visual |
