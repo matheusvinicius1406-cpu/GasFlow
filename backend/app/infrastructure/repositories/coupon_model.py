@@ -55,6 +55,14 @@ class CouponModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # ── Indicação (F4) ─────────────────────────────────
+    # invite_token: identificador público do link de convite/auto-cadastro
+    # (gerado on-demand; null em cupons comuns criados pelo admin).
+    # is_referral: cupom nascido de uma indicação (não consome o 1/pedido
+    # do cupom aplicado — validação do pedido continua no domain existente).
+    invite_token = Column(String(64), unique=True, nullable=True, index=True)
+    is_referral = Column(Boolean, default=False, nullable=False)
+
 
 class CouponRedemptionModel(Base):
     __tablename__ = "coupon_redemptions"
@@ -72,4 +80,32 @@ class CouponRedemptionModel(Base):
     fee_saved = Column(Numeric(10, 2), default=0, nullable=False)
     # Metadados para reverter corretamente ao remover o cupom:
     delivery_fee_before = Column(Numeric(10, 2), default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ── Indicações (F4): quem indicou quem e quais cupons a indicação gerou ──
+
+
+class ReferralModel(Base):
+    """Indicação: referrer convidou referred (auto-cadastro via token).
+
+    Ambos recebem um cupom de mesmo valor (decisão G1 do spec). O limite
+    mensal de indicações por cliente é validado no ReferralService.
+    """
+
+    __tablename__ = "referrals"
+
+    __table_args__ = (UniqueConstraint("tenant_id", "invite_token", name="uq_referral_tenant_token"),)
+
+    id = Column(String(36), primary_key=True)
+    tenant_id = Column(String, default="default", index=True, nullable=False)
+    invite_token = Column(String(64), nullable=False, index=True)
+    referrer_client_codigo = Column(String(20), nullable=False, index=True)
+    referred_client_codigo = Column(String(20), nullable=True, index=True)
+    # Cupons gerados (referrer + referred) — preenchidos no auto-cadastro
+    referrer_coupon_id = Column(String(36), nullable=True)
+    referred_coupon_id = Column(String(36), nullable=True)
+    # Nome/telefone informados no cadastro (auditoria)
+    referred_name = Column(String(100), nullable=True)
+    referred_phone = Column(String(30), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
