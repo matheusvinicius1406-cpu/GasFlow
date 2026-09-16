@@ -42,6 +42,82 @@ DEFAULT_TEMPLATE = (
 )
 VARIABLES = ("{{driver_name}}", "{{order_ref}}", "{{customer_name}}", "{{address}}")
 
+# Nomes no nível do módulo para permitir monkeypatch nos testes.
+from app.infrastructure.database.init_db import engine as _engine  # noqa: E402
+from app.infrastructure.repositories.whatsapp_automation_repository import (  # noqa: E402
+    SQLAlchemyAutomationRepository,
+)
+from app.application.whatsapp_automation.executor import ExecutionProcessor  # noqa: E402
+
+
+def load_delivery_context(automation_repo, delivery_id: str, tenant_id: str) -> Dict[str, str]:
+    """
+    F3.5: extrai order_ref/customer_name/address da delivery persistida.
+
+    Falha (delivery inexistente ou erro de infra) NUNCA quebra a notificação:
+    retorna placeholders vazios + log warning — mensagem segue com o que houver.
+    """
+    ctx = {"order_ref": "", "customer_name": "", "address": ""}
+    try:
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+        )
+
+        repo = SQLAlchemyDeliveryPersistenceRepository(automation_repo.db, tenant_id)
+        record = repo.get_delivery(delivery_id)
+        if record is None:
+            logger.warning(
+                "driver_notification_delivery_not_found",
+                extra={"delivery_id": delivery_id, "tenant": tenant_id},
+            )
+            return ctx
+        ctx["order_ref"] = str(record.order_id or "")
+        ctx["customer_name"] = str(record.customer_name or "")
+        parts = [record.address_street, record.address_number, record.address_neighborhood]
+        ctx["address"] = ", ".join(p for p in (str(x or "").strip() for x in parts) if p)
+    except Exception:
+        logger.warning("driver_notification_delivery_lookup_failed", exc_info=True)
+    return ctx
+
+
+def drain_pending_notifications(tenant_id: str = "default", limit: int = 10) -> Dict[str, Any]:
+    """
+    F3.5: drena a fila de automações uma vez (envio imediato pós-atribuição).
+
+    Reaproveita o ExecutionProcessor existente (pacing/anti-ban/audit) —
+    não cria fila paralela. Garante o critério "zap em <30s" mesmo com
+    AUTOMATION_POLL_SECONDS=0. Erros são logados, nunca propagados.
+    """
+    import asyncio
+
+    from sqlalchemy.orm import Session as _Session
+
+    session = _Session(bind=_engine)
+    try:
+        repo = SQLAlchemyAutomationRepository(session, tenant_id)
+        processor = ExecutionProcessor(repo)
+        try:
+            # Pode já haver um event loop rodando (assign chamado de dentro
+            # de um handler async, ex.: FastAPI com session async) — nesse
+            # caso roda a corotina no loop existente; senão, cria o seu.
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(asyncio.run, processor.process_pending_executions(limit=limit)).result(
+                        timeout=25
+                    )
+            return asyncio.run(processor.process_pending_executions(limit=limit))
+        except Exception:
+            logger.warning("driver_notification_drain_failed", exc_info=True)
+            return {"processed": 0, "sent": 0, "failed": 0, "errors": []}
+    finally:
+        session.close()
+
 
 def render_assignment_message(payload: Dict[str, Any], template: str = DEFAULT_TEMPLATE) -> str:
     """Renderiza o template da notificação com o payload da atribuição."""
@@ -113,6 +189,12 @@ class DriverAssignmentNotifier:
             driver_name, order_ref, customer_name, address, customer_phone
         """
         payload = payload or {}
+        # F3.5: completa o payload com dados da delivery persistida
+        # (order_ref, customer_name, address) — placeholders vazios se ausente.
+        tenant_id = getattr(self.automation_repo, "tenant_id", "default") or "default"
+        for key, value in load_delivery_context(self.automation_repo, delivery_id, tenant_id).items():
+            if not payload.get(key):
+                payload[key] = value
         rule = self._get_or_create_rule()
         if not rule or not rule.id:
             return {"success": False, "error": "rule_unavailable"}

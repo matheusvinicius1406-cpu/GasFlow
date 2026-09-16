@@ -162,7 +162,7 @@ class AssignmentService:
             except Exception:
                 template = None  # sem settings, usa o template default
             notifier = DriverAssignmentNotifier(SQLAlchemyAutomationRepository(session, tenant_id))
-            notifier.notify_assignment(
+            result = notifier.notify_assignment(
                 delivery_id=delivery_id,
                 driver_codigo=driver_codigo,
                 payload={
@@ -171,6 +171,13 @@ class AssignmentService:
                 },
                 template=template if isinstance(template, str) and "{{" in template else None,
             )
+            # F3.5 — envio imediato: drena a fila uma vez (execução recém-criada
+            # sai PENDING → SENT sem depender de AUTOMATION_POLL_SECONDS).
+            # Idempotente: execução já processada é ignorada pelo processor.
+            if result.get("created"):
+                from app.application.delivery.driver_notification import drain_pending_notifications
+
+                drain_pending_notifications(tenant_id=tenant_id, limit=10)
         except Exception:
             logger.exception("driver_notification_error", extra={"delivery_id": delivery_id, "driver": driver_codigo})
         finally:

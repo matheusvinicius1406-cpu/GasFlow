@@ -53,8 +53,8 @@ def _safe_auto_print(order_id: str, tenant_id: str, order_status: str, order_dat
             order_status=order_status,
             order_data=order_data,
         )
-    except Exception:  # pragma: no cover — defesa extra; trigger já engole erros
-        logger.exception("auto_print_hook_error", extra={"order_id": order_id})
+    except Exception as exc:  # F3.5: loga antes de engolir (não é silencioso)
+        logger.warning("auto-print falhou: %s", exc, extra={"order_id": order_id}, exc_info=True)
 
 
 router = APIRouter(prefix="/orders", tags=["Orders"])

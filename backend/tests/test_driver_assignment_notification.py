@@ -194,3 +194,199 @@ def notifier_rule_id(repo):
         if rule.name == RULE_NAME:
             return rule.id
     pytest.fail("rule de notificação não foi criada")
+
+
+# ═══════════════════════════════════════════════════════════
+# F3.5 — payload completo + envio imediato
+# ═══════════════════════════════════════════════════════════
+
+
+class TestDeliveryContextF35:
+    def _persist_delivery(self, db, delivery_id="DLV-CTX", order_id="ORD-777"):
+        import app.infrastructure.repositories.delivery_persistence_model  # noqa: F401
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+        )
+
+        repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
+        repo.create_delivery(
+            delivery_id=delivery_id,
+            order_id=order_id,
+            customer_name="Maria Silva",
+            address={"street": "Rua das Flores", "number": "123", "neighborhood": "Centro"},
+        )
+
+    def test_payload_completed_from_delivery(self, db):
+        """Delivery com pedido → zap tem order_ref + customer_name + address."""
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+        import app.infrastructure.repositories.delivery_persistence_model  # noqa: F401
+        from app.application.delivery.driver_notification import DriverAssignmentNotifier
+        from app.infrastructure.repositories.whatsapp_automation_repository import (
+            SQLAlchemyAutomationRepository,
+        )
+
+        self._persist_delivery(db)
+        auto_repo = SQLAlchemyAutomationRepository(db, "default")
+        notifier = DriverAssignmentNotifier(auto_repo)
+
+        result = notifier.notify_assignment(
+            delivery_id="DLV-CTX",
+            driver_codigo="M-001",
+            payload={"driver_name": "João", "customer_phone": "5511999990001"},
+        )
+        assert result["created"] is True
+
+        execs = _pending_execs(auto_repo, notifier._get_or_create_rule().id)
+        assert len(execs) == 1
+        msg = execs[0].message_text
+        assert "ORD-777" in msg
+        assert "Maria Silva" in msg
+        assert "Rua das Flores" in msg and "123" in msg and "Centro" in msg
+
+    def test_missing_delivery_keeps_placeholders(self, db, caplog):
+        """Delivery inexistente → placeholders vazios + warning, sem explodir."""
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+        from app.application.delivery.driver_notification import load_delivery_context
+        from app.infrastructure.repositories.whatsapp_automation_repository import (
+            SQLAlchemyAutomationRepository,
+        )
+
+        auto_repo = SQLAlchemyAutomationRepository(db, "default")
+        with caplog.at_level("WARNING"):
+            ctx = load_delivery_context(auto_repo, "DLV-NÃO-EXISTE", "default")
+
+        assert ctx == {"order_ref": "", "customer_name": "", "address": ""}
+        assert any("delivery_not_found" in r.message for r in caplog.records)
+
+    def test_lookup_error_is_swallowed(self, db, monkeypatch, caplog):
+        """Erro de infra no lookup → warning + placeholders (nunca propaga)."""
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+        from app.application.delivery import driver_notification as dn
+        from app.infrastructure.repositories.whatsapp_automation_repository import (
+            SQLAlchemyAutomationRepository,
+        )
+
+        auto_repo = SQLAlchemyAutomationRepository(db, "default")
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(
+            "app.infrastructure.repositories.delivery_persistence_repository.SQLAlchemyDeliveryPersistenceRepository",
+            boom,
+        )
+        with caplog.at_level("WARNING"):
+            ctx = dn.load_delivery_context(auto_repo, "DLV-X", "default")
+
+        assert ctx["order_ref"] == ""
+        assert any("lookup_failed" in r.message for r in caplog.records)
+
+    def test_explicit_payload_not_overwritten(self, db):
+        """Payload explícito tem precedência sobre o lookup da delivery."""
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+        import app.infrastructure.repositories.delivery_persistence_model  # noqa: F401
+        from app.application.delivery.driver_notification import DriverAssignmentNotifier
+        from app.infrastructure.repositories.whatsapp_automation_repository import (
+            SQLAlchemyAutomationRepository,
+        )
+
+        self._persist_delivery(db)
+        auto_repo = SQLAlchemyAutomationRepository(db, "default")
+        notifier = DriverAssignmentNotifier(auto_repo)
+        notifier.notify_assignment(
+            delivery_id="DLV-CTX",
+            driver_codigo="M-001",
+            payload={"customer_name": "Nome Explícito"},
+        )
+        execs = _pending_execs(auto_repo, notifier._get_or_create_rule().id)
+        assert "Nome Explícito" in execs[0].message_text
+
+
+class TestImmediateDrainF35:
+    @pytest.mark.asyncio
+    async def test_assign_drains_queue_and_sends(self, db, monkeypatch):
+        """Assign → execução criada E processada (bridge mockado, envio imediato)."""
+        import app.infrastructure.database.init_db as init_db
+        from app.application.delivery import driver_notification as dn
+        from app.application.delivery.assignment_service import AssignmentService
+        from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+        from app.infrastructure.repositories.whatsapp_automation_repository import (
+            SQLAlchemyAutomationRepository,
+        )
+        from app.domain.whatsapp_automation.entity import ExecutionStatus
+
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+        import app.infrastructure.repositories.delivery_persistence_model  # noqa: F401
+
+        db.add(
+            DeliveryDriverModel(
+                tenant_id="default",
+                codigo="M-IMED",
+                nome="Imediato",
+                telefone="5511900000099",
+                status="AVAILABLE",
+                ativo=True,
+            )
+        )
+        db.commit()
+
+        sent: list = []
+
+        class StubBridge:
+            async def send_message(self, phone, text, account_id="primary", idempotency_key=None):
+                sent.append({"phone": phone, "text": text})
+                return {"success": True, "message_id": "stub-f35"}
+
+        monkeypatch.setattr(init_db, "engine", db.get_bind())
+        monkeypatch.setattr(dn, "_engine", db.get_bind(), raising=False)
+
+        original_processor = dn.ExecutionProcessor
+
+        def _processor_with_stub(repo):
+            return original_processor(repo, whatsapp_bridge=StubBridge())
+
+        monkeypatch.setattr(dn, "ExecutionProcessor", _processor_with_stub)
+
+        service = AssignmentService(db)
+        result = service.assign(tenant_id="default", delivery_id="DLV-IMED-1", driver_codigo="M-IMED")
+        assert result["success"] is True
+
+        # Execução foi criada E processada (SENT) no mesmo fluxo do assign
+        repo = SQLAlchemyAutomationRepository(db, "default")
+        execs = repo.list_executions(limit=100)
+        assert len(execs) == 1
+        assert execs[0].status == ExecutionStatus.SENT
+        assert len(sent) == 1
+        assert sent[0]["phone"] == "5511900000099"
+
+    def test_drain_error_does_not_break_assign(self, db, monkeypatch):
+        """Se a drenagem falhar, a atribuição continua OK."""
+        import app.infrastructure.database.init_db as init_db
+        from app.application.delivery import driver_notification as dn
+        from app.application.delivery.assignment_service import AssignmentService
+        from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+
+        import app.infrastructure.repositories.whatsapp_automation_model  # noqa: F401
+
+        db.add(
+            DeliveryDriverModel(
+                tenant_id="default",
+                codigo="M-DRAIN",
+                nome="Drain",
+                telefone="5511900000088",
+                status="AVAILABLE",
+                ativo=True,
+            )
+        )
+        db.commit()
+
+        monkeypatch.setattr(init_db, "engine", db.get_bind())
+
+        def boom_drain(**kwargs):
+            raise RuntimeError("drain down")
+
+        monkeypatch.setattr(dn, "drain_pending_notifications", boom_drain)
+
+        service = AssignmentService(db)
+        result = service.assign(tenant_id="default", delivery_id="DLV-DRAIN-1", driver_codigo="M-DRAIN")
+        assert result["success"] is True
