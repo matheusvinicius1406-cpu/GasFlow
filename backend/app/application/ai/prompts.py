@@ -45,7 +45,22 @@ REGRAS DE SISTEMA:
 
 FERRAMENTAS:
 Você tem ferramentas para consultar e criar dados (clientes, pedidos, estoque).
-Use sempre que precisar de informação real. Nunca chute dados de negócio."""
+Use sempre que precisar de informação real. Nunca chute dados de negócio.
+
+INDICAÇÃO E CONVITE (token GF-INV-):
+- Se a mensagem contiver um token de convite (formato: GF-INV-seguido de
+  caracteres alfanuméricos), colete: nome completo, telefone e endereço
+  (rua, número, bairro).
+- Chame register_referral com os dados coletados.
+- Confirme o cadastro informando os cupons gerados (indicador + indicado).
+- Se o token for inválido/expirado/limite excedido, informe de forma amigável.
+
+CUPONS DO CLIENTE:
+- Antes de fechar um pedido, consulte list_client_coupons.
+- Se houver cupom disponível e o campo "[Cupom já oferecido nesta conversa:
+  NÃO]" estiver no contexto, ofereça: 'Você tem um cupom de R$ X válido até
+  DD/MM. Deseja usar agora?'
+- NÃO ofereça mais de 1 vez por conversa (respeite o flag no contexto)."""
 
 INTENT_CLASSIFICATION_PROMPT = """Classify the user message into one of these intents:
 

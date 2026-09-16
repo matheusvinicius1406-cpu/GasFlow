@@ -324,6 +324,47 @@ def _build_tool_registry(db: Optional[Session] = None) -> ToolRegistry:
             handler=factory.register_payment,
         )
     )
+    # ── F4: Referral tools ─────────────────────────────
+    registry.register(
+        ToolDefinition(
+            name="register_referral",
+            description="Registrar cliente novo via token de convite de indicação",
+            tool_type=ToolType.WRITE,
+            permission=ToolPermission.PUBLIC_WRITE,  # auto-cadastro público via token
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "invite_token": {"type": "string"},
+                    "name": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "rua": {"type": "string"},
+                    "numero": {"type": "string"},
+                    "bairro": {"type": "string"},
+                    "tenant_id": {"type": "string"},
+                    "ip": {"type": "string"},
+                },
+                "required": ["invite_token", "name", "phone"],
+            },
+            handler=factory.register_referral,
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="list_client_coupons",
+            description="Listar cupons ativos do cliente (disponíveis para usar)",
+            tool_type=ToolType.READ,
+            permission=ToolPermission.READ_ONLY,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "customer_codigo": {"type": "string"},
+                    "tenant_id": {"type": "string"},
+                },
+                "required": ["customer_codigo"],
+            },
+            handler=factory.list_client_coupons,
+        )
+    )
 
     return registry
 

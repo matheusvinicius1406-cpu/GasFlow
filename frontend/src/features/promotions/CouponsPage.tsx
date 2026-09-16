@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Ticket, Plus, Trash2, RefreshCw, Save, X } from 'lucide-react'
+import { Ticket, Plus, Trash2, RefreshCw, Save, X, Link2, Copy, Check } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -70,6 +70,15 @@ export function CouponsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CouponForm>(EMPTY_FORM)
+
+  // ── Gerar link de convite (F4) ──
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteClientCodigo, setInviteClientCodigo] = useState('')
+  const [inviteClientPhone, setInviteClientPhone] = useState('')
+  const [inviteToken, setInviteToken] = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
+  const [inviteError, setInviteError] = useState('')
 
   const fetchCoupons = useCallback(async () => {
     setLoading(true)
@@ -161,6 +170,44 @@ export function CouponsPage() {
     }
   }
 
+  const handleGenerateInvite = async () => {
+    if (!inviteClientCodigo.trim()) {
+      setInviteError('Código do cliente é obrigatório.')
+      return
+    }
+    setInviteLoading(true)
+    setInviteError('')
+    setInviteToken('')
+    try {
+      const { data } = await apiClient.post('/coupons/generate-invite-token', {
+        client_codigo: inviteClientCodigo.trim(),
+      })
+      setInviteToken(data.invite_token)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setInviteError(detail || 'Falha ao gerar token de convite.')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteToken || !inviteClientPhone) return
+    const phone = inviteClientPhone.replace(/\D/g, '')
+    const link = `https://wa.me/${phone}?text=${inviteToken}`
+    try {
+      await navigator.clipboard.writeText(link)
+      setInviteCopied(true)
+      setTimeout(() => setInviteCopied(false), 2000)
+    } catch {
+      setInviteError('Falha ao copiar link.')
+    }
+  }
+
+  const inviteLink = inviteToken && inviteClientPhone
+    ? `https://wa.me/${inviteClientPhone.replace(/\D/g, '')}?text=${inviteToken}`
+    : ''
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -183,6 +230,9 @@ export function CouponsPage() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={fetchCoupons} disabled={!!busy}>
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={() => setShowInviteModal(true)} disabled={!!busy}>
+            <Link2 className="mr-1 h-4 w-4" /> Gerar link de convite
           </Button>
           <Button onClick={startCreate} disabled={!!busy}>
             <Plus className="mr-1 h-4 w-4" /> Novo cupom
@@ -291,6 +341,64 @@ export function CouponsPage() {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Modal: Gerar link de convite (F4) ── */}
+      {showInviteModal && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Gerar link de convite</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => { setShowInviteModal(false); setInviteToken(''); setInviteError('') }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="Código do cliente"
+                value={inviteClientCodigo}
+                onChange={(e) => setInviteClientCodigo(e.target.value)}
+              />
+              <Input
+                placeholder="Telefone do cliente (ex: 11999998888)"
+                value={inviteClientPhone}
+                onChange={(e) => setInviteClientPhone(e.target.value)}
+              />
+            </div>
+            {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
+            <div className="flex gap-2">
+              <Button onClick={handleGenerateInvite} disabled={inviteLoading || !inviteClientCodigo.trim()}>
+                {inviteLoading ? <LoadingSpinner size="sm" /> : 'Gerar token'}
+              </Button>
+            </div>
+            {inviteToken && (
+              <div className="space-y-2 rounded-md bg-muted p-3">
+                <p className="text-sm font-medium">Token gerado:</p>
+                <code className="block text-xs break-all">{inviteToken}</code>
+                {inviteLink && (
+                  <>
+                    <p className="text-xs text-muted-foreground mt-2">Link de convite:</p>
+                    <code className="block text-xs break-all">{inviteLink}</code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyInviteLink}
+                      className="mt-2"
+                    >
+                      {inviteCopied ? (
+                        <><Check className="mr-1 h-3 w-3" /> Copiado!</>
+                      ) : (
+                        <><Copy className="mr-1 h-3 w-3" /> Copiar link</>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

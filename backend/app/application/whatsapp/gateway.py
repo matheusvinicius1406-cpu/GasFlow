@@ -125,6 +125,10 @@ class MessageGateway:
         self._rate_buckets: Dict[str, List[float]] = defaultdict(list)
         self._rate_lock = threading.Lock()
 
+        # ── Coupon offer cap (F4): 1 oferta por conversa ──
+        self._coupon_offered: Dict[str, float] = {}  # conv_key -> timestamp
+        self._COUPON_OFFER_TTL = 1800  # 30 min
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get current metrics snapshot."""
         with self._metrics_lock:
@@ -899,6 +903,14 @@ class MessageGateway:
         )
         if customer:
             context_prefix += f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
+        # F4: flag de cupom já oferecido nesta conversa (cap 1/conversa)
+        if customer:
+            conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
+            offered_at = self._coupon_offered.get(conv_key)
+            if offered_at and (time.time() - offered_at) < self._COUPON_OFFER_TTL:
+                context_prefix += "[Cupom já oferecido nesta conversa: SIM]\n"
+            else:
+                context_prefix += "[Cupom já oferecido nesta conversa: NÃO]\n"
         if conversation.draft:
             draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]
             context_prefix += f"[Draft atual: {draft_json}]\n"
@@ -950,6 +962,12 @@ class MessageGateway:
 
         # Normal AI response
         reply = ai_result.get("message", "Posso ajudar com consultas sobre clientes, pedidos, estoque e financeiro.")
+
+        # F4: marcar cupom como oferecido se a resposta mencionou cupom
+        if customer and reply and "cupom" in reply.lower():
+            conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
+            self._coupon_offered[conv_key] = time.time()
+
         return self._build_outbound(
             conversation.id,
             message.sender_phone,

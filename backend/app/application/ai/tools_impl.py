@@ -5,7 +5,10 @@ Read and Write tools that wrap existing use cases.
 Tools NEVER access repositories directly — always through use cases.
 """
 
-from typing import Dict, Any
+import time
+from collections import defaultdict
+from typing import Dict, Any, List, Optional
+
 from app.domain.ai.tools import ToolResult
 
 
@@ -479,6 +482,141 @@ class AIToolsFactory:
                 success=True,
                 data={"codigo": client.codigo, "endereco": client.endereco_completo},
                 display_message=f"Endereço atualizado: {client.endereco_completo}",
+            )
+        except Exception as e:
+            session.rollback()
+            return ToolResult(success=False, error=str(e))
+        finally:
+            self._close_session(session)
+
+    # ── REFERRAL TOOLS (F4) ─────────────────────────────
+
+    # Rate limit para auto-cadastro (MVP em memória; production → Redis)
+    _signup_rate: Dict[str, List[float]] = defaultdict(list)
+    _RATE_WINDOW = 3600  # 1 hora
+
+    def _check_signup_rate(self, phone: str, ip: str = "") -> Optional[str]:
+        """Retorna erro se rate limit excedido, senão None.
+
+        Limites: 3 tentativas/telefone/hora, 5 tentativas/IP/hora.
+        """
+        now = time.time()
+        # Por telefone: 3/hora
+        phone_key = f"phone:{phone}"
+        bucket = self._signup_rate[phone_key]
+        bucket[:] = [t for t in bucket if now - t < self._RATE_WINDOW]
+        if len(bucket) >= 3:
+            return "RATE_LIMITED_PHONE"
+        bucket.append(now)
+        # Por IP: 5/hora (se IP disponível)
+        if ip:
+            ip_key = f"ip:{ip}"
+            ip_bucket = self._signup_rate[ip_key]
+            ip_bucket[:] = [t for t in ip_bucket if now - t < self._RATE_WINDOW]
+            if len(ip_bucket) >= 5:
+                return "RATE_LIMITED_IP"
+            ip_bucket.append(now)
+        return None
+
+    def register_referral(self, args: Dict[str, Any]) -> ToolResult:
+        """Registra novo cliente via token de convite de indicação.
+
+        IA do WhatsApp pode chamar por design (auto-cadastro público via token).
+        Não expor em outras IAs.
+        """
+        session = self._get_session()
+        try:
+            from app.application.coupon.referral_service import ReferralService, ReferralError
+
+            token = (args.get("invite_token") or "").strip()
+            name = (args.get("name") or "").strip()
+            phone = (args.get("phone") or "").strip()
+            address = {
+                "rua": (args.get("rua") or "").strip(),
+                "numero": (args.get("numero") or "").strip(),
+                "bairro": (args.get("bairro") or "").strip(),
+            }
+
+            if not token or not name or not phone:
+                return ToolResult(
+                    success=False,
+                    error="invite_token, name e phone são obrigatórios",
+                )
+
+            # Rate limit (3/telefone/hora, 5/IP/hora)
+            rate_error = self._check_signup_rate(phone, args.get("ip", ""))
+            if rate_error:
+                return ToolResult(
+                    success=False,
+                    error="Muitas tentativas de cadastro. Tente novamente mais tarde.",
+                )
+
+            tenant_id = args.get("tenant_id", "default")
+            svc = ReferralService(session, tenant_id)
+            result = svc.complete_signup(token, name, phone, address)
+
+            referred = result.get("referred_client")
+            referrer = result.get("referrer_client")
+            coupons = result.get("coupons", {})
+            idempotent = result.get("idempotent_replay", False)
+
+            rc = coupons.get("referred") or {}
+            rfc = coupons.get("referrer") or {}
+
+            if idempotent:
+                display = "Cadastro já realizado anteriormente com este token."
+            elif rc:
+                display = (
+                    f"Cadastro realizado! Você ganhou um cupom de "
+                    f"R$ {rc.get('value', 0):.2f} (código: {rc.get('code', '?')}). "
+                    f"Seu indicador também ganhou um cupom!"
+                )
+            else:
+                display = "Cadastro realizado com sucesso!"
+
+            return ToolResult(
+                success=True,
+                data={
+                    "referred_codigo": referred.codigo if referred else None,
+                    "referrer_codigo": referrer.codigo if referrer else None,
+                    "referred_coupon": rc.get("code") if rc else None,
+                    "referrer_coupon": rfc.get("code") if rfc else None,
+                    "idempotent": idempotent,
+                },
+                display_message=display,
+            )
+        except ReferralError as e:
+            return ToolResult(success=False, error=e.message)
+        except Exception as e:
+            session.rollback()
+            return ToolResult(success=False, error=str(e))
+        finally:
+            self._close_session(session)
+
+    def list_client_coupons(self, args: Dict[str, Any]) -> ToolResult:
+        """Lista cupons ativos do cliente (não usados, não expirados)."""
+        session = self._get_session()
+        try:
+            from app.application.coupon.referral_service import ReferralService
+
+            client_codigo = (args.get("customer_codigo") or "").strip()
+            if not client_codigo:
+                return ToolResult(success=False, error="customer_codigo obrigatório")
+
+            tenant_id = args.get("tenant_id", "default")
+            svc = ReferralService(session, tenant_id)
+            result = svc.client_coupons(client_codigo)
+            active = result.get("active", [])
+
+            return ToolResult(
+                success=True,
+                data={
+                    "count": len(active),
+                    "coupons": active,
+                },
+                display_message=(
+                    f"Você tem {len(active)} cupom(s) disponível(is)." if active else "Nenhum cupom disponível."
+                ),
             )
         except Exception as e:
             session.rollback()

@@ -105,6 +105,10 @@ class RemoveCoupon(BaseModel):
     order_codigo: str
 
 
+class GenerateInviteRequest(BaseModel):
+    client_codigo: str = Field(..., min_length=1)
+
+
 # ── Rotas de cupom ───────────────────────────────────
 
 
@@ -313,3 +317,78 @@ def remove_coupon_orders_path(
     ctx: TenantContext = Depends(require_permission("order.update")),
 ):
     return remove_coupon(RemoveCoupon(order_codigo=order_codigo), svc, ctx)
+
+
+# ── Indicação / Referral (F4) ──────────────────────────
+
+
+@router.post("/coupons/generate-invite-token")
+def generate_invite_token(
+    body: GenerateInviteRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("coupon.write")),
+):
+    """Gera um token de convite (GF-INV-...) para o cliente indicador."""
+    from app.application.coupon.referral_service import ReferralService, ReferralError
+
+    try:
+        rsvc = ReferralService(db, ctx.tenant_id)
+        referral = rsvc.generate_invite(body.client_codigo)
+        return {"invite_token": referral.invite_token}
+    except ReferralError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+
+
+@router.get("/coupons/by-client/{client_codigo}")
+def client_coupons(
+    client_codigo: str,
+    status: str = Query(default="all", pattern="^(all|active|used|expired)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, le=100),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("coupon.read")),
+):
+    """Cupons do cliente (ativo/usado/expirado) com paginação."""
+    from app.application.coupon.referral_service import ReferralService
+
+    svc = ReferralService(db, ctx.tenant_id)
+    result = svc.client_coupons(client_codigo)
+
+    all_items = []
+    for group in ("active", "used", "expired"):
+        all_items.extend([{**item, "status": group} for item in result.get(group, [])])
+
+    if status != "all":
+        all_items = [i for i in all_items if i["status"] == status]
+
+    total = len(all_items)
+    start = (page - 1) * page_size
+    items = all_items[start : start + page_size]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/coupons/by-client/{client_codigo}/referrals")
+def client_referrals(
+    client_codigo: str,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, le=100),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("coupon.read")),
+):
+    """Histórico de indicações do cliente (como indicador)."""
+    from app.application.coupon.referral_service import ReferralService
+
+    svc = ReferralService(db, ctx.tenant_id)
+    result = svc.client_referrals(client_codigo)
+    items = result.get("items", [])
+    total = len(items)
+    start = (page - 1) * page_size
+    return {
+        "items": items[start : start + page_size],
+        "total": total,
+        "completed": result.get("completed", 0),
+        "pending": result.get("pending", 0),
+        "monthly_limit": result.get("monthly_limit", 10),
+        "page": page,
+        "page_size": page_size,
+    }

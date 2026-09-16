@@ -11,6 +11,7 @@ from enum import Enum
 
 
 class ToolPermission(str, Enum):
+    PUBLIC_WRITE = "PUBLIC_WRITE"  # Ações públicas (auto-cadastro via token)
     READ_ONLY = "READ_ONLY"
     OPERATOR = "OPERATOR"
     ADMIN = "ADMIN"

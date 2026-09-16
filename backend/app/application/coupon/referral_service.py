@@ -33,6 +33,7 @@ logger = setup_logging("INFO")
 DEFAULT_MAX_REFERRALS_PER_MONTH = 10
 DEFAULT_COUPON_VALIDITY_DAYS = 90
 
+TOKEN_PREFIX = "GF-INV-"
 TOKEN_LENGTH = 24  # secrets.token_urlsafe(24) → string URL-safe
 
 
@@ -94,7 +95,7 @@ class ReferralService:
         # Valor de referência: último cupom ativo ou default fixo (R$10)
         value, coupon_type = self._reference_offer()
 
-        token = secrets.token_urlsafe(TOKEN_LENGTH)
+        token = f"{TOKEN_PREFIX}{secrets.token_urlsafe(TOKEN_LENGTH)}"
         referrer_coupon = self._create_referral_coupon(
             code=f"INDICA-{token[:8].upper()}",
             value=value,
@@ -119,6 +120,8 @@ class ReferralService:
         return referral
 
     def get_by_token(self, token: str) -> Optional[ReferralModel]:
+        if not token or not token.startswith(TOKEN_PREFIX):
+            return None
         return (
             self.db.query(ReferralModel)
             .filter(

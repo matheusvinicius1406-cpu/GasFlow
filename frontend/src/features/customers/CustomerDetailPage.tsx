@@ -1,6 +1,6 @@
 import { } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, ShoppingCart, ShoppingBag, DollarSign, Calendar } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, ShoppingCart, ShoppingBag, DollarSign, Calendar, Ticket, Users } from 'lucide-react'
 import { useCustomer360, useCustomerOrders, useDisableCustomer } from '@/lib/api/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +11,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 
 import { formatPhone, formatDate, formatCurrency } from '@/lib/utils'
+import { ClientCouponsTab } from './ClientCouponsTab'
+import { ClientReferralsTab } from './ClientReferralsTab'
 
 const CLIENT_TYPES: Record<string, string> = {
   CONSUMER: 'Consumidor',
@@ -130,6 +132,8 @@ export function CustomerDetailPage() {
         <TabsList>
           <TabsTrigger value="summary">Resumo</TabsTrigger>
           <TabsTrigger value="orders">Pedidos</TabsTrigger>
+          <TabsTrigger value="coupons">Cupons</TabsTrigger>
+          <TabsTrigger value="referrals">Indicações</TabsTrigger>
           <TabsTrigger value="addresses">Endereços</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="notes">Notas</TabsTrigger>
@@ -281,6 +285,14 @@ export function CustomerDetailPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="coupons" className="space-y-4">
+          <ClientCouponsTab clientCodigo={customer.codigo} />
+        </TabsContent>
+
+        <TabsContent value="referrals" className="space-y-4">
+          <ClientReferralsTab clientCodigo={customer.codigo} />
         </TabsContent>
 
         <TabsContent value="addresses">

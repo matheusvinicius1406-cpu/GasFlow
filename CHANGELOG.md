@@ -30,6 +30,26 @@ Implementação da F3 do `docs/entregas-cupons-spec.md` (§3.4):
   notificação) · frontend +2 (botão chama API; toast de erro/sucesso).
   `renderWithProviders` agora inclui `ToastProvider`.
 
+### 🎟️ Cupons + Indicação + IA (F4)
+
+- **Tabela `referrals` + `invite_token` em cupons**: modelo de indicação com
+  convite via link WhatsApp. Migration incluída.
+- **Limite 10 indicações/mês** (config `referral.max_per_month`) + validade
+  90 dias (`referral.coupon_validity_days`). Bloqueio da 11ª indicação com
+  erro claro.
+- **Tool `register_referral`**: auto-cadastro via IA na conversa (decisão §5
+  do spec). Registra cliente + gera cupons para indicador e indicado.
+- **Tool `list_client_coupons`**: IA consulta cupons ativos antes de fechar
+  pedido e oferece automaticamente (cap 1 ofertas/conversa).
+- **Endpoints** `GET /coupons/by-client/{id}` e
+  `GET /coupons/by-client/{id}/referrals`: perfil do cliente com cupons e
+  histórico de indicações. Endpoint `POST /coupons/generate-invite-token`
+  para gerar token de convite.
+- **Frontend**: abas "Cupons" e "Indicações" no perfil do cliente; botão
+  "Gerar link de convite" na página de Promoções com cópia para clipboard.
+- **Rate limit** no auto-cadastro: 3 tentativas/telefone/hora, 5/IP/hora
+  (MVP em memória).
+
 ### 📱 F2 — Mobile RN: navegação com gates + consentimento LGPD + fila offline ponta a ponta (16/09/2026)
 
 Implementação da F2 do `docs/entregas-cupons-spec.md`:
