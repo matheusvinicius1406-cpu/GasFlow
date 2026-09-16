@@ -45,7 +45,7 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 
 | # | Proposta | Justificativa |
 |---|---|---|
-| B1/B2 | Rastreio a cada **60s, só em rota** (configurável nas Configurações › Sistema) | Bateria, aceitação do entregador, cobre o caso de uso |
+| B1/B2 | Rastreio a cada **120s, só em rota** (decisão do dono 16/09; configurável nas Configurações › Sistema) | Bateria, aceitação do entregador, cobre o caso de uso |
 | B3 | Consentimento LGPD: checkbox + termo no 1º login do app, auditado | Padrão do backend já audita acesso/ingestão |
 | D1 | Térmica **80mm** | Já é o que `escpos.py` implementa |
 | D2 | Auto-print **só pedidos pagos/aprovados** | Imprimir todo pedido vira lixo |
@@ -64,11 +64,12 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 ### 3.1 App do Entregador (desktop MVP + mobile paralelo)
 - Desktop: `/driver/login` e `/driver` já existem — consolidar (guard de sessão, esconder sidebar/módulos admin quando sessão é de entregador, som/toast de nova atribuição via eventos realtime `delivery.*` já emitidos).
 - Mobile RN: completar telas do MVP (login, lista, detalhe, confirmar), apontando para `/auth/mobile/*` + `/driver/*` com fallback LAN→nuvem→offline (já implementado na lógica pura).
+- **Arquitetura real do mobile/ (medido):** lógica de negócio em TypeScript puro testável sem toolchain RN (`src/logic/connection.ts`, `offlineQueue.ts`, `workHours.ts`; testes em `node --test`) + telas RN já escritas (`LoginScreen`, `RouteTodayScreen`, `DeliveryDetailScreen`) com zustand e react-navigation. O estado (fila offline, sessão) vive na lógica pura — as telas só desenham. Sem toolchain de build Android/iOS no repo ainda: a F2 completa as telas/wiring e o build nativo é passo separado. **Nada da lógica é duplicada no desktop** — mobile consome os mesmos endpoints.
 - **Decisão de arquitetura:** nenhum endpoint novo para o desktop; mobile já tem os endpoints de que precisa.
 
 ### 3.2 Rastreamento embutido (falta só a visualização)
-- Mapa do operador: painel na página de Entregas consumindo `GET /driver/location`/delta sync; polling 30s ou push via WS existente.
-- Frequência do app em rota: 60s default, `driver.tracking.interval_seconds` nas Configurações.
+- Mapa do operador: **componente único** usado nas páginas **Entregas e Motoristas** (decisão do dono 16/09 — `DriversPage` já consome `GET /delivery/locations`); **Leaflet** + tiles OSM (sem API key, Electron local); **todos os entregadores com posição recente**, cinza quando `is_stale`; polling 30s (padrão do repo: `lib/realtime.ts` evita push de posição por WS por causa de refetch storms).
+- Frequência do app em rota: **120s default** (decisão do dono 16/09), `driver.tracking.interval_seconds` nas Configurações.
 - LGPD: já implementado (janela de trabalho + retenção + audit). Só plugar a visualização.
 
 ### 3.3 Entrega inteligente (C1 + C3 decididos)
@@ -134,7 +135,7 @@ Suítes atuais: backend 1446 ✅ · frontend 194 ✅ · whatsapp 94 ✅ · deskt
 | Comunidade fora do nosso controle (ban do WhatsApp) | Anti-ban já existe (pacing/caps); Community nativo reduz risco de grupo informal |
 | Renomeador corromper nomes reais | Preview obrigatório + audit + nada sobrescrito sem confirmação (I3) |
 | CI quebrado (E2E boot + Trivy CVEs na imagem backend) pré-existente desde 10/09 | Não bloqueia desenvolvimento, mas **corrigir antes da release que fechar estas fases** |
-| **`release.yml` sem gate de CI** — publica mesmo com CI vermelho | **Tarefa pré-F1:** gate no release — job de release só roda se os 4 jobs de teste do CI passarem no mesmo commit (alternativa: rodar os testes dentro do próprio `release.yml` antes do build). Hoje: CI vermelho desde 10/09 → toda release pode publicar código quebrado sem perceber. |
+| **`release.yml` sem gate de CI** — publica mesmo com CI vermelho | **Tarefa pré-F1 (executada):** gate no release — job `ci-gate` aguarda o workflow de **CI** no mesmo SHA da tag e só libera o build se os **4 jobs de teste** (backend, frontend, whatsapp, agent) passarem. E2E/Trivy **não** fazem parte do gate (estão vermelhos por problemas pré-existentes); corrigi-los é tarefa separada. |
 
 ---
 
@@ -158,12 +159,13 @@ Fallback: se a captura pela IA mostrar atrito no fluxo real, migra-se para (b) *
 
 | Fase | Bloco | Entrega | Critério de aceitação | Validação |
 |---|---|---|---|---|
-| **F1** | 1+2 | Entregador **desktop MVP** consolidado (login, lista, status, confirmação, notificação de atribuição) **+** mapa do operador com posição em tempo real + intervalo configurável | Entregador vê entrega nova em **<10s** após atribuição; operador vê posição em **<60s** | Suítes desktop/frontend + LGPD re-run (403 fora da janela, audit) |
+| **F1a** | 1 | Entregador **desktop MVP**: guard de sessão (entregador não vê módulos admin), notificação de atribuição (som+toast), intervalo de rastreio configurável (**120s default**) | Entregador vê entrega nova em **<10s** após atribuição (realtime) | Suítes frontend/desktop + teste do guard |
+| **F1b** | 2 | **Mapa do operador** (Leaflet, OSM): componente único em Entregas e Motoristas, todos os conectados (cinza = stale), polling 30s | Operador vê posição com atraso **≤ 1 intervalo** (120s default) do envio do entregador | Suítes frontend + LGPD re-run (403 fora da janela, audit) |
 | **F2** | 1 | **Mobile RN**: telas finais (login, lista, detalhe, confirmar) sobre a lógica offline já testada + consentimento LGPD no 1º login | App abre **offline**, mostra entregas em cache, confirma entrega e **sincroniza ao voltar** | Suíte mobile + fluxo offline manual |
 | **F3** | 4 | Auto-print com filtro + zap do entregador na atribuição | Pedido pago imprime em **<5s** na térmica 80mm; zap chega em **<30s** | Impressão real GT710 + idempotência do zap |
 | **F4** | 7 | Referral + auto-cadastro por IA (canal §5) + cupons no perfil + tool IA | Fluxo indicação→cadastro→cupom nos dois perfis em **<2min**; IA oferece cupom na próxima conversa | Testes backend (limites 10/mês, validade 90d, 1/pedido) + e2e da indicação |
 | **F5** | 8 | Convite do Community pós-cadastro + filtro de campanha | Cliente entra via link **pós-cadastro**; só admin publica | Envio manual para grupo de teste |
 | **F6** | 9 | **Organizador + renomeador de contatos** (antecipado: base de dados limpa antes dos blocos dependentes) | **100%** dos contatos com código sequencial; **zero duplicatas** após renomeação em lote | Preview/review + audit por contato |
-| **F7** | 3 | **Entrega inteligente**: `driver_stock` (§3.3.1) + elegibilidade + UI sugestão/confirmar | Sugestão acerta o entregador mais próximo com estoque em **>90%** (medido em 50 pedidos reais) | Testes de consistência de estoque + despacho |
+| **F7** | 3 | **Entrega inteligente**: `driver_stock` (§3.3.1) + elegibilidade + UI sugestão/confirmar | **Dev:** >90% no dataset sintético de testes (fixtures com 50 cenários). **Campo:** >90% medido em 50 pedidos reais (coletado após implantar; não bloqueia o merge da fase) | Testes de consistência de estoque + despacho |
 | **F8** | 5 | Mapa de calor por bairro (30d default) | Renderiza em **<3s** com 90 dias de dados; filtrável por período | Contagens vs SQL direto |
 | **F9** | 6 | Relatórios com Recharts + export PDF | Gráficos carregam em **<2s**; exportação PDF funciona | Suítes frontend + smoke visual |

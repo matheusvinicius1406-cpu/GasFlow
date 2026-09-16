@@ -21,6 +21,12 @@ Impedir que o release.yml publique com CI vermelho: o job de release só roda
 se os 4 jobs de teste do CI passarem no mesmo commit (ou rodar os testes
 dentro do release.yml antes do build).
 
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
+
 ## Arquivos-chave a ler antes de codar
 - .github/workflows/release.yml
 - .github/workflows/ci.yml (jobs backend/frontend/whatsapp/agent)
@@ -55,28 +61,36 @@ commit verde dispara normalmente.
 
 ---
 
-## F1 — Entregador + Rastreio (desktop MVP)
+## F1a — Entregador desktop (guard + notificação + intervalo)
 
 ```
-# Sessão de codificação — GasFlow F1: Entregador + Rastreio (desktop MVP)
+# Sessão de codificação — GasFlow F1a: Entregador desktop MVP
 
 ## Contexto
 - Repo: GasFlow (desktop Electron + backend FastAPI + frontend React + WhatsApp Node)
 - Versão base: v1.1.6 (módulos reorganizados, WhatsApp unificado)
-- Spec: docs/entregas-cupons-spec.md (§3.1, §3.2 — Fase F1)
+- Spec: docs/entregas-cupons-spec.md (§3.1 — Fase F1a)
 - Suítes atuais: backend 1446 · frontend 194 · whatsapp 94 · desktop 41 · mobile 9
 
 ## Objetivo desta sessão
-Consolidar o desktop como MVP do entregador (login, lista, status, confirmação,
-notificação de nova atribuição) e mostrar a posição do entregador no mapa do
-operador em tempo real, com intervalo configurável.
+Consolidar o desktop como MVP do entregador: guard de sessão (entregador
+logado não vê módulos admin), notificação som+toast de nova atribuição via
+realtime e intervalo de rastreio configurável (default 120s).
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - frontend/src/features/driver/DriverLoginPage.tsx
 - frontend/src/features/driver/DriverHomePage.tsx
 - frontend/src/components/layout/DashboardLayout.tsx (guard/sidebar por sessão)
+- frontend/src/components/layout/nav.tsx (fonte única dos grupos)
 - frontend/src/components/realtime/RealtimeBridge.tsx + lib/hooks/useRealtime.ts
-- backend/app/presentation/api/logistics/driver_api.py (e driver_* do módulo logistics)
+- frontend/src/lib/hooks/useNotifySound.ts (som já existe)
+- backend/app/presentation/api/logistics/driver_api.py (endpoints /driver/*)
 - backend/app/application/settings/ (para driver.tracking.interval_seconds)
 
 ## O que JÁ existe (não reimplementar)
@@ -84,34 +98,104 @@ operador em tempo real, com intervalo configurável.
 - Auth mobile JWT (access 15min + refresh rotativo), LGPD completo
   (janela de trabalho 403, retenção 90d, audit), POST /driver/location
 - Eventos realtime delivery.* já emitidos e consumidos pelo RealtimeBridge
+- Som de notificação (useNotifySound)
 
 ## O que falta implementar
-- Esconder módulos admin quando a sessão é de entregador
+- Esconder sidebar/módulos admin e FloatingCopilot quando a sessão é de entregador
 - Notificação (som/toast) de nova entrega atribuída via evento realtime
-- Painel de mapa na página de Entregas consumindo posição (polling ≤30s ou WS)
-- Config driver.tracking.interval_seconds (default 60) aplicada no app
+- Config driver.tracking.interval_seconds (default 120) aplicada no app
 
 ## Critério de aceitação
-Entregador vê entrega nova em <10s após atribuição; operador vê posição em <60s.
+Entregador vê entrega nova em <10s após atribuição (realtime).
 
 ## Restrições
 - Não quebrar o que já funciona (suítes verdes)
 - Não duplicar lógica existente (LGPD/janela de trabalho já prontos)
 - Seguir o padrão de módulos consolidados da v1.1.6
-- Testes obrigatórios: frontend (driver), backend (interval config + LGPD re-run)
+- Testes obrigatórios: frontend (guard + notificação), backend (config)
 
 ## Passos sugeridos
 1. Ler arquivos-chave
-2. Implementar guard de sessão + notificação
-3. Implementar painel de mapa + config de intervalo
-4. Rodar testes (desktop/frontend/backend)
-5. Atualizar CHANGELOG
-6. Commit
+2. Implementar guard de sessão
+3. Implementar notificação de atribuição
+4. Implementar config de intervalo
+5. Rodar testes (frontend/backend)
+6. Atualizar CHANGELOG
+7. Commit: feat(driver): sessão entregador + notificação de atribuição
 
 ## O que NÃO fazer
 - Não criar endpoint novo de tracking (delta sync + location já existem)
-- Não tocar no mobile/ nesta fase (é a F2)
+- Não tocar no mobile/ (é a F2) nem no mapa (é a F1b)
 - Não remover o poll de 5 min do heartbeat do driver
+```
+
+---
+
+## F1b — Mapa do operador (Leaflet)
+
+```
+# Sessão de codificação — GasFlow F1b: Mapa do operador
+
+## Contexto
+- Repo: GasFlow (desktop Electron + backend FastAPI + frontend React + WhatsApp Node)
+- Versão base: v1.1.6 (módulos reorganizados, WhatsApp unificado)
+- Spec: docs/entregas-cupons-spec.md (§3.2 — Fase F1b)
+- Suítes atuais: backend 1446 · frontend 194 · whatsapp 94 · desktop 41 · mobile 9
+
+## Objetivo desta sessão
+Mapa do operador com a posição dos entregadores em tempo quase real:
+componente único Leaflet usado nas páginas Entregas E Motoristas,
+todos os conectados, marcador cinza quando is_stale, polling 30s.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
+
+## Arquivos-chave a ler antes de codar
+- frontend/src/features/drivers/DriversPage.tsx (JÁ consome GET /delivery/locations)
+- frontend/src/features/deliveries/DeliveriesPage.tsx
+- frontend/src/lib/realtime.ts (por que posição é polling e não WS)
+- frontend/src/lib/api/client.ts (endpoint delivery.locations)
+- backend/app/presentation/api/logistics/driver_api.py (rota de locations)
+
+## O que JÁ existe (não reimplementar)
+- GET /delivery/locations com lat/lng/timestamp/is_stale/age_seconds
+- DriversPage com estado locations mapeado por driver_id
+- LGPD completo no backend (janela de trabalho 403, retenção, audit)
+- Décisão do dono: Leaflet + tiles OSM (sem API key), ambas as páginas,
+  todos os conectados (cinza = stale)
+
+## O que falta implementar
+- Instalar leaflet + react-leaflet (ou Leaflet direto)
+- Componente DriverMap reutilizável (marcadores, stale cinza, popup com
+  nome/idade da posição)
+- Painel do mapa na página Entregas e na página Motoristas
+- Polling 30s (refetch interval) apenas com a tela visível
+
+## Critério de aceitação
+Operador vê posição com atraso ≤ 1 intervalo (120s default) do envio do entregador.
+
+## Restrições
+- Não quebrar o que já funciona (suítes verdes)
+- Polling, NÃO websocket (padrão do repo — refetch storms)
+- Testes obrigatórios: frontend (render do mapa, estado vazio/erro)
+
+## Passos sugeridos
+1. Ler arquivos-chave
+2. Instalar leaflet
+3. Componente DriverMap
+4. Integrar nas duas páginas
+5. Rodar testes frontend
+6. Atualizar CHANGELOG
+7. Commit: feat(deliveries): mapa do operador com posição em tempo real
+
+## O que NÃO fazer
+- Não usar Mapbox/Google (precisa API key — decisão foi Leaflet/OSM)
+- Não criar endpoint novo de posição (GET /delivery/locations existe)
+- Não renderizar mapa em teste jsdom (mockar ou pular — Leaflet precisa DOM real)
+- Não logar coordenadas em console/telemetria (LGPD)
 ```
 
 ---
@@ -130,6 +214,12 @@ Entregador vê entrega nova em <10s após atribuição; operador vê posição e
 ## Objetivo desta sessão
 Completar as telas do app mobile (login, lista, detalhe, confirmação de entrega)
 sobre a lógica offline já testada, com consentimento LGPD no 1º login.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - mobile/ (lógica pura: fila offline, client_action_id, backoff, work-hours)
@@ -188,6 +278,12 @@ ao voltar online.
 ## Objetivo desta sessão
 Auto-print com filtro de status (só pagos/aprovados) e envio automático do
 resumo do pedido no WhatsApp do entregador na atribuição da entrega.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - backend/app/infrastructure/printing/print_agent.py (auto_print_enabled)
@@ -250,6 +346,12 @@ Pedido pago imprime em <5s na térmica 80mm; zap do entregador chega em <30s.
 Sistema de indicação com cupom: link de convite, auto-cadastro capturado pela
 IA na conversa (decisão §5), cupons no perfil do cliente e tool de IA que
 consulta/oferece cupons antes de fechar o pedido.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - backend/app/domain/coupon/models.py (CouponSnapshot, validação, cálculo)
@@ -321,6 +423,12 @@ na próxima conversa.
 Envio automático do link de convite do WhatsApp Community após o cadastro do
 cliente e filtro de campanha para "membros da comunidade".
 
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
+
 ## Arquivos-chave a ler antes de codar
 - backend/app/application/whatsapp_automation/executor.py
 - backend/app/application/contacts/reactivate.py (padrão de template/vars)
@@ -378,6 +486,12 @@ Cliente entra via link pós-cadastro; só admin publica (admin-only nativo).
 ## Objetivo desta sessão
 Renomeador em lote com preview e revisão, códigos sequenciais globais para
 toda a base e lista de conflitos sinalizados (nada sobrescrito sem confirmação).
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - backend/app/application/contacts/service.py
@@ -441,6 +555,12 @@ renomeação em lote.
 Controle de estoque carregado pelo entregador (modelo §3.3.1) e despacho
 inteligente filtrando elegibilidade por cheio disponível, com UI de
 sugestão + confirmação do operador.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - backend/app/domain/delivery/dispatch_engine.py (score + explicação)
@@ -509,6 +629,12 @@ Sugestão acerta o entregador mais próximo com estoque em >90% dos casos
 Densidade de entregas por bairro com visualização em mapa e filtro de
 período (7/30/90 dias, default 30). Só visualização (E3).
 
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
+
 ## Arquivos-chave a ler antes de codar
 - backend/app/infrastructure/repositories/delivery_persistence_model.py
   (address_neighborhood)
@@ -563,6 +689,12 @@ Renderiza em <3s com 90 dias de dados; filtrável por período.
 ## Objetivo desta sessão
 Gráficos de entregas (período, entregador, região), tempo médio de entrega e
 comparativo de performance, com exportação PDF.
+
+## Ordem de leitura
+1. Este bloco inteiro (contexto → objetivo → restrições → NÃO fazer)
+2. Seções do spec indicadas no Contexto
+3. Arquivos-chave abaixo, na ordem listada
+4. Inventário §0 do spec (o que já existe)
 
 ## Arquivos-chave a ler antes de codar
 - frontend/src/features/reports/ReportsPage.tsx
