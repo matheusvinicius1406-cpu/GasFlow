@@ -13,9 +13,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-gate:
+    name: CI gate (backend/frontend/whatsapp/agent)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Aguarda CI do commit da tag e confere os 4 jobs de teste
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_gate.py
+
   build-windows:
     name: Build & publish Windows installer
     runs-on: windows-latest
+    needs: [ci-gate]
     defaults:
       run:
         working-directory: desktop

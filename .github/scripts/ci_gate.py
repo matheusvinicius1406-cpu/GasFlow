@@ -1,0 +1,113 @@
+"""CI gate do release — GasFlow.
+
+Aguarda a run de CI do commit da tag terminar e confere que os 4 jobs de
+teste (backend, frontend, whatsapp, agent) passaram. E2E/Trivy NÃO fazem
+parte do gate (problemas pré-existentes — ver docs/entregas-cupons-spec.md §4).
+
+Variáveis de ambiente (injetadas pelo release.yml):
+  GH_TOKEN  — token com leitura de Actions
+  REPO      — "owner/repo"
+  SHA       — commit apontado pela tag
+
+Notas de projeto:
+- A conclusão GERAL do CI pode ser "failure" por E2E/Trivy; o gate olha
+  apenas os jobs de teste, individualmente.
+- A tag deve apontar para um commit já na main (CI roda em push p/ main);
+  enquanto a run não existir, o gate aguarda com timeout de 45 min.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+import urllib.request
+
+API = "https://api.github.com"
+
+REQUIRED_JOBS = (
+    "Backend (ruff + pytest)",
+    "Frontend (typecheck + build + tests)",
+    "WhatsApp service (typecheck + build + tests)",
+    "Agent (typecheck + build + tests)",
+)
+
+TIMEOUT_S = 45 * 60
+POLL_INTERVAL_S = 60
+
+
+def api_get(path: str, token: str) -> dict:
+    req = urllib.request.Request(
+        f"{API}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "gasflow-ci-gate",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def find_run(repo: str, sha: str, token: str) -> int | None:
+    data = api_get(
+        f"/repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=10", token
+    )
+    runs = [r for r in data.get("workflow_runs", []) if r.get("head_sha") == sha]
+    return runs[0]["id"] if runs else None
+
+
+def check_jobs(repo: str, run_id: int, token: str) -> None:
+    data = api_get(f"/repos/{repo}/actions/runs/{run_id}/jobs?per_page=30", token)
+    jobs = {j["name"]: j.get("conclusion") for j in data.get("jobs", [])}
+
+    missing = [r for r in REQUIRED_JOBS if not any(n.startswith(r) for n in jobs)]
+    failed = [
+        n
+        for n, c in jobs.items()
+        if any(n.startswith(r) for r in REQUIRED_JOBS) and c != "success"
+    ]
+    if missing:
+        print(f"::error::jobs de teste ausentes na run: {', '.join(missing)}")
+        sys.exit(1)
+    if failed:
+        print(f"::error::jobs de teste reprovados: {', '.join(failed)}")
+        sys.exit(1)
+    print("Gate OK: backend/frontend/whatsapp/agent verdes no commit da tag.")
+
+
+def main() -> None:
+    token = os.environ["GH_TOKEN"]
+    repo = os.environ["REPO"]
+    sha = os.environ["SHA"]
+    deadline = time.monotonic() + TIMEOUT_S
+
+    print(f"Aguardando CI para o commit {sha[:12]}...")
+    while True:
+        run_id = find_run(repo, sha, token)
+        if run_id is not None:
+            run = api_get(f"/repos/{repo}/actions/runs/{run_id}", token)
+            status, conclusion = run["status"], run.get("conclusion")
+            if status == "completed":
+                print(f"CI concluído: run {run_id} (conclusão geral: {conclusion}).")
+                check_jobs(repo, run_id, token)
+                return
+            print(
+                f"CI em andamento (status: {status}). Aguardando {POLL_INTERVAL_S}s..."
+            )
+        else:
+            print(
+                f"Run de CI ainda não registrada para {sha[:12]}. Aguardando {POLL_INTERVAL_S}s..."
+            )
+
+        if time.monotonic() >= deadline:
+            print(
+                "::error::Timeout aguardando CI. A tag deve apontar para um commit já na main."
+            )
+            sys.exit(1)
+        time.sleep(POLL_INTERVAL_S)
+
+
+if __name__ == "__main__":
+    main()
