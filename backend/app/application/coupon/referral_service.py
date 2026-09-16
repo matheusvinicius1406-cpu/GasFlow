@@ -150,15 +150,12 @@ class ReferralService:
             raise ReferralError("TOKEN_NOT_FOUND", "Token de convite inválido ou expirado.", 404)
 
         if referral.referred_client_codigo:
-            # Idempotente: token já usado → retorna o estado atual
-            referred = self._client_by_codigo(referral.referred_client_codigo)
-            return {
-                "idempotent_replay": True,
-                "referral": referral,
-                "referred_client": referred,
-                "referrer_client": self._client_by_codigo(referral.referrer_client_codigo),
-                "coupons": self._referral_coupons(referral),
-            }
+            # Token já usado → erro (single-use)
+            raise ReferralError(
+                "INVITE_ALREADY_USED",
+                "Este token de convite já foi utilizado.",
+                409,
+            )
 
         # Cria/atualiza o cliente indicado (upsert idempotente por telefone)
         client = self._upsert_referred(name, phone, address or {})

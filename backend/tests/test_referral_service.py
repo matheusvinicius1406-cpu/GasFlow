@@ -73,7 +73,7 @@ class TestReferralService:
             referred.nome,
             referred.telefone,
         )
-        assert result["idempotent_replay"] is False
+        assert result["referral"].id == referral.id
 
         referred_coupon = db.query(CouponModel).filter(CouponModel.id == referral.referred_coupon_id).first()
         assert referred_coupon is not None
@@ -168,6 +168,24 @@ class TestReferralService:
         found = svc.get_by_token("")
         assert found is None
 
+    def test_invite_token_single_use(self, db):
+        """Token de convite é single-use: 2º uso retorna erro."""
+        referrer = _create_client(db, "000050", "SingleUse", "11999990050")
+        referred = _create_client(db, "000051", "ReferredOnce", "11999990051")
+        svc = ReferralService(db, "default")
+
+        referral = svc.generate_invite(referrer.codigo)
+        token = referral.invite_token
+
+        # 1º uso — sucesso
+        result = svc.complete_signup(token, referred.nome, referred.telefone)
+        assert result["referral"].id == referral.id
+
+        # 2º uso — erro
+        with pytest.raises(ReferralError) as exc:
+            svc.complete_signup(token, "Outro", "11999990052")
+        assert exc.value.code == "INVITE_ALREADY_USED"
+
     def test_client_coupons_returns_grouped_by_status(self, db):
         """client_coupons retorna cupons agrupados por status."""
         client = _create_client(db, "000030", "Grouped", "11999990030")
@@ -242,3 +260,52 @@ class TestReferralService:
         assert result["completed"] == 1  # só o primeiro tem referred_client_codigo
         assert result["pending"] == 1
         assert result["monthly_limit"] == 10
+
+    def test_coupon_code_length_is_12_chars(self, db):
+        """F4.5 bugfix: código do cupom de indicação usa 12 chars (não 8)."""
+        referrer = _create_client(db, "000060", "CodeLen", "11999990060")
+        svc = ReferralService(db, "default")
+
+        referral = svc.generate_invite(referrer.codigo)
+        coupon = db.query(CouponModel).filter(CouponModel.id == referral.referrer_coupon_id).first()
+
+        # Código deve ter pelo menos 12 chars após o prefixo "INDICA-"
+        code_part = coupon.code.replace("INDICA-", "")
+        assert len(code_part) >= 12, f"Código muito curto: {coupon.code}"
+
+    def test_coupon_code_uniqueness_200(self, db):
+        """F4.5 bugfix: 200 cupons gerados devem ter códigos únicos."""
+        codes = set()
+        for i in range(200):
+            referrer = _create_client(db, f"61{i:04d}", f"Unique-{i}", f"1199999{6100+i}")
+            svc = ReferralService(db, "default")
+            referral = svc.generate_invite(referrer.codigo)
+            coupon = db.query(CouponModel).filter(CouponModel.id == referral.referrer_coupon_id).first()
+            codes.add(coupon.code)
+
+        assert len(codes) == 200, f"Colisão detectada: {200 - len(codes)} códigos duplicados"
+
+    def test_bemvindo_coupon_code_has_unique_suffix(self, db):
+        """F4.5 bugfix: BEMVINDO-{codigo} tem sufixo UUID único."""
+        referrer = _create_client(db, "000062", "BemVindo", "11999990062")
+        svc = ReferralService(db, "default")
+
+        codes = []
+        for i in range(5):
+            token = svc.generate_invite(referrer.codigo).invite_token
+            referred = _create_client(db, f"62{i:04d}", f"BV-{i}", f"1199999{6300+i}")
+            svc.complete_signup(token, referred.nome, referred.telefone)
+
+        # Pega todos os cupons BEMVINDO
+        coupons = (
+            db.query(CouponModel)
+            .filter(
+                CouponModel.tenant_id == "default",
+                CouponModel.code.like("BEMVINDO-%"),
+            )
+            .all()
+        )
+        codes = [c.code for c in coupons]
+
+        # Todos os códigos BEMVINDO devem ser únicos
+        assert len(codes) == len(set(codes)), f"Colisão BEMVINDO: {codes}"

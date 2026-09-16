@@ -66,7 +66,7 @@ class TestRegisterReferral:
             {
                 "invite_token": token,
                 "name": "Novo Indicado",
-                "phone": "11999991002",
+                "phone": "11999994002",
                 "rua": "Rua Nova",
                 "numero": "200",
                 "bairro": "Centro",
@@ -158,32 +158,31 @@ class TestRegisterReferral:
         assert result.success is False
         assert "Muitas tentativas" in result.error
 
-    def test_idempotent_replay(self, factory, db):
-        """Segunda chamada com mesmo token é idempotente."""
+    def test_token_single_use(self, factory, db):
+        """Token de convite é single-use: 2º uso retorna erro."""
         referrer = _create_client(db, "000005", "Indicador 5", "11999993011")
         token = _create_invite_token(db, referrer.codigo)
 
-        # Primeira chamada
+        # Primeira chamada — sucesso
         result1 = factory.register_referral(
             {
                 "invite_token": token,
-                "name": "Idempotente",
-                "phone": "11999991012",
+                "name": "Único Uso",
+                "phone": "11999994012",
             }
         )
         assert result1.success is True
-        assert result1.data["idempotent"] is False
 
-        # Segunda chamada (idempotente)
+        # Segunda chamada — erro INVITE_ALREADY_USED
         result2 = factory.register_referral(
             {
                 "invite_token": token,
-                "name": "Idempotente",
-                "phone": "11999991012",
+                "name": "Tentar de novo",
+                "phone": "11999994013",
             }
         )
-        assert result2.success is True
-        assert result2.data["idempotent"] is True
+        assert result2.success is False
+        assert "já foi utilizado" in result2.error
 
 
 class TestListClientCoupons:
