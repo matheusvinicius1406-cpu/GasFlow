@@ -84,6 +84,7 @@ let waBridge;
 let assistant = null;
 let aiSetup = null;
 let relayClient = null;
+const relay_ingest_1 = require("./relay-ingest");
 let waWebPanel = null;
 // ── Helpers ──────────────────────────────────────────────────────────
 function backendPort() {
@@ -604,14 +605,28 @@ else {
         // App do Entregador (Fase 1): relay outbound p/ localização em tempo
         // real. Desligado por padrão (relayEnabled=false no settings.json).
         if (settings.relayEnabled && settings.relayUrl) {
+            // Fix do elo morto (rastreador): posição vinda da rua era entregue
+            // ao renderer e descartada — o mapa do operador nunca via o
+            // entregador fora da WiFi do depósito. Agora o main process ingere
+            // no backend embutido (auth service-to-service via X-GasFlow-Key,
+            // a mesma settings.waApiKey injetada no backend no boot).
+            const relayIngest = new relay_ingest_1.IngestClient({
+                baseUrl: backendUrl(),
+                serviceKey: settings.waApiKey,
+                tenantId: settings.relayTenant || "default",
+                log: (level, scope, message) => logger_1.logger[level](scope, message),
+            });
             relayClient = new relay_client_1.RelayClient({
                 relayUrl: settings.relayUrl,
                 tenantId: settings.relayTenant || "default",
                 token: settings.relayToken || "",
                 log: (scope, message) => logger_1.logger.info(scope, message),
                 onLocation: (payload) => {
+                    // UI em tempo real (mapa vivo sem esperar o polling de 30s)
                     if (mainWindow && !mainWindow.isDestroyed())
                         mainWindow.webContents.send("gasflow:driver-location", payload);
+                    // Persistência: backend → driver_locations → mapa
+                    relayIngest.ingestDriverLocation(payload);
                 },
                 onStatus: (s) => logger_1.logger.info("relay", `status: ${s}`),
             });

@@ -64,6 +64,10 @@ class DriverMeResponse(BaseModel):
     active: bool
     tenant_id: str
     tracking_interval_seconds: int = 120
+    # Janela de trabalho (LGPD) como "HH:MM-HH:MM" — o app do entregador
+    # respeita no cliente (fail-closed) o MESMO gate que o backend reforça
+    # no ingest (403 fora da janela). Defaults = janela do produto.
+    work_hours: Optional[str] = None
 
 
 class DriverDeliverySummary(BaseModel):
@@ -417,12 +421,17 @@ async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
         # Intervalo de rastreio configurável (F1a) — lido do quadro de
         # configurações; default 120s se a chave não existir (pré-seed).
         tracking_interval = 120
+        work_hours: Optional[str] = None
         try:
             from app.application.settings.settings_service import SettingsService
 
             settings_svc = SettingsService(db)
             raw = settings_svc.get_value("driver.tracking.interval_seconds", 120)
             tracking_interval = max(15, int(raw))
+            wh_start = str(settings_svc.get_value("driver.work_hours.start", "06:00"))
+            wh_end = str(settings_svc.get_value("driver.work_hours.end", "22:00"))
+            if wh_start and wh_end:
+                work_hours = f"{wh_start}-{wh_end}"
         except Exception:
             pass
 
@@ -434,6 +443,7 @@ async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
             active=model.ativo,
             tenant_id=model.tenant_id or "default",
             tracking_interval_seconds=tracking_interval,
+            work_hours=work_hours,
         )
     finally:
         db.close()
@@ -812,6 +822,14 @@ async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
 
 
 async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
+    """Handler compartilhado de ingestão de posição GPS (app direto e relay).
+
+    Regras aplicadas a TODA origem (mesma LGPD p/ app e relay):
+    - work-hours: fora da janela `driver.work_hours.*` → 403 + audit REJECTED
+      (janela inválida é fail-open, mesma política do DriverLocationService)
+    - throttle de 10s (rate limit por driver)
+    - upsert em driver_locations + evento realtime
+    """
     driver_id = ctx["driver_id"]
     tenant_id = ctx["tenant_id"]
 
@@ -820,6 +838,14 @@ async def handle_update_location(ctx: Dict, req: LocationUpdate) -> Dict:
         from app.infrastructure.repositories.delivery_persistence_repository import SQLAlchemyDriverLocationRepository
 
         loc_repo = SQLAlchemyDriverLocationRepository(db)
+
+        # LGPD work-hours: fora da janela → 403 + audit REJECTED (best-effort)
+        from app.application.delivery.driver_location_service import DriverLocationService
+
+        svc = DriverLocationService(db, tenant_id, driver_id)
+        if not svc.is_within_work_hours():
+            svc._audit("driver.location.rejected_out_of_hours", {"count": 1}, result="REJECTED")
+            raise HTTPException(status_code=403, detail="Fora do horário de trabalho — localização não coletada")
 
         # Rate limit: skip if last update was < 10s ago
         existing = loc_repo.get_location(tenant_id, driver_id)

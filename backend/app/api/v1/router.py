@@ -24,6 +24,7 @@ from app.presentation.api.automation import router as automation_router
 from app.presentation.api.core.auth import router as auth_router
 from app.presentation.api.logistics.delivery_ops import router as delivery_ops_router
 from app.presentation.api.logistics.driver_v1 import router as driver_v1_router
+from app.presentation.api.logistics.driver_relay import router as driver_relay_router
 from app.presentation.api.logistics.driver_mobile_auth import router as driver_mobile_router
 from app.presentation.api.logistics.dispatch import router as dispatch_router
 from app.presentation.api.operations import router as operations_router
@@ -59,6 +60,9 @@ api_v1_router.include_router(ai_router, tags=["AI"])
 api_v1_router.include_router(audio_router, tags=["Audio"])
 api_v1_router.include_router(automation_router, tags=["Automation"])
 api_v1_router.include_router(driver_v1_router, tags=["Driver"])
+api_v1_router.include_router(
+    driver_relay_router, tags=["Driver Relay"]
+)  # /internal/*: service-to-service (relay → desktop → backend)
 api_v1_router.include_router(driver_mobile_router, tags=["Driver Mobile"])
 api_v1_router.include_router(dispatch_router, tags=["Dispatch"])
 api_v1_router.include_router(operations_router, tags=["Operations"])

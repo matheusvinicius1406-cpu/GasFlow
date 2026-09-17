@@ -106,6 +106,28 @@ def test_mobile_login_returns_token_pair(client, driver_credentials):
     assert payload["exp"] - payload["iat"] == 900  # 15 min
 
 
+def test_driver_me_exposes_tracking_and_work_hours(client, driver_credentials):
+    """F2.5: /driver/me carrega intervalo de rastreio E janela LGPD
+    ("HH:MM-HH:MM") — o app do entregador respeita no cliente o mesmo gate
+    que o backend reforça no ingest (403 fora da janela)."""
+    db = _db()
+    try:
+        from app.application.settings.settings_service import SettingsService
+
+        svc = SettingsService(db)
+        svc.update("driver.tracking.interval_seconds", 45)
+        svc.update("driver.work_hours.start", "06:00")
+        svc.update("driver.work_hours.end", "22:00")
+    finally:
+        db.close()
+
+    res = client.get("/api/v1/driver/me", headers=_auth_header(driver_credentials))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["tracking_interval_seconds"] == 45
+    assert body["work_hours"] == "06:00-22:00"
+
+
 def test_mobile_login_wrong_password(client):
     assert _login(client, password="errada!").status_code == 401
     assert _login(client, username="nao_existe_xyz").status_code == 401
@@ -199,6 +221,15 @@ def test_location_batch_within_hours(client, driver_credentials):
     from app.infrastructure.repositories.delivery_persistence_repository import (
         SQLAlchemyDriverLocationRepository,
     )
+    from app.application.settings.settings_service import SettingsService
+
+    # O handler agora reforça work-hours (LGPD) para toda origem. Fixa a
+    # janela como 24h para o teste ser determinístico em qualquer horário
+    # de CI (end "24:00" → end_m=1440 > qualquer minuto do dia).
+    db = _db()
+    svc = SettingsService(db)
+    svc.update("driver.work_hours.start", "00:00")
+    svc.update("driver.work_hours.end", "24:00")
 
     # Rota legada montada na raiz (driver_api_router, prefixo /api/driver);
     # a v1 oficial vive sob /api/v1/driver/location.
@@ -209,12 +240,13 @@ def test_location_batch_within_hours(client, driver_credentials):
     )
     assert res.status_code == 200, res.text
 
-    db = _db()
     try:
         record = SQLAlchemyDriverLocationRepository(db).get_location("default", "654321")
         assert record is not None
         assert abs(record.latitude - (-1.4558)) < 1e-6
     finally:
+        svc.update("driver.work_hours.start", "06:00")
+        svc.update("driver.work_hours.end", "22:00")
         db.close()
 
 
