@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap'
 import { CopilotPage } from '@/features/ai/CopilotPage'
 
 const OPEN_KEY = 'gasflow.copilot.open'
@@ -24,6 +25,21 @@ export function FloatingCopilot() {
       return false
     }
   })
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Focus trap: foco entra no painel, Tab cicla só dentro dele e volta ao
+  // FAB ao fechar. Painel é focável (tabIndex=-1) e recebe o foco direto.
+  useFocusTrap(panelRef, open, { focusContainer: true })
+
+  // Escape fecha o painel.
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
 
   // Rotas sem a bolinha: login e console do motorista.
   if (pathname === '/login' || pathname.startsWith('/driver')) return null
@@ -40,10 +56,14 @@ export function FloatingCopilot() {
 
   return (
     <>
-      {/* FAB — fora do fluxo dos módulos, acima de tudo */}
+      {/* FAB — fora do fluxo dos módulos, acima de tudo. Com o painel
+          aberto sai do tab order (tabIndex=-1): é puro visual, fechar é
+          Escape/X/backdrop. */}
       <button
         type="button"
         aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
+        aria-expanded={open}
+        tabIndex={open ? -1 : 0}
         onClick={() => toggle(!open)}
         className={cn(
           'fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full',
@@ -57,12 +77,16 @@ export function FloatingCopilot() {
 
       {/* Slide-over */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-label="Assistente IA"
+        aria-modal="true"
+        tabIndex={-1}
         className={cn(
           'fixed bottom-0 right-0 top-0 z-50 w-[380px] max-w-[100vw]',
           'border-l border-border bg-background/95 shadow-2xl backdrop-blur',
           'transition-transform duration-200 ease-out',
+          'outline-none focus-visible:ring-0',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
         aria-hidden={!open}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, createContext, useContext, ty
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './Button'
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap'
 
 // ── Context ────────────────────────────────────────────────
 
@@ -75,20 +76,9 @@ interface DialogContentProps {
 export function DialogContent({ children, className, showClose = true }: DialogContentProps) {
   const { open, onOpenChange } = useDialogContext()
   const contentRef = useRef<HTMLDivElement>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
 
-  // Focus management
-  useEffect(() => {
-    if (open) {
-      previousFocusRef.current = document.activeElement as HTMLElement
-      // Focus the dialog after render
-      requestAnimationFrame(() => {
-        contentRef.current?.focus()
-      })
-    } else {
-      previousFocusRef.current?.focus()
-    }
-  }, [open])
+  // Focus trap: foco inicial, ciclo de Tab e devolução ao gatilho ao fechar.
+  useFocusTrap(contentRef, open, { focusContainer: true })
 
   // ESC to close
   useEffect(() => {

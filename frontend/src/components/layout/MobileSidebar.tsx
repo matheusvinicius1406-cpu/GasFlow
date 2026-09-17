@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { BrandMark } from '@/components/brand/BrandLogo'
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap'
 import { NavTree } from './nav'
 
 interface MobileSidebarProps {
@@ -23,6 +24,10 @@ interface MobileSidebarProps {
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const drawerRef = useRef<HTMLElement>(null)
 
+  // Focus trap: foco inicial no drawer, Tab cicla só dentro dele e o foco
+  // volta ao botão de menu ao fechar.
+  useFocusTrap(drawerRef, isOpen, { focusContainer: true })
+
   // Escape fecha; scroll do body trava enquanto o drawer está aberto.
   useEffect(() => {
     if (!isOpen) return
@@ -34,9 +39,6 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-
-    // Foco inicial no drawer (fecha o loop de tab dentro do dialog na prática).
-    drawerRef.current?.focus()
 
     return () => {
       document.removeEventListener('keydown', onKeyDown)

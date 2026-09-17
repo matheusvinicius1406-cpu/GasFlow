@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ticket, Plus, Trash2, RefreshCw, Save, X, Link2, Copy, Check } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap'
 import { apiClient } from '@/lib/api/client'
 
 interface Coupon {
@@ -74,6 +75,23 @@ export function CouponsPage() {
 
   // ── Gerar link de convite (F4) ──
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const inviteModalRef = useRef<HTMLDivElement>(null)
+
+  // O modal é um dialog modal de verdade: foco preso, Escape fecha.
+  useFocusTrap(inviteModalRef, showInviteModal, { focusContainer: true })
+
+  useEffect(() => {
+    if (!showInviteModal) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowInviteModal(false)
+        setInviteToken('')
+        setInviteError('')
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [showInviteModal])
   const [inviteClientCodigo, setInviteClientCodigo] = useState('')
   const [inviteClientPhone, setInviteClientPhone] = useState('')
   const [inviteToken, setInviteToken] = useState('')
@@ -359,7 +377,14 @@ export function CouponsPage() {
 
       {/* ── Modal: Gerar link de convite (F4) ── */}
       {showInviteModal && (
-        <Card role="dialog" aria-modal="true" aria-label="Gerar link de convite">
+        <Card
+          ref={inviteModalRef as never}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Gerar link de convite"
+          tabIndex={-1}
+          className="outline-none"
+        >
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Gerar link de convite</CardTitle>
