@@ -101,9 +101,9 @@ export function OrdersPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Buscar por código ou cliente..."
+            aria-label="Buscar pedidos" placeholder="Buscar por código ou cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -147,14 +147,14 @@ export function OrdersPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Pedidos</CardTitle>
+            <CardTitle>Pedidos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {filteredOrders.map((order) => (
                 <div
                   key={order.codigo}
-                  className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-accent/50"
+                  className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:border-primary/30 hover:bg-accent/50"
                 >
                   <Link to={`/orders/${order.codigo}`} className="flex-1">
                     <div className="space-y-1">

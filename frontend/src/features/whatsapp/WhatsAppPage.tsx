@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Wifi, WifiOff, RefreshCw, LogOut, Smartphone, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -157,9 +158,9 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
             <p className="text-muted-foreground">Status</p>
             <div className="flex items-center gap-1">
               {account.status.connected ? (
-                <Wifi className="h-4 w-4 text-green-500" />
+                <Wifi className="h-4 w-4 text-success" />
               ) : (
-                <WifiOff className="h-4 w-4 text-red-500" />
+                <WifiOff className="h-4 w-4 text-destructive" />
               )}
               <span className="font-medium">{getStatusLabel(account.status.state)}</span>
             </div>
@@ -172,6 +173,8 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
             <p className="text-sm text-muted-foreground">Escaneie com o WhatsApp</p>
             <div
               className="h-64 w-64"
+              role="img"
+              aria-label="QR Code de pareamento do WhatsApp — escaneie com o aplicativo"
               dangerouslySetInnerHTML={{ __html: qr.svg }}
             />
             <p className="text-xs text-muted-foreground">
@@ -198,11 +201,21 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
               Desconectar
             </Button>
           )}
-          <Button onClick={onRefresh} variant="ghost" size="icon">
+          <Button
+            onClick={onRefresh}
+            variant="ghost"
+            size="icon"
+            aria-label={`Atualizar status de ${account.name}`}
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
           {account.status.connected && (
-            <Button onClick={handleLogout} variant="destructive" size="icon">
+            <Button
+              onClick={handleLogout}
+              variant="destructive"
+              size="icon"
+              aria-label={`Desconectar sessão de ${account.name}`}
+            >
               <LogOut className="h-4 w-4" />
             </Button>
           )}
@@ -294,7 +307,7 @@ export function WhatsAppAccountsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Wifi className="h-5 w-5 text-green-500" />
+              <Wifi className="h-5 w-5 text-success" />
               <div>
                 <p className="text-sm text-muted-foreground">Conectadas</p>
                 <p className="text-xl font-bold">
@@ -307,7 +320,7 @@ export function WhatsAppAccountsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-500" />
+              <MessageSquare className="h-5 w-5 text-info" />
               <div>
                 <p className="text-sm text-muted-foreground">Aguardando QR</p>
                 <p className="text-xl font-bold">
@@ -354,6 +367,7 @@ export function WhatsAppAccountsPage() {
  * seção colapsável quando o bridge está disponível.
  */
 export function WhatsAppModulePage() {
+  const navigate = useNavigate()
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([])
   const [accountsLoaded, setAccountsLoaded] = useState(false)
 
@@ -397,7 +411,7 @@ export function WhatsAppModulePage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => window.location.href = '/whatsapp/accounts'}
+            onClick={() => navigate('/whatsapp/accounts')}
             className="ml-auto text-xs"
           >
             Gerenciar contas

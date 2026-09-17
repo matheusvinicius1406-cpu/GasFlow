@@ -166,11 +166,11 @@ function PaymentMethodsTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={m.enabled ? 'success' : 'secondary'}>{m.enabled ? 'Ativo' : 'Inativo'}</Badge>
-                  <Button variant="ghost" size="icon" onClick={() => handleToggle(m.id)}>
-                    {m.enabled ? <ToggleRight className="h-5 w-5 text-green-500" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
+                  <Button variant="ghost" size="icon" onClick={() => handleToggle(m.id)} aria-label={m.enabled ? `Desativar método ${m.name}` : `Ativar método ${m.name}`}>
+                    {m.enabled ? <ToggleRight className="h-5 w-5 text-success" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => startEdit(m)}><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(m.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(m)} aria-label={`Editar método ${m.name}`}><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(m.id)} aria-label={`Excluir método ${m.name}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               </CardContent>
             </Card>
@@ -261,7 +261,7 @@ function PixConfigTab() {
             <Card key={c.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <Smartphone className="h-5 w-5 text-green-500" />
+                  <Smartphone className="h-5 w-5 text-success" />
                   <div>
                     <p className="font-medium font-mono">{c.key}</p>
                     <p className="text-xs text-muted-foreground">{PIX_KEY_TYPES.find(t => t.value === c.key_type)?.label} • {c.holder_name || 'Sem nome'} {c.institution && `• ${c.institution}`}</p>
@@ -269,7 +269,7 @@ function PixConfigTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={c.active ? 'success' : 'secondary'}>{c.active ? 'Ativa' : 'Inativa'}</Badge>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)} aria-label={`Excluir chave PIX ${c.key}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               </CardContent>
             </Card>

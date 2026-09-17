@@ -59,7 +59,7 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, icon: Icon, trend, subtitle, color = 'text-primary', className }: KpiCardProps) {
   return (
-    <Card className={cn('relative overflow-hidden', className)}>
+    <Card className={cn('relative overflow-hidden transition-shadow hover:shadow-md', className)}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -69,7 +69,7 @@ function KpiCard({ title, value, icon: Icon, trend, subtitle, color = 'text-prim
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             )}
           </div>
-          <div className={cn('rounded-lg bg-primary/10 p-2.5', color === 'text-primary' ? '' : '')}>
+          <div className="rounded-lg bg-muted p-2.5">
             <Icon className={cn('h-5 w-5', color)} />
           </div>
         </div>

@@ -14,7 +14,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { theme, toggleTheme } = useTheme()
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-md">
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -47,7 +47,10 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
           <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
+          <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
         </Button>
 
         <Separator orientation="vertical" className="h-6" />

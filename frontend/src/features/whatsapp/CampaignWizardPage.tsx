@@ -32,7 +32,9 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { Page, PageHeader, PageTitle } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
+import { cn } from '@/lib/utils'
 import { CAMPAIGN_STATUS_CONFIG } from './constants'
 
 // ── Types ────────────────────────────────────────────────
@@ -45,8 +47,6 @@ interface CampaignList {
   customerCount: number
   created_at: string
 }
-
-
 
 interface CampaignResults {
   total: number
@@ -139,12 +139,6 @@ function StepIndicator({ current, completed }: { current: number; completed: boo
       })}
     </div>
   )
-}
-
-// ── cn helper ────────────────────────────────────────────
-
-function cn(...classes: (string | boolean | undefined | null)[]) {
-  return classes.filter(Boolean).join(' ')
 }
 
 // ── Step 1: Details ──────────────────────────────────────
@@ -333,6 +327,7 @@ function AudienceStep({
             value={communityFilter}
             onChange={(e) => setCommunityFilter(e.target.value as 'all' | 'members' | 'non_members')}
             className="rounded-md border border-input bg-background px-3 py-1 text-sm"
+            aria-label="Filtrar audiência por status na comunidade"
           >
             <option value="all">Todos os clientes</option>
             <option value="members">Membros da comunidade</option>
@@ -898,25 +893,25 @@ export function CampaignWizardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <Page>
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button
-          onClick={() => navigate('/whatsapp')}
-          variant="ghost"
-          size="sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+      <PageHeader>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => navigate('/whatsapp')}
+            variant="ghost"
+            size="sm"
+            aria-label="Voltar para WhatsApp"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <PageTitle
+            subtitle="Crie e envie uma campanha WhatsApp para seus clientes."
+          >
             Nova Campanha
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Crie e envie uma campanha WhatsApp para seus clientes.
-          </p>
+          </PageTitle>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Step Indicator */}
       <StepIndicator current={step} completed={completedSteps} />
@@ -1009,6 +1004,6 @@ export function CampaignWizardPage() {
           )}
         </div>
       </div>
-    </div>
+    </Page>
   )
 }

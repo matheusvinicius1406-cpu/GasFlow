@@ -236,12 +236,12 @@ export function WhatsAppWebPanelPage({ embedded = false }: { embedded?: boolean 
                 aria-label={b?.label}
                 className={`h-2 w-2 rounded-full ${
                   s?.state === 'connected'
-                    ? 'bg-green-500'
+                    ? 'bg-success'
                     : s?.state === 'qr' || s?.state === 'loading'
-                      ? 'bg-amber-500'
+                      ? 'bg-warning'
                       : s?.state === 'error'
-                        ? 'bg-red-500'
-                        : 'bg-gray-400'
+                        ? 'bg-destructive'
+                        : 'bg-muted-foreground'
                 }`}
               />
             </button>

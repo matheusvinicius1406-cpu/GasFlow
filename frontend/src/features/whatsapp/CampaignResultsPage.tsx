@@ -26,7 +26,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { Page, PageHeader, PageTitle } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
+import { CAMPAIGN_STATUS_CONFIG, RECIPIENT_STATUS_CONFIG, formatDate } from './constants'
 
 // ── Types ────────────────────────────────────────────────
 
@@ -64,8 +66,6 @@ interface CampaignRecipient {
   error: string | null
   provider_message_id: string | null
 }
-
-import { CAMPAIGN_STATUS_CONFIG, RECIPIENT_STATUS_CONFIG, formatDate } from './constants'
 
 // ── Main Page ────────────────────────────────────────────
 
@@ -159,13 +159,20 @@ export function CampaignResultsPage() {
 
   if (error || !campaign) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button onClick={() => navigate('/whatsapp')} variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-2xl font-bold text-foreground">Campanha</h1>
-        </div>
+      <Page>
+        <PageHeader>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => navigate('/whatsapp')}
+              variant="ghost"
+              size="sm"
+              aria-label="Voltar para WhatsApp"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <PageTitle>Campanha</PageTitle>
+          </div>
+        </PageHeader>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -175,7 +182,7 @@ export function CampaignResultsPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </Page>
     )
   }
 
@@ -195,28 +202,24 @@ export function CampaignResultsPage() {
   const isActive = isRunning || isPaused || isDraft
 
   return (
-    <div className="space-y-6">
+    <Page>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <PageHeader>
         <div className="flex items-center gap-3">
           <Button
             onClick={() => navigate('/whatsapp')}
             variant="ghost"
             size="sm"
+            aria-label="Voltar para WhatsApp"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {campaign.name}
-              </h1>
+          <PageTitle subtitle={`Campanha #${campaign.id}`}>
+            <span className="flex items-center gap-2">
+              {campaign.name}
               <Badge variant={status.variant}>{status.label}</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Campanha #{campaign.id}
-            </p>
-          </div>
+            </span>
+          </PageTitle>
         </div>
 
         {/* Actions */}
@@ -256,7 +259,7 @@ export function CampaignResultsPage() {
             </Button>
           </div>
         )}
-      </div>
+      </PageHeader>
 
       {/* Progress */}
       <Card>
@@ -475,6 +478,6 @@ export function CampaignResultsPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }
