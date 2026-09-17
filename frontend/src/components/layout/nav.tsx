@@ -1,8 +1,9 @@
 /**
- * Navegação em 8 grupos (reorg F2 — docs/reorg-plan.md §1).
+ * Navegação em 7 grupos (reorg F2 + consolidação: Pedidos entra no grupo de
+ * logística — pedido vira entrega).
  *
  * Fonte única da verdade usada por Sidebar (desktop) e MobileSidebar (mobile):
- * Dashboard e Pedidos são itens únicos; os demais são grupos colapsáveis.
+ * Dashboard é o único item direto; os demais são grupos colapsáveis.
  * A IA NÃO é item de menu — vive na bolinha flutuante (FloatingCopilot, F4).
  */
 
@@ -61,11 +62,11 @@ export const NAV_GROUPS: NavEntry[] = [
       { label: 'Contas & Conexão', href: '/whatsapp/accounts', icon: Smartphone },
     ],
   },
-  { label: 'Pedidos', icon: ShoppingCart, href: '/orders' },
   {
-    label: 'Entregas',
-    icon: Truck,
+    label: 'Pedidos & Entregas',
+    icon: ShoppingCart,
     items: [
+      { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
       { label: 'Entregas', href: '/deliveries', icon: Truck },
       { label: 'Motoristas', href: '/drivers', icon: UserCog },
     ],

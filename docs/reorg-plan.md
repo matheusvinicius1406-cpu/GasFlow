@@ -1,56 +1,12 @@
-# Plano de Reorganização Estrutural — GasFlow
+# Reorg Plan — Consolidation
 
-**Data:** 15/09/2026 · **Status:** ✅ EXECUTADO (F1–F6) — release v1.1.6 (16/09/2026). Decisões do §6 resolvidas: limpeza TOTAL do banco aprovada; preços reais semeados (Água 20L R$10, Gás P13 R$120 cartão 1x R$125/2x R$130); Segmentos/Recompra/Cupons como sub-itens de Clientes; WhatsApp Web como seção de Contas & Conexão.
-**Origem:** pedido do dono — consolidar módulos, limpar banco, frontend sofisticado, IA como bolinha flutuante.
+> **Status: v2 — SUPERSEDED by owner decision (Sept 17, 2026).**
+> The 8-group sidebar was consolidated to **7 groups**: "Pedidos" (direct link) merged into the
+> logistics group, now **"Pedidos & Entregas"** (sub-items: Pedidos, Entregas, Motoristas).
+> Dashboard remains the only direct item. The §1 map below reflects v2.
+> Original v1 structure kept at the bottom for history.
 
 ---
-
-## 0. Diagnóstico da estrutura ATUAL (medido hoje no código)
-
-### Frontend — sidebar com 18 itens chapados (0 agrupamento)
-| # | Item | Rota | Feature dir | Linhas |
-|---|---|---|---|---|
-| 1 | Dashboard | `/` | dashboard | 856 |
-| 2 | Pedidos | `/orders` | orders | 1165 |
-| 3 | Clientes | `/customers` | customers | 1011 |
-| 4 | **Contatos WhatsApp** | `/contacts` | contacts (ContactsCrmPage) | ~300 |
-| 5 | Segmentos | `/segments` | segments | 1099 |
-| 6 | Recompra | `/reorder` | segments (ReorderPage) | ↑ |
-| 7 | WhatsApp | `/whatsapp` | whatsapp | **4472** |
-| 8 | **WhatsApp Web** | `/whatsapp/web` | whatsapp (WebPanel, flag) | ↑ |
-| 9 | Entregas | `/deliveries` | deliveries | ~500 |
-| 10 | Motoristas | `/drivers` | drivers | ~400 |
-| 11 | Produtos | `/products` | products | ~450 |
-| 12 | Estoque | `/inventory` | inventory | 687 |
-| 13 | Financeiro | `/finance` | finance | ~350 |
-| 14 | Relatórios | `/reports` | reports | ~300 |
-| 15 | Cupons | `/promotions` | promotions | ~250 |
-| 16 | Notas de Compra | `/purchase-notes` | purchase | 917 |
-| 17 | **Inteligência** | `/intelligence` | intelligence → CopilotPage (ai) | **5** (wrapper) + 183 |
-| 18 | Configurações | `/settings` | settings | 1387 |
-
-Duplicações/espalhamento identificados:
-- **WhatsApp em 3 lugares**: "Contatos WhatsApp", "WhatsApp", "WhatsApp Web" — 3 entradas de menu, 3 rotas, 2 features (`contacts` + `whatsapp`).
-- **Produtos e Estoque** separados (mas Estoque é detalhe do produto: `/inventory/:productCodigo`).
-- **Inteligência** é um *wrapper vazio* de 5 linhas em cima do CopilotPage — item de menu só para abrir um chat.
-- Financeiro/Relatórios e Segmentos/Recompra são pares naturais separados.
-
-### Backend — 37 routers em `presentation/api/` (pasta chapada)
-- WhatsApp espalhado em **4 routers**: `whatsapp.py` (proxy contas), `whatsapp_gateway.py` (conversas/IA), `whatsapp_automation.py`, `whatsapp_cloud_webhook.py` + `contacts_crm.py` (contatos, rota `/clients/contacts`).
-- `products.py` + `inventory.py` separados (domínio comum: catálogo).
-- Único consumidor de `/clients/contacts`: a página Contatos (frontend). Nenhum app externo usa.
-- Consumidores externos (driver app, relay) usam `driver_*` — **não serão tocados**.
-
-### Banco (SQLite 3.5 MB) — estado medido hoje
-| Tabela | Registros | Avaliação |
-|---|---|---|
-| clients | **6917** | 5 lixo LID; 66 sem nome; 6912 números reais BR sincronizados do WhatsApp |
-| products | 3 | **preços placeholder que inseri hoje** (P13 R$120, P45 R$400, Água R$15) — precisam dos PREÇOS REAIS |
-| orders | 0 | limpo |
-| whatsapp_conversations / messages | 28 / 160 | mistura de lixo LID + testes + poucas reais |
-| segments / coupons / site_leads | 0 / 0 / 0 | limpo |
-| ai_conversations / ai_messages | 4 / 6 | lixo de teste do Copilot |
-| auth_* / system_settings | — | **manter** (RBAC + config) |
 
 Mecanismo de migração: Alembic (9 versões) + `SCHEMA_VERSION` no init_db **com backup automático do arquivo** antes de migrar.
 
@@ -58,7 +14,7 @@ Mecanismo de migração: Alembic (9 versões) + `SCHEMA_VERSION` no init_db **co
 
 ## 1. Mapa da nova estrutura de módulos
 
-### Sidebar: de 18 itens chapados → **8 grupos**
+### Sidebar: de 18 itens chapados → **7 grupos (v2)**
 
 ```
 📊 Dashboard                          (item único)
@@ -68,10 +24,10 @@ Mecanismo de migração: Alembic (9 versões) + `SCHEMA_VERSION` no init_db **co
    ├── Campanhas            ← wizard + resultados + histórico
    ├── Automações
    └── Contas & Conexão     ← contas + QR + WhatsApp Web como SEÇÃO/opção ligável
-📦 Pedidos                            (item único; entra, sai, detalha)
-🚚 Entregas                           (grupo)
-   ├── Entregas
-   └── Motoristas
+🛒 Pedidos & Entregas                 (grupo — v2: logística de ponta a ponta)
+   ├── Pedidos               ← entrada do fluxo (/orders)
+   ├── Entregas              ← execução (/deliveries)
+   └── Motoristas            ← recursos (/drivers)
 👥 Clientes                           (grupo)
    ├── Lista               ← /customers
    ├── Segmentos
@@ -89,20 +45,22 @@ Mecanismo de migração: Alembic (9 versões) + `SCHEMA_VERSION` no init_db **co
 🤖 IA = BOLINHA FLUTUANTE (não é item de menu)
 ```
 
-### O que funde com o quê / o que é removido
+### O que funde com o quê / o que é removido (v2)
+
 | Ação | De | Para |
 |---|---|---|
 | **MOVE+REROTA** | `/contacts` (Contatos WhatsApp) | `/whatsapp/contacts` — feature `contacts` **deletada**, vira aba do módulo WhatsApp |
 | **ABSORVE (seção)** | `/whatsapp/web` (WhatsApp Web) | vira seção "WhatsApp Web" dentro de *Contas & Conexão*, **gated pela flag `waWebPanel.enabled`** (ligável/desligável). Rota própria some. |
+| **AGRUPA (v2)** | `Pedidos` (item direto) | entra no grupo **Pedidos & Entregas** — fluxo pedido→entrega em um só lugar |
 | **FUNDE** | products + inventory | grupo **Produtos & Estoque** (frontend); backend agrupa em módulo `catalog/` mantendo rotas `/products`, `/inventory` (zero quebra de API) |
 | **ABSORVE** | Notas de Compra | entra no grupo Produtos & Estoque (compra de estoque) |
 | **FUNDE** | finance + reports | grupo **Financeiro & Relatórios** (abas internas) |
-| **ABSORVE** | Motoristas | grupo **Entregas** (logística) |
+| **ABSORVE** | Motoristas | grupo **Pedidos & Entregas** (logística) |
 | **AGRUPA** | segments + reorder + promotions (Cupons) | sub-itens do grupo **Clientes** (marketing de clientes) — *ponto de decisão, ver §6* |
 | **REMOVE** | `/intelligence` + IntelligencePage | **deletados** (não escondidos). CopilotPage vira painel da bolinha flutuante |
 | **REMOVE** | item "Contatos WhatsApp" | substituído por aba Contatos no WhatsApp |
 
-**Resultado:** 18 → 8 grupos; todo WhatsApp em 1 módulo; nada duplicado; nada órfão.
+**Resultado (v2):** 18 → 7 grupos; todo WhatsApp em 1 módulo; fluxo pedido→entrega em 1 grupo; nada duplicado; nada órfão.
 
 ---
 
@@ -162,6 +120,8 @@ presentation/api/
 │   └── contacts.py      ← contacts_crm.py  (ROTA MUDA: /clients/contacts → /whatsapp/contacts)
 ├── catalog/
 │   ├── products.py      (rota /products mantida)
+├── catalog/
+│   ├── products.py      (rota /products mantida)
 │   └── inventory.py     (rota /inventory mantida)
 ├── logistics/           # delivery*, dispatch, driver_* (rotas mantidas)
 ├── finance/             # finance, payments, reports (rotas mantidas)
@@ -191,7 +151,7 @@ presentation/api/
 | Regressão no fluxo de mensagens | E2E completo após cada fase: msg in → conversa → IA → pedido → Pedidos |
 | Links antigos (/intelligence) | Rota removida sem redirect é aceitável (app desktop, sem SEO) |
 
-**Checklist de publicação:** suítes 100% verdes → E2E WhatsApp de ponta → smoke manual dos 8 grupos → pareio OK → release v1.1.6.
+**Checklist de publicação:** suítes 100% verdes → E2E WhatsApp de ponta → smoke manual dos grupos do menu → pareio OK → release v1.1.6.
 
 ---
 
