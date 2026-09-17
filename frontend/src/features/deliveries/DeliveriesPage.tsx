@@ -342,6 +342,7 @@ export function DeliveriesPage() {
                                 value={selectedDriver}
                                 onChange={(e) => setSelectedDriver(e.target.value)}
                                 className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                                aria-label={`Motorista para a entrega ${delivery.id}`}
                               >
                                 <option value="">Selecionar motorista</option>
                                 {drivers.filter((d: DeliveryDriverExtended) => d.is_available).map((d: DeliveryDriverExtended) => (

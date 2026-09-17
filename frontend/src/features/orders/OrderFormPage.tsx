@@ -184,6 +184,7 @@ export function OrderFormPage() {
                   value={clientCodigo}
                   onChange={(e) => setClientCodigo(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  aria-label="Cliente do pedido"
                   required
                 >
                   <option value="">Selecione um cliente</option>
@@ -219,6 +220,7 @@ export function OrderFormPage() {
                       value={item.product_codigo}
                       onChange={(e) => updateItem(index, 'product_codigo', e.target.value)}
                       className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      aria-label={`Produto do item ${index + 1}`}
                       required
                     >
                       <option value="">Selecione um produto</option>
@@ -234,6 +236,7 @@ export function OrderFormPage() {
                       value={item.quantity}
                       onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
                       className="w-24"
+                      aria-label={`Quantidade do item ${index + 1}`}
                       required
                     />
                     <p className="flex items-center text-sm font-medium text-foreground">
@@ -245,6 +248,7 @@ export function OrderFormPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => removeItem(index)}
+                        aria-label={`Remover item ${index + 1}`}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -269,6 +273,7 @@ export function OrderFormPage() {
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                      aria-label="Forma de pagamento"
                     >
                       <option value="">Selecione</option>
                       {paymentMethods.length > 0 ? (
@@ -344,7 +349,7 @@ export function OrderFormPage() {
                   {couponDiscount > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Desconto do cupom</span>
-                      <span className="text-sm text-green-600">-{formatCurrency(couponDiscount)}</span>
+                      <span className="text-sm text-success">-{formatCurrency(couponDiscount)}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
@@ -356,6 +361,7 @@ export function OrderFormPage() {
                       value={deliveryFee}
                       onChange={(e) => setDeliveryFee(parseFloat(e.target.value) || 0)}
                       className="w-24 text-right"
+                      aria-label="Taxa de entrega"
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -367,6 +373,7 @@ export function OrderFormPage() {
                       value={discount}
                       onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
                       className="w-24 text-right"
+                      aria-label="Desconto do pedido"
                     />
                   </div>
                   <div className="border-t border-border pt-2">

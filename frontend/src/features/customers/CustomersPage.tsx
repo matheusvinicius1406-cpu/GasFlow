@@ -76,9 +76,9 @@ export function CustomersPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Buscar por nome, código, telefone ou bairro..."
+            aria-label="Buscar clientes" placeholder="Buscar por nome, código, telefone ou bairro..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             className="pl-10"
@@ -89,6 +89,7 @@ export function CustomersPage() {
             value={tipo}
             onChange={(e) => { setTipo(e.target.value); setPage(1) }}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            aria-label="Filtrar por tipo de cliente"
           >
             {CLIENT_TYPES.map(t => (
               <option key={t.value} value={t.value}>{t.label}</option>

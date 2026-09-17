@@ -144,7 +144,7 @@ function RuleEditor({
         />
       ) : null}
 
-      <Button onClick={onRemove} variant="ghost" size="icon" className="text-destructive">
+      <Button onClick={onRemove} variant="ghost" size="icon" className="text-destructive" aria-label="Remover regra">
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>
@@ -451,9 +451,9 @@ export function SegmentsPage() {
       ) : (
         <>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
-              placeholder="Buscar segmentos..."
+              aria-label="Buscar segmentos" placeholder="Buscar segmentos..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 max-w-md"

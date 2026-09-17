@@ -165,9 +165,9 @@ export function ReorderPage() {
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
               <Input
-                placeholder="Buscar por nome ou código..."
+                aria-label="Buscar clientes" placeholder="Buscar por nome ou código..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"

@@ -315,7 +315,12 @@ export function CouponsPage() {
                   {coupons.map((c) => (
                     <tr key={c.id} className="border-b last:border-0">
                       <td className="py-2 pr-4">
-                        <button className="font-mono font-medium hover:underline" onClick={() => startEdit(c)} title="Editar">
+                        <button
+                          className="font-mono font-medium hover:underline"
+                          onClick={() => startEdit(c)}
+                          title="Editar"
+                          aria-label={`Editar cupom ${c.code}`}
+                        >
                           {c.code}
                         </button>
                         {c.name && <p className="text-xs text-muted-foreground">{c.name}</p>}
@@ -330,7 +335,14 @@ export function CouponsPage() {
                         <div className="flex items-center gap-2">
                           <Badge variant={c.is_active ? 'success' : 'secondary'}>{c.is_active ? 'Ativo' : 'Inativo'}</Badge>
                           {c.is_active && (
-                            <Button variant="ghost" size="icon" onClick={() => handleDeactivate(c)} disabled={busy === c.id} title="Desativar">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeactivate(c)}
+                              disabled={busy === c.id}
+                              title="Desativar"
+                              aria-label={`Desativar cupom ${c.code}`}
+                            >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
@@ -347,11 +359,16 @@ export function CouponsPage() {
 
       {/* ── Modal: Gerar link de convite (F4) ── */}
       {showInviteModal && (
-        <Card>
+        <Card role="dialog" aria-modal="true" aria-label="Gerar link de convite">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Gerar link de convite</CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => { setShowInviteModal(false); setInviteToken(''); setInviteError('') }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => { setShowInviteModal(false); setInviteToken(''); setInviteError('') }}
+                aria-label="Fechar geração de link de convite"
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>

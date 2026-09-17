@@ -245,9 +245,9 @@ export function FinancePage() {
           <CardContent>
             {expenseOpen && (
               <div className="bg-accent/50 p-4 rounded-lg mb-4 space-y-3">
-                <Input placeholder="Descrição" value={newExpense.description} onChange={e => setNewExpense({ ...newExpense, description: e.target.value })} />
-                <Input type="number" step="0.01" placeholder="Valor (R$)" value={newExpense.amount} onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })} />
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" value={newExpense.category} onChange={e => setNewExpense({ ...newExpense, category: e.target.value })}>
+                <Input aria-label="Descrição da despesa" placeholder="Descrição" value={newExpense.description} onChange={e => setNewExpense({ ...newExpense, description: e.target.value })} />
+                <Input aria-label="Valor da despesa em reais" type="number" step="0.01" placeholder="Valor (R$)" value={newExpense.amount} onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })} />
+                <select aria-label="Categoria da despesa" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" value={newExpense.category} onChange={e => setNewExpense({ ...newExpense, category: e.target.value })}>
                   {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
                 <div className="flex gap-2">

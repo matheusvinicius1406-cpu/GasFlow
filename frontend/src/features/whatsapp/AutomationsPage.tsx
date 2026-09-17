@@ -309,7 +309,7 @@ export function AutomationsPage() {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[rule.status] || ''}`}>
                             {rule.status}
                           </span>
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-info/10 text-info">
                             {TRIGGER_LABELS[rule.trigger_type] || rule.trigger_type}
                           </span>
                         </div>
@@ -330,19 +330,19 @@ export function AutomationsPage() {
                       </div>
                       <div className="flex items-center gap-1 ml-4">
                         {rule.status === 'DRAFT' || rule.status === 'PAUSED' ? (
-                          <Button variant="ghost" size="icon" onClick={() => handleActivate(rule.id)} title="Ativar">
-                            <Play className="w-4 h-4 text-emerald-600" />
+                          <Button variant="ghost" size="icon" onClick={() => handleActivate(rule.id)} title="Ativar" aria-label={`Ativar regra ${rule.name}`}>
+                            <Play className="w-4 h-4 text-success" />
                           </Button>
                         ) : (
-                          <Button variant="ghost" size="icon" onClick={() => handlePause(rule.id)} title="Pausar">
-                            <Pause className="w-4 h-4 text-amber-600" />
+                          <Button variant="ghost" size="icon" onClick={() => handlePause(rule.id)} title="Pausar" aria-label={`Pausar regra ${rule.name}`}>
+                            <Pause className="w-4 h-4 text-warning" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" onClick={() => handleExecute(rule.id)} title="Executar agora">
-                          <Send className="w-4 h-4 text-blue-600" />
+                        <Button variant="ghost" size="icon" onClick={() => handleExecute(rule.id)} title="Executar agora" aria-label={`Executar regra ${rule.name} agora`}>
+                          <Send className="w-4 h-4 text-info" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)} title="Excluir">
-                          <Trash2 className="w-4 h-4 text-red-600" />
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)} title="Excluir" aria-label={`Excluir regra ${rule.name}`}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
                       </div>
                     </div>

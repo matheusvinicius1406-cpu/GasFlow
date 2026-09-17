@@ -162,9 +162,9 @@ export function ContactsCrmPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Buscar por nome, telefone ou código..."
+            aria-label="Buscar contatos" placeholder="Buscar por nome, telefone ou código..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"

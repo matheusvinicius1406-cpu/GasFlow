@@ -193,13 +193,13 @@ export function UsersPage() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
         <div className="relative min-w-56 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
+            aria-label="Buscar usuários"
             placeholder="Buscar por nome, e-mail..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
-            aria-label="Buscar usuários"
           />
         </div>
         <Select

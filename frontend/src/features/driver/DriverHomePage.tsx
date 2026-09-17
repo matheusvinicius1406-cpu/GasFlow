@@ -364,10 +364,10 @@ export function DriverHomePage() {
           <p className="text-sm text-muted-foreground">Suas entregas de hoje</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={fetchDeliveries}>
+          <Button variant="ghost" size="icon" onClick={fetchDeliveries} aria-label="Atualizar entregas">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleLogout}>
+          <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sair da conta do entregador">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

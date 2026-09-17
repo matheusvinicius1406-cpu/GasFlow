@@ -55,18 +55,27 @@ export function UpdateNotifier() {
   return (
     <div
       data-testid="update-notifier"
+      role="status"
+      aria-live="polite"
       className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-white shadow-lg"
     >
       <p className="text-sm">{message}</p>
       {state.status === 'downloading' && (
-        <div className="mt-2 h-1 overflow-hidden rounded bg-slate-700">
-          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${state.progress}%` }} />
+        <div
+          className="mt-2 h-1 overflow-hidden rounded bg-slate-700"
+          role="progressbar"
+          aria-valuenow={Math.round(state.progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Progresso do download da atualização"
+        >
+          <div className="h-full bg-success transition-all" style={{ width: `${state.progress}%` }} />
         </div>
       )}
       {canInstall && (
         <button
           onClick={() => window.gasflowUpdater?.install()}
-          className="mt-2 rounded bg-emerald-600 px-3 py-1 text-sm hover:bg-emerald-500"
+          className="mt-2 rounded bg-success px-3 py-1 text-sm text-success-foreground hover:bg-success/90"
         >
           Reiniciar e instalar
         </button>

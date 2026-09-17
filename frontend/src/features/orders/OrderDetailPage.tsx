@@ -248,10 +248,11 @@ export function OrderDetailPage() {
                 ) : (
                   <div className="space-y-3 rounded-lg border border-border p-3">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">
+                      <label className="text-sm font-medium text-foreground" htmlFor="payment-amount">
                         Valor (R$) — Saldo restante: {formatCurrency(remainingAmount)}
                       </label>
                       <Input
+                        id="payment-amount"
                         type="number"
                         min="0.01"
                         max={remainingAmount}
@@ -262,8 +263,9 @@ export function OrderDetailPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Método</label>
+                      <label htmlFor="payment-method" className="text-sm font-medium text-foreground">Método</label>
                       <select
+                        id="payment-method"
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
