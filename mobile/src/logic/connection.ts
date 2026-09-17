@@ -9,7 +9,8 @@
 
 export interface ConnectionTargets {
   lan?: { baseUrl: string } | null;
-  cloud?: { baseUrl: string } | null;
+  /** relayToken: token compartilhado do relay (X-Relay-Token) p/ o rastreamento na nuvem (F2.5). */
+  cloud?: { baseUrl: string; relayToken?: string } | null;
 }
 
 export type ConnectionMode = "lan" | "cloud" | "offline";

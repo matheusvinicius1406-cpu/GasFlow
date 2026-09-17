@@ -18,6 +18,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import RootNavigator from "./src/navigation/RootNavigator";
 import { loadPersistedConsent, setConsentStorage, createMemoryConsentStorage } from "./src/logic/session";
 import { resolveConnection } from "./src/logic/connection";
+import { getConnectionTargets } from "./src/logic/config";
 import { useConnectionStore } from "./src/containers/wired";
 
 /**
@@ -34,14 +35,11 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       await loadPersistedConsent();
-      // Targets reais virão das configurações/QR na F2.5; aqui, o dev server
-      // local é o fallback LAN default e o relay da nuvem quando configurado.
-      const targets = {
-        lan: { baseUrl: "http://10.0.2.2:8000" }, // host machine a partir do emulador Android
-        cloud: undefined,
-      };
+      // F2.5: alvos reais (LAN/relay) de logic/config.ts — o desktop pode
+      // sobrescrever no boot (QR/configurações) via setConnectionConfig.
+      const targets = getConnectionTargets();
       const resolved = await resolveConnection(targets, fetch);
-      setConnection(resolved);
+      setConnection(resolved, targets.cloud?.relayToken ?? "");
       setBooted(true);
     })();
   }, [setConnection]);

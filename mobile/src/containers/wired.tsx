@@ -10,7 +10,7 @@
  * injetado aqui. Sem rede: ações passam pela fila e a rota mostra cache.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -18,9 +18,18 @@ import LoginScreen from "../screens/LoginScreen";
 import RouteTodayScreen, { type RouteDelivery } from "../screens/RouteTodayScreen";
 import DeliveryDetailScreen, { type DeliveryDetail } from "../screens/DeliveryDetailScreen";
 import { useSessionStore } from "../logic/session";
-import { mobileLogin, fetchMyDeliveries, postDeliveryAction, type DeliveryDTO } from "../logic/api";
+import {
+  mobileLogin,
+  fetchMyDeliveries,
+  fetchDriverMe,
+  postDeliveryAction,
+  postDriverLocation,
+  postDriverLocationRelay,
+  type DeliveryDTO,
+} from "../logic/api";
 import { OfflineQueue, type QueueItem, type QueueStorage } from "../logic/offlineQueue";
 import { resolveConnection, type ResolvedConnection } from "../logic/connection";
+import { TrackingController, type TrackingDeps } from "../logic/tracking";
 
 export type RouteTodayScreenWiredProps = NativeStackScreenProps<RootStackParamList, "RouteToday">;
 export type DeliveryDetailScreenWiredProps = NativeStackScreenProps<RootStackParamList, "DeliveryDetail">;
@@ -28,12 +37,15 @@ export type DeliveryDetailScreenWiredProps = NativeStackScreenProps<RootStackPar
 /** Url de conexão ativa — setada pelo app container a partir do resolveConnection. */
 interface ConnectionStore {
   connection: ResolvedConnection;
-  setConnection: (c: ResolvedConnection) => void;
+  /** Token compartilhado do relay (X-Relay-Token) — usado pelo rastreamento na nuvem. */
+  relayToken: string;
+  setConnection: (c: ResolvedConnection, relayToken?: string) => void;
 }
 import { create } from "zustand";
 export const useConnectionStore = create<ConnectionStore>((set) => ({
   connection: { mode: "offline", baseUrl: null },
-  setConnection: (connection) => set({ connection }),
+  relayToken: "",
+  setConnection: (connection, relayToken = "") => set({ connection, relayToken }),
 }));
 
 /** Fila offline com storage em memória + rehidratação (RN real: SQLite/MMKV). */
@@ -48,6 +60,125 @@ export const queueStorage: QueueStorage = {
 };
 export const deliveryQueue = new OfflineQueue(queueStorage);
 
+// ── Rastreamento (F2.5) ──────────────────────────────────────
+
+/**
+ * Estado de runtime do rastreamento — preenchido pelo /driver/me (intervalo
+ * e janela LGPD do servidor) e pelas entregas visíveis (statuses p/ o gate).
+ * workWindow null ⇒ fail-closed (nada coleta até o servidor informar).
+ */
+const trackingRuntime = {
+  statuses: [] as string[],
+  workWindow: null as string | null,
+  intervalSeconds: 120,
+  relayToken: "",
+  driverId: "",
+  tenantId: "default",
+};
+
+/** geolocation native module (opcional até o `npm i` da lib no build RN). */
+function requireGeolocation(): {
+  watchPosition: (ok: (p: { coords: { latitude: number; longitude: number; accuracy?: number | null; speed?: number | null; heading?: number | null }; timestamp: number }) => void, err: (e: { message?: string; code?: number }) => void, opts?: Record<string, unknown>) => number;
+  clearWatch: (id: number) => void;
+} | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("@react-native-community/geolocation");
+  } catch {
+    return null; // dev sem lib nativa: rastreio fica indisponível (não crasha)
+  }
+}
+
+let trackingController: TrackingController | null = null;
+
+/** Controller singleton do rastreamento (gate B2 + cadência + roteamento). */
+export function getTrackingController(): TrackingController {
+  if (trackingController) return trackingController;
+  const deps: TrackingDeps = {
+    fetchFn: fetch,
+    now: () => Date.now(),
+    log: (level, message) => {
+      if (level === "warn") console.warn(`[tracking] ${message}`);
+      else console.log(`[tracking] ${message}`);
+    },
+    getSnapshot: () => ({
+      statuses: trackingRuntime.statuses,
+      workWindow: trackingRuntime.workWindow,
+      intervalSeconds: trackingRuntime.intervalSeconds,
+      token: useSessionStore.getState().accessToken ?? "",
+      relayToken: trackingRuntime.relayToken,
+      driverId: trackingRuntime.driverId || useSessionStore.getState().driverId || "",
+      tenantId: trackingRuntime.tenantId,
+      connection: useConnectionStore.getState().connection,
+    }),
+    watch: (onPosition, onError) => {
+      const geo = requireGeolocation();
+      if (!geo) {
+        onError(new Error("geolocation indisponível (lib nativa ausente)"));
+        return () => undefined;
+      }
+      const watchId = geo.watchPosition(
+        (p) =>
+          onPosition({
+            latitude: p.coords.latitude,
+            longitude: p.coords.longitude,
+            accuracy: p.coords.accuracy ?? undefined,
+            speed: p.coords.speed ?? undefined,
+            bearing: p.coords.heading ?? undefined,
+            timestamp: p.timestamp,
+          }),
+        (e) => onError(new Error(e.message ?? `GPS erro ${e.code ?? "?"}`)),
+        { enableHighAccuracy: true, distanceFilter: 10, timeout: 15_000, maximumAge: 30_000 },
+      );
+      return () => geo.clearWatch(watchId);
+    },
+    queue: deliveryQueue,
+  };
+  trackingController = new TrackingController(deps);
+  return trackingController;
+}
+
+/**
+ * Liga o gate do rastreamento às entregas visíveis (mesma semântica B2 do
+ * desktop) e ao /driver/me (intervalo + janela LGPD). Usar em UMA tela viva
+ * (RouteToday) — o controller é singleton e sobrevive à navegação.
+ */
+export function useTrackingGate(deliveries: RouteDelivery[]): void {
+  const token = useSessionStore((s) => s.accessToken);
+  const { connection, relayToken } = useConnectionStore();
+  const statusesKey = useMemo(() => deliveries.map((d) => d.status).join(","), [deliveries]);
+
+  // Perfil do entregador: intervalo configurável + janela LGPD do servidor.
+  useEffect(() => {
+    if (!token || connection.mode === "offline" || !connection.baseUrl) return;
+    let alive = true;
+    void fetchDriverMe(fetch, connection.baseUrl, token)
+      .then((me) => {
+        if (!alive) return;
+        trackingRuntime.workWindow = me.work_hours ?? null;
+        trackingRuntime.intervalSeconds = me.tracking_interval_seconds;
+        trackingRuntime.driverId = me.driver_id;
+        trackingRuntime.tenantId = me.tenant_id || "default";
+      })
+      .catch(() => undefined); // offline p/ /me: mantém fail-closed
+    return () => {
+      alive = false;
+    };
+  }, [token, connection.mode, connection.baseUrl]);
+
+  useEffect(() => {
+    trackingRuntime.statuses = statusesKey ? statusesKey.split(",") : [];
+    trackingRuntime.relayToken = relayToken;
+  }, [statusesKey, relayToken]);
+
+  // Sessão controla o ciclo de vida: sem login ⇒ rastreamento parado.
+  useEffect(() => {
+    const controller = getTrackingController();
+    if (token) controller.start();
+    else controller.stop();
+  }, [token]);
+}
+
 function toRoute(d: DeliveryDTO): RouteDelivery {
   return { delivery_id: d.delivery_id, customer_name: d.customer_name, address: d.address, status: d.status };
 }
@@ -56,15 +187,57 @@ function toDetail(d: DeliveryDTO): DeliveryDetail {
   return { delivery_id: d.delivery_id, customer_name: d.customer_name, address: d.address, phone: d.phone ?? "", status: d.status };
 }
 
-/** Injected em vez de importado — facilita o teste do replay. */
-export function makeTransport(baseUrl: string, token: string) {
-  return (item: QueueItem) =>
-    postDeliveryAction(fetch, baseUrl, token, {
+/**
+ * Transporte da fila (F2.5: agora também roteia posições "location").
+ * Lê os stores no momento do envio (a conexão pode ter mudado desde o
+ * enqueue): lan → backend com JWT · cloud → relay com X-Relay-Token.
+ * Lança em falha — o OfflineQueue aplica o backoff.
+ */
+export function makeTransport() {
+  return async (item: QueueItem) => {
+    const { connection, relayToken } = useConnectionStore.getState();
+    const { accessToken, driverId } = useSessionStore.getState();
+    const token = accessToken ?? "";
+
+    if (item.kind === "location") {
+      if (connection.mode === "lan" && connection.baseUrl && token) {
+        await postDriverLocation(fetch, connection.baseUrl, token, {
+          latitude: Number(item.payload.latitude),
+          longitude: Number(item.payload.longitude),
+          accuracy: item.payload.accuracy as number | undefined,
+          speed: item.payload.speed as number | undefined,
+          bearing: item.payload.bearing as number | undefined,
+        });
+        return;
+      }
+      if (connection.mode === "cloud" && connection.baseUrl && relayToken && driverId) {
+        await postDriverLocationRelay(fetch, connection.baseUrl, relayToken, {
+          driverId,
+          tenantId: "default",
+          positions: [
+            {
+              lat: Number(item.payload.latitude),
+              lng: Number(item.payload.longitude),
+              speed: (item.payload.speed as number) ?? null,
+              heading: (item.payload.bearing as number) ?? null,
+              accuracy: (item.payload.accuracy as number) ?? null,
+              recorded_at: (item.payload.recorded_at as string) ?? null,
+            },
+          ],
+        });
+        return;
+      }
+      throw new Error("offline — posição aguarda canal");
+    }
+
+    if (!item.deliveryId) throw new Error("ação sem deliveryId");
+    await postDeliveryAction(fetch, connection.baseUrl ?? "", token, {
       deliveryId: item.deliveryId,
-      action: item.kind === "location" ? "start" : item.kind,
+      action: item.kind,
       clientActionId: item.client_action_id,
       payload: item.payload,
     });
+  };
 }
 
 // ── Login (wired) ────────────────────────────────────────────
@@ -112,14 +285,17 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
 
   // Replay da fila ao ficar online (C4.3: confirmação offline → sync depois).
   const flushQueue = useCallback(async () => {
-    if (!token || !connection.baseUrl) return;
-    await deliveryQueue.flush(makeTransport(connection.baseUrl, token));
+    if (useConnectionStore.getState().connection.mode === "offline") return;
+    await deliveryQueue.flush(makeTransport());
     await reload();
-  }, [token, connection.baseUrl, reload]);
+  }, [reload]);
 
   useEffect(() => {
     if (connection.mode !== "offline") void flushQueue();
   }, [connection.mode, flushQueue]);
+
+  // F2.5: gate de rastreamento acompanha as entregas desta tela (auto on/off).
+  useTrackingGate(deliveries);
 
   return (
     <View style={{ flex: 1 }}>
@@ -127,7 +303,9 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
       <RouteTodayScreen
         deliveries={deliveries}
         onStartRoute={() => {
-          /* serviço de background location nativo entra na F2.5 */
+          // F2.5: rastreio já liga sozinho com entrega atribuída (gate B2);
+          // o botão antecipa/força a vontade do entregador.
+          getTrackingController().setOverride(true);
         }}
         onOpenDelivery={(deliveryId) => navigation.navigate("DeliveryDetail", { deliveryId })}
       />
@@ -161,8 +339,8 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
       // Sempre enfileira: quando online, o flush dispara imediatamente;
       // quando offline, fica pending e vai no próximo flush (C4.3).
       deliveryQueue.enqueue(kind, deliveryId, payload);
-      if (token && connection.baseUrl) {
-        void deliveryQueue.flush(makeTransport(connection.baseUrl, token)).then(() => {
+      if (connection.mode !== "offline") {
+        void deliveryQueue.flush(makeTransport()).then(() => {
           setDelivery((prev) => (prev ? { ...prev, status: kind === "complete" ? "DELIVERED" : kind === "start" ? "EN_ROUTE" : prev.status } : prev));
         });
       } else {

@@ -4,6 +4,38 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🛰️ F2.5 — Rastreamento no App do Entregador (mobile)
+
+Fecha a captura GPS da cadeia do rastreador (mobile → relay → desktop →
+backend → mapa do operador), complementando o Fix #1 (ingestão via relay)
+e o Fix #2 (gate EM_ROTA no desktop):
+
+- **`logic/tracking.ts`** (novo, módulo puro): gate B2 idêntico ao desktop
+  (auto on/off por `ASSIGNED/DISPATCHED/EN_ROUTE`, override manual
+  respeitado e limpo ao fim da rota), work-hours LGPD fail-closed no
+  cliente (fora da janela não captura — nem com override), cadência pelo
+  intervalo do servidor (`driver.tracking.interval_seconds`, default 120s,
+  min 15) e roteamento de envio: **lan** → `POST /api/v1/driver/location`
+  (JWT) · **cloud** → `POST {relay}/driver/location` (`X-Relay-Token`) ·
+  **offline** → fila (`kind: "location"`) com replay no flush.
+- **`TrackingController`**: captura só quando deve (watch injetado;
+  zero captura fora de rota — bateria + LGPD); falha de rede enfileira.
+- **`api.ts`**: `fetchDriverMe` (intervalo + `work_hours`),
+  `postDriverLocation` (LAN), `postDriverLocationRelay` (nuvem).
+- **`wired.tsx`**: cola nativa com `@react-native-community/geolocation`
+  (watch injetável; ausente ⇒ rastreio indisponível, sem crash);
+  `useTrackingGate` liga o gate às entregas visíveis; `makeTransport`
+  roteia posições da fila pelo canal ativo; botão "Iniciar rota" antecipa
+  o rastreio (`setOverride(true)`).
+- **Backend**: `/driver/me` agora expõe `work_hours` ("HH:MM-HH:MM") — o app
+  respeita no cliente a mesma janela que o backend reforça no ingest.
+- **`logic/config.ts`** (novo): alvos LAN/relay + relayToken (defaults de
+  dev, override pelo desktop via `setConnectionConfig`).
+- Testes: mobile +14 (gate, cadência, roteamento, controller) · backend +1
+  (`/driver/me` expõe intervalo e janela).
+- Pendente para produção: `npm i @react-native-community/geolocation` no
+  build nativo (APK), deploy do relay (Fly.io) e smoke em campo.
+
 ### 👥 Comunidade WhatsApp (F5)
 
 - Setting `whatsapp.community_invite_link` (link do Community)

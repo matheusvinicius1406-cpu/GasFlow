@@ -46,7 +46,8 @@ function defaultId(): string {
 }
 
 export class OfflineQueue {
-  private storage: QueueStorage;
+  /** Público readonly para inspeção em testes (não mutar diretamente). */
+  readonly storage: QueueStorage;
   private clock: () => number;
   private idGen: () => string;
 
