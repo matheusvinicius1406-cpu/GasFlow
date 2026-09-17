@@ -42,6 +42,7 @@ const SETTING_META: Record<string, { kind: 'boolean' | 'number' | 'text' | 'text
   whatsapp_reactivate_template: { kind: 'textarea' },
   whatsapp_auto_reply: { kind: 'boolean' },
   whatsapp_agent_enabled: { kind: 'boolean' },
+  'whatsapp.community_invite_link': { kind: 'text' },
   notify_order_created: { kind: 'boolean' },
   notify_driver_webhook: { kind: 'text' },
   pix_enabled: { kind: 'boolean' },

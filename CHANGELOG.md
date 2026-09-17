@@ -4,6 +4,14 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 👥 Comunidade WhatsApp (F5)
+
+- Setting `whatsapp.community_invite_link` (link do Community)
+- Envio automático do convite pós-cadastro (event-driven, idempotente)
+- Filtro de audiência por status de comunidade nas Campanhas
+- Frontend: campo de config + indicador de status no perfil do cliente
+- Requer WhatsApp módulo v1.1.6+ e link configurado (vazio = desabilitado)
+
 ### 🖨️ F3 — Impressão em tempo real + zap do entregador (16/09/2026)
 
 Implementação da F3 do `docs/entregas-cupons-spec.md` (§3.4):

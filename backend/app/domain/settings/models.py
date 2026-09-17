@@ -15,6 +15,12 @@ DEFAULT_SETTINGS = [
         "Olá {{nome}}! Faz tempo que não falamos. Para manter seus dados atualizados, confirme seu endereço:\nRua: {{rua}} Nº{{numero}}\nComplemento: {{complemento}}\nBairro: {{bairro}}\nSe algum dado estiver errado, responda com a correção. \U0001f60a",
         "Template da mensagem de reativação",
     ),
+    (
+        "whatsapp.community_invite_link",
+        "whatsapp",
+        "",
+        "Link de convite do WhatsApp Community (chat.whatsapp.com/...). Vazio = desabilitado.",
+    ),
     ("notify_order_created", "notifications", True, "Notificar admin quando pedido chega"),
     (
         "notify_driver_webhook",

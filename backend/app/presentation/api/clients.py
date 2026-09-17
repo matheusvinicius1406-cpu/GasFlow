@@ -55,6 +55,9 @@ def list_clients(
     q: Optional[str] = Query(default=None, description="Busca por nome, código, telefone ou bairro"),
     tipo: Optional[str] = Query(default=None, description="Filtrar por tipo"),
     ativo: Optional[bool] = Query(default=None, description="Filtrar por status ativo"),
+    community_member: Optional[bool] = Query(
+        default=None, description="Filtrar por membros da comunidade (true=convidados, false=não convidados)"
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     repository: SQLAlchemyClientRepository = Depends(_get_repository),

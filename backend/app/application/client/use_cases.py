@@ -45,7 +45,17 @@ class CreateClientUseCase:
             updated_at=datetime.utcnow(),
         )
 
-        return self.repository.criar(client)
+        created = self.repository.criar(client)
+
+        # F5: envia convite para comunidade após cadastro
+        try:
+            from app.application.community.service import queue_community_invite
+
+            queue_community_invite(created.codigo, created.nome, created.telefone)
+        except Exception:
+            pass  # falha no convite não deve impedir o cadastro
+
+        return created
 
 
 class GetClientUseCase:

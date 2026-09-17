@@ -275,12 +275,16 @@ function AudienceStep({
   setSelectedListId,
   loading,
   errors,
+  communityFilter,
+  setCommunityFilter,
 }: {
   lists: CampaignList[]
   selectedListId: number | null
   setSelectedListId: (id: number) => void
   loading: boolean
   errors: Record<string, string>
+  communityFilter: 'all' | 'members' | 'non_members'
+  setCommunityFilter: (filter: 'all' | 'members' | 'non_members') => void
 }) {
   if (loading) {
     return (
@@ -320,6 +324,20 @@ function AudienceStep({
         {errors.list && (
           <p className="text-sm text-destructive">{errors.list}</p>
         )}
+
+        {/* Filtro de comunidade */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Filtro de comunidade:</label>
+          <select
+            value={communityFilter}
+            onChange={(e) => setCommunityFilter(e.target.value as 'all' | 'members' | 'non_members')}
+            className="rounded-md border border-input bg-background px-3 py-1 text-sm"
+          >
+            <option value="all">Todos os clientes</option>
+            <option value="members">Membros da comunidade</option>
+            <option value="non_members">Não-membros</option>
+          </select>
+        </div>
 
         <div className="space-y-2">
           {lists.map((list) => {
@@ -721,6 +739,7 @@ export function CampaignWizardPage() {
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
+  const [communityFilter, setCommunityFilter] = useState<'all' | 'members' | 'non_members'>('all')
 
   // Data
   const [lists, setLists] = useState<CampaignList[]>([])
@@ -934,6 +953,8 @@ export function CampaignWizardPage() {
           setSelectedListId={setSelectedListId}
           loading={listsLoading}
           errors={errors}
+          communityFilter={communityFilter}
+          setCommunityFilter={setCommunityFilter}
         />
       )}
 

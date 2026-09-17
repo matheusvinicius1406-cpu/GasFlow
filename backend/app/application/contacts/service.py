@@ -62,7 +62,17 @@ class ContactService:
             self.client_repo.atualizar(existing)
             return existing, action
 
-        return self._create_minimal(telefone, clean), "created"
+        client = self._create_minimal(telefone, clean)
+
+        # F5: envia convite para comunidade após cadastro
+        try:
+            from app.application.community.service import queue_community_invite
+
+            queue_community_invite(client.codigo, client.nome, client.telefone)
+        except Exception:
+            pass  # falha no convite não deve impedir o cadastro
+
+        return client, "created"
 
     def _apply_update(self, client: Client, data: Dict[str, Any]) -> bool:
         """Atualiza campos quando o novo valor é mais rico. True se mudou."""
