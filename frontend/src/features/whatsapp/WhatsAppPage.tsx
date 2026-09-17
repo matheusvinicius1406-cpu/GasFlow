@@ -347,11 +347,71 @@ export function WhatsAppAccountsPage() {
 }
 
 /**
- * Home do módulo WhatsApp (reorg F2) — conversas como tela principal.
- * Contatos, Campanhas, Automações e Contas & Conexão são rotas próprias
- * (/whatsapp/contacts, /whatsapp/campaigns, /whatsapp/automations,
- * /whatsapp/accounts) acessíveis pelo grupo WhatsApp da sidebar.
+ * Home do módulo WhatsApp — conversas + status de contas + WhatsApp Web.
+ *
+ * Reorg v1.1.6: tudo unificado numa única tela. O status de conexão
+ * aparece como barra sutil no topo. WhatsApp Web (desktop) aparece como
+ * seção colapsável quando o bridge está disponível.
  */
 export function WhatsAppModulePage() {
-  return <ConversationsPage />
+  const [accounts, setAccounts] = useState<WhatsAppAccount[]>([])
+  const [accountsLoaded, setAccountsLoaded] = useState(false)
+
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get('/whatsapp/accounts')
+      setAccounts(data.accounts || [])
+    } catch {
+      // silently ignore — status bar will be hidden
+    } finally {
+      setAccountsLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchAccounts()
+    const interval = setInterval(fetchAccounts, 15000)
+    return () => clearInterval(interval)
+  }, [fetchAccounts])
+
+  const connectedCount = accounts.filter((a) => a.status.connected).length
+  const totalCount = accounts.length
+  const hasAccounts = totalCount > 0
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Barra de status sutil — só aparece se houver contas configuradas */}
+      {accountsLoaded && hasAccounts && (
+        <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-sm">
+          <Smartphone className="h-4 w-4" />
+          <span className="text-muted-foreground">
+            {connectedCount === totalCount
+              ? `${totalCount} conta${totalCount > 1 ? 's' : ''} conectada${totalCount > 1 ? 's' : ''}`
+              : `${connectedCount}/${totalCount} contas conectadas`}
+          </span>
+          {connectedCount < totalCount && (
+            <Badge variant="warning" className="ml-1">
+              {totalCount - connectedCount} offline
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.location.href = '/whatsapp/accounts'}
+            className="ml-auto text-xs"
+          >
+            Gerenciar contas
+          </Button>
+        </div>
+      )}
+
+      {/* Conteúdo principal: conversas */}
+      <div className="flex-1 overflow-hidden">
+        <ConversationsPage />
+      </div>
+
+      {/* WhatsApp Web — seção discreta (só no desktop, só com bridge) */}
+      <WhatsAppWebPanelPage embedded />
+    </div>
+  )
 }

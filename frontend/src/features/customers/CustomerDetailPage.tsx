@@ -1,6 +1,6 @@
 import { } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, ShoppingCart, ShoppingBag, DollarSign, Calendar, Ticket, Users } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, Edit, Trash2, Clock, ShoppingCart, ShoppingBag, DollarSign, Calendar } from 'lucide-react'
 import { useCustomer360, useCustomerOrders, useDisableCustomer } from '@/lib/api/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
