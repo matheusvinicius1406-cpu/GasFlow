@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
@@ -84,21 +85,18 @@ export function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
-          <p className="text-muted-foreground">
-            {orders?.length ?? 0} pedidos
-          </p>
-        </div>
-        <Link to="/orders/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            Novo Pedido
-          </Button>
-        </Link>
-      </div>
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle={`${orders?.length ?? 0} pedidos`}>Pedidos</PageTitle>
+        <PageActions>
+          <Link to="/orders/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Novo Pedido
+            </Button>
+          </Link>
+        </PageActions>
+      </PageHeader>
 
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -214,6 +212,6 @@ export function OrdersPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

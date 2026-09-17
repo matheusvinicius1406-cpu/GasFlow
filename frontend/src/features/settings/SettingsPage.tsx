@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
 import { useAuth } from '@/features/auth'
 import { PaymentSettingsPage } from './PaymentSettingsPage'
@@ -66,16 +67,15 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-          <p className="text-muted-foreground">Perfil e informações do sistema</p>
-        </div>
-        <Button onClick={fetchProfile} variant="outline">
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-      </div>
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Perfil e informações do sistema">Configurações</PageTitle>
+        <PageActions>
+          <Button onClick={fetchProfile} variant="outline">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </PageActions>
+      </PageHeader>
 
       {/* Tab Navigation */}
       <div className="flex gap-2 border-b pb-2">
@@ -207,6 +207,6 @@ export function SettingsPage() {
           </Card>
         </>
       )}
-    </div>
+    </Page>
   )
 }

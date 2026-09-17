@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
 
 interface ContactRow {
@@ -129,15 +130,12 @@ export function ContactsCrmPage() {
   const contacts = data?.contacts ?? []
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Contatos</h1>
-          <p className="text-sm text-muted-foreground">
-            Clientes do CRM sincronizados com o WhatsApp — importe, exporte e reative.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Clientes do CRM sincronizados com o WhatsApp — importe, exporte e reative.">
+          Contatos
+        </PageTitle>
+        <PageActions>
           <Button variant="outline" onClick={() => fileInput.current?.click()} disabled={!!busy}>
             <Upload className="mr-1 h-4 w-4" /> {busy === 'import' ? 'Importando...' : 'Importar .vcf'}
           </Button>
@@ -147,8 +145,8 @@ export function ContactsCrmPage() {
           <Button variant="outline" onClick={handleSync} disabled={!!busy}>
             <RefreshCw className="mr-1 h-4 w-4" /> Sincronizar WhatsApp
           </Button>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       <input
         ref={fileInput}
@@ -245,6 +243,6 @@ export function ContactsCrmPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

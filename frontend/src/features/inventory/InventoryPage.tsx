@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle } from '@/components/layout/Page'
 import { formatCurrency } from '@/lib/utils'
 import type { Product, StockStatus } from '@/types'
 
@@ -68,15 +69,10 @@ export function InventoryPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Estoque</h1>
-          <p className="text-muted-foreground">
-            {total} produtos no inventário
-          </p>
-        </div>
-      </div>
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle={`${total} produtos no inventário`}>Estoque</PageTitle>
+      </PageHeader>
 
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -248,6 +244,6 @@ export function InventoryPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

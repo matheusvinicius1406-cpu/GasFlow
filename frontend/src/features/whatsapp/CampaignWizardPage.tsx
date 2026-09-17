@@ -33,6 +33,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { apiClient } from '@/lib/api/client'
+import { CAMPAIGN_STATUS_CONFIG } from './constants'
 
 // ── Types ────────────────────────────────────────────────
 
@@ -546,19 +547,7 @@ function ResultsStep({
       ? Math.round((results.sent / results.total) * 100)
       : 0
 
-  const statusConfig: Record<
-    string,
-    { label: string; variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary' }
-  > = {
-    DRAFT: { label: 'Rascunho', variant: 'secondary' },
-    RUNNING: { label: 'Em execução', variant: 'info' },
-    PAUSED: { label: 'Pausada', variant: 'warning' },
-    COMPLETED: { label: 'Concluída', variant: 'success' },
-    CANCELLED: { label: 'Cancelada', variant: 'destructive' },
-    FAILED: { label: 'Falhou', variant: 'destructive' },
-  }
-
-  const status = statusConfig[campaign.status] || {
+  const status = CAMPAIGN_STATUS_CONFIG[campaign.status] || {
     label: campaign.status,
     variant: 'secondary' as const,
   }

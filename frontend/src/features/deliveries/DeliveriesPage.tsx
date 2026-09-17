@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { StatCard } from '@/components/ui/StatCard'
 import {
   useDeliveries,
@@ -162,15 +163,10 @@ export function DeliveriesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Entregas</h1>
-          <p className="text-muted-foreground">
-            {deliveries.length} entrega{deliveries.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle={`${deliveries.length} entrega${deliveries.length !== 1 ? 's' : ''}`}>Entregas</PageTitle>
+        <PageActions>
           <Button onClick={() => refetch()} variant="outline">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -178,8 +174,8 @@ export function DeliveriesPage() {
             <Plus className="h-4 w-4" />
             Nova Entrega
           </Button>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       {/* Create Delivery Form */}
       {showCreateForm && (
@@ -405,6 +401,6 @@ export function DeliveriesPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

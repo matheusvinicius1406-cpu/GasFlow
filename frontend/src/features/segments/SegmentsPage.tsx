@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { apiClient } from '@/lib/api/client'
 
@@ -408,23 +409,20 @@ export function SegmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Segmentação de Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Crie regras para segmentar seus clientes automaticamente.
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Crie regras para segmentar seus clientes automaticamente.">
+          Segmentação de Clientes
+        </PageTitle>
+        <PageActions>
           <Button onClick={fetchSegments} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button onClick={() => { setShowForm(true); setEditingSegment(null) }}>
             <Plus className="h-4 w-4 mr-1" /> Novo Segmento
           </Button>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       {showForm && (
         <SegmentForm
@@ -536,6 +534,6 @@ export function SegmentsPage() {
           </div>
         </>
       )}
-    </div>
+    </Page>
   )
 }

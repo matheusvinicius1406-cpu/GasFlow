@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
 
 interface Coupon {
@@ -221,13 +222,12 @@ export function CouponsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Promoções e Cupons</h1>
-          <p className="text-sm text-muted-foreground">Cupons de desconto aplicáveis a pedidos.</p>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Cupons de desconto aplicáveis a pedidos.">
+          Promoções e Cupons
+        </PageTitle>
+        <PageActions>
           <Button variant="outline" onClick={fetchCoupons} disabled={!!busy}>
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -237,8 +237,8 @@ export function CouponsPage() {
           <Button onClick={startCreate} disabled={!!busy}>
             <Plus className="mr-1 h-4 w-4" /> Novo cupom
           </Button>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       {notice && <div className="rounded-md bg-primary/10 p-3 text-sm text-foreground">{notice}</div>}
 
@@ -402,6 +402,6 @@ export function CouponsPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

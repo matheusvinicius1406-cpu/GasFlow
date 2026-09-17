@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { StatCard } from '@/components/ui/StatCard'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
 import { DriverMap } from '@/components/map/DriverMap'
 import type { DriverMapPoint } from '@/components/map/DriverMap'
@@ -102,21 +103,16 @@ export function DriversPage() {
   }))
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Motoristas</h1>
-          <p className="text-muted-foreground">
-            {drivers.length} motorista{drivers.length !== 1 ? 's' : ''} cadastrado{drivers.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle={`${drivers.length} motorista${drivers.length !== 1 ? 's' : ''} cadastrado${drivers.length !== 1 ? 's' : ''}`}>Motoristas</PageTitle>
+        <PageActions>
           <Button onClick={fetchData} variant="outline"><RefreshCw className="h-4 w-4" /></Button>
           <Link to="/drivers/new">
             <Button><UserCog className="h-4 w-4" /> Novo Motorista</Button>
           </Link>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Total" value={drivers.length} icon={UserCog} />
@@ -193,6 +189,6 @@ export function DriversPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   )
 }

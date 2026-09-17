@@ -17,9 +17,6 @@ import {
   RefreshCw,
   Rocket,
   Clock,
-  CheckCircle,
-  X,
-  Pause,
   FileText,
   Eye,
   Users,
@@ -28,6 +25,8 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { apiClient } from '@/lib/api/client'
 
 // ── Types ────────────────────────────────────────────────
@@ -58,34 +57,7 @@ interface CampaignWithResults extends CampaignRow {
   listName?: string
 }
 
-// ── Status Config ────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
-  string,
-  {
-    label: string
-    variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary'
-    icon: React.ElementType
-  }
-> = {
-  DRAFT: { label: 'Rascunho', variant: 'secondary', icon: FileText },
-  RUNNING: { label: 'Em execução', variant: 'info', icon: Rocket },
-  PAUSED: { label: 'Pausada', variant: 'warning', icon: Pause },
-  COMPLETED: { label: 'Concluída', variant: 'success', icon: CheckCircle },
-  CANCELLED: { label: 'Cancelada', variant: 'destructive', icon: X },
-  FAILED: { label: 'Falhou', variant: 'destructive', icon: X },
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { CAMPAIGN_STATUS_CONFIG, formatDate } from './constants'
 
 // ── Campaign Card ────────────────────────────────────────
 
@@ -96,7 +68,7 @@ function CampaignCard({
   campaign: CampaignWithResults
   onViewResults: (id: number) => void
 }) {
-  const status = STATUS_CONFIG[campaign.status] || {
+  const status = CAMPAIGN_STATUS_CONFIG[campaign.status] || {
     label: campaign.status,
     variant: 'secondary' as const,
     icon: FileText,
@@ -251,18 +223,12 @@ export function CampaignHistoryPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Campanhas
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie e acompanhe suas campanhas WhatsApp.
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Gerencie e acompanhe suas campanhas WhatsApp.">
+          Campanhas
+        </PageTitle>
+        <PageActions>
           <Button onClick={fetchCampaigns} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -270,8 +236,8 @@ export function CampaignHistoryPage() {
             <Plus className="h-4 w-4 mr-2" />
             Nova Campanha
           </Button>
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -304,30 +270,23 @@ export function CampaignHistoryPage() {
           <LoadingSpinner size="lg" />
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Rocket className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">
-              {filter === 'all'
-                ? 'Nenhuma campanha'
-                : 'Nenhuma campanha com esse filtro'}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-2 text-center max-w-md">
-              {filter === 'all'
-                ? 'Crie sua primeira campanha WhatsApp para alcançar seus clientes.'
-                : 'Tente outro filtro ou crie uma nova campanha.'}
-            </p>
-            {filter === 'all' && (
-              <Button
-                onClick={() => navigate('/whatsapp/campaigns/new')}
-                className="mt-4"
-              >
+        <EmptyState
+          icon={Rocket}
+          title={filter === 'all' ? 'Nenhuma campanha' : 'Nenhuma campanha com esse filtro'}
+          description={
+            filter === 'all'
+              ? 'Crie sua primeira campanha WhatsApp para alcançar seus clientes.'
+              : 'Tente outro filtro ou crie uma nova campanha.'
+          }
+          action={
+            filter === 'all' ? (
+              <Button onClick={() => navigate('/whatsapp/campaigns/new')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Criar campanha
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-3">
           {filtered.map((campaign) => (
@@ -339,6 +298,6 @@ export function CampaignHistoryPage() {
           ))}
         </div>
       )}
-    </div>
+    </Page>
   )
 }

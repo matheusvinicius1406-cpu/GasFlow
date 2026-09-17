@@ -65,38 +65,7 @@ interface CampaignRecipient {
   provider_message_id: string | null
 }
 
-// ── Status Config ────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
-  string,
-  {
-    label: string
-    variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary'
-  }
-> = {
-  DRAFT: { label: 'Rascunho', variant: 'secondary' },
-  RUNNING: { label: 'Em execução', variant: 'info' },
-  PAUSED: { label: 'Pausada', variant: 'warning' },
-  COMPLETED: { label: 'Concluída', variant: 'success' },
-  CANCELLED: { label: 'Cancelada', variant: 'destructive' },
-  FAILED: { label: 'Falhou', variant: 'destructive' },
-}
-
-const RECIPIENT_STATUS: Record<
-  string,
-  { label: string; variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary' }
-> = {
-  PENDING: { label: 'Pendente', variant: 'secondary' },
-  PROCESSING: { label: 'Processando', variant: 'info' },
-  SENT: { label: 'Enviado', variant: 'success' },
-  FAILED: { label: 'Falhou', variant: 'destructive' },
-  CANCELLED: { label: 'Cancelado', variant: 'warning' },
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('pt-BR')
-}
+import { CAMPAIGN_STATUS_CONFIG, RECIPIENT_STATUS_CONFIG, formatDate } from './constants'
 
 // ── Main Page ────────────────────────────────────────────
 
@@ -210,7 +179,7 @@ export function CampaignResultsPage() {
     )
   }
 
-  const status = STATUS_CONFIG[campaign.status] || {
+  const status = CAMPAIGN_STATUS_CONFIG[campaign.status] || {
     label: campaign.status,
     variant: 'secondary' as const,
   }
@@ -471,7 +440,7 @@ export function CampaignResultsPage() {
                 </thead>
                 <tbody>
                   {recipients.map((r) => {
-                    const rStatus = RECIPIENT_STATUS[r.status] || {
+                    const rStatus = RECIPIENT_STATUS_CONFIG[r.status] || {
                       label: r.status,
                       variant: 'secondary' as const,
                     }

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Page, PageHeader, PageTitle } from '@/components/layout/Page';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { DollarSign, TrendingUp, TrendingDown, Plus, Wallet, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
@@ -146,8 +147,10 @@ export function FinancePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
+    <Page>
+      <PageHeader>
+        <PageTitle>Financeiro</PageTitle>
+      </PageHeader>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -454,6 +457,6 @@ export function FinancePage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Page>
   );
 }

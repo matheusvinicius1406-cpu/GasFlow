@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import {
   Table,
   TableBody,
@@ -177,13 +178,12 @@ export function PurchaseNotesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">Notas de Compra</h1>
-        </div>
-        <div className="flex gap-2">
+    <Page>
+      <PageHeader>
+        <PageTitle subtitle="Registre a compra do fornecedor para dar entrada no estoque.">
+          <span className="flex items-center gap-2"><FileText className="h-6 w-6" /> Notas de Compra</span>
+        </PageTitle>
+        <PageActions>
           <Button variant="outline" onClick={fetchNotes} aria-label="Recarregar">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -192,8 +192,8 @@ export function PurchaseNotesPage() {
               <Plus className="mr-2 h-4 w-4" /> Nova nota
             </Button>
           )}
-        </div>
-      </div>
+        </PageActions>
+      </PageHeader>
 
       {notice && (
         <div role="status" className="rounded-md border border-border bg-accent/50 px-4 py-2 text-sm">
@@ -336,7 +336,7 @@ export function PurchaseNotesPage() {
           busy={busy.startsWith('confirm-') || busy.startsWith('cancel-')}
         />
       )}
-    </div>
+    </Page>
   )
 }
 
