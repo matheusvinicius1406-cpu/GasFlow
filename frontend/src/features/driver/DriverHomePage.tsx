@@ -217,6 +217,41 @@ export function DriverHomePage() {
     setGpsEnabled(false)
   }, [])
 
+  // ── Gate "só em rota" (B2 — spec entregas-cupons §2) ──────────
+  //
+  // Rastreio ativo ⇔ existe entrega EM_ROTA (ou a caminho: ASSIGNED /
+  // DISPATCHED, período entre atribuição e chegada). Override manual:
+  // o entregador pode desligar o GPS a qualquer momento (gpsUserOff)
+  // e religar (toggle) — a automação só liga; desligar é sempre dele.
+  // Fora de rota: watchPosition nem roda (bateria + LGPD — nada é
+  // capturado ou enviado fora da janela de trabalho da entrega).
+  const gpsUserOff = useRef(false)
+  const ROUTING_STATUSES = ['ASSIGNED', 'DISPATCHED', 'EN_ROUTE']
+  const hasActiveRoute = deliveries.some(d => ROUTING_STATUSES.includes(d.status))
+
+  useEffect(() => {
+    if (hasActiveRoute && !gpsUserOff.current) {
+      startGpsTracking()
+    } else if (!hasActiveRoute) {
+      // Fim da rota (todas entregues/falhas): para o rastreio e limpa o
+      // override — próxima rota religa automaticamente.
+      stopGpsTracking()
+      gpsUserOff.current = false
+    }
+  }, [hasActiveRoute, startGpsTracking, stopGpsTracking])
+
+  /** Override manual: desligar com rota ativa respeita a escolha. */
+  const handleGpsOff = useCallback(() => {
+    gpsUserOff.current = true
+    stopGpsTracking()
+  }, [stopGpsTracking])
+
+  /** Override manual: religar antes de ter rota ativa também é permitido. */
+  const handleGpsOn = useCallback(() => {
+    gpsUserOff.current = false
+    startGpsTracking()
+  }, [startGpsTracking])
+
   // Cleanup GPS on unmount
   useEffect(() => {
     return () => {
@@ -382,7 +417,7 @@ export function DriverHomePage() {
                 {driverStatus === 'AVAILABLE' ? '🟢 Disponível' : '⏸️ Pausado'}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                GPS: {gpsEnabled ? `✅ ${lastGpsUpdate || 'Ativo'}` : '❌ Desligado'}
+                GPS: {gpsEnabled ? `✅ ${lastGpsUpdate || 'Ativo'}` : hasActiveRoute ? '⏸️ desligado por você' : '💤 aguarda rota'}
               </span>
             </div>
             <div className="flex gap-2">
@@ -395,11 +430,11 @@ export function DriverHomePage() {
                 {driverStatus === 'AVAILABLE' ? 'Pausar' : 'Retomar'}
               </Button>
               {!gpsEnabled ? (
-                <Button size="sm" onClick={startGpsTracking}>
+                <Button size="sm" onClick={handleGpsOn}>
                   <Navigation className="h-4 w-4 mr-1" /> GPS
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" onClick={stopGpsTracking}>
+                <Button size="sm" variant="outline" onClick={handleGpsOff}>
                   <XCircle className="h-4 w-4 mr-1" /> GPS Off
                 </Button>
               )}
@@ -412,19 +447,19 @@ export function DriverHomePage() {
       <div className="grid grid-cols-3 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+            <p className="text-2xl font-bold text-warning">{pendingCount}</p>
             <p className="text-xs text-muted-foreground">Pendentes</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600">{activeCount}</p>
+            <p className="text-2xl font-bold text-info">{activeCount}</p>
             <p className="text-xs text-muted-foreground">Em Rota</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-green-600">{completedCount}</p>
+            <p className="text-2xl font-bold text-success">{completedCount}</p>
             <p className="text-xs text-muted-foreground">Entregues</p>
           </CardContent>
         </Card>
