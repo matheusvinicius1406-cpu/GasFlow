@@ -4,6 +4,30 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 📱 F2.5.1 — Build nativo Android do app do entregador
+
+Fecha o item "build nativo (APK)" pendente da F2.5: shell Android criado,
+autolink do geolocation validado e **APK debug gerado com sucesso**
+(`android/app/build/outputs/apk/debug/app-debug.apk`, universal, ~107MB).
+
+- **Shell `mobile/android/`**: template RN 0.76 (Gradle 8.10.2, AGP via
+  react-native-gradle-plugin, `com.gasflowdriver`, Hermes ON),
+  `MainActivity`/`MainApplication` padrão, manifest com
+  `ACCESS_COARSE/FINE_LOCATION` (sem background location — decisão B2).
+- **Configs RN**: `index.js` (registro do App), `babel.config.js`,
+  `metro.config.js`, `react-native.config.js`, `app.json`.
+- **`wired.tsx`**: troca `require()` opcional por **import direto** de
+  `@react-native-community/geolocation` — lib autolinkada no build nativo.
+- **`react-native-screens` fixada em 4.4.0** (exact): a 4.28 derruba o
+  codegen do RN 0.76 (`Unknown prop type "accessibilityContainerViewIsModal"`).
+- **`newArchEnabled=false`**: CMake/ninja do NDK corrompem paths não-ASCII
+  (repo vive em "…\\automação zap\\"); Fabric volta quando o repo migrar
+  para caminho ASCII.
+- **Limitação de ambiente (documentada em `mobile/android/BUILD.md`)**:
+  buildar exige caminho ASCII + JDK 17 (`JAVA_HOME` do sistema aponta pro
+  8). Receita: copiar `mobile/` para um caminho ASCII (ex.: `C:\gflow\mobile`),
+  `npm ci` e `gradlew assembleDebug`.
+
 ### 🛰️ F2.5 — Rastreamento no App do Entregador (mobile)
 
 Fecha a captura GPS da cadeia do rastreador (mobile → relay → desktop →

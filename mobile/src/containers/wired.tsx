@@ -76,17 +76,14 @@ const trackingRuntime = {
   tenantId: "default",
 };
 
-/** geolocation native module (opcional até o `npm i` da lib no build RN). */
-function requireGeolocation(): {
+/** geolocation — import direto (lib nativa autolinkada no shell android/). */
+import Geolocation from "@react-native-community/geolocation";
+
+function getGeolocation(): {
   watchPosition: (ok: (p: { coords: { latitude: number; longitude: number; accuracy?: number | null; speed?: number | null; heading?: number | null }; timestamp: number }) => void, err: (e: { message?: string; code?: number }) => void, opts?: Record<string, unknown>) => number;
   clearWatch: (id: number) => void;
-} | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("@react-native-community/geolocation");
-  } catch {
-    return null; // dev sem lib nativa: rastreio fica indisponível (não crasha)
-  }
+} {
+  return Geolocation;
 }
 
 let trackingController: TrackingController | null = null;
@@ -112,11 +109,7 @@ export function getTrackingController(): TrackingController {
       connection: useConnectionStore.getState().connection,
     }),
     watch: (onPosition, onError) => {
-      const geo = requireGeolocation();
-      if (!geo) {
-        onError(new Error("geolocation indisponível (lib nativa ausente)"));
-        return () => undefined;
-      }
+      const geo = getGeolocation();
       const watchId = geo.watchPosition(
         (p) =>
           onPosition({
