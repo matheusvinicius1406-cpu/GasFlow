@@ -75,7 +75,7 @@ describe('DriverStockCard', () => {
   })
 
   it('mostra aviso de bloqueio quando divergência pendente', () => {
-    renderCard([{ ...loadedStock[0], blocked: true, blocked_reason: 'divergência 6 > 2' }])
+    renderCard([{ ...loadedStock[0]!, blocked: true, blocked_reason: 'divergência 6 > 2' }])
     expect(screen.getByText(/Bloqueado/)).toBeInTheDocument()
     expect(screen.getByText(/cargas bloqueadas até reconciliação/i)).toBeInTheDocument()
   })

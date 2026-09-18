@@ -4,6 +4,30 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🗺️ F8 — Mapa de Calor de Entregas por Bairro
+
+Implementação da F8 do `docs/entregas-cupons-spec.md` (§3.8, decisões
+E1–E3): densidade de entregas por bairro, só visualização.
+
+- **Agregação SQL** (`application/reports/heatmap.py`): entregas
+  DELIVERED por `address_neighborhood` (group by nativo, sem postgis),
+  centroide aproximado por bairro (bounding box min/max de lat/lng) e
+  contagem; sem bairro informado agrupa como "(sem bairro)".
+- **Cache de 5 min** por (tenant, período) em memória com TTL — segunda
+  chamada dentro da janela retorna `cached: true` sem reconsultar.
+- **Endpoint** `GET /reports/heatmap?days=7|30|90` (default 30, E1);
+  período inválido → 400; sempre filtrado por tenant.
+- **UI**: `HeatmapPage` em `/reports/heatmap` (item "Mapa de Calor" no
+  grupo Financeiro & Relatórios) — `DeliveryHeatmap` (Leaflet/OSM, mesma
+  base do DriverMap, zero dependência nova) com círculos cujo raio e cor
+  (verde→amarelo→vermelho) escalam pela contagem, popup por bairro,
+  legenda, filtro 7/30/90 e ranking de bairros em barras. Bairros sem
+  coordenadas ficam de fora do mapa mas seguem no ranking (avisado).
+- Testes: backend +12 (`test_delivery_heatmap.py`: contagens vs SQL
+  direto — critério do prompt, períodos, cache, tenant, endpoint) ·
+  frontend +4 (`HeatmapPage.test.tsx`). Totais: backend 1571 ·
+  frontend 248.
+
 ### 🚚 F7 — Entrega Inteligente + Estoque do Entregador
 
 Implementação da F7 do `docs/entregas-cupons-spec.md` (§3.3 + §3.3.1,

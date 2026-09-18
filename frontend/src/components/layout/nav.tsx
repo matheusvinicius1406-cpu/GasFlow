@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Contact,
   DollarSign,
+  Flame,
   FileText,
   Filter,
   LayoutDashboard,
@@ -98,6 +99,7 @@ export const NAV_GROUPS: NavEntry[] = [
     items: [
       { label: 'Financeiro', href: '/finance', icon: DollarSign },
       { label: 'Relatórios', href: '/reports', icon: BarChart3 },
+      { label: 'Mapa de Calor', href: '/reports/heatmap', icon: Flame },
     ],
   },
   {

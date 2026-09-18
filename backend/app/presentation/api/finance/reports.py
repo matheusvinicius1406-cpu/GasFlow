@@ -59,6 +59,31 @@ def _get_order_data_for_date(tenant_id: str, date: str):
         return [], [], []
 
 
+@router.get("/heatmap")
+async def get_delivery_heatmap(
+    days: int = Query(30, description="Período em dias (7, 30 ou 90)"),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Mapa de calor — entregas DELIVERED por bairro no período (F8).
+
+    Agregação SQL por address_neighborhood com cache de 5min; centroide
+    aproximado por bairro (bounding box) para a camada de densidade.
+    Só visualização (E3) — sempre filtrado por tenant.
+    """
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.application.reports.heatmap import delivery_heatmap, VALID_PERIODS
+
+    if days not in VALID_PERIODS:
+        raise HTTPException(400, f"Período inválido: use {sorted(VALID_PERIODS)} dias")
+
+    db = DBSession(bind=engine)
+    try:
+        return delivery_heatmap(db, ctx.tenant_id, days)
+    finally:
+        db.close()
+
+
 @router.get("/daily")
 async def get_daily_report(
     date: Optional[str] = Query(None, description="Report date (YYYY-MM-DD)"),

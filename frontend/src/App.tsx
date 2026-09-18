@@ -19,7 +19,7 @@ import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
-import { ReportsPage } from '@/features/reports'
+import { ReportsPage, HeatmapPage } from '@/features/reports'
 import { SettingsPage, AISettingsPage } from '@/features/settings'
 import { CouponsPage } from '@/features/promotions'
 import { PurchaseNotesPage } from '@/features/purchase'
@@ -86,6 +86,7 @@ export function App() {
         <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/heatmap" element={<HeatmapPage />} />
         <Route path="segments" element={<SegmentsPage />} />
         <Route path="reorder" element={<ReorderPage />} />
         <Route path="promotions" element={<CouponsPage />} />
