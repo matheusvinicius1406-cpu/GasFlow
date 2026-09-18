@@ -4,6 +4,38 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 📇 F6 — Organizador + Renomeador de Contatos
+
+Implementação da F6 do `docs/entregas-cupons-spec.md` (§3.7, decisões
+I1–I3): base de contatos limpa antes dos blocos dependentes.
+
+- **Renomeador em lote com preview obrigatório** (I3): regras configuráveis
+  (trim, remoção de prefixos `WA-`/`WPP-`/`+`, capitalização Title Case
+  preservando conectores, padrão "Nome — Bairro") aplicadas em
+  `organizer.py` — funções puras testáveis. Preview calcula sem gravar;
+  apply só aceita os códigos que o operador viu no preview e re-verifica
+  o nome no banco (sem corrida com o sync do WhatsApp).
+- **Backfill de códigos sequenciais** (I1): contato sem código recebe o
+  próximo da sequência global do tenant (`proximo_codigo`); buracos
+  pré-existentes não são renumerados. Idempotente.
+- **Lista "Revisar"**: conflitos detectados e apenas sinalizados — nome
+  duplicado (avaliado no nome normalizado sem prefixos, que é o que o
+  renomeador produziria) e telefone fora do padrão BR. Contato em
+  conflito é **preservado e excluído do rename em lote**;
+  correção é sempre manual.
+- **Audit** (padrão P0 3.3): `contact.rename` e `contact.backfill_code`
+  com before/after em `auth_audit_log`, best-effort (nunca derruba a
+  operação).
+- **Endpoints** (sob `/whatsapp/contacts/organizer`, permissão
+  `customer.update`): `POST rename-preview` · `POST rename-apply` ·
+  `POST backfill-codes` · `GET conflicts`.
+- **Frontend**: `ContactsOrganizerPage` em `/whatsapp/contacts/organizer`
+  (item "Organizador" no grupo WhatsApp) — regras → preview com seleção
+  individual/lote → aplicar; backfill no header; lista Revisar com badges.
+- Testes: backend +28 (`test_contacts_organizer.py`: regras puras,
+  preview/apply, backfill, conflitos, audit via API HTTP) · frontend +5
+  (`ContactsOrganizerPage.test.tsx`). Totais: backend 1544 · frontend 239.
+
 ### 📱 F2.5.1 — Build nativo Android do app do entregador
 
 Fecha o item "build nativo (APK)" pendente da F2.5: shell Android criado,

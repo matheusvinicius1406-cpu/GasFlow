@@ -232,6 +232,106 @@ def enrich_contact(
     return result
 
 
+# ── F6: Organizador de contatos (renomeador em lote + códigos + conflitos) ──
+
+
+class RenameRule(BaseModel):
+    """Regra de renomeação (espelha build_rename_rule do organizer)."""
+
+    trim: bool = True
+    strip_prefixes: bool = False
+    prefixes: Optional[List[str]] = None
+    case: Optional[str] = None  # "title" | "upper" | "lower" | None
+    pattern_bairro: bool = False  # "Nome — Bairro"
+
+
+class RenameApplyRequest(BaseModel):
+    rule: RenameRule
+    codes: List[str] = []
+
+
+def _organizer(db: Session, ctx: TenantContext):
+    from app.application.contacts.organizer import ContactOrganizer
+
+    return ContactOrganizer(db, _repo(db, ctx), ctx.tenant_id)
+
+
+@router.post("/organizer/rename-preview")
+def organizer_rename_preview(
+    rule: RenameRule,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Preview do renomeador em lote — calcula mudanças SEM gravar (I3).
+
+    Contatos em conflito ("Revisar") são excluídos do preview: nada
+    automático sobre contato conflitante.
+    """
+    from app.application.contacts.organizer import build_rename_rule
+
+    try:
+        validated = build_rename_rule(
+            trim=rule.trim,
+            strip_prefixes=rule.strip_prefixes,
+            prefixes=rule.prefixes,
+            case=rule.case,
+            pattern_bairro=rule.pattern_bairro,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return _organizer(db, ctx).preview_rename(validated, search=search or "")
+
+
+@router.post("/organizer/rename-apply")
+def organizer_rename_apply(
+    payload: RenameApplyRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Aplica renomeações confirmadas (apenas códigos vindos do preview).
+
+    Grava audit `contact.rename` (before/after) por contato alterado.
+    """
+    from app.application.contacts.organizer import build_rename_rule
+
+    try:
+        validated = build_rename_rule(
+            trim=payload.rule.trim,
+            strip_prefixes=payload.rule.strip_prefixes,
+            prefixes=payload.rule.prefixes,
+            case=payload.rule.case,
+            pattern_bairro=payload.rule.pattern_bairro,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return _organizer(db, ctx).apply_rename(validated, codes=payload.codes, actor_id=ctx.user_id)
+
+
+@router.post("/organizer/backfill-codes")
+def organizer_backfill_codes(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Backfill: atribui código sequencial global a contatos sem código (I1).
+
+    Idempotente: segunda execução sem novos contatos retorna fixed=0.
+    """
+    return _organizer(db, ctx).backfill_codes(actor_id=ctx.user_id)
+
+
+@router.get("/organizer/conflicts")
+def organizer_conflicts(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Lista "Revisar": contatos em conflito (nome duplicado / telefone divergente).
+
+    Apenas sinaliza (I3) — correção é sempre manual, contato por contato.
+    """
+    return _organizer(db, ctx).list_conflicts()
+
+
 @router.get("")
 def list_contacts(
     search: Optional[str] = None,

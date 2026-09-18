@@ -6,6 +6,7 @@ import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
 import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/customers'
 import {
   ContactsCrmPage,
+  ContactsOrganizerPage,
   CampaignWizardPage,
   CampaignResultsPage,
   CampaignHistoryPage,
@@ -64,6 +65,7 @@ export function App() {
             WhatsApp Web vira seção de Contas & Conexão (reorg F3), sem rota própria. */}
         <Route path="whatsapp" element={<WhatsAppModulePage />} />
         <Route path="whatsapp/contacts" element={<ContactsCrmPage />} />
+        <Route path="whatsapp/contacts/organizer" element={<ContactsOrganizerPage />} />
         <Route path="whatsapp/campaigns" element={<CampaignHistoryPage />} />
         <Route path="whatsapp/campaigns/new" element={<CampaignWizardPage />} />
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />

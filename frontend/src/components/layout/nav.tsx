@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Smartphone,
+  Sparkles,
   Ticket,
   Truck,
   UserCog,
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavEntry[] = [
     items: [
       { label: 'Conversas', href: '/whatsapp', icon: MessageSquare },
       { label: 'Contatos', href: '/whatsapp/contacts', icon: Contact },
+      { label: 'Organizador', href: '/whatsapp/contacts/organizer', icon: Sparkles },
       { label: 'Campanhas', href: '/whatsapp/campaigns', icon: Megaphone },
       { label: 'Automações', href: '/whatsapp/automations', icon: Zap },
       { label: 'Contas & Conexão', href: '/whatsapp/accounts', icon: Smartphone },
