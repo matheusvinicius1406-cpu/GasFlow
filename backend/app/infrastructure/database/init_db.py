@@ -14,6 +14,10 @@ from app.infrastructure.repositories.order_model import OrderModel  # noqa: F401
 from app.infrastructure.repositories.order_item_model import OrderItemModel  # noqa: F401
 from app.infrastructure.repositories.product_model import ProductModel  # noqa: F401
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel  # noqa: F401
+from app.infrastructure.repositories.driver_stock_model import (  # noqa: F401 — F7
+    DriverStockModel,
+    DriverStockEventModel,
+)
 from app.infrastructure.repositories.vehicle_model import (  # noqa: F401
     VehicleModel,
     VehicleCapacityModel,

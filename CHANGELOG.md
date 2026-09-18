@@ -4,6 +4,44 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🚚 F7 — Entrega Inteligente + Estoque do Entregador
+
+Implementação da F7 do `docs/entregas-cupons-spec.md` (§3.3 + §3.3.1,
+decisões C1/C3): controle do estoque carregado pelo entregador e
+sugestão inteligente com confirmação do operador.
+
+- **`driver_stock` + `driver_stock_events`** (migration
+  `c3f8a1d7e9b2`): saldos por entregador/produto —
+  `full_tanks_loaded` (empréstimo, NÃO debita a base),
+  `empty_tanks_returned`, bloqueio por divergência; eventos append-only
+  (LOADING/DELIVERY/DAMAGE/RETURN/RECONCILE) com saldos pós-evento.
+- **Carga (C1, manual)**: operador confirma N cheios; bloqueada quando o
+  entregador tem divergência pendente. Débito da base continua sendo
+  exclusivo do `deliver_stock_atomic` — conta dupla é bug (testado).
+- **Espelho na entrega**: `DELIVERED` decrementa o entregador e credita
+  os vazios (mesma transição que debita a base); `CANCELLED` pós
+  `DELIVERED` reverte ambos; idempotente por evento (DELIVERY/RETURN
+  com reference_id da entrega); best-effort — nunca derruba a transição.
+- **Avaria**: motivo OBRIGATÓRIO; debita entregador + base
+  (`deliver_stock_atomic` com reference `DRIVER_DAMAGE`), audit completo.
+- **Reconciliação**: carga − entregas − avarias = cheios restantes +
+  vazios devolvidos; divergência > tolerância (setting
+  `driver.stock.tolerance`, default 2) → alerta + **bloqueio de novas
+  cargas** até reconciliação aceita ou desbloqueio admin.
+- **Sugestão no despacho (C3)**: `POST /delivery/dispatch/suggest` —
+  elegibilidade = cheios disponíveis (não bloqueado) + disponibilidade;
+  ranking = proximidade GPS + folga de capacidade (reaproveita
+  `DispatchEngine`/haversine; nada duplicado). O OPERADOR confirma via
+  assign existente.
+- **UI**: `DriverStockCard` (carga/avaria/reconciliação + badge de
+  bloqueio) na página de Motoristas; botão "Sugerir" no fluxo de
+  atribuição de Entregas com explicação textual da recomendação.
+- Testes: backend +15 (`test_driver_stock.py`: consistência
+  base+entregador, idempotência, avaria, bloqueio, elegibilidade;
+  migrations alignment ✅) · frontend +5 (`DriverStockCard.test.tsx`).
+  Totais: backend 1559 · frontend 244. Critério de campo (>90% em 50
+  pedidos reais) fica pós-implantação, conforme o spec.
+
 ### 📇 F6 — Organizador + Renomeador de Contatos
 
 Implementação da F6 do `docs/entregas-cupons-spec.md` (§3.7, decisões

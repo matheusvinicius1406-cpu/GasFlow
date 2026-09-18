@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle } from 'lucide-react'
+import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle, Package } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api/client'
 import { DriverMap } from '@/components/map/DriverMap'
 import type { DriverMapPoint } from '@/components/map/DriverMap'
 import type { DeliveryDriver } from '@/types'
+import { DriverStockCard } from './DriverStockCard'
 
 interface DriverWithLocation extends DeliveryDriver {
   status?: string
@@ -43,6 +44,8 @@ export function DriversPage() {
   const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean; age_seconds?: number }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  // F7: motorista selecionado para ver/gerenciar o estoque carregado
+  const [stockDriver, setStockDriver] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -178,6 +181,14 @@ export function DriversPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant={stockDriver === driver.codigo ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setStockDriver(stockDriver === driver.codigo ? null : driver.codigo)}
+                      >
+                        <Package className="h-4 w-4 mr-1" />
+                        Estoque
+                      </Button>
                       <Link to={`/drivers/${driver.codigo}/edit`}>
                         <Button variant="ghost" size="sm">Editar</Button>
                       </Link>
@@ -188,6 +199,14 @@ export function DriversPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* F7: carga/avaria/reconciliação do entregador selecionado */}
+      {stockDriver && (
+        <DriverStockCard
+          driverId={stockDriver}
+          driverName={drivers.find((d) => d.codigo === stockDriver)?.nome}
+        />
       )}
     </Page>
   )

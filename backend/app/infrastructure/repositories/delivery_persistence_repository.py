@@ -284,6 +284,28 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
                     reference_id=record.delivery_id,
                 )
 
+        # ── F7: espelho no estoque do ENTREGADOR ────────────
+        # DELIVERED: decrementa full_tanks_loaded do entregador (a base
+        # já foi debitada acima — única vez). CANCELLED pós-DELIVERED:
+        # devolve ao entregador o que a entrega consumiu. Best-effort:
+        # nunca reverte/derruba a transição da entrega.
+        if record.driver_id:
+            try:
+                from app.application.delivery.driver_stock_service import DriverStockService
+
+                svc = DriverStockService(self.db, self.tenant_id)
+                if new_status == "DELIVERED":
+                    svc.apply_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
+                else:
+                    svc.reverse_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
+            except Exception as exc:  # pragma: no cover — nunca derruba a transição
+                logger.error(
+                    "falha ao espelhar estoque do entregador (delivery=%s driver=%s): %s",
+                    record.delivery_id,
+                    record.driver_id,
+                    exc,
+                )
+
     def assign_delivery(
         self, delivery_id: str, driver_id: str, vehicle_id: Optional[str], version: int
     ) -> Optional[DeliveryRecord]:

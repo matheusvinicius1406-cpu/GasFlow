@@ -681,6 +681,210 @@ async def dispatch_summary(ctx: TenantContext = Depends(get_tenant_context)):
         db.close()
 
 
+# ── Driver Stock (F7 — estoque carregado pelo entregador) ──
+
+
+class DriverStockLoadRequest(BaseModel):
+    driver_id: str
+    product_codigo: str
+    quantity: int
+
+
+class DriverStockDamageRequest(BaseModel):
+    driver_id: str
+    product_codigo: str
+    quantity: int
+    reason: str
+
+
+class DriverStockReconcileRequest(BaseModel):
+    driver_id: str
+    counts: dict  # {product_codigo: cheios informados}
+    empty_returned: dict = {}  # {product_codigo: vazios devolvidos à base}
+
+
+class DriverSuggestRequest(BaseModel):
+    delivery_id: str
+
+
+@router.get("/drivers/{driver_id}/stock")
+async def get_driver_stock(driver_id: str, ctx: TenantContext = Depends(get_tenant_context)):
+    """Saldos do estoque carregado pelo entregador, por produto."""
+    from app.application.delivery.driver_stock_service import DriverStockService
+
+    db = _get_db()
+    try:
+        svc = DriverStockService(db, ctx.tenant_id)
+        return {"driver_id": driver_id, "stock": svc.get_stock(driver_id)}
+    finally:
+        db.close()
+
+
+@router.post("/drivers/{driver_id}/stock/load")
+async def load_driver_stock(
+    driver_id: str, req: DriverStockLoadRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
+    """Carga: operador confirma N cheios carregados pelo entregador (C1).
+
+    Empréstimo temporário — NÃO debita a base. Bloqueada quando o
+    entregador tem divergência pendente (blocked).
+    """
+    from app.application.delivery.driver_stock_service import DriverStockService, DriverStockError
+
+    db = _get_db()
+    try:
+        svc = DriverStockService(db, ctx.tenant_id)
+        return svc.load_tanks(driver_id, req.product_codigo, req.quantity, actor_id=ctx.user_id)
+    except DriverStockError as e:
+        raise HTTPException(e.status_code, e.message) from e
+    finally:
+        db.close()
+
+
+@router.post("/drivers/{driver_id}/stock/damage")
+async def damage_driver_stock(
+    driver_id: str, req: DriverStockDamageRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
+    """Avaria: motivo obrigatório; debita o entregador E a base (audit)."""
+    from app.application.delivery.driver_stock_service import DriverStockService, DriverStockError
+
+    db = _get_db()
+    try:
+        svc = DriverStockService(db, ctx.tenant_id)
+        return svc.register_damage(driver_id, req.product_codigo, req.quantity, req.reason, actor_id=ctx.user_id)
+    except DriverStockError as e:
+        raise HTTPException(e.status_code, e.message) from e
+    finally:
+        db.close()
+
+
+@router.post("/drivers/{driver_id}/stock/reconcile")
+async def reconcile_driver_stock(
+    driver_id: str, req: DriverStockReconcileRequest, ctx: TenantContext = Depends(get_tenant_context)
+):
+    """Fim de turno: carga − entregas − avarias = cheios + vazios.
+
+    Divergência > tolerância (driver.stock.tolerance) → alerta + bloqueio
+    de novas cargas até reconciliação manual.
+    """
+    from app.application.delivery.driver_stock_service import DriverStockService
+
+    db = _get_db()
+    try:
+        svc = DriverStockService(db, ctx.tenant_id)
+        return svc.reconcile(driver_id, req.counts, req.empty_returned, actor_id=ctx.user_id)
+    finally:
+        db.close()
+
+
+@router.post("/drivers/{driver_id}/stock/unblock")
+async def unblock_driver_stock(driver_id: str, ctx: TenantContext = Depends(require_admin)):
+    """Desbloqueia cargas após reconciliação manual (admin-only)."""
+    from app.application.delivery.driver_stock_service import DriverStockService
+
+    db = _get_db()
+    try:
+        svc = DriverStockService(db, ctx.tenant_id)
+        return svc.unblock(driver_id, actor_id=ctx.user_id)
+    finally:
+        db.close()
+
+
+@router.post("/dispatch/suggest")
+async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantContext = Depends(get_tenant_context)):
+    """Sugestão inteligente de entregador para a entrega (F7, C3).
+
+    Elegibilidade = cheios disponíveis no driver_stock + disponível;
+    score = proximidade (posição GPS recente) + folga de capacidade.
+    Retorna ranking + explicação — o OPERADOR confirma (assign atual).
+    """
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.infrastructure.repositories.delivery_persistence_repository import (
+        SQLAlchemyDeliveryPersistenceRepository,
+        SQLAlchemyDeliveryDriverRepository,
+    )
+    from app.application.delivery.driver_stock_service import DriverStockService
+    from app.domain.delivery.dispatch_engine import DispatchEngine, DispatchMode, OrderRequest, DriverCandidate
+
+    db = DBSession(bind=engine)
+    try:
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
+        delivery = del_repo.get_delivery(req.delivery_id)
+        if not delivery:
+            raise HTTPException(404, "Delivery not found")
+        if delivery.driver_id is not None and delivery.status != "PENDING":
+            pass  # sugestão permitida para reatribuição também
+
+        # Itens do pedido → demandas por produto
+        from app.infrastructure.repositories.order_item_model import OrderItemModel
+
+        items = db.query(OrderItemModel).filter(OrderItemModel.order_codigo == delivery.order_id).all()
+        demand: dict = {}
+        for it in items:
+            demand[it.product_codigo] = demand.get(it.product_codigo, 0) + it.quantity
+
+        stock_svc = DriverStockService(db, ctx.tenant_id)
+        drivers = drv_repo.listar_todos()
+        candidates: list = []
+        for d in drivers:
+            if not d.ativo:
+                continue
+            model = drv_repo.find_by_id_as_model(d.codigo)
+            capacity = stock_svc.eligible_capacity(d.codigo)
+            candidates.append(
+                DriverCandidate(
+                    driver_id=d.codigo,
+                    driver_name=d.nome,
+                    vehicle_id=model.vehicle_id if model else None,
+                    status=model.status if model else "AVAILABLE",
+                    is_active=bool(d.ativo),
+                    capacity=capacity,
+                )
+            )
+
+        # Posição GPS mais recente por entregador (mapa do operador)
+        from app.infrastructure.repositories.delivery_persistence_model import DriverLocationRecord
+
+        locs = (
+            db.query(DriverLocationRecord)
+            .filter(DriverLocationRecord.tenant_id == ctx.tenant_id)
+            .order_by(DriverLocationRecord.timestamp.desc())
+            .limit(200)
+            .all()
+        )
+        seen = set()
+        loc_by_driver = {}
+        for loc in locs:
+            if loc.driver_id in seen:
+                continue
+            seen.add(loc.driver_id)
+            loc_by_driver[loc.driver_id] = loc
+        for c in candidates:
+            loc = loc_by_driver.get(c.driver_id)
+            if loc:
+                c.latitude, c.longitude = loc.latitude, loc.longitude
+
+        order = OrderRequest(
+            order_id=delivery.order_id,
+            tenant_id=ctx.tenant_id,
+            customer_codigo=delivery.customer_codigo,
+            customer_name=delivery.customer_name,
+            latitude=delivery.address_lat,
+            longitude=delivery.address_lng,
+        )
+        order.items = [
+            type("OrderItem", (), {"product_codigo": pc, "product_name": pc, "quantity": qty})()
+            for pc, qty in demand.items()
+        ]
+
+        engine = DispatchEngine(mode=DispatchMode.ASSISTED)
+        return engine.recommend(order, candidates)
+    finally:
+        db.close()
+
+
 # ── Driver Locations (Database-backed) ─────────────────
 
 

@@ -52,6 +52,15 @@ DEFAULT_SETTINGS = [
         120,
         "Intervalo de envio de posição pelo app do entregador (segundos)",
     ),
+    # ── Estoque do entregador (F7, §3.3.1) ──────────────────
+    # Divergência de reconciliação acima disto (cheios ou vazios) bloqueia
+    # novas cargas até reconciliação manual.
+    (
+        "driver.stock.tolerance",
+        "operations",
+        2,
+        "Tolerância de divergência na reconciliação de estoque do entregador",
+    ),
     ("dark_mode", "appearance", False, "Tema escuro no frontend"),
     ("brand_color", "appearance", "#E30613", "Cor primária do GasFlow"),
     # ── Impressão em tempo real (F3) ────────────────────────

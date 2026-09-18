@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Truck, RefreshCw, Package, MapPin, Clock, CheckCircle, XCircle, Plus, UserCog, ArrowRight } from 'lucide-react'
+import { Truck, RefreshCw, Package, MapPin, Clock, CheckCircle, XCircle, Plus, UserCog, ArrowRight, Sparkles } from 'lucide-react'
+import { driverStockApi, type DispatchSuggestionResponse } from '@/lib/api/driverStock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -72,6 +73,10 @@ export function DeliveriesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [selectedDriver, setSelectedDriver] = useState<string>('')
+  // F7 (C3): sugestão inteligente por entrega — operador confirma
+  const [suggestingId, setSuggestingId] = useState<string | null>(null)
+  const [suggestion, setSuggestion] = useState<DispatchSuggestionResponse | null>(null)
+  const [suggestLoading, setSuggestLoading] = useState(false)
 
   // Create form state
   const [newDelivery, setNewDelivery] = useState({
@@ -359,6 +364,29 @@ export function DeliveriesPage() {
                               <Button size="sm" variant="ghost" onClick={() => { setAssigningId(null); setSelectedDriver('') }}>
                                 Cancelar
                               </Button>
+                              {/* F7: sugere o entregador mais próximo com estoque */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={suggestLoading}
+                                onClick={async () => {
+                                  setSuggestLoading(true)
+                                  try {
+                                    const res = await driverStockApi.suggest(delivery.id)
+                                    setSuggestion(res.data as DispatchSuggestionResponse)
+                                    setSuggestingId(delivery.id)
+                                    const best = (res.data as DispatchSuggestionResponse)?.recommendations?.[0]
+                                    if (best) setSelectedDriver(best.driver_id)
+                                  } catch {
+                                    setSuggestion(null)
+                                  } finally {
+                                    setSuggestLoading(false)
+                                  }
+                                }}
+                              >
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                {suggestLoading ? '...' : 'Sugerir'}
+                              </Button>
                             </div>
                           ) : (
                             <Button
@@ -395,6 +423,35 @@ export function DeliveriesPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* F7: sugestão do dispatch — operador confirma (C3) */}
+                    {suggestingId === delivery.id && suggestion && (
+                      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm space-y-1" role="status">
+                        {suggestion.recommendations.length === 0 ? (
+                          <p className="text-destructive">
+                            Nenhum entregador elegível ({suggestion.error ?? 'sem estoque disponível'})
+                            {suggestion.rejected?.length > 0 && ` — ${suggestion.rejected.length} rejeitado(s)`}
+                          </p>
+                        ) : (
+                          suggestion.recommendations.map((rec) => (
+                            <div key={rec.driver_id} className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium">
+                                  <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
+                                  {rec.driver_name} · score {rec.score} · {rec.distance_km} km
+                                </p>
+                                <ul className="text-xs text-muted-foreground list-disc ml-4">
+                                  {rec.explanation.map((e, i) => (
+                                    <li key={i}>{e}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <Badge variant="success">Sugestão</Badge>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
