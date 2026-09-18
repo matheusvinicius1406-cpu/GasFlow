@@ -59,6 +59,31 @@ def _get_order_data_for_date(tenant_id: str, date: str):
         return [], [], []
 
 
+@router.get("/deliveries")
+async def get_delivery_report(
+    days: int = Query(30, description="Janela em dias (7, 30 ou 90)"),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Agregados de entregas para os gráficos da ReportsPage (F9).
+
+    Série diária (criadas/entregues/falhas), por entregador (com tempo
+    médio atribuição→DELIVERED em minutos) e por bairro. Sempre filtrado
+    por tenant.
+    """
+    from sqlalchemy.orm import Session as DBSession
+    from app.infrastructure.database.init_db import engine
+    from app.application.reports.delivery_metrics import delivery_report, VALID_DAYS
+
+    if days not in VALID_DAYS:
+        raise HTTPException(400, f"Janela inválida: use {list(VALID_DAYS)} dias")
+
+    db = DBSession(bind=engine)
+    try:
+        return delivery_report(db, ctx.tenant_id, days)
+    finally:
+        db.close()
+
+
 @router.get("/heatmap")
 async def get_delivery_heatmap(
     days: int = Query(30, description="Período em dias (7, 30 ou 90)"),

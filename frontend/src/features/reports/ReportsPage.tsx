@@ -6,6 +6,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { StatCard } from '@/components/ui/StatCard'
 import { apiClient } from '@/lib/api/client'
+import { DeliveryCharts } from './DeliveryCharts'
 
 interface DailySummary {
   date: string
@@ -141,6 +142,9 @@ export function ReportsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* F9: gráficos de entregas (Recharts) + export PDF */}
+      <DeliveryCharts />
     </div>
   )
 }

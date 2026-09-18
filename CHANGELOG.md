@@ -4,6 +4,33 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 📊 F9 — Relatórios com Gráficos + Export PDF
+
+Implementação da F9 do `docs/entregas-cupons-spec.md` (§3.9, decisões
+F1–F3) — fecha todas as fases do spec de Entregas & Cupons.
+
+- **Recharts 3.10.1 instalado** (decisão F1: biblioteca de gráficos
+  padrão React, tree-shakeable).
+- **Agregados backend** (`application/reports/delivery_metrics.py` +
+  `GET /reports/deliveries?days=7|30|90`): série diária (criadas/
+  entregues/falhas), por entregador (atribuídas/entregues/falhas +
+  tempo médio atribuição→DELIVERED em minutos via `func.julianday`) e
+  por bairro. Agregação SQL direta (mesmo padrão da F8), sempre por
+  tenant; janela inválida → 400.
+- **Gráficos** (`DeliveryCharts` na ReportsPage): linha de entregas por
+  dia, barras comparativas por entregador, barras de tempo médio por
+  entregador e barras por bairro — estados de vazio por gráfico, filtro
+  de período e **refresh manual** (F2: sem auto-refresh no MVP).
+- **Export PDF**: IPC `reports:export-pdf` (gate `finance.export_pdf` —
+  permissão existente; `reports.read` não está no seed RBAC) faz
+  `printToPDF` paisagem da view atual — os gráficos já renderizados — e
+  abre o arquivo salvo no tmp (padrão das notas de compra). Fallback
+  `window.print()` fora do Electron (dev/navegador).
+- Testes: backend +10 (`test_delivery_report.py`: séries, tempo médio,
+  ranking, tenant, endpoint) · frontend +7 (`DeliveryCharts.test.tsx`:
+  render dos 4 gráficos, período, refresh, export via bridge + fallback,
+  vazio/erro). Totais: backend 1581 · frontend 255.
+
 ### 🗺️ F8 — Mapa de Calor de Entregas por Bairro
 
 Implementação da F8 do `docs/entregas-cupons-spec.md` (§3.8, decisões

@@ -252,6 +252,26 @@ function registerProtectedIpc() {
         });
         return { ok: true, pdfBase64: pdf.toString("base64") };
     });
+    // reports:export-pdf (F9) → printToPDF da view atual: os gráficos da
+    // ReportsPage já estão renderizados no DOM, então imprimimos a própria
+    // janela (paisagem — gráficos lado a lado) e salvamos no tmp.
+    // Permissão: finance.export_pdf (mesma gate do finance:export-pdf).
+    (0, ipc_permissions_1.registerProtectedHandler)("reports:export-pdf", "finance.export_pdf", async (event) => {
+        const wc = event.sender;
+        const pdf = await wc.printToPDF({
+            landscape: true,
+            printBackground: true,
+            margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+        });
+        const { shell } = require("electron");
+        const { writeFile } = require("node:fs/promises");
+        const { tmpdir } = require("node:os");
+        const { join } = require("node:path");
+        const outPath = join(tmpdir(), `gasflow-relatorio-entregas-${Date.now()}.pdf`);
+        await writeFile(outPath, pdf);
+        await shell.openPath(outPath);
+        return { ok: true, path: outPath };
+    });
     // purchase:export-pdf → printToPDF do webContents (handler nativo).
     // Recebe HTML já autorizado (o backend só devolve html para purchase.read);
     // aqui o gate garante purchase.read também na barreira IPC.

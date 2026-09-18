@@ -41,6 +41,8 @@ const api = {
     gasflowHealth: () => electron_1.ipcRenderer.invoke("gasflow:health"),
     // Notas de compra (Item 2): PDF via printToPDF em janela offscreen
     exportPdf: (html, filename) => electron_1.ipcRenderer.invoke("purchase:export-pdf", { html, filename }),
+    // F9: relatórios — printToPDF da view atual (gráficos já renderizados)
+    exportCurrentViewPdf: () => electron_1.ipcRenderer.invoke("reports:export-pdf"),
     // Diálogos
     pickImage: () => electron_1.ipcRenderer.invoke("dialog:pick-image"),
     pickAudio: () => electron_1.ipcRenderer.invoke("dialog:pick-audio"),
