@@ -18,6 +18,8 @@ Architecture: WhatsApp → Message Gateway → Conversation → AI Core → Tool
 
 import json
 import logging
+
+from app.core.whatsapp_limits import get_whatsapp_limit_store
 import time
 import re
 from typing import Dict, Any, Optional, List
@@ -126,8 +128,9 @@ class MessageGateway:
         self._rate_lock = threading.Lock()
 
         # ── Coupon offer cap (F4): 1 oferta por conversa ──
-        # TODO(prod): Mover para Redis para persistir entre reinícios do backend.
-        self._coupon_offered: Dict[str, float] = {}  # conv_key -> timestamp
+        # F4.5: store TTL compartilhado (Redis quando RATE_LIMIT_MODE=redis —
+        # persiste entre reinícios e entre workers; fallback in-memory).
+        self._limit_store = get_whatsapp_limit_store()
         self._COUPON_OFFER_TTL = 7200  # 2h — cobre conversas de WhatsApp típicas
 
     def get_metrics(self) -> Dict[str, Any]:
@@ -907,8 +910,7 @@ class MessageGateway:
         # F4: flag de cupom já oferecido nesta conversa (cap 1/conversa)
         if customer:
             conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
-            offered_at = self._coupon_offered.get(conv_key)
-            if offered_at and (time.time() - offered_at) < self._COUPON_OFFER_TTL:
+            if self._limit_store.is_marked(f"coupon_offer:{conv_key}", self._COUPON_OFFER_TTL):
                 context_prefix += "[Cupom já oferecido nesta conversa: SIM]\n"
             else:
                 context_prefix += "[Cupom já oferecido nesta conversa: NÃO]\n"
@@ -967,7 +969,7 @@ class MessageGateway:
         # F4: marcar cupom como oferecido se a resposta mencionou cupom
         if customer and reply and "cupom" in reply.lower():
             conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
-            self._coupon_offered[conv_key] = time.time()
+            self._limit_store.mark(f"coupon_offer:{conv_key}", self._COUPON_OFFER_TTL)
 
         return self._build_outbound(
             conversation.id,

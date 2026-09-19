@@ -245,12 +245,17 @@ Implementação da F3 do `docs/entregas-cupons-spec.md` (§3.4):
   `test_ai_referral_tools.py` (tools IA). Total suite: 1532→1551.
 - **Testes frontend**: +5 `ClientCouponsTab.test.tsx`, +4
   `ClientReferralsTab.test.tsx`, +3 `CouponsPage.invite-link.test.tsx`.
-- **TODOs de produção**:
-  - `tools_impl.py`: IP não disponível em contexto WhatsApp (rate limit IP
-    inefetivo).
-  - `gateway.py`: cap 1/conversa em memória, precisa Redis para persistir.
+- **Store TTL compartilhado (TODOs de produção resolvidos)**:
+  `app/core/whatsapp_limits.py` — `WhatsAppLimitStore` com sliding window ZSET
+  em Redis quando `RATE_LIMIT_MODE=redis` (reusa o singleton do core
+  `rate_limit.py`; persiste entre reinícios e workers) e fallback in-memory
+  fail-open por worker. Usado por `tools_impl.py` (rate limit do auto-cadastro:
+  3/telefone/hora, 5/IP/hora) e por `gateway.py` (cap 1 oferta de cupom por
+  conversa, TTL 2h). Testes: +12 `test_whatsapp_limits.py`, +2
+  `test_coupon_offer_cap.py`.
 - **R1 verificado**: rate limit IP (5/hora) não funciona em contexto WhatsApp
-  porque o IP não é extraído do webhook. Apenas phone (3/hora) é efetivo.
+  porque o IP não é extraído do webhook. Apenas phone (3/hora) é efetivo;
+  o parâmetro `ip` fica reservado ao futuro endpoint web público (§5).
 - **R2 verificado**: prompt instrui corretamente sobre token GF-INV-,
   coleta de dados, register_referral e cap 1/conversa.
 - **Cap 1/conversa**: in-memory dict com TTL 30min — não testável como

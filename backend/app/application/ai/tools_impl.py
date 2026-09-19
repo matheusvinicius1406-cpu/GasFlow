@@ -5,11 +5,10 @@ Read and Write tools that wrap existing use cases.
 Tools NEVER access repositories directly — always through use cases.
 """
 
-import time
-from collections import defaultdict
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from app.domain.ai.tools import ToolResult
+from app.core.whatsapp_limits import get_whatsapp_limit_store
 
 
 class AIToolsFactory:
@@ -491,32 +490,29 @@ class AIToolsFactory:
 
     # ── REFERRAL TOOLS (F4) ─────────────────────────────
 
-    # Rate limit para auto-cadastro (MVP em memória; production → Redis)
-    _signup_rate: Dict[str, List[float]] = defaultdict(list)
-    _RATE_WINDOW = 3600  # 1 hora
+    # Rate limit do auto-cadastro — F4.5: store TTL compartilhado
+    # (Redis quando RATE_LIMIT_MODE=redis — persiste entre reinícios e
+    # compartilha entre workers; fallback in-memory fail-open por worker).
+    # R1 (verificado): o IP não é extraído do webhook do WhatsApp — a conexão
+    # vem do serviço WhatsApp Node, não do cliente final — então o limite
+    # efetivo é por telefone. O parâmetro `ip` permanece para o futuro
+    # endpoint web público (§5), onde o limite por IP voltará a valer.
+    _SIGNUP_RATE_WINDOW = 3600  # 1 hora
 
     def _check_signup_rate(self, phone: str, ip: str = "") -> Optional[str]:
         """Retorna erro se rate limit excedido, senão None.
 
-        Limites: 3 tentativas/telefone/hora, 5 tentativas/IP/hora.
-        # TODO(prod): IP não é passado no contexto WhatsApp — limitar a phone apenas.
+        Limites: 3 tentativas/telefone/hora; 5 tentativas/IP/hora quando
+        o IP estiver disponível (hoje não é, no contexto WhatsApp).
         """
-        now = time.time()
-        # Por telefone: 3/hora
-        phone_key = f"phone:{phone}"
-        bucket = self._signup_rate[phone_key]
-        bucket[:] = [t for t in bucket if now - t < self._RATE_WINDOW]
-        if len(bucket) >= 3:
+        store = get_whatsapp_limit_store()
+        allowed, _ = store.allow(f"signup:phone:{phone}", 3, self._SIGNUP_RATE_WINDOW)
+        if not allowed:
             return "RATE_LIMITED_PHONE"
-        bucket.append(now)
-        # Por IP: 5/hora (se IP disponível)
         if ip:
-            ip_key = f"ip:{ip}"
-            ip_bucket = self._signup_rate[ip_key]
-            ip_bucket[:] = [t for t in ip_bucket if now - t < self._RATE_WINDOW]
-            if len(ip_bucket) >= 5:
+            allowed, _ = store.allow(f"signup:ip:{ip}", 5, self._SIGNUP_RATE_WINDOW)
+            if not allowed:
                 return "RATE_LIMITED_IP"
-            ip_bucket.append(now)
         return None
 
     def register_referral(self, args: Dict[str, Any]) -> ToolResult:
