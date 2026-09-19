@@ -6,7 +6,7 @@ Idempotente: 1 convite por cliente (dedup key `community:{client_codigo}`).
 """
 
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from app.core.logging import setup_logging
 from app.infrastructure.database.connection import SessionLocal
@@ -90,18 +90,37 @@ def queue_community_invite(
             logger.warning("community_invite.skip", extra={"reason": "invalid_phone", "client": client_codigo})
             return None
 
-        # Envia (async bridge, mas chamamos sync por simplicidade no MVP)
+        # Envia via bridge async (send_message). Chamadores são use cases
+        # síncronos rodando em threadpool (endpoints `def` do FastAPI —
+        # sem event loop na thread), então o caminho comum é asyncio.run;
+        # dentro de um loop rodando, agenda como task fire-and-forget com
+        # callback de erro (nunca derruba o cadastro).
+        # F9.1 (bugfix): antes chamava `send_text`, método que nunca existiu
+        # no bridge — a exceção era engolida pelo `except Exception` e o
+        # convite nunca partia.
         import asyncio
 
+        async def _send() -> Dict[str, Any]:
+            return await bridge.send_message(phone_digits, message)
+
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Já num loop async — usa bridge sync se disponível
-                bridge.send_text(phone_digits, message)
-            else:
-                loop.run_until_complete(bridge.send_text(phone_digits, message))
+            running = asyncio.get_running_loop()
         except RuntimeError:
-            bridge.send_text(phone_digits, message)
+            running = None
+
+        if running is not None:
+
+            def _log_task_error(task: "asyncio.Task[Any]") -> None:
+                exc = task.exception()
+                if exc is not None:
+                    logger.error(
+                        "community_invite.failed",
+                        extra={"client": client_codigo, "error": str(exc)},
+                    )
+
+            running.create_task(_send()).add_done_callback(_log_task_error)
+        else:
+            asyncio.run(_send())
 
         mark_invited(client_codigo)
         logger.info("community_invite.sent", extra={"client": client_codigo, "phone": phone_digits})

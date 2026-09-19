@@ -4,6 +4,30 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔧 CI verde no backend (F9.1) — mypy + bugfix do convite de comunidade
+
+Fecha a parte do item "CI quebrado" da tabela de riscos do spec
+(critério: corrigir antes da release que fecha as fases).
+
+- **mypy `app` verde (0 erros em 288 arquivos; eram 37)**, sem engordar o
+  baseline: modelos F7/F4 (`driver_stock_model.py`, `coupon_model.py`)
+  modernizados para SQLAlchemy 2.0 tipado (`Mapped[...]`) — mesmos schemas,
+  atributos instanciados deixam de tipar como `Column[X]`.
+- **Bugfix real (F5)**: `community/service.py` chamava
+  `bridge.send_text()`, método que nunca existiu — a exceção era engolida e
+  o convite do Community **nunca partia**. Agora usa `send_message()`
+  (async): `asyncio.run` no caminho comum (endpoints `def` em threadpool)
+  ou task fire-and-forget com callback de erro dentro de loop rodando.
+- Correções pontuais: narrowing de `created_at` em `orders.py`;
+  conversão explícita `RelayLocationPayload` → `LocationUpdate` em
+  `driver_relay.py` (handler compartilhado app/relay).
+- Testes: +1 `test_community_invite.py` (convite chama `send_message` com
+  telefone normalizado e link na mensagem; mocks migrados p/ `AsyncMock`).
+  Suíte: backend 1595 ✅.
+- Pendente (não bloqueia o job de testes): E2E (boot do stack docker no
+  CI) e Trivy (CVEs CRITICAL/HIGH nas imagens) — reprodução local exige
+  Docker daemon; rastreados à parte.
+
 ### 📊 F9 — Relatórios com Gráficos + Export PDF
 
 Implementação da F9 do `docs/entregas-cupons-spec.md` (§3.9, decisões

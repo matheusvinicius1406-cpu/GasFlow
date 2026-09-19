@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.presentation.api.logistics.driver_api import (
+    LocationUpdate,
     _get_db_session,
     handle_update_location,
 )
@@ -136,7 +137,16 @@ async def relay_driver_location(
         accepted, throttled = 0, 0
         for pos in batch.positions:
             ctx = {"driver_id": batch.driver_id, "tenant_id": batch.tenant_id, "role": "DRIVER", "scope": "relay"}
-            result = await handle_update_location(ctx, pos)
+            # Converte para o payload do handler compartilhado (app direto e
+            # relay usam o mesmo ingest); recorded_at não é consumido a jusante.
+            loc = LocationUpdate(
+                latitude=pos.latitude,
+                longitude=pos.longitude,
+                accuracy=pos.accuracy,
+                speed=pos.speed,
+                bearing=pos.bearing,
+            )
+            result = await handle_update_location(ctx, loc)
             if result.get("throttled"):
                 throttled += 1
             else:

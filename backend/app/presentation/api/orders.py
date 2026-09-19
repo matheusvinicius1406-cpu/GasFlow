@@ -171,7 +171,11 @@ def update_order_status(
                 "total": order.total,
                 "payment_method": "",
                 "notes": "",
-                "created_at": order.created_at.isoformat() if getattr(order, "created_at", None) else "",
+                "created_at": (
+                    order.created_at.isoformat()
+                    if getattr(order, "created_at", None) is not None and order.created_at is not None
+                    else ""
+                ),
             },
         )
         return order

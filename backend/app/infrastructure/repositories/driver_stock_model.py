@@ -12,10 +12,25 @@ Modelo do spec (§3.3.1, decisão C1):
 
 Movimentos de carga/avaria/reconciliação vivem em driver_stock_events
 (audit por evento — mesmo espírito de stock_movements da base).
+
+F9.1: modelo em estilo SQLAlchemy 2.0 tipado (Mapped[...]) — atributos
+instanciados em Python (ex.: row.full_tanks_loaded = 5) tipam como int/str
+em vez de Column[int], sem ignore no serviço.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Index, UniqueConstraint
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column
 from app.infrastructure.database.base import Base
 
 
@@ -29,22 +44,22 @@ class DriverStockModel(Base):
         Index("ix_driver_stock_tenant_driver", "tenant_id", "driver_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String, default="default", nullable=False, index=True)
-    driver_id = Column(String(36), nullable=False, index=True)  # codigo do DeliveryDriverModel
-    product_codigo = Column(String(20), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)  # codigo do DeliveryDriverModel
+    product_codigo: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Empréstimo temporário — NÃO debita a base (C1).
-    full_tanks_loaded = Column(Integer, nullable=False, default=0)
+    full_tanks_loaded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Vazios devolvidos pelo entregador (troca na porta do cliente).
-    empty_tanks_returned = Column(Integer, nullable=False, default=0)
+    empty_tanks_returned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Bloqueio de novas cargas (divergência fora da tolerância).
-    blocked = Column(Boolean, nullable=False, default=False)
-    blocked_reason = Column(String(200), nullable=True)
+    blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    blocked_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DriverStockEventModel(Base):
@@ -58,19 +73,19 @@ class DriverStockEventModel(Base):
 
     __table_args__ = (Index("ix_driver_stock_events_driver", "tenant_id", "driver_id", "created_at"),)
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String, default="default", nullable=False, index=True)
-    driver_id = Column(String(36), nullable=False)
-    product_codigo = Column(String(20), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    product_codigo: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    event_type = Column(String(20), nullable=False)  # LOADING|DELIVERY|DAMAGE|RETURN|RECONCILE
-    quantity = Column(Integer, nullable=False, default=0)  # sempre >= 0; o sinal é do tipo
-    reason = Column(String(200), nullable=True)  # obrigatório em DAMAGE
-    reference_type = Column(String(30), nullable=True)  # ex.: DELIVERY
-    reference_id = Column(String(36), nullable=True)  # ex.: delivery_id
-    details = Column(JSON, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False)  # LOADING|DELIVERY|DAMAGE|RETURN|RECONCILE
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # sempre >= 0; o sinal é do tipo
+    reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # obrigatório em DAMAGE
+    reference_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)  # ex.: DELIVERY
+    reference_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)  # ex.: delivery_id
+    details: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    balance_after_loaded = Column(Integer, nullable=False, default=0)
-    balance_after_empty = Column(Integer, nullable=False, default=0)
+    balance_after_loaded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    balance_after_empty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

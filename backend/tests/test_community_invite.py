@@ -6,7 +6,7 @@ queue_community_invite (skip sem bridge, idempotência).
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from app.application.community.service import (
     should_send_community_invite,
@@ -67,10 +67,32 @@ class TestCommunityInvite:
 
         # Mock da bridge para evitar envio real
         with patch("app.application.whatsapp_automation.whatsapp_bridge.WhatsAppSendBridge") as mock_bridge:
-            mock_bridge.return_value.send_text = MagicMock()
+            # F9.1: bridge expõe send_message (async) — send_text nunca existiu
+            mock_bridge.return_value.send_message = AsyncMock(
+                return_value={"success": True, "message_id": "m1", "error": None}
+            )
             result1 = queue_community_invite("000001", "João", "11999990000")
             assert result1["status"] == "sent"
 
         # Segunda chamada — já convidado
         result2 = queue_community_invite("000001", "João", "11999990000")
         assert result2 is None
+
+    @patch("app.application.community.service._get_setting")
+    def test_queue_calls_send_message(self, mock_setting):
+        """F9.1 bugfix: convite chama bridge.send_message com o texto do link."""
+        mock_setting.return_value = "https://chat.whatsapp.com/abc123"
+
+        with patch("app.application.whatsapp_automation.whatsapp_bridge.WhatsAppSendBridge") as mock_bridge:
+            instance = mock_bridge.return_value
+            instance.send_message = AsyncMock(return_value={"success": True, "message_id": "m2", "error": None})
+            result = queue_community_invite("000002", "Maria", "(11) 98888-7777")
+
+        assert result["status"] == "sent"
+        instance.send_message.assert_called_once()
+        args, kwargs = instance.send_message.call_args
+        # Telefone normalizado para dígitos
+        assert (args[0] if args else kwargs.get("phone_digits")) == "11988887777"
+        # Mensagem contém o link do community
+        text = args[1] if len(args) > 1 else kwargs.get("message")
+        assert "https://chat.whatsapp.com/abc123" in text
