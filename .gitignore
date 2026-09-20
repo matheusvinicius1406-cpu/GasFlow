@@ -37,6 +37,7 @@ frontend/coverage/
 
 # TypeScript incremental build info (artefato local)
 frontend/tsconfig.tsbuildinfo
+desktop/tsconfig.tsbuildinfo
 
 # Pytest
 .pytest_cache/

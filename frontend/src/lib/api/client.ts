@@ -220,6 +220,9 @@ export const api = {
 
     // Reports
     daily: (date?: string) => apiClient.get('/finance/reports/daily', { params: { date } }),
+    // F10.8: período (totais + série diária + comparação com o anterior)
+    periodReport: (params: { days?: number; from?: string; to?: string }) =>
+      apiClient.get('/finance/reports/period', { params }),
   },
 
   // Finance Reports (backward compat)

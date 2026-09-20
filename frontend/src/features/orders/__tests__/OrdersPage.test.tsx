@@ -14,9 +14,22 @@ vi.mock('@/lib/api/hooks', () => ({
 }))
 
 const apiPost = vi.fn().mockResolvedValue({ data: { success: true } })
+const apiGet = vi.fn()
 vi.mock('@/lib/api/client', () => ({
-  apiClient: { post: (...args: unknown[]) => apiPost(...args) },
+  apiClient: {
+    get: (...args: unknown[]) => apiGet(...args),
+    post: (...args: unknown[]) => apiPost(...args),
+  },
 }))
+
+/** Status da impressora respondido pelo backend (`/printer/status`). */
+const statusComImpressora = {
+  status: 'ONLINE',
+  printer_name: 'GT710',
+  stale: false,
+  pending_jobs: 0,
+  failed_jobs: 0,
+}
 
 import { OrdersPage } from '../OrdersPage'
 
@@ -36,6 +49,8 @@ describe('OrdersPage', () => {
     ordersState = { data: [], isLoading: false, error: null, refetch: vi.fn() }
     apiPost.mockClear()
     apiPost.mockResolvedValue({ data: { success: true } })
+    apiGet.mockReset()
+    apiGet.mockResolvedValue({ data: statusComImpressora })
   })
 
   it('shows loading spinner while loading', () => {
@@ -65,7 +80,7 @@ describe('OrdersPage', () => {
     expect(screen.getByText('Não foi possível carregar os pedidos.')).toBeInTheDocument()
   })
 
-  it('print button calls /printer/print and shows success toast', async () => {
+  it('imprimir enfileira o cupom e confirma na impressora configurada', async () => {
     ordersState = { ...ordersState, data: [sampleOrder] }
     renderWithProviders(<OrdersPage />)
 
@@ -75,9 +90,41 @@ describe('OrdersPage', () => {
     await waitFor(() => {
       expect(apiPost).toHaveBeenCalledWith('/printer/print', { order_id: 'ORD-001' })
     })
+    // Quem imprime é a impressora da máquina do operador: o toast promete
+    // "na fila", não "impresso".
     await waitFor(() => {
-      expect(screen.getByText(/pedido enviado para impressão/i)).toBeInTheDocument()
+      expect(screen.getByText(/cupom na fila de impressão/i)).toBeInTheDocument()
     })
+    expect(screen.getByText(/GT710/)).toBeInTheDocument()
+  })
+
+  it('imprimir sem impressora escolhida avisa o caminho em vez de fingir sucesso', async () => {
+    apiGet.mockResolvedValue({ data: { ...statusComImpressora, status: 'NOT_CONFIGURED', printer_name: null } })
+    ordersState = { ...ordersState, data: [sampleOrder] }
+    renderWithProviders(<OrdersPage />)
+
+    const printBtn = await screen.findByRole('button', { name: /imprimir pedido ord-001/i })
+    fireEvent.click(printBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText(/nenhuma impressora configurada/i)).toBeInTheDocument()
+    })
+  })
+
+  it('imprimir com o app sem sinal avisa em vez de prometer impressão', async () => {
+    // Impressora escolhida, mas o último relato do agente é velho: o app pode
+    // estar fechado e o cupom ficar na fila — não dá para dizer "sai em instantes".
+    apiGet.mockResolvedValue({ data: { ...statusComImpressora, stale: true } })
+    ordersState = { ...ordersState, data: [sampleOrder] }
+    renderWithProviders(<OrdersPage />)
+
+    const printBtn = await screen.findByRole('button', { name: /imprimir pedido ord-001/i })
+    fireEvent.click(printBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText(/app de impressão está sem sinal/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/sai em instantes/i)).not.toBeInTheDocument()
   })
 
   it('print button shows error toast when API fails', async () => {
@@ -89,7 +136,7 @@ describe('OrdersPage', () => {
     fireEvent.click(printBtn)
 
     await waitFor(() => {
-      expect(screen.getByText(/falha ao imprimir/i)).toBeInTheDocument()
+      expect(screen.getByText(/não foi possível enviar para impressão/i)).toBeInTheDocument()
     })
     // Botão volta a habilitar após a falha
     await waitFor(() => {

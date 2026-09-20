@@ -73,7 +73,11 @@ class ESCPOSCommands:
 
     @classmethod
     def separator(cls, char: str = "-", width: int = 48) -> bytes:
-        """Print a separator line."""
+        """Print a separator line.
+
+        `char` é o CARÁTER do separador (a largura é `width`). Chamar
+        `separator(48)` — posicional — imprimia "48484848..." no cupom.
+        """
         line_text = str(char) * width
         return ESCPOSCommands.text(line_text) + b"\n"
 
@@ -142,7 +146,7 @@ class ReceiptFormatter:
         buf.extend(ESCPOSCommands.line(f"PEDIDO #{codigo}", align="center"))
         buf.extend(ESCPOSCommands.BOLD_OFF)
         buf.extend(ESCPOSCommands.line(date_str, align="center"))
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Customer info
         client_name = order.get("client_name", order.get("customer_name", ""))
@@ -169,7 +173,7 @@ class ReceiptFormatter:
         if reference:
             buf.extend(ESCPOSCommands.line(f"Ref: {reference}"))
 
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Items header
         buf.extend(ESCPOSCommands.BOLD_ON)
@@ -177,7 +181,7 @@ class ReceiptFormatter:
         buf.extend(ESCPOSCommands.text(header))
         buf.extend(ESCPOSCommands.BOLD_OFF)
         buf.extend(b"\n")
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Items
         items = order.get("items", [])
@@ -193,7 +197,7 @@ class ReceiptFormatter:
             line_text = f"{name_display:<24} {qty:>4} {self._format_money(subtotal):>10}"
             buf.extend(ESCPOSCommands.line(line_text))
 
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Totals
         subtotal = order.get("subtotal", 0)
@@ -217,7 +221,7 @@ class ReceiptFormatter:
         if payment:
             buf.extend(ESCPOSCommands.line(f"FORMA PGTO: {payment}"))
 
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Notes
         notes = order.get("notes", "")
@@ -228,7 +232,7 @@ class ReceiptFormatter:
             buf.extend(b"\n")
             for line_text in self._wrap_text(notes, self.width):
                 buf.extend(ESCPOSCommands.line(line_text))
-            buf.extend(ESCPOSCommands.separator(self.width))
+            buf.extend(ESCPOSCommands.separator("-", self.width))
 
         # Driver info
         driver_name = order.get("driver_name", "")
@@ -254,10 +258,10 @@ class ReceiptFormatter:
         buf.extend(ESCPOSCommands.DOUBLE_SIZE)
         buf.extend(ESCPOSCommands.line("GASFLOW", align="center"))
         buf.extend(ESCPOSCommands.NORMAL_SIZE)
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
         buf.extend(ESCPOSCommands.line("Teste de impressora", align="center"))
         buf.extend(ESCPOSCommands.line(datetime.now().strftime("%d/%m/%Y %H:%M:%S"), align="center"))
-        buf.extend(ESCPOSCommands.separator(self.width))
+        buf.extend(ESCPOSCommands.separator("-", self.width))
         buf.extend(ESCPOSCommands.line("OK", align="center"))
         buf.extend(b"\n\n\n")
         buf.extend(ESCPOSCommands.CUT_FULL)

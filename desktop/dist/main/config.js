@@ -24,6 +24,8 @@ const DEFAULTS = {
     waApiKey: "",
     waAutoReply: false,
     waWebPanel: { enabled: false },
+    printerName: "",
+    printerEnabled: true,
 };
 function generateKey(prefix) {
     return `${prefix}-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;

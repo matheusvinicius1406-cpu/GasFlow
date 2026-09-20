@@ -9,7 +9,7 @@ Atomic transactions for all financial operations.
 - FinancialReports: aggregated queries
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -304,6 +304,14 @@ class RefundPaymentUseCase:
         return {"payment": payment, "cash_movement": cash_movement}
 
 
+def _pct_change(current: Decimal, previous: Decimal) -> Optional[float]:
+    """Variação percentual vs. o período anterior (None quando não há base)."""
+    if previous == 0:
+        return None
+    change = ((current - previous) / abs(previous)) * 100
+    return float(change.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
 class FinancialReportsUseCase:
     """Basic financial reports for a period."""
 
@@ -321,7 +329,9 @@ class FinancialReportsUseCase:
 
     def daily_summary(self, date: datetime) -> dict:
         start = date.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start.replace(day=start.day + 1) if start.day < 28 else start.replace(month=start.month + 1, day=1)
+        # `timedelta` e não `replace(day=day+1)`: o cálculo anterior virava o
+        # mês inteiro a partir do dia 28 (28/jan virava 1º/fev = "dia" de 4 dias).
+        end = start + timedelta(days=1)
 
         total_receipts = self.cash_repo.total_by_type_and_period(CashMovementType.RECEIPT, start, end)
         total_expenses = self.expense_repo.total_by_period(start, end)
@@ -331,4 +341,65 @@ class FinancialReportsUseCase:
             "total_receipts": total_receipts,
             "total_expenses": total_expenses,
             "net_result": (total_receipts - total_expenses).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        }
+
+    def period_summary(self, start: datetime, end: datetime) -> dict:
+        """Reuno do período [start, end) + série diária + período anterior.
+
+        A comparação usa o período ANTERIOR de mesma duração (ex.: 30 dias
+        contra os 30 dias anteriores), que é o que o operador quer ver ao
+        trocar o filtro — não "o mês passado" genérico. Percentuais ficam
+        `None` quando não há base de comparação (período anterior zerado),
+        para a tela mostrar "—" em vez de divisão por zero.
+        """
+        span = end - start
+        prev_start = start - span
+
+        receipts = self.cash_repo.receipts_by_day(start, end)
+        expenses = self.expense_repo.totals_by_day(start, end)
+
+        daily = []
+        cursor = start
+        while cursor < end:
+            day = cursor.date()
+            day_receipts = receipts.get(day, Decimal("0.00"))
+            day_expenses = expenses.get(day, Decimal("0.00"))
+            daily.append(
+                {
+                    "date": day.isoformat(),
+                    "receipts": day_receipts,
+                    "expenses": day_expenses,
+                    "net_result": (day_receipts - day_expenses).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                }
+            )
+            cursor += timedelta(days=1)
+
+        total_receipts = sum(receipts.values(), Decimal("0.00"))
+        total_expenses = sum(expenses.values(), Decimal("0.00"))
+        net_result = (total_receipts - total_expenses).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        prev_receipts = self.cash_repo.total_by_type_and_period(CashMovementType.RECEIPT, prev_start, start)
+        prev_expenses = self.expense_repo.total_by_period(prev_start, start)
+        prev_net = (prev_receipts - prev_expenses).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        return {
+            "from": start.date().isoformat(),
+            "to": (end - timedelta(days=1)).date().isoformat(),
+            "days": span.days,
+            "total_receipts": total_receipts,
+            "total_expenses": total_expenses,
+            "net_result": net_result,
+            "daily": daily,
+            "previous": {
+                "from": prev_start.date().isoformat(),
+                "to": (start - timedelta(days=1)).date().isoformat(),
+                "total_receipts": prev_receipts,
+                "total_expenses": prev_expenses,
+                "net_result": prev_net,
+            },
+            "comparison": {
+                "receipts_pct": _pct_change(total_receipts, prev_receipts),
+                "expenses_pct": _pct_change(total_expenses, prev_expenses),
+                "net_pct": _pct_change(net_result, prev_net),
+            },
         }

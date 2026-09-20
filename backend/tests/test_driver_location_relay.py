@@ -31,6 +31,30 @@ def client():
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _open_work_hours():
+    """Abre a janela de trabalho (LGPD) durante estes testes.
+
+    O handler reforça `driver.work_hours` (default 06:00–22:00 UTC) e este
+    arquivo cobre auth/validação/auditoria do relay, não a regra de horário —
+    sem isto o resultado passa a depender da hora em que o CI roda (end
+    "24:00" → end_m=1440 cobre qualquer minuto do dia). Mesmo padrão de
+    test_driver_mobile.py.
+    """
+    from app.application.settings.settings_service import SettingsService
+
+    db = _db()
+    svc = SettingsService(db)
+    try:
+        svc.update("driver.work_hours.start", "00:00")
+        svc.update("driver.work_hours.end", "24:00")
+        yield
+    finally:
+        svc.update("driver.work_hours.start", "06:00")
+        svc.update("driver.work_hours.end", "22:00")
+        db.close()
+
+
 def _db():
     from app.infrastructure.database.init_db import engine
 

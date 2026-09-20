@@ -131,6 +131,31 @@ class ReferralService:
             .first()
         )
 
+    def peek_invite(self, token: str) -> Dict[str, Any]:
+        """Situação do convite para a página pública (antes do formulário).
+
+        Não altera nada e não devolve PII de terceiros: só se o convite é
+        utilizável e o que o próprio indicado ganha. `reason`:
+        ok | already_used | not_found | malformed.
+        """
+        if not token or not token.startswith(TOKEN_PREFIX):
+            return {"valid": False, "reason": "malformed"}
+
+        referral = self.get_by_token(token)
+        if not referral:
+            return {"valid": False, "reason": "not_found"}
+        if referral.referred_client_codigo:
+            return {"valid": False, "reason": "already_used"}
+
+        value, coupon_type = self._reference_offer()
+        return {
+            "valid": True,
+            "reason": "ok",
+            "coupon_value": float(value),
+            "coupon_type": coupon_type,
+            "validity_days": self.validity_days(),
+        }
+
     # ── Auto-cadastro (completa a indicação) ──────────────
 
     def complete_signup(
@@ -144,13 +169,37 @@ class ReferralService:
         Registra o indicado e gera os cupons de ambos (idempotente por token).
 
         Retorna dict com referred/referrer, cliente criado e cupons gerados.
+
+        Reenvio do mesmo telefone para um token já usado NÃO é erro: devolve o
+        resultado original com `idempotent_replay=True` (retenção da resposta
+        perdida). Token usado por outro telefone continua 409 (single-use).
         """
         referral = self.get_by_token(invite_token)
         if not referral:
             raise ReferralError("TOKEN_NOT_FOUND", "Token de convite inválido ou expirado.", 404)
 
         if referral.referred_client_codigo:
-            # Token já usado → erro (single-use)
+            # Token já usado. Se for o MESMO telefone, é o reenvio do próprio
+            # indicado depois de uma resposta perdida (queda de rede, túnel,
+            # página fechada no meio): o cadastro e o cupom JÁ existem, então
+            # devolver o resultado original é o correto — um 409 aqui faria o
+            # cliente achar que falhou e perder o cupom.
+            if self._same_referred_phone(referral, phone):
+                logger.info(
+                    "referral.signup_replayed",
+                    extra={
+                        "referral_id": referral.id,
+                        "referred": referral.referred_client_codigo,
+                    },
+                )
+                return {
+                    "idempotent_replay": True,
+                    "referral": referral,
+                    "referred_client": self._client_by_codigo(referral.referred_client_codigo),
+                    "referrer_client": self._client_by_codigo(referral.referrer_client_codigo),
+                    "coupons": self._referral_coupons(referral),
+                }
+            # Telefone diferente → outra pessoa tentando usar o mesmo token.
             raise ReferralError(
                 "INVITE_ALREADY_USED",
                 "Este token de convite já foi utilizado.",
@@ -319,6 +368,21 @@ class ReferralService:
         self.db.commit()
         self.db.refresh(coupon)
         return coupon
+
+    def _same_referred_phone(self, referral: ReferralModel, phone: str) -> bool:
+        """True quando o telefone do reenvio é o mesmo que completou a indicação.
+
+        Compara normalizado (o token é o mesmo, então o telefone é a única
+        credencial do indicado) — telefone ausente/inválido nunca casa.
+        """
+        from app.application.contacts.service import normalize_phone
+
+        try:
+            incoming = normalize_phone(phone or "")
+            original = normalize_phone(referral.referred_phone or "")
+        except Exception:
+            return False
+        return bool(incoming) and incoming == original
 
     def _upsert_referred(self, name: str, phone: str, address: Dict[str, str]):
         from app.application.contacts.service import ContactService, normalize_phone

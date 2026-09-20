@@ -42,8 +42,14 @@ from app.domain.events.event_bus import (
 logger = logging.getLogger("gasflow.orders")
 
 
-def _safe_auto_print(order_id: str, tenant_id: str, order_status: str, order_data: dict) -> None:
-    """F3: dispara o auto-print sem nunca falhar a requisição de status."""
+def _safe_auto_print(order_id: str, tenant_id: str, order_status: str, db=None) -> None:
+    """F3: dispara o auto-print sem nunca falhar a requisição de status.
+
+    F10.7: o cupom é montado a partir do PEDIDO REAL dentro do PrintQueueService
+    (antes o hook passava items=[], total=0 e "Cliente" fixo — o cupom saía
+    vazio mesmo quando a impressão funcionava). A sessão do endpoint é
+    reaproveitada para o pedido estar visível na mesma transação.
+    """
     try:
         from app.application.delivery.auto_print_trigger import AutoPrintTrigger
 
@@ -51,7 +57,7 @@ def _safe_auto_print(order_id: str, tenant_id: str, order_status: str, order_dat
             order_id=order_id,
             tenant_id=tenant_id,
             order_status=order_status,
-            order_data=order_data,
+            db=db,
         )
     except Exception as exc:  # F3.5: loga antes de engolir (não é silencioso)
         logger.warning("auto-print falhou: %s", exc, extra={"order_id": order_id}, exc_info=True)
@@ -62,6 +68,9 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 
 def _get_repositories(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
     return {
+        # A sessão também vai no dict: o auto-print precisa enxergar o pedido
+        # recém-atualizado (mesma transação).
+        "db": db,
         "order": SQLAlchemyOrderRepository(db, ctx.tenant_id),
         "order_item": SQLAlchemyOrderItemRepository(db, ctx.tenant_id),
         "client": SQLAlchemyClientRepository(db, ctx.tenant_id),
@@ -159,24 +168,12 @@ def update_order_status(
         )
         # F3 — auto-print: se o pedido entrou em status elegível
         # (setting printer.auto_print.min_status), cria o job uma única vez.
+        # O cupom usa os dados REAIS do pedido (F10.7).
         _safe_auto_print(
             order_id=order.codigo,
             tenant_id=ctx.tenant_id,
             order_status=order.status.value,
-            order_data={
-                "codigo": order.codigo,
-                "client_name": getattr(order, "client_name", "") or "Cliente",
-                "client_address": getattr(order, "address_snapshot", "") or "",
-                "items": [],
-                "total": order.total,
-                "payment_method": "",
-                "notes": "",
-                "created_at": (
-                    order.created_at.isoformat()
-                    if getattr(order, "created_at", None) is not None and order.created_at is not None
-                    else ""
-                ),
-            },
+            db=repos.get("db"),
         )
         return order
     except Exception as e:

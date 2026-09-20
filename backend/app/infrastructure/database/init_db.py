@@ -93,6 +93,7 @@ from app.infrastructure.repositories.purchase_note_model import (  # noqa: F401
     PurchaseNoteModel,
     PurchaseNoteItemModel,
 )
+from app.infrastructure.repositories.print_job_model import PrintJobModel  # noqa: F401 — F10.7
 
 
 def _ensure_sqlite_columns() -> None:

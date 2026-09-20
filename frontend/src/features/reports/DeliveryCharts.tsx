@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { apiClient } from '@/lib/api/client'
+import { exportCurrentViewPdf } from '@/lib/exportPdf'
 
 interface DayPoint { day: string; created: number; delivered: number; failed: number }
 interface DriverPoint { driver_id: string; assigned: number; delivered: number; failed: number; avg_minutes: number | null }
@@ -24,8 +25,8 @@ interface DeliveryReport {
 
 const PERIODS = [7, 30, 90] as const
 
-/** Exporta a seção de gráficos como PDF: bridge Electron (printToPDF do
- * conteúdo atual) quando disponível; fallback window.print(). */
+/** Exporta a seção de gráficos como PDF (bridge Electron com fallback para o
+ * diálogo de impressão — ver `lib/exportPdf`). */
 function useExportPdf() {
   const [exporting, setExporting] = useState(false)
   const sectionRef = useRef<HTMLDivElement | null>(null)
@@ -33,12 +34,7 @@ function useExportPdf() {
   const exportPdf = useCallback(async () => {
     setExporting(true)
     try {
-      const bridge = (window as { gasflow?: { exportCurrentViewPdf?: () => Promise<unknown> } }).gasflow
-      if (bridge?.exportCurrentViewPdf) {
-        await bridge.exportCurrentViewPdf()
-      } else {
-        window.print() // navegador/dev: diálogo de impressão nativo
-      }
+      await exportCurrentViewPdf()
     } finally {
       setExporting(false)
     }

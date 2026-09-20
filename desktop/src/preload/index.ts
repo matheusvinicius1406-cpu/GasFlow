@@ -66,6 +66,12 @@ const api = {
     waWebRePair: (accountId) => electron_1.ipcRenderer.invoke("wa-web:re-pair", { accountId }),
     waWebClose: (accountId) => electron_1.ipcRenderer.invoke("wa-web:close", { accountId }),
     onWaWebStatus: (cb) => subscribe("gasflow:wa-web-status", cb),
+    // Impressão (F10.7): impressoras instaladas, escolha, estado e teste.
+    // Só existem dentro do Electron — no navegador `gasflow` não é exposto.
+    printerList: () => electron_1.ipcRenderer.invoke("printer:list"),
+    printerSetName: (name) => electron_1.ipcRenderer.invoke("settings:setPrinterName", name),
+    printerStatus: () => electron_1.ipcRenderer.invoke("printer:status"),
+    printerTest: () => electron_1.ipcRenderer.invoke("printer:test"),
     // Conversas WhatsApp (gateway do backend)
     listConversations: () => electron_1.ipcRenderer.invoke("convs:list"),
     getConversation: (id) => electron_1.ipcRenderer.invoke("convs:get", { id }),

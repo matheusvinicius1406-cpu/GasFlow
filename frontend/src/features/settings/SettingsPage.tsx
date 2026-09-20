@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, User, Shield, RefreshCw, CreditCard, SlidersHorizontal, Users, Brain } from 'lucide-react'
+import { Settings, User, Shield, RefreshCw, CreditCard, SlidersHorizontal, Users, Brain, Printer } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -12,6 +12,7 @@ import { useAuth } from '@/features/auth'
 import { PaymentSettingsPage } from './PaymentSettingsPage'
 import { SystemSettingsPanel } from './SystemSettingsPanel'
 import { PermissionsPanel } from './PermissionsPanel'
+import { PrinterSettings } from './PrinterSettings'
 
 interface UserProfile {
   id: string
@@ -31,7 +32,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'payments' | 'system' | 'permissions' | 'intelligence'
+    'profile' | 'payments' | 'printer' | 'system' | 'permissions' | 'intelligence'
   >('profile')
 
   const fetchProfile = useCallback(async () => {
@@ -85,6 +86,9 @@ export function SettingsPage() {
         <Button variant={activeTab === 'payments' ? 'default' : 'ghost'} onClick={() => setActiveTab('payments')}>
           <CreditCard className="h-4 w-4 mr-1" /> Pagamentos
         </Button>
+        <Button variant={activeTab === 'printer' ? 'default' : 'ghost'} onClick={() => setActiveTab('printer')}>
+          <Printer className="h-4 w-4 mr-1" /> Impressora
+        </Button>
         <Button variant={activeTab === 'system' ? 'default' : 'ghost'} onClick={() => setActiveTab('system')}>
           <SlidersHorizontal className="h-4 w-4 mr-1" /> Sistema
         </Button>
@@ -104,6 +108,8 @@ export function SettingsPage() {
 
       {activeTab === 'payments' ? (
         <PaymentSettingsPage />
+      ) : activeTab === 'printer' ? (
+        <PrinterSettings />
       ) : activeTab === 'system' ? (
         <SystemSettingsPanel />
       ) : activeTab === 'permissions' ? (

@@ -95,6 +95,7 @@ export function CouponsPage() {
   const [inviteClientCodigo, setInviteClientCodigo] = useState('')
   const [inviteClientPhone, setInviteClientPhone] = useState('')
   const [inviteToken, setInviteToken] = useState('')
+  const [inviteSignupUrl, setInviteSignupUrl] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
   const [inviteError, setInviteError] = useState('')
@@ -197,11 +198,14 @@ export function CouponsPage() {
     setInviteLoading(true)
     setInviteError('')
     setInviteToken('')
+    setInviteSignupUrl('')
     try {
       const { data } = await apiClient.post('/coupons/generate-invite-token', {
         client_codigo: inviteClientCodigo.trim(),
       })
       setInviteToken(data.invite_token)
+      // F10.2: URL da página pública de cadastro (Vercel) quando configurada
+      setInviteSignupUrl(data.signup_url || '')
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setInviteError(detail || 'Falha ao gerar token de convite.')
@@ -211,11 +215,9 @@ export function CouponsPage() {
   }
 
   const handleCopyInviteLink = async () => {
-    if (!inviteToken || !inviteClientPhone) return
-    const phone = inviteClientPhone.replace(/\D/g, '')
-    const link = `https://wa.me/${phone}?text=${inviteToken}`
+    if (!inviteLink) return
     try {
-      await navigator.clipboard.writeText(link)
+      await navigator.clipboard.writeText(inviteLink)
       setInviteCopied(true)
       setTimeout(() => setInviteCopied(false), 2000)
     } catch {
@@ -223,9 +225,13 @@ export function CouponsPage() {
     }
   }
 
-  const inviteLink = inviteToken && inviteClientPhone
-    ? `https://wa.me/${inviteClientPhone.replace(/\D/g, '')}?text=${inviteToken}`
-    : ''
+  // F10.2: prioriza o link da página pública (cadastro web) quando
+  // configurado; fallback wa.me com o token no texto (legado).
+  const inviteLink = inviteSignupUrl
+    ? inviteSignupUrl
+    : inviteToken && inviteClientPhone
+      ? `https://wa.me/${inviteClientPhone.replace(/\D/g, '')}?text=${inviteToken}`
+      : ''
 
   if (loading) {
     return (

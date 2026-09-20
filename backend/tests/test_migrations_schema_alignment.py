@@ -96,6 +96,32 @@ def test_migrations_upgrade_creates_fresh_schema(migrated_db):
     assert tables == set(Base.metadata.tables.keys())
 
 
+def test_migrations_create_printer_auto_unique_index(migrated_db):
+    """O índice único parcial do auto-print é garantia de BANCO (F10.7).
+
+    Sem ele, o check-then-insert do Python não segura dois workers
+    (BACKEND_WORKERS=2 em prod) e o mesmo pedido ganha dois cupons. O model e a
+    migration precisam declarar o mesmo índice — criar o model com o índice e
+    esquecer a migration faria prod divergir de dev/testes em silêncio.
+    """
+    from app.infrastructure.database.init_db import Base
+
+    model_indexes = {i.name for i in Base.metadata.tables["print_jobs"].indexes}
+    assert "uq_print_jobs_auto_order" in model_indexes, f"index ausente no model: {sorted(model_indexes)}"
+
+    engine = create_engine(migrated_db)
+    inspector = inspect(engine)
+    indexes = inspector.get_indexes("print_jobs")
+    engine.dispose()
+
+    migrated = {i["name"]: i for i in indexes}
+    assert "uq_print_jobs_auto_order" in migrated, f"index ausente na migration: {sorted(migrated)}"
+    index = migrated["uq_print_jobs_auto_order"]
+    # SQLite devolve 1/0 aqui; Postgres, True/False — truthiness serve para os dois.
+    assert index["unique"]
+    assert index["column_names"] == ["tenant_id", "order_id"]
+
+
 def test_migrations_schema_matches_models(migrated_db):
     """Schema migrado == schema dos models (tabelas, colunas, PK, nullable)."""
     models = _model_schema()

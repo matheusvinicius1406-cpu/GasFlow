@@ -86,6 +86,12 @@ let aiSetup = null;
 let relayClient = null;
 const relay_ingest_1 = require("./relay-ingest");
 let waWebPanel = null;
+// F10.3 — orquestrador: mantém os serviços vivos enquanto o app estiver aberto.
+const { ServiceOrchestrator } = require("./orchestrator");
+const { PrintWorker } = require("./print-worker");
+const { printRawBytes } = require("./print-transport");
+let orchestrator = null;
+let printWorker = null;
 // ── Helpers ──────────────────────────────────────────────────────────
 function backendPort() {
     const m = settings.gasflowApiUrl.match(/:(\d+)/);
@@ -215,22 +221,117 @@ function ensureAgentBridge() {
     });
     return bridge;
 }
-async function startWithRetry(label, start, attempts = 3) {
-    let lastError;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-        try {
-            await start();
-            logger_1.logger.info(`${label}.started`, `tentativa=${attempt}`);
-            return;
+// ── F10.3 — Orquestrador de serviços ─────────────────────────────────
+// Desired-state: cada serviço tem health check periódico e restart com
+// backoff. Enquanto o app estiver aberto, um serviço que cai volta sozinho;
+// após muitas falhas consecutivas o restart pausa (com notificação) em vez
+// de ficar em crash-loop eterno. Estado de saúde persiste em userData.
+function ensureOrchestrator() {
+    if (orchestrator)
+        return orchestrator;
+    orchestrator = new ServiceOrchestrator();
+    const userData = electron_1.app.getPath("userData");
+    orchestrator.setPersistence(path.join(userData, "health-state.json"));
+    const onEvent = (event) => {
+        logger_1.logger.info("orchestrator", `${event.service}: ${event.type} — ${event.detail} (tentativa=${event.attempts})`);
+        if (event.type === "paused") {
+            notify("GasFlow — serviço pausado", `${event.service}: várias falhas seguidas. Abra Configurações para retomar.`);
         }
-        catch (error) {
-            lastError = error;
-            logger_1.logger.warn(`${label}.start_failed`, `tentativa=${attempt}/${attempts}: ${error instanceof Error ? error.message : String(error)}`);
-            if (attempt < attempts)
-                await new Promise((resolve) => setTimeout(resolve, 1500));
-        }
+    };
+    // Backend (API central + frontend servido). Health: GET /health.
+    orchestrator.register({
+        name: "backend",
+        start: () => ensureBackend().start(),
+        stop: () => ensureBackend().stop(),
+        isHealthy: async () => {
+            try {
+                const res = await fetch(`${backendUrl()}/health`, { signal: AbortSignal.timeout(2000) });
+                return res.ok;
+            }
+            catch {
+                return false;
+            }
+        },
+        onEvent,
+    });
+    // Serviço WhatsApp (Baileys). Health: GET /api/health.
+    orchestrator.register({
+        name: "whatsapp",
+        start: () => ensureWaBridge().start(),
+        stop: () => ensureWaBridge().stop(),
+        isHealthy: async () => {
+            try {
+                const res = await fetch(`${waBaseUrl()}/api/health`, { signal: AbortSignal.timeout(2000) });
+                return res.ok;
+            }
+            catch {
+                return false;
+            }
+        },
+        onEvent,
+    });
+    // Agente de integração (subprocesso Node, JSON-lines sobre stdio).
+    // Health = processo vivo: o agente roda mesmo sem token configurado (só
+    // loga aviso), então sair é o único sinal confiável de queda — e é
+    // exatamente o caso que precisa de restart automático.
+    orchestrator.register({
+        name: "agent",
+        start: () => ensureAgentBridge().start(),
+        stop: () => ensureAgentBridge().stop(),
+        isHealthy: async () => ensureAgentBridge().status().running,
+        onEvent,
+    });
+    // Impressão (F10.7): worker que consome a fila do backend e manda os
+    // bytes ESC/POS para a impressora USB desta máquina. Health = ticks
+    // recentes; "doente" = parou de consultar a fila.
+    orchestrator.register({
+        name: "printer",
+        start: async () => {
+            ensurePrintWorker().start();
+        },
+        stop: async () => {
+            printWorker?.stop();
+        },
+        isHealthy: async () => ensurePrintWorker().isHealthy(),
+        onEvent,
+    });
+    return orchestrator;
+}
+function ensurePrintWorker() {
+    if (!printWorker) {
+        printWorker = new PrintWorker({
+            baseUrl: backendUrl(),
+            // Mesma chave de serviço que o backend recebe no boot (X-GasFlow-Key).
+            serviceKey: settings.waApiKey,
+            printerName: settings.printerName || "",
+            // Anti-duplicata: o backend devolve o job à fila quando o POST do
+            // resultado se perde, e o cupom não pode sair duas vezes.
+            ledgerPath: path.join(electron_1.app.getPath("userData"), "printed-jobs.json"),
+            onEvent: (event) => {
+                logger_1.logger.info("print", `${event.type}: ${event.detail}`);
+                if (event.type === "failed") {
+                    notify("GasFlow — falha na impressão", event.detail);
+                }
+                else if (event.type === "expired") {
+                    // Cupom de dia anterior que não saiu: sem aviso, o pedido fica
+                    // sem cupom e ninguém percebe (não sai papel, então não há erro).
+                    notify("GasFlow — cupons não impressos", event.detail);
+                }
+            },
+        });
     }
-    throw lastError instanceof Error ? lastError : new Error(`${label} não iniciou`);
+    else {
+        // Configurações podem ter mudado sem reiniciar o app.
+        printWorker.setPrinterName(settings.printerName || "");
+    }
+    return printWorker;
+}
+/** Boot de um serviço sob orquestração — nunca rejeita (log + notificação). */
+function startOrchestrated(name) {
+    const orch = ensureOrchestrator();
+    return orch.start(name).catch((e) => {
+        logger_1.logger.warn("orchestrator", `${name}: boot inicial falhou — o health loop vai tentar de novo (${e.message})`);
+    });
 }
 // ── IPC protegido (P0 3.6) ─────────────────────────────────────
 // O token de sessão vive no localStorage da janela (mesma origem do login
@@ -261,6 +362,26 @@ function registerProtectedIpc() {
             margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
         });
         return { ok: true, pdfBase64: pdf.toString("base64") };
+    });
+    // reports:export-pdf (F9) → printToPDF da view atual: os gráficos da
+    // ReportsPage já estão renderizados no DOM, então imprimimos a própria
+    // janela (paisagem — gráficos lado a lado) e salvamos no tmp.
+    // Permissão: finance.export_pdf (mesma gate do finance:export-pdf).
+    (0, ipc_permissions_1.registerProtectedHandler)("reports:export-pdf", "finance.export_pdf", async (event) => {
+        const wc = event.sender;
+        const pdf = await wc.printToPDF({
+            landscape: true,
+            printBackground: true,
+            margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
+        });
+        const { shell } = require("electron");
+        const { writeFile } = require("node:fs/promises");
+        const { tmpdir } = require("node:os");
+        const { join } = require("node:path");
+        const outPath = join(tmpdir(), `gasflow-relatorio-entregas-${Date.now()}.pdf`);
+        await writeFile(outPath, pdf);
+        await shell.openPath(outPath);
+        return { ok: true, path: outPath };
     });
     // purchase:export-pdf → printToPDF do webContents (handler nativo).
     // Recebe HTML já autorizado (o backend só devolve html para purchase.read);
@@ -432,7 +553,60 @@ function registerSettingsIpc() {
         logger_1.logger.info("wa.bridge", "waBridge não instanciado — nada a parar");
         return { ok: true, running: false };
     });
+    // ── Impressão (F10.7) ────────────────────────────────
+    // Listar as impressoras INSTALADAS no Windows (só o Electron consegue).
+    electron_1.ipcMain.handle("printer:list", async () => {
+        try {
+            const printers = await mainWindow.webContents.getPrintersAsync();
+            return {
+                ok: true,
+                printers: printers.map((p) => ({
+                    name: p.name,
+                    displayName: p.displayName || p.name,
+                    isDefault: p.isDefault === true,
+                    status: p.status,
+                })),
+            };
+        }
+        catch (e) {
+            return { ok: false, printers: [], error: String(e?.message ?? e) };
+        }
+    });
+    // Escolher a impressora: persiste e troca em runtime (sem reiniciar).
+    electron_1.ipcMain.handle("settings:setPrinterName", async (_event, name) => {
+        const next = typeof name === "string" ? name.trim() : "";
+        settings = { ...settings, printerName: next };
+        (0, config_1.saveSettings)(settings);
+        ensurePrintWorker().setPrinterName(next);
+        logger_1.logger.info("print", `impressora definida: ${next || "(nenhuma)"}`);
+        return { ok: true, printerName: next };
+    });
+    // Estado local do worker (impressora, contadores, último erro).
+    electron_1.ipcMain.handle("printer:status", () => ({ ok: true, status: ensurePrintWorker().status() }));
+    // Teste de impressão: manda o cupom de teste ESC/POS direto para a
+    // impressora escolhida e devolve o erro real quando falha.
+    electron_1.ipcMain.handle("printer:test", async () => {
+        const printerName = settings.printerName || "";
+        if (!printerName) {
+            return { ok: false, error: "Escolha uma impressora antes de testar." };
+        }
+        // O cupom de teste é montado aqui (o desktop não importa o formatador
+        // Python do backend): só precisa provar que sai papel.
+        const testPayload = Buffer.from(TEST_RECEIPT_ESCPOS, "binary");
+        const result = await printRawBytes(printerName, testPayload);
+        return { ok: result.ok, error: result.error, printerName };
+    });
 }
+// Cupom de teste em ESC/POS (80mm): inicializa, escreve e corta.
+const TEST_RECEIPT_ESCPOS = "\x1b@" + "\x1b\x21\x10" + "        GASFLOW         \n" + "\x1b\x21\x00" +
+    "------------------------------------------\n" +
+    "     TESTE DE IMPRESSORA\n" +
+    "------------------------------------------\n" +
+    "Se este cupom saiu, a impressora esta\n" +
+    "configurada e os cupons de pedido vao\n" +
+    "sair automaticamente.\n" +
+    "------------------------------------------\n" +
+    "\n\n\n" + "\x1bi";
 function ensureAssistant() {
     if (assistant)
         return assistant;
@@ -546,6 +720,14 @@ else {
         // Handlers de settings registrados cedo — o renderer pode chamar a
         // qualquer momento depois do preload.
         registerSettingsIpc();
+        // F10.3: status/resume do orquestrador (painel do operador).
+        electron_1.ipcMain.handle("orchestrator:status", () => {
+            return ensureOrchestrator().statusAll();
+        });
+        electron_1.ipcMain.handle("orchestrator:resume", async (_event, name) => {
+            await ensureOrchestrator().resume(String(name));
+            return ensureOrchestrator().statusAll();
+        });
         // Gate de permissões IPC (P0 3.6) + handlers finance:export-*.
         registerProtectedIpc();
         // Protótipo WhatsApp Web (flag waWebPanel.enabled, default OFF):
@@ -560,7 +742,9 @@ else {
             visionModel: settings.ollamaVisionModel,
         });
         try {
-            await startWithRetry("backend", () => ensureBackend().start());
+            // F10.3: backend sob orquestração — falha no boot não mata o app;
+            // o health loop continua tentando (a janela mostra o estado).
+            await startOrchestrated("backend");
             createWindow();
             logger_1.logger.info("app", `backend pronto em ${backendUrl()} — frontend original servido pelo FastAPI`);
         }
@@ -574,21 +758,26 @@ else {
             electron_1.app.quit();
             return;
         }
-        // Serviços em segundo plano — independentes: falha de um não trava o outro.
-        // waEnabled=false pula o boot do serviço WhatsApp (settings.json).
+        // Serviços em segundo plano sob orquestração — independentes: falha
+        // de um não trava o outro. waEnabled=false pula o WhatsApp.
         if (settings.waEnabled !== false) {
-            void startWithRetry("wa.bridge", () => ensureWaBridge().start())
-                .then(() => {
+            void startOrchestrated("whatsapp").then(() => {
                 if (settings.waAutoReply)
                     ensureAssistant().start();
-            })
-                .catch((e) => logger_1.logger.warn("app", `whatsapp: ${e.message}`));
+            });
         }
         else {
             logger_1.logger.info("wa.bridge.skipped", "waEnabled=false");
         }
-        void startWithRetry("agent", () => ensureAgentBridge().start())
-            .catch((e) => logger_1.logger.warn("app", `agente: ${e.message}`));
+        // F10.3: agente também sob orquestração (antes só havia retry no boot).
+        void startOrchestrated("agent");
+        // F10.7: worker de impressão (pula se desligado nas configurações).
+        if (settings.printerEnabled !== false) {
+            void startOrchestrated("printer");
+        }
+        else {
+            logger_1.logger.info("print", "printerEnabled=false — worker de impressão não iniciado");
+        }
         // Protótipo WA Web: painel nasce só com flag on (default OFF) —
         // attach/detach das views fica na janela (createWindow/closed).
         if (settings.waWebPanel?.enabled === true) {
@@ -642,6 +831,8 @@ else {
             waWebPanel?.closeAll();
         }
         catch { /* best-effort */ }
+        // F10.3: para os health loops e persiste o estado final.
+        void orchestrator?.stopAll();
     });
     electron_1.app.on("window-all-closed", () => {
         void bridge?.stop();

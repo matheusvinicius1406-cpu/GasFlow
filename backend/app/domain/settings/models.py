@@ -21,6 +21,15 @@ DEFAULT_SETTINGS = [
         "",
         "Link de convite do WhatsApp Community (chat.whatsapp.com/...). Vazio = desabilitado.",
     ),
+    # ── Indicação (F10.2): URL base da página pública de cadastro ─────
+    # O admin copia o link do convite apontando para a página web (Vercel):
+    # {base}/cadastro?token=GF-INV-... Vazio = mantém o link wa.me (legado).
+    (
+        "referral.signup_base_url",
+        "operations",
+        "",
+        "URL base da página de cadastro por convite (ex.: https://gasflow.vercel.app). Vazio = link wa.me legado.",
+    ),
     ("notify_order_created", "notifications", True, "Notificar admin quando pedido chega"),
     (
         "notify_driver_webhook",

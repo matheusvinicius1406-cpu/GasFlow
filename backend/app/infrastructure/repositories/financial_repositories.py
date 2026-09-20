@@ -5,9 +5,9 @@ All monetary values stored/returned as Decimal.
 Atomic transactions for financial operations.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from sqlalchemy.orm import Session
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
 from sqlalchemy import func, text
@@ -31,6 +31,20 @@ from app.infrastructure.repositories.financial_models import (
     CashMovementModel,
     FinancialLedgerModel,
 )
+
+
+def _parse_day(value) -> date:
+    """Normaliza a chave devolvida por `func.date(...)`.
+
+    SQLite devolve string 'YYYY-MM-DD'; PostgreSQL devolve `date`. Aceita os
+    dois (e `datetime`, por segurança) para os agrupamentos por dia serem
+    portáveis entre os bancos suportados.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
 
 
 def _to_decimal(val) -> Decimal:
@@ -309,6 +323,22 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         )
         return _to_decimal(result)
 
+    def totals_by_day(self, start: datetime, end: datetime) -> Dict[date, Decimal]:
+        """Uma consulta agrupada por dia (em vez de N consultas) para o relatório."""
+        day = func.date(ExpenseModel.date)
+        rows = (
+            self.db.query(day, func.coalesce(func.sum(ExpenseModel.amount), 0))
+            .filter(
+                ExpenseModel.tenant_id == self.tenant_id,
+                ExpenseModel.date >= start,
+                ExpenseModel.date < end,
+                ExpenseModel.status == "ACTIVE",
+            )
+            .group_by(day)
+            .all()
+        )
+        return {_parse_day(d): _to_decimal(total) for d, total in rows}
+
 
 class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
     def __init__(self, db: Session, tenant_id: str = "default"):
@@ -375,6 +405,22 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
             .scalar()
         )
         return _to_decimal(result)
+
+    def receipts_by_day(self, start: datetime, end: datetime) -> Dict[date, Decimal]:
+        """Uma consulta agrupada por dia (em vez de N consultas) para o relatório."""
+        day = func.date(CashMovementModel.created_at)
+        rows = (
+            self.db.query(day, func.coalesce(func.sum(CashMovementModel.amount), 0))
+            .filter(
+                CashMovementModel.tenant_id == self.tenant_id,
+                CashMovementModel.type == CashMovementType.RECEIPT.value,
+                CashMovementModel.created_at >= start,
+                CashMovementModel.created_at < end,
+            )
+            .group_by(day)
+            .all()
+        )
+        return {_parse_day(d): _to_decimal(total) for d, total in rows}
 
 
 class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository):

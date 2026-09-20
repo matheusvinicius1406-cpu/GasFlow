@@ -36,6 +36,11 @@ class Settings(BaseModel):
     cors_origins: List[str] = []
     cors_methods: List[str] = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     cors_headers: List[str] = ["Authorization", "Content-Type", "Accept"]
+    # F10.2: origem extra da página pública de cadastro (Vercel). Separada de
+    # CORS_ORIGINS (apis admin) para poder liberar só o domínio público.
+    public_signup_origins: List[str] = [
+        o.strip() for o in os.getenv("PUBLIC_SIGNUP_ORIGINS", "").split(",") if o.strip()
+    ]
 
     # External Services
     whatsapp_service_url: str = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000")
@@ -152,6 +157,9 @@ class Settings(BaseModel):
             database_url=os.getenv("DATABASE_URL", "sqlite:///./gasflow.db"),
             admin_password=admin_pw,
             cors_origins=origins,
+            # F10.4: mesmo campo documentado acima — explícito aqui para o
+            # valor seguir CORS_ORIGINS no from_env (e não só no default).
+            public_signup_origins=[o.strip() for o in os.getenv("PUBLIC_SIGNUP_ORIGINS", "").split(",") if o.strip()],
             whatsapp_service_url=os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3000"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             session_ttl_minutes=int(os.getenv("SESSION_TTL_MINUTES", "60")),

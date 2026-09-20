@@ -35,23 +35,61 @@ const sourceLabels: Record<string, string> = {
   API: 'API',
 }
 
+interface PrinterStatus {
+  status: string
+  printer_name: string | null
+  /** O app de impressão não reporta há mais de 30s (pode estar fechado). */
+  stale: boolean
+  pending_jobs: number
+  failed_jobs: number
+}
+
 export function OrdersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all')
   const [printingOrder, setPrintingOrder] = useState<string | null>(null)
+  const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null)
   const toast = useToast()
 
   const { data: orders, isLoading, error, refetch } = useOrders(
     statusFilter === 'all' ? undefined : statusFilter
   )
 
+  /**
+   * Imprimir = colocar o cupom do pedido REAL na fila de impressão (F10.7).
+   *
+   * O toast é deliberadamente conservador: "na fila", não "impresso" — quem
+   * imprime é a impressora da máquina do operador, segundos depois. Quando
+   * não há impressora escolhida, avisa o caminho em vez de mentir sucesso.
+   */
   const handlePrint = async (orderId: string) => {
     setPrintingOrder(orderId)
     try {
       await apiClient.post('/printer/print', { order_id: orderId })
-      toast.success('Pedido enviado para impressão', `#${orderId}`)
+      let status = printerStatus
+      try {
+        status = (await apiClient.get<PrinterStatus>('/printer/status')).data
+        setPrinterStatus(status)
+      } catch {
+        /* sem o status, o toast genérico abaixo ainda é honesto */
+      }
+      if (!status?.printer_name) {
+        toast.warning(
+          'Cupom na fila de impressão',
+          'Nenhuma impressora configurada — escolha a térmica em Configurações › Impressora.'
+        )
+      } else if (status.stale) {
+        // Impressora escolhida, mas o app está sem sinal: prometer "sai em
+        // instantes" seria mentira — o cupom sai quando ele voltar.
+        toast.warning(
+          'Cupom na fila de impressão',
+          `#${orderId} — o app de impressão está sem sinal; o cupom sai quando ele voltar.`
+        )
+      } else {
+        toast.success('Cupom na fila de impressão', `#${orderId} — sai em instantes na ${status.printer_name}.`)
+      }
     } catch {
-      toast.error('Falha ao imprimir', `Verifique a impressora e tente novamente (#${orderId}).`)
+      toast.error('Não foi possível enviar para impressão', `Pedido #${orderId} continua sem cupom na fila.`)
     } finally {
       setPrintingOrder(null)
     }

@@ -22,6 +22,12 @@ export interface Settings {
   // Protótipo WhatsApp Web embutido (WebContentsView) — pairing/status
   // apenas; envio continua no Baileys. Default OFF (nenhuma view criada).
   waWebPanel?: { enabled?: boolean };
+  // Impressão (F10.7) — impressora instalada no Windows que recebe os
+  // cupons. Vazio = worker roda e reporta NOT_CONFIGURED (a tela mostra que
+  // a impressora não foi escolhida, em vez de o operador achar que imprimiu).
+  printerName?: string;
+  // Desliga o worker de impressão por completo (default: ligado).
+  printerEnabled?: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -40,6 +46,8 @@ const DEFAULTS: Settings = {
     waApiKey: "",
     waAutoReply: false,
     waWebPanel: { enabled: false },
+    printerName: "",
+    printerEnabled: true,
 };
 
 function generateKey(prefix: string): string {

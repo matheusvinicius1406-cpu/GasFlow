@@ -52,6 +52,10 @@ test("contextBridge expõe window.gasflow com a API esperada", () => {
     "waStop",
     "waGetQr",
     "listConversations",
+    "printerList",
+    "printerSetName",
+    "printerStatus",
+    "printerTest",
     "onLog",
   ]) {
     assert.equal(typeof api?.[fn], "function", `gasflow.${fn} deve ser função`);

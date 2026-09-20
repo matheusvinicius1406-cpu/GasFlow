@@ -4,6 +4,156 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🌐 F10 — Cadastro público por convite (site) + orquestrador de serviços
+
+Mudança de canal pedida pelo dono: o cliente indicado **não se cadastra
+pela conversa** — recebe o link e se cadastra numa **página pública**
+ligada à API central. É o fallback **(b) do §5** do spec de Entregas &
+Cupons, agora o caminho principal; o canal IA (a) continua e os dois usam
+o mesmo `ReferralService`.
+
+- **F10.1 — Endpoint público** (`app/presentation/api/public_signup.py`,
+  `POST /public/referral/signup`, sem auth): rate limit duplo — 3/hora por
+  telefone e 5/hora por **IP** — via `WhatsAppLimitStore` (Redis quando
+  `RATE_LIMIT_MODE=redis`). Como a requisição vem do navegador e não do
+  webhook, o limite por IP enfim funciona de verdade (resolve o R1 da
+  F4.5). Consentimento LGPD obrigatório validado no backend; a resposta
+  traz só o cupom do próprio indicado (nunca lista dados de terceiros).
+  Montado também em `/api/v1` (e em `/api` no modo FRONTEND_DIST).
+- **F10.2 — Página pública** (rota `/cadastro` no frontend, fora do login):
+  formulário + tela de sucesso com o cupom e mensagens específicas para
+  convite já usado (409), inválido (404) e excesso de tentativas (429).
+  `POST /coupons/generate-invite-token` passa a devolver `signup_url`
+  quando a setting `referral.signup_base_url` está configurada (sem ela, o
+  link `wa.me` legado continua).
+- **F10.3 — Orquestrador** (`desktop/src/main/orchestrator.ts`):
+  desired-state loop com health check periódico (15s), restart com
+  **backoff exponencial** (2s → teto de 60s) e pausa após 5 falhas
+  seguidas — substitui o antigo `startWithRetry` (3 tentativas no boot e
+  desistia). Backend, serviço WhatsApp e agente ficam supervisionados;
+  estado de saúde persistido em `userData/health-state.json` e IPC
+  `orchestrator:status` / `orchestrator:resume`.
+- **F10.4 — Deploy** (`frontend/vercel.json` +
+  `docs/cadastro-publico-vercel.md`): SPA na Vercel com rewrites de rota e
+  `VITE_API_URL` apontando para a API exposta por túnel.
+  **Correção de CORS**: `PUBLIC_SIGNUP_ORIGINS` era lida mas nunca entrava
+  no middleware — a origem da página pública agora é somada a
+  `CORS_ORIGINS` (`main.py`). **Bugfix de build**: a página importava
+  `ui/button` / `ui/input` em minúsculas, o que quebra o `tsc -b` (e o
+  build no Linux da Vercel) — passava apenas no Windows.
+- **F10.5 — Reenvio automático do cadastro**: se a API não responde (rede
+  fora, túnel caído, 5xx ou excesso de requisições), o formulário é gravado
+  no aparelho do cliente e reenviado sozinho — backoff 3s → 60s, ao voltar a
+  internet e ao reabrir o link (`features/public-signup/pendingSignup.ts`).
+  Para isso o backend ficou **idempotente por (token + telefone)**: reenvio do
+  mesmo telefone devolve o cupom original (`status: "replayed"`, mesmo
+  `coupon_code`, sem cliente/cupom duplicado) em vez de 409 — outro telefone
+  continua 409 (single-use preservado).
+- **F10.6 — Consulta do convite antes do formulário**: novo
+  `GET /public/referral/invite/{token}` responde 200 com
+  `{valid, reason, coupon_value, …}` (consulta, não ação — "já usado" é
+  resposta esperada), sem PII de quem indicou e com limite de 60 consultas
+  por IP/hora. A página avisa **antes** de pedir qualquer dado e, para quem já
+  se cadastrou e não anotou o cupom, oferece o atalho "já preenchi meus dados"
+  — o envio cai no replay idempotente e devolve o cupom original. Com cadastro
+  pendente na fila local a consulta é **pulada**: o token pode ter sido
+  consumido pelo próprio reenvio, e "já usado" esconderia a recuperação.
+- **Flake de horário no CI**: `test_driver_location_relay.py` (3 testes) só
+  passava dentro da janela de trabalho LGPD — default **06:00–22:00 UTC** — e
+  depois das 22h UTC o handler respondia 403, deixando a suíte vermelha sem
+  nenhuma mudança de código. O arquivo agora abre a janela (`00:00`–`24:00`),
+  como `test_driver_mobile.py` já fazia.
+- **F10.7 — Impressão de verdade** (`print_jobs` + agente no desktop): a fila
+  saiu de um `dict` de processo para uma tabela (`PrintQueueService`) e o cupom
+  passou a ser montado do **pedido real** (`receipt_data.py`) — antes ia
+  `client_name="Cliente"`, `items=[]`, `total=0`, ou seja, papel em branco útil.
+  O agente é o app desktop (tem o USB): poll em `GET /printer/agent/next`,
+  bytes ESC/POS direto no spooler do Windows em modo RAW (PowerShell/P-Invoke,
+  sem dependência nativa de npm), resultado em `POST .../result` e estado em
+  `POST .../status`. Endpoints do agente exigem a chave de serviço
+  (fail-closed, sem fallback para JWT). Tela em Configurações › Impressora
+  (fila, reenvio, teste de impressão) e botão Imprimir na tela de Pedidos.
+- **F10.8 — Relatório por período** (`GET /finance/reports/period`): totais,
+  série diária e comparação com o período anterior de mesma duração, cache de
+  5 min por (tenant, período), sempre filtrado por tenant.
+- **F10.9 — Relatórios na tela**: filtro Hoje/7/30/90, gráfico
+  barras+linha, detalhe dia a dia com rodapé de total, saldo em caixa,
+  comparação em cada card, **exportar CSV** (separador `;`, vírgula decimal e
+  BOM — Excel pt-BR abre certo) e **imprimir/PDF** preservando a view renderizada
+  (ponte do Electron quando existe, diálogo do sistema fora dele).
+- Testes: backend +15 (`test_public_signup.py`: sucesso, token repetido 409,
+  reenvio do mesmo telefone devolvendo o mesmo cupom, consulta do convite
+  (ok/já usado/inexistente/malformado + limite por IP), validações 422,
+  limites por telefone e por IP); frontend +24 (`InviteSignupPage` 16 +
+  `pendingSignup` 8 — fila local, classificação de falha, backoff, reenvio e
+  consulta prévia); desktop +5 (`orchestrator`: saúde, restart com backoff,
+  pausa por excesso de falhas, resume, persistência).
+
+### 🖨️ Impressão — revisão de ponta a ponta (idempotência e reconexão)
+
+Revisão do caminho pedido pago → fila → agente → spooler. Nove furos
+encontrados e fechados, três deles garantindo **um cupom por pedido** de fato:
+
+- **Cupom vencido não fica em silêncio**: o poll do agente passou a devolver
+  `expired_jobs` e o app desktop **notifica** ("N cupom(ns) de dia anterior não
+  saíram — reimprima os que ainda precisar"), uma vez por aumento do total (o
+  poll é a cada 3s). Sem isso o pedido ficava sem cupom sem nada aparecer como
+  erro: não sai papel, logo não existe falha para a tela mostrar. Na tela, os
+  vencidos ganharam card próprio nos números, badge de atenção e alerta com o
+  caminho da reimpressão.
+- **Cupom de ontem não é reimpresso** (decisão do dono): o que ficou na fila
+  desde antes da meia-noite **local** (setting `timezone`, default
+  `America/Sao_Paulo` — `created_at` é UTC) **não sai sozinho** ao reabrir o
+  app; vira `EXPIRED`, visível na tela com o motivo e com **Reimprimir**. Antes,
+  abrir o app de manhã despejava no spooler a fila inteira do dia anterior —
+  cupom de pedido já entregue, papel e atenção do operador jogados fora. A regra
+  é o dia local (e não uma janela de horas) para casar com o dia que o operador
+  enxerga; "impressos hoje" na tela passou a contar pelo mesmo dia. Reimprimir
+  cria job novo, com carimbo de agora, então passa pelo corte.
+
+- **Cupom duplicado quando o relato do resultado se perde**: o backend devolvia
+  o job à fila depois do timeout de claim e o agente imprimia de novo. Agora o
+  desktop mantém um **ledger local** (`userData/printed-jobs.json`) do que já
+  foi para o spooler: job de volta à fila é re-reportado como sucesso, sem
+  soltar papel (`replayed` na UI; reimpressão real continua criando job novo).
+- **Idempotência do auto-print virou garantia do banco**: era check-then-insert
+  em Python com um lock de processo — inútil com `BACKEND_WORKERS=2` (default
+  de prod). Novo **índice único parcial** `uq_print_jobs_auto_order`
+  (`WHERE requested_by='auto_print'`), com `IntegrityError` tratado no
+  `enqueue` devolvendo o job do vencedor. Parcial de propósito: impressão
+  manual e reimpressão continuam livres.
+- **Claim atômico**: `claim_next` fazia SELECT e depois UPDATE (dois agentes
+  imprimiam o mesmo cupom). Agora quem leva a linha é o UPDATE condicional
+  (`status='PENDING'`); o perdedor recebe `None`.
+- **Status do agente deixou de ser memória de um worker**
+  (`app/core/printer_status.py`, padrão Redis com fallback in-memory de
+  `whatsapp_limits.py`): com 2 workers o POST caía em um e o GET era atendido
+  por outro — a tela oscilava entre "Pronta" e "Não configurada".
+- **Sem sinal não é "Pronta"**: `stale` no `/printer/status` (30s sem relato,
+  TTL de 5 min no store) e a tela avisa "Sem sinal do app de impressão — N
+  cupom(ns) na fila" em vez de prometer impressão.
+- **Relato de status perdido não fica perdido**: o worker cacheava o estado
+  *antes* do POST; uma falha única (backend reiniciando) fazia aquele estado
+  nunca mais ser enviado. Agora só cacheia o que o backend confirmou.
+- **Diagnóstico separado por causa**: 401 na chave de serviço virou "chave
+  rejeitada" (antes aparecia para sempre como "backend fora"), 5xx aparece com
+  o código, e o `only_auto` do auto-print passou a filtrar por
+  `requested_by='auto_print'` — imprimir manualmente um pedido novo não suprime
+  mais o cupom automático quando ele for pago.
+- Docstring do `/printer/agent/next` corrigida (fila vazia é 200 com
+  `job: null`, não 204 — o agente lê o corpo para distinguir de erro).
+- Testes: backend +23 (`test_printer_api.py`: unicidade do auto-print, manual
+  não bloqueada, INSERT duplicado recusado pelo banco, corrida de claim com dois
+  agentes, teto de tentativas, vencimento do dia anterior (não imprimível, o de
+  hoje imprimível, só PENDING vence), reimpressão do vencido e o poll que
+  denuncia o vencimento; `stale`; `test_printer_status.py` novo com 11:
+  staleness, TTL, compartilhamento entre workers via Redis e fallback; índice do
+  auto-print conferido na migration); desktop +7 (ledger contra duplicata, ledger
+  sobrevivendo a restart, relato perdido reenviado, 401 e 5xx com diagnóstico
+  próprio, aviso de vencido uma única vez por aumento); frontend +4 (aviso de app
+  sem sinal em Pedidos e em Configurações › Impressora, vencido com reimpressão
+  em um clique e card de vencidos).
+
 ### 🔧 CI verde no backend (F9.1) — mypy + bugfix do convite de comunidade
 
 Fecha a parte do item "CI quebrado" da tabela de riscos do spec

@@ -5,7 +5,7 @@ REST API for payments, receivables, expenses, cash movements.
 All derived values calculated by backend.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import ceil
 from typing import Optional
 
@@ -42,6 +42,7 @@ from app.presentation.schemas.financial import (
     CashMovementResponse,
     CashMovementListResponse,
     DailySummaryResponse,
+    PeriodSummaryResponse,
 )
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -297,6 +298,49 @@ def daily_report(
     )
     result = uc.daily_summary(target_date)
     return DailySummaryResponse(**result)
+
+
+@router.get("/reports/period", response_model=PeriodSummaryResponse)
+def period_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Relatório do período: totais, série diária e comparação com o anterior.
+
+    Sem `from`/`to`, usa os últimos `days` dias INCLUINDO hoje (30 → de 29
+    dias atrás até hoje), que é a leitura que o operador espera do filtro.
+    """
+    if date_from or date_to:
+        if not (date_from and date_to):
+            raise HTTPException(400, "Informe 'from' e 'to' juntos (YYYY-MM-DD)")
+        try:
+            start = datetime.strptime(date_from, "%Y-%m-%d")
+            end_day = datetime.strptime(date_to, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(400, "Data inválida: use YYYY-MM-DD") from exc
+        if end_day < start:
+            raise HTTPException(400, "'to' não pode ser anterior a 'from'")
+        end = end_day + timedelta(days=1)
+        if (end - start).days > 366:
+            raise HTTPException(400, "Período máximo: 366 dias")
+    else:
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = today + timedelta(days=1)
+        start = end - timedelta(days=days)
+
+    uc = FinancialReportsUseCase(
+        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
+        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
+        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+    )
+    result = uc.period_summary(start, end)
+    if not result["daily"]:
+        raise HTTPException(400, "Período vazio")
+    return PeriodSummaryResponse(**result)
 
 
 # ── Helpers ──────────────────────────────────────────

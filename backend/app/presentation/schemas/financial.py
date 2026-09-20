@@ -113,6 +113,44 @@ class DailySummaryResponse(BaseModel):
     net_result: Decimal
 
 
+class PeriodDayResponse(BaseModel):
+    date: str
+    receipts: Decimal
+    expenses: Decimal
+    net_result: Decimal
+
+
+class PeriodTotalsResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    total_receipts: Decimal
+    total_expenses: Decimal
+    net_result: Decimal
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PeriodComparisonResponse(BaseModel):
+    # None quando o período anterior está zerado (a tela mostra "—")
+    receipts_pct: Optional[float] = None
+    expenses_pct: Optional[float] = None
+    net_pct: Optional[float] = None
+
+
+class PeriodSummaryResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    total_receipts: Decimal
+    total_expenses: Decimal
+    net_result: Decimal
+    daily: list[PeriodDayResponse]
+    previous: PeriodTotalsResponse
+    comparison: PeriodComparisonResponse
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 # ── Paginated responses ─────────────────────────────
 
 

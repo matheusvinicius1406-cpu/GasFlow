@@ -6,9 +6,9 @@ All monetary values use Decimal.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple
 
 from app.domain.financial.payment import Payment, PaymentStatus
 from app.domain.financial.receivable import Receivable
@@ -92,6 +92,22 @@ class ExpenseRepository(ABC):
     @abstractmethod
     def total_by_period(self, start: datetime, end: datetime) -> Decimal: ...
 
+    def totals_by_day(self, start: datetime, end: datetime) -> Dict[date, Decimal]:
+        """Despesas ATIVAS por dia no período [start, end).
+
+        Implementação padrão: itera dia a dia com `total_by_period`, correta
+        para qualquer repositório. Os repositórios SQL sobrescrevem com uma
+        única consulta agrupada — relatório de 90 dias não deve fazer 180
+        consultas. Dias sem despesa saem como 0.
+        """
+        totals: Dict[date, Decimal] = {}
+        cursor = start
+        while cursor < end:
+            nxt = cursor + timedelta(days=1)
+            totals[cursor.date()] = self.total_by_period(cursor, nxt)
+            cursor = nxt
+        return totals
+
 
 class CashMovementRepository(ABC):
     @abstractmethod
@@ -110,6 +126,16 @@ class CashMovementRepository(ABC):
 
     @abstractmethod
     def total_by_type_and_period(self, movement_type: CashMovementType, start: datetime, end: datetime) -> Decimal: ...
+
+    def receipts_by_day(self, start: datetime, end: datetime) -> Dict[date, Decimal]:
+        """Recebimentos por dia no período [start, end) — ver `totals_by_day`."""
+        totals: Dict[date, Decimal] = {}
+        cursor = start
+        while cursor < end:
+            nxt = cursor + timedelta(days=1)
+            totals[cursor.date()] = self.total_by_type_and_period(CashMovementType.RECEIPT, cursor, nxt)
+            cursor = nxt
+        return totals
 
 
 class FinancialLedgerRepository(ABC):

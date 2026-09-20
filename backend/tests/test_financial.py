@@ -40,7 +40,7 @@ from app.application.financial.use_cases import (
 )
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
-from app.domain.financial.expense import Expense, ExpenseStatus
+from app.domain.financial.expense import Expense, ExpenseCategory, ExpenseStatus
 from app.domain.financial.cash_movement import CashMovement, CashMovementType
 from app.domain.financial.ledger import FinancialLedgerEntry, LedgerEventType
 
@@ -951,3 +951,160 @@ class TestReports:
         assert report["total_receipts"] == Decimal("100.00")
         assert report["total_expenses"] == Decimal("30.00")
         assert report["net_result"] == Decimal("70.00")
+
+    def test_daily_summary_no_dia_28_nao_engole_o_mes(self, db):
+        """Regressão: no dia >= 28 o "fim do dia" virava o 1º do mês seguinte.
+
+        O dia 28/jan chegava a 1º/fev — um "resumo diário" de 4 dias, somando
+        movimentos que não são daquele dia. Agora o fim é `start + 1 dia`.
+        """
+        pay_repo = SQLAlchemyPaymentRepository(db)
+        recv_repo = SQLAlchemyReceivableRepository(db)
+        cash_repo = SQLAlchemyCashMovementRepository(db)
+        exp_repo = SQLAlchemyExpenseRepository(db)
+
+        dia28 = datetime(2026, 1, 28, 10, 0)
+        dia29 = datetime(2026, 1, 29, 10, 0)
+        for when, amount in ((dia28, Decimal("10.00")), (dia29, Decimal("99.00"))):
+            cash_repo.create(
+                CashMovement(
+                    type=CashMovementType.RECEIPT,
+                    amount=amount,
+                    description="recebimento",
+                    balance_after=amount,
+                    created_at=when,
+                )
+            )
+            exp_repo.create(
+                Expense(
+                    description="despesa",
+                    amount=amount,
+                    category=ExpenseCategory.OTHER,
+                    date=when,
+                )
+            )
+
+        uc = FinancialReportsUseCase(pay_repo, recv_repo, exp_repo, cash_repo)
+        report = uc.daily_summary(dia28)
+
+        assert report["total_receipts"] == Decimal("10.00")  # e não 109.00
+        assert report["total_expenses"] == Decimal("10.00")
+        assert report["net_result"] == Decimal("0.00")
+
+    def test_period_summary_serie_diaria_e_comparacao(self, db):
+        """Período de 3 dias: série com dias zerados + comparação com o anterior."""
+        pay_repo = SQLAlchemyPaymentRepository(db)
+        recv_repo = SQLAlchemyReceivableRepository(db)
+        cash_repo = SQLAlchemyCashMovementRepository(db)
+        exp_repo = SQLAlchemyExpenseRepository(db)
+
+        def receber(quando: datetime, valor: str):
+            cash_repo.create(
+                CashMovement(
+                    type=CashMovementType.RECEIPT,
+                    amount=Decimal(valor),
+                    description="recebimento",
+                    balance_after=Decimal(valor),
+                    created_at=quando,
+                )
+            )
+
+        def gastar(quando: datetime, valor: str):
+            exp_repo.create(
+                Expense(
+                    description="despesa",
+                    amount=Decimal(valor),
+                    category=ExpenseCategory.OTHER,
+                    date=quando,
+                )
+            )
+
+        # Período anterior (1-3/jan): 100 de receita, 50 de despesa
+        receber(datetime(2026, 1, 1, 12, 0), "100.00")
+        gastar(datetime(2026, 1, 2, 12, 0), "50.00")
+        # Período atual (4-6/jan): 150 de receita, 50 de despesa
+        receber(datetime(2026, 1, 4, 12, 0), "50.00")
+        receber(datetime(2026, 1, 6, 12, 0), "100.00")
+        gastar(datetime(2026, 1, 4, 12, 0), "20.00")
+        gastar(datetime(2026, 1, 6, 12, 0), "30.00")
+
+        uc = FinancialReportsUseCase(pay_repo, recv_repo, exp_repo, cash_repo)
+        report = uc.period_summary(datetime(2026, 1, 4), datetime(2026, 1, 7))
+
+        assert report["from"] == "2026-01-04"
+        assert report["to"] == "2026-01-06"
+        assert report["days"] == 3
+        assert report["total_receipts"] == Decimal("150.00")
+        assert report["total_expenses"] == Decimal("50.00")
+        assert report["net_result"] == Decimal("100.00")
+
+        # Um ponto por dia, inclusive o dia sem movimento (5/jan)
+        assert [d["date"] for d in report["daily"]] == ["2026-01-04", "2026-01-05", "2026-01-06"]
+        assert report["daily"][1] == {
+            "date": "2026-01-05",
+            "receipts": Decimal("0.00"),
+            "expenses": Decimal("0.00"),
+            "net_result": Decimal("0.00"),
+        }
+
+        assert report["previous"]["from"] == "2026-01-01"
+        assert report["previous"]["to"] == "2026-01-03"
+        assert report["previous"]["total_receipts"] == Decimal("100.00")
+        assert report["previous"]["net_result"] == Decimal("50.00")
+        assert report["comparison"]["receipts_pct"] == 50.0  # 150 vs 100
+        assert report["comparison"]["expenses_pct"] == 0.0  # 50 vs 50
+        assert report["comparison"]["net_pct"] == 100.0  # 100 vs 50
+
+    def test_period_summary_sem_base_de_comparacao(self, db):
+        """Período anterior zerado: percentual é None (a tela mostra "—")."""
+        pay_repo = SQLAlchemyPaymentRepository(db)
+        recv_repo = SQLAlchemyReceivableRepository(db)
+        cash_repo = SQLAlchemyCashMovementRepository(db)
+        exp_repo = SQLAlchemyExpenseRepository(db)
+
+        cash_repo.create(
+            CashMovement(
+                type=CashMovementType.RECEIPT,
+                amount=Decimal("10.00"),
+                description="recebimento",
+                balance_after=Decimal("10.00"),
+                created_at=datetime(2026, 3, 2, 12, 0),
+            )
+        )
+
+        uc = FinancialReportsUseCase(pay_repo, recv_repo, exp_repo, cash_repo)
+        report = uc.period_summary(datetime(2026, 3, 1), datetime(2026, 3, 4))
+
+        assert report["comparison"]["receipts_pct"] is None
+        assert report["comparison"]["expenses_pct"] is None
+        assert report["comparison"]["net_pct"] is None
+
+    def test_periodo_de_90_dias_usa_poucas_consultas(self, db):
+        """A série diária vem de UMA consulta agrupada por repositório.
+
+        Se `totals_by_day`/`receipts_by_day` caírem no laço dia-a-dia, um
+        relatório de 90 dias vira 180 consultas — o contador prova que não.
+        """
+        pay_repo = SQLAlchemyPaymentRepository(db)
+        recv_repo = SQLAlchemyReceivableRepository(db)
+        cash_repo = SQLAlchemyCashMovementRepository(db)
+        exp_repo = SQLAlchemyExpenseRepository(db)
+
+        consultas = {"n": 0}
+        original = db.execute
+
+        def contar(statement, *args, **kwargs):
+            consultas["n"] += 1
+            return original(statement, *args, **kwargs)
+
+        db.execute = contar  # type: ignore[method-assign]
+        try:
+            uc = FinancialReportsUseCase(pay_repo, recv_repo, exp_repo, cash_repo)
+            report = uc.period_summary(datetime(2026, 1, 1), datetime(2026, 4, 1))
+        finally:
+            db.execute = original  # type: ignore[method-assign]
+
+        assert report["days"] == 90
+        assert len(report["daily"]) == 90
+        # 2 agrupadas (recebimentos/despesas) + 2 do período anterior — e não 182
+        assert consultas["n"] <= 6, f"consultas excessivas: {consultas['n']}"

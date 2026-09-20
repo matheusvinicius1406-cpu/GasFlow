@@ -38,6 +38,7 @@ from app.presentation.api.finance.reports import router as reports_router
 from app.presentation.api.core.settings import router as settings_router
 from app.presentation.api.core.admin import router as admin_router
 from app.presentation.api.coupons import router as coupons_router
+from app.presentation.api.public_signup import router as public_signup_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
 from app.presentation.api.whatsapp.contacts import router as contacts_crm_router
@@ -221,9 +222,13 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # CORS
+# F10.4: a página pública de cadastro (Vercel) chama a API direto do
+# navegador — a origem dela entra junto (PUBLIC_SIGNUP_ORIGINS), sem
+# precisar abrir CORS_ORIGINS do admin. Dedup para não repetir entrada.
+_cors_origins = list(dict.fromkeys([*settings.cors_origins, *settings.public_signup_origins]))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=settings.cors_methods,
     allow_headers=settings.cors_headers,
@@ -291,6 +296,7 @@ app.include_router(whatsapp_automation_router)
 app.include_router(settings_router)
 app.include_router(admin_router)
 app.include_router(coupons_router)
+app.include_router(public_signup_router)
 app.include_router(leads_router)
 app.include_router(integrations_router)
 app.include_router(contacts_crm_router)
@@ -355,6 +361,7 @@ if _frontend_dist and _Path(_frontend_dist).is_dir():
         whatsapp_automation_router,
         settings_router,
         coupons_router,
+        public_signup_router,
         leads_router,
         integrations_router,
         contacts_crm_router,

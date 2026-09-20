@@ -25,6 +25,7 @@ import { CouponsPage } from '@/features/promotions'
 import { PurchaseNotesPage } from '@/features/purchase'
 import { SegmentsPage, ReorderPage } from '@/features/segments'
 import { LoginPage, PermissionRoute } from '@/features/auth'
+import { InviteSignupPage } from '@/features/public-signup'
 import { DriverLoginPage, DriverHomePage } from '@/features/driver'
 import { UsersPage, AuditPage } from '@/features/admin'
 
@@ -32,6 +33,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* F10.2: página pública de auto-cadastro por convite (hospedada na Vercel; token GF-INV- via query) */}
+      <Route path="/cadastro" element={<InviteSignupPage />} />
       <Route path="/driver/login" element={<DriverLoginPage />} />
       <Route path="/driver" element={<DriverHomePage />} />
       <Route

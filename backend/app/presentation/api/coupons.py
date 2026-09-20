@@ -328,13 +328,27 @@ def generate_invite_token(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permission("coupon.write")),
 ):
-    """Gera um token de convite (GF-INV-...) para o cliente indicador."""
+    """Gera um token de convite (GF-INV-...) para o cliente indicador.
+
+    F10.2: retorna também `signup_url` — link completo da página pública de
+    cadastro quando a setting `referral.signup_base_url` está configurada
+    (ex.: site na Vercel). Sem a setting, `signup_url` é None e o frontend
+    mantém o link wa.me (legado).
+    """
     from app.application.coupon.referral_service import ReferralService, ReferralError
 
     try:
         rsvc = ReferralService(db, ctx.tenant_id)
         referral = rsvc.generate_invite(body.client_codigo)
-        return {"invite_token": referral.invite_token}
+        base = ""
+        try:
+            from app.application.settings.settings_service import SettingsService
+
+            base = str(SettingsService(db).get_value("referral.signup_base_url", "") or "").rstrip("/")
+        except Exception:
+            base = ""
+        signup_url = f"{base}/cadastro?token={referral.invite_token}" if base else None
+        return {"invite_token": referral.invite_token, "signup_url": signup_url}
     except ReferralError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message) from e
 
