@@ -4,13 +4,26 @@
 #
 # Instalação: pip install pre-commit && pre-commit install
 # Execução manual: pre-commit run --all-files
+#
+# `desktop/dist/` é artefato de build versionado e fica FORA dos hooks que
+# ESCREVEM no arquivo (trailing-whitespace, end-of-file-fixer, ruff --fix,
+# ruff-format): o `tsc` não emite a newline final, então o hook "consertava" o
+# dist, o próximo `npm run build` desfazia e todo commit virava ruído em ~40
+# arquivos gerados — o diff real ficava escondido no meio. Arquivo gerado não é
+# arquivo autoral.
+#
+# Os hooks de CHECAGEM (check-json, check-yaml, check-added-large-files)
+# continuam valendo no dist: eles não modificam nada, só denunciam.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        # Âncora reusada nos outros hooks que escrevem em arquivo.
+        exclude: &artefato_de_build ^desktop/dist/
       - id: end-of-file-fixer
+        exclude: *artefato_de_build
       - id: check-json
       - id: check-yaml
       - id: check-added-large-files
@@ -20,4 +33,6 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: *artefato_de_build
       - id: ruff-format
+        exclude: *artefato_de_build
