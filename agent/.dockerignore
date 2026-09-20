@@ -1,0 +1,37 @@
+# Version control
+.git
+.gitignore
+
+# Node
+# Sem esta linha o `COPY . .` do Dockerfile levava o node_modules da máquina
+# (binários de Windows + as versões velhas de tar/brace-expansion) para dentro
+# da imagem, sobrepondo o que o `npm ci` acabou de instalar — era daí que o
+# scan do Trivy reprovava o agent com pacotes que nem estão no package-lock.
+node_modules
+npm-debug.log*
+
+# Build artifacts
+dist
+
+# IDE
+.vscode
+.idea
+
+# Environment
+.env
+.env.local
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests
+tests/
+*.test.*
+
+# Documentation
+*.md
+
+# OS
+.DS_Store
+Thumbs.db

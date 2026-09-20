@@ -19,7 +19,15 @@ jobs:
           cache-dependency-path: e2e/package-lock.json
 
       - name: Subir stack E2E (docker-compose.e2e.yml)
-        run: docker compose -f docker-compose.e2e.yml up -d --build
+        run: |
+          # Em falha, imprime os logs de quem não subiu: sem isso o job só
+          # dizia "dependency failed to start" e a causa ficava invisível.
+          docker compose -f docker-compose.e2e.yml up -d --build || {
+            echo "::error::stack E2E não subiu — logs dos serviços abaixo"
+            docker compose -f docker-compose.e2e.yml ps
+            docker compose -f docker-compose.e2e.yml logs --tail=200
+            exit 1
+          }
 
       - name: Aguardar stack saudável
         run: |

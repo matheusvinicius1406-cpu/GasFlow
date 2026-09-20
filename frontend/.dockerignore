@@ -9,6 +9,7 @@ npm-debug.log*
 # Build artifacts
 dist
 .vite
+*.tsbuildinfo
 
 # IDE
 .vscode
@@ -27,6 +28,9 @@ test/
 *.test.*
 vitest.config.*
 coverage/
+
+# Logs
+*.log
 
 # Documentation
 *.md

@@ -7,8 +7,13 @@ Fonte compartilhada usada em DOIS pontos:
    legados `create_all` que receberam `stamp head` (a migration não roda
    neles, mas o boot sim).
 
-Idempotente: INSERT OR IGNORE / upsert — rodar N vezes não duplica.
+Idempotente: `ON CONFLICT DO NOTHING` — rodar N vezes não duplica.
 Banco = fonte de verdade; ROLE_PERMISSIONS (código) = fallback.
+
+Portável de propósito: `INSERT OR IGNORE` é sintaxe exclusiva do SQLite e
+quebrava o `alembic upgrade head` no PostgreSQL (`syntax error at or near
+"OR"`), o que derrubava o boot do stack E2E/produção em loop. `ON CONFLICT
+DO NOTHING` vale para os dois (SQLite >= 3.24, PostgreSQL >= 9.5).
 """
 
 import json
@@ -193,11 +198,12 @@ def seed_rbac(conn: Connection) -> dict[str, int]:
     now = datetime.utcnow().isoformat()
     for code, module, description in PERMISSIONS:
         # created_at explícito: a coluna é NOT NULL sem server default e o
-        # INSERT OR IGNORE engoliria a violação silenciosamente (0 linhas).
+        # DO NOTHING engoliria a violação silenciosamente (0 linhas).
         result = conn.execute(
             text(
-                "INSERT OR IGNORE INTO permissions (code, description, module, created_at) "
-                "VALUES (:code, :description, :module, :created_at)"
+                "INSERT INTO permissions (code, description, module, created_at) "
+                "VALUES (:code, :description, :module, :created_at) "
+                "ON CONFLICT (code) DO NOTHING"
             ),
             {"code": code, "description": description, "module": module, "created_at": now},
         )
@@ -241,7 +247,8 @@ def seed_rbac(conn: Connection) -> dict[str, int]:
                 continue  # curinga específico (ex.: delivery.*) não catalogado
             result = conn.execute(
                 text(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (:role_id, :permission_id)"
+                    "INSERT INTO role_permissions (role_id, permission_id) "
+                    "VALUES (:role_id, :permission_id) ON CONFLICT DO NOTHING"
                 ),
                 {"role_id": role_id, "permission_id": pid},
             )

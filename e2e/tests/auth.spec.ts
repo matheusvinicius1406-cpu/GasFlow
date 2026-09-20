@@ -25,6 +25,8 @@ test.describe('E2E-01: Autenticação — sessão ativa (storageState)', () => {
   test('sessão de admin acessa o dashboard', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Pedidos' })).toBeVisible()
+    // A navegação passou de links planos para grupos colapsáveis: "Pedidos &
+    // Entregas" é o grupo que substituiu o antigo link "Pedidos".
+    await expect(page.getByRole('button', { name: 'Pedidos & Entregas' })).toBeVisible()
   })
 })

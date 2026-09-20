@@ -386,7 +386,11 @@ async def update_role_permissions(
         db.execute(text("DELETE FROM role_permissions WHERE role_id = :rid"), {"rid": role_id})
         for code in sorted(set(body.permissions)):
             db.execute(
-                text("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (:rid, :pid)"),
+                # `ON CONFLICT DO NOTHING` e não `INSERT OR IGNORE`: a segunda é
+                # sintaxe só do SQLite e quebra no PostgreSQL (produção/E2E).
+                text(
+                    "INSERT INTO role_permissions (role_id, permission_id) VALUES (:rid, :pid) ON CONFLICT DO NOTHING"
+                ),
                 {"rid": role_id, "pid": id_by_code[code]},
             )
         db.commit()

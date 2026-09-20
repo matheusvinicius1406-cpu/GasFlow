@@ -109,6 +109,48 @@ jobs:
       - name: Test
         run: npm test
 
+  migrations:
+    name: Migrations (PostgreSQL, banco zerado)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gasflow_migrations
+          POSTGRES_USER: gasflow
+          POSTGRES_PASSWORD: migrations_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gasflow -d gasflow_migrations"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg2://gasflow:migrations_password@localhost:5432/gasflow_migrations
+      ADMIN_PASSWORD: admin123
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+      # A suíte roda em SQLite; o E2E/produção rodam em PostgreSQL. Sem este
+      # job, uma query só de SQLite (`INSERT OR IGNORE`) passou despercebida e
+      # derrubou o boot do stack E2E por dias. Roda a cadeia inteira num banco
+      # zerado e confirma idempotência (segundo upgrade é no-op).
+      - name: Upgrade do zero (alembic upgrade head)
+        run: alembic upgrade head
+      - name: Idempotência (upgrade repetido)
+        run: alembic upgrade head
+
   e2e:
     name: E2E (Playwright, full stack)
     runs-on: ubuntu-latest
@@ -116,7 +158,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Boot E2E stack (postgres + redis + backend + frontend/nginx)
-        run: docker compose -f docker-compose.e2e.yml up -d --build
+        run: |
+          # Em falha, imprime os logs de quem não subiu: sem isso o job só
+          # dizia "dependency failed to start" e a causa ficava invisível.
+          docker compose -f docker-compose.e2e.yml up -d --build || {
+            echo "::error::stack E2E não subiu — logs dos serviços abaixo"
+            docker compose -f docker-compose.e2e.yml ps
+            docker compose -f docker-compose.e2e.yml logs --tail=200
+            exit 1
+          }
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

@@ -10,7 +10,12 @@ FROM node:26-slim
 ARG BUILD_WWEBJS=0
 
 # curl é necessário ao healthcheck do compose.
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# `apt-get upgrade`: mantém a base Debian patcheada para o scan do Trivy
+# (exit-code 1 em CRITICAL/HIGH) — mesma regra do backend/agent.
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get upgrade -y -o Dpkg::Options::="--force-confold" \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependências do Chromium apenas no build de rollback (BUILD_WWEBJS=1).

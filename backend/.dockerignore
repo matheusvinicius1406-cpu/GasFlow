@@ -1,15 +1,29 @@
+# ═══════════════════════════════════════════════════════════════
+# Contexto de build do backend.
+#
+# A imagem só precisa de app/, migrations/, alembic.ini e
+# requirements.txt (o container roda `alembic upgrade head` + uvicorn).
+# O resto é lixo de desenvolvimento: `.venv-ci/` e `.mypy_cache/` sozinhos
+# levavam o contexto a 266MB, o que deixava `docker compose up --build`
+# lento no CI (e inflava a imagem, que é o que o Trivy escaneia).
+# ═══════════════════════════════════════════════════════════════
+
 # Version control
 .git
 .gitignore
 
-# Python
+# Python (interpretador + caches + venvs)
 __pycache__
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .venv
+.venv-ci
 venv
 .pytest_cache
+.mypy_cache
+.ruff_cache
 .coverage
 htmlcov
 
@@ -21,17 +35,19 @@ htmlcov
 .env
 .env.local
 
-# Database files
+# Bancos de dev/teste + backups (nunca entram na imagem)
 *.db
 *.db-shm
 *.db-wal
+*.db.backups
 *.sqlite3
+$(mktemp -u)*
 
 # Logs
 *.log
 logs/
 
-# Build artifacts
+# Build artifacts (o .exe do desktop é empacotado fora da imagem)
 build/
 dist/
 *.egg-info

@@ -27,6 +27,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      # initdb num container frio (runner compartilhado) pode passar dos 50s
+      # do retries × interval.
+      start_period: 30s
     restart: unless-stopped
     networks:
       - internal
@@ -66,6 +69,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      # O container roda `alembic upgrade head` antes do uvicorn: a cadeia
+      # inteira (39 tabelas + seed) numa base zerada pode passar de 100s num
+      # runner frio. Sem esta janela, o `up -d` do compose via `depends_on:
+      # service_healthy` falhava com "container gasflow-e2e-backend is
+      # unhealthy" — e o E2E nunca chegava a rodar o Playwright.
+      start_period: 180s
     depends_on:
       postgres:
         condition: service_healthy

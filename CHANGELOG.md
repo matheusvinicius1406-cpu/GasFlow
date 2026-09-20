@@ -4,6 +4,62 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔧 CI/E2E — o stack voltou a subir (e o Postgres a migrar)
+
+O workflow **E2E estava vermelho desde pelo menos 15/09** e o **Trivy nunca
+havia rodado** (ele depende do job do backend, que falhava antes). As duas
+causas eram reais e silenciosas:
+
+- **Query só de SQLite quebrava o PostgreSQL** — `INSERT OR IGNORE`
+  (`rbac_seed.py`, usado pela migration RBAC, e `admin.py`) é sintaxe
+  exclusiva do SQLite. No Postgres dá `syntax error at or near "OR"`, o
+  `alembic upgrade head` morre, o container do backend entra em loop de
+  restart (`restart: unless-stopped`) e o `docker compose up -d` aborta com
+  *"container gasflow-e2e-backend is unhealthy"* — o Playwright nunca
+  chegava a rodar. Agora é `ON CONFLICT (code) DO NOTHING` / `ON CONFLICT DO
+  NOTHING`, portável para os dois bancos (SQLite ≥ 3.24, PostgreSQL ≥ 9.5).
+  Ninguém tinha visto porque a suíte inteira roda em SQLite.
+- **Janela de saúde apertada demais** — o healthcheck do backend não tinha
+  `start_period`: a cadeia de migrations roda **antes** do uvicorn e, em
+  banco zerado frio, passa de 100s (`retries` × `interval`), marcando
+  unhealthy durante o boot legítimo. `start_period: 180s` no E2E e `120s` no
+  prod (era 20s).
+- **Contexto de build de 266MB → 54kB** (`backend/.dockerignore`):
+  `.venv-ci/`, `.mypy_cache/`, `*.db.backups`, os diretórios `$(mktemp -u)*`
+  e logs entravam na imagem (o `transferring context` levava ~7min). O mesmo
+  ajuste no frontend (`*.tsbuildinfo`, `*.log`).
+- **Trivy verde nas 4 imagens** — a base Debian/Alpine era um snapshot
+  atrasado e reprovava com 14 HIGH/CRITICAL **sem CVE nenhum no código**
+  (perl-base, gzip, libsqlite3, libpcre2, libssh2…). Os Dockerfiles agora
+  fazem `apt-get upgrade` / `apk upgrade` no build, o que torna o scan
+  determinístico. Sobrou o que não tinha correção upstream: o pip vendoriza
+  `msgpack==1.1.2` (GHSA-6v7p-g79w-8964) e `setuptools==70.3.0`
+  (CVE-2025-47273) em `pip/_vendor/vendor.txt` — o runtime não usa pip
+  (entrypoints são `alembic`/`uvicorn`), então o pip e o `ensurepip` saem da
+  imagem final. Resultado: **as 4 imagens com 0 findings**.
+- **Agente sem `.dockerignore`** — o `COPY . .` do `agent/Dockerfile` levava
+  o `node_modules` da máquina (binários de Windows e versões antigas de
+  `tar`/`brace-expansion`/`ip-address`) para dentro da imagem, **sobrepondo**
+  o que o `npm ci` tinha acabado de instalar. Além do CVE, isso tornava o
+  build dependente da máquina de quem buildava.
+- **Agent em `node:26-slim`** (era `24`): o `node:24-slim` traz **npm
+  11.19.0** e as dependências vendorizadas do próprio npm aparecem no Trivy
+  sem correção possível pelo projeto (`tar 7.5.19`, `brace-expansion 5.0.7`,
+  `ip-address 10.2.0`). O `node:26-slim` traz npm 11.19.1 com as três
+  corrigidas — mesma base que o serviço whatsapp já usava.
+- **Specs E2E atualizados para a UI atual** (nunca tinham rodado por causa do
+  boot): o módulo WhatsApp virou rotas aninhadas (`/whatsapp` é Conversas;
+  "Serviço Indisponível" vive em `/whatsapp/accounts`) e a navegação passou
+  de links planos para grupos colapsáveis — "Pedidos & Entregas" substituiu
+  o link "Pedidos". Suíte: 10 passam, 1 pulado (requer sessão pareada).
+- **Fail-fast legível**: quando o stack não sobe, o CI agora imprime
+  `docker compose ps` + `logs --tail=200` (antes só saía "dependency failed
+  to start", sem causa).
+- **Novo job `Migrations (PostgreSQL, banco zerado)`**: roda `alembic upgrade
+  head` num Postgres de serviço em segundos. O E2E cobre o caso, mas só
+  quando o stack sobe — este é o guard barato que teria pego o
+  `INSERT OR IGNORE` na primeira execução.
+
 ### 🌐 F10 — Cadastro público por convite (site) + orquestrador de serviços
 
 Mudança de canal pedida pelo dono: o cliente indicado **não se cadastra
