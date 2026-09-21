@@ -139,7 +139,7 @@ jobs:
       # é o que falha primeiro) e o job passou verde — release publicado sem
       # instalador, e o auto-update sem `latest.yml` para ler. Falhar aqui é
       # melhor do que descobrir isso no cliente.
-      - name: Confere que o release tem instalador, blockmap e latest.yml
+      - name: Confere que o release está publicado e completo
         # `shell: bash` é obrigatório: o runner é windows-latest e o shell
         # padrão lá é PowerShell, que não entende `$(...)`, `for ... do` nem
         # `grep -Eq` — o step morria em 1s sem checar nada.
@@ -158,4 +158,24 @@ jobs:
             echo "::error::release $TAG incompleto — faltando:$missing"
             exit 1
           fi
-          echo "::notice::release $TAG com instalador, blockmap e latest.yml."
+
+          # Rascunho é pior que release ausente: o `gh` (autenticado) enxerga e
+          # os ativos estão lá, mas o updater e o cliente não — release criado
+          # pelo electron-builder sobre um rascunho anterior ficaria invisível.
+          # `releaseType: release` no electron-builder.yml já evita isso; aqui a
+          # asserção deixa o caso explícito e se autocorrige.
+          draft=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+          if [ "$draft" = "true" ]; then
+            echo "::warning::release $TAG estava como rascunho — publicando."
+            gh release edit "$TAG" --draft=false
+            draft=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+          fi
+          if [ "$draft" != "false" ]; then
+            echo "::error::release $TAG não está publicado (isDraft=$draft)."
+            exit 1
+          fi
+
+          url=$(gh release view "$TAG" --json url --jq '.url')
+          echo "::notice::release $TAG publicado com instalador, blockmap e latest.yml — $url"
+          echo "### Release publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$TAG]($url) — instalador, blockmap e latest.yml." >> "$GITHUB_STEP_SUMMARY"
