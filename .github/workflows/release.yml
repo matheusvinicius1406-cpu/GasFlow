@@ -104,3 +104,25 @@ jobs:
             desktop/release/*.exe
             desktop/release/latest.yml
           retention-days: 30
+
+      # O publish do electron-builder pode terminar com sucesso deixando o
+      # release incompleto: na v1.1.7 só o `.blockmap` subiu (o `.exe` de ~170MB
+      # é o que falha primeiro) e o job passou verde — release publicado sem
+      # instalador, e o auto-update sem `latest.yml` para ler. Falhar aqui é
+      # melhor do que descobrir isso no cliente.
+      - name: Confere que o release tem instalador, blockmap e latest.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          assets=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          echo "ativos em $TAG:"; printf '%s\n' "$assets"
+          missing=""
+          for pattern in '\.exe$' '\.exe\.blockmap$' '^latest\.yml$'; do
+            printf '%s\n' "$assets" | grep -Eq "$pattern" || missing="$missing $pattern"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::release $TAG incompleto — faltando:$missing"
+            exit 1
+          fi
+          echo "::notice::release $TAG com instalador, blockmap e latest.yml."
