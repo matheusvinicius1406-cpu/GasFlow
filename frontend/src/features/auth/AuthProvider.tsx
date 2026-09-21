@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: unknown) {
       // Axios error from 401 response
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      throw new Error(msg || 'Credenciais inválidas')
+      throw new Error(msg || 'Credenciais inválidas', { cause: err })
     }
 
     if (!data?.success) {
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void electronSessionBridge()?.notifySessionChanged?.()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      throw new Error(msg || 'Não foi possível alterar a senha')
+      throw new Error(msg || 'Não foi possível alterar a senha', { cause: err })
     }
   }
 
