@@ -1,0 +1,106 @@
+{
+  "total": 20,
+  "pending": 0,
+  "findings": [
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/campaigns/*/preview",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/contacts/dedupe",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/customers/*/status",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/customers/sync",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/contacts",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/contacts/*",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/customers",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/customers/*",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/sync",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/whatsapp/accounts/*/media",
+      "detail": "rota do serviço WhatsApp sem consumidor no repo"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "automation_rules",
+      "detail": "tabela sem uso fora da própria camada (AutomationRuleModel)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "driver_refresh_tokens",
+      "detail": "tabela sem uso fora da própria camada (DriverRefreshTokenRecord)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "driver_sessions",
+      "detail": "tabela sem uso fora da própria camada (DriverSessionRecord)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "financial_ledger",
+      "detail": "tabela sem uso fora da própria camada (FinancialLedgerModel)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "route_records",
+      "detail": "tabela sem uso fora da própria camada (RouteRecord)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "route_stop_records",
+      "detail": "tabela sem uso fora da própria camada (RouteStopRecord)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "service_payments",
+      "detail": "tabela sem uso fora da própria camada (PaymentServiceRecord)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "stock_movements",
+      "detail": "tabela sem uso fora da própria camada (StockMovementModel)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "vehicle_capacities",
+      "detail": "tabela sem uso fora da própria camada (VehicleCapacityModel)"
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "vehicle_loads",
+      "detail": "tabela sem uso fora da própria camada (VehicleLoadModel)"
+    }
+  ]
+}

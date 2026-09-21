@@ -1,0 +1,109 @@
+{
+  "_doc": [
+    "Allowlist do guard de integridade (tests/test_app_integrity.py).",
+    "Cada entrada é uma exceção DECLARADA para uma checagem: nada entra aqui sem motivo.",
+    "Ao adicionar algo novo, justifique — o objetivo é que o guard pegue regressões de integração."
+  ],
+  "entries": [
+    {
+      "check": "dado-invisivel",
+      "target": "automation_rules",
+      "reason": "Regras de automação persistidas; gerenciadas pelo serviço de automação (sem CRUD em tela)."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "driver_refresh_tokens",
+      "reason": "Refresh tokens do app do entregador — infraestrutura de sessão, nunca exposta à UI."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "driver_sessions",
+      "reason": "Sessões do entregador — infraestrutura de auth (F2.5)."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "financial_ledger",
+      "reason": "Livro-razão interno derivado de payments/receivables; sem tela própria."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "route_records",
+      "reason": "Planos de rota por ciclo operacional (transitórios) — persistidos para o despacho, não listados em tela."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "route_stop_records",
+      "reason": "Paradas do plano de rota — mesmo ciclo de route_records."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "service_payments",
+      "reason": "Pagamentos de serviço (integração PSP) — suporta /payments, sem tabela exposta."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "stock_movements",
+      "reason": "Movimentos de estoque expostos via /inventory/{codigo}/movements (o nome na UI difere do da tabela)."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "vehicle_capacities",
+      "reason": "Capacidade por veículo — usada pela elegibilidade do despacho (F7)."
+    },
+    {
+      "check": "dado-invisivel",
+      "target": "vehicle_loads",
+      "reason": "Cargas do veículo do entregador — núcleo do estoque do entregador (F7)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/whatsapp/accounts/*/media",
+      "reason": "API do serviço WhatsApp não exposta pelo proxy do backend; sem consumidor no repo (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/contacts/dedupe",
+      "reason": "Deduplicação de contatos do serviço Node; o produto usa /whatsapp/contacts/sync (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/customers/*/status",
+      "reason": "Atualização de status de cliente no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/customers/sync",
+      "reason": "Sync de clientes no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/contacts",
+      "reason": "CRUD de contatos em listas no serviço Node; o proxy do backend não expõe (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/contacts/*",
+      "reason": "Idem /lists/*/contacts (add/remove de contato em lista)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/customers",
+      "reason": "CRUD de clientes em listas no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/customers/*",
+      "reason": "Idem /lists/*/customers (add/remove de cliente em lista)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/lists/*/sync",
+      "reason": "Sync de lista no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
+    },
+    {
+      "check": "whatsapp-sem-consumidor",
+      "target": "/campaigns/*/preview",
+      "reason": "Pré-visualização de campanha no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
+    }
+  ]
+}
