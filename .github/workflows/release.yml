@@ -5,8 +5,12 @@ on:
     tags:
       - "v*"
 
+# `actions: read` é o que permite ao gate ler as runs/jobs do CI — declarar
+# `permissions` zera todo escopo não listado, e sem ele a consulta à API
+# voltaria 403.
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -18,6 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Sem o checkout o workspace está vazio e `python3 .github/scripts/
+      # ci_gate.py` morre com "No such file or directory" (exit 2) antes de
+      # consultar o CI — foi o que reprovou a primeira tag que usou o gate.
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Aguarda CI do commit da tag e confere os 4 jobs de teste
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
