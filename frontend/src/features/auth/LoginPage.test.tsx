@@ -61,4 +61,20 @@ describe('LoginPage', () => {
       await screen.findByText('Email ou senha inválidos'),
     ).toBeInTheDocument()
   })
+
+  /**
+   * A entrada do app termina aqui: o splash dissolve e o cartão sobe em
+   * cascata. Sem estas classes a tela volta a aparecer de uma vez — o teste
+   * existe para a animação não sumir num refactor de className.
+   */
+  it('entra em cascata (marca → título → formulário)', () => {
+    const { container } = renderWithProviders(<LoginPage />)
+
+    expect(container.querySelector('.gf-anim-rise-in')).toBeInTheDocument()
+    expect(document.querySelectorAll('.gf-anim-rise-in').length).toBeGreaterThanOrEqual(3)
+    expect(container.querySelector('.gf-anim-delay-1')).toBeInTheDocument()
+    expect(document.querySelector('.gf-anim-delay-3')).toBeInTheDocument()
+    // Fundo animado (ambiente) — aria-hidden, não entra na árvore acessível.
+    expect(container.querySelector('.gf-anim-drift')).toBeInTheDocument()
+  })
 })

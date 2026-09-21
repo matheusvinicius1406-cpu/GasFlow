@@ -4,6 +4,7 @@ import { useAuth } from './AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
+import { BrandLogo, BrandName } from '@/components/brand/BrandLogo'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -29,16 +30,39 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md p-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      {/*
+        Brilhos de fundo: derivam devagar atrás do cartão. Só CSS e tokens do
+        design system (nada de imagem), então acompanham o tema do cliente.
+      */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <span className="gf-anim-drift absolute -left-16 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <span className="gf-anim-drift-slow absolute -bottom-24 -right-10 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+
+      <Card className="gf-anim-rise-in relative w-full max-w-md p-8">
+        {/*
+          Entrada em cascata: marca → título → campos. O splash do boot
+          (index.html) dissolve no mesmo instante em que isto monta, então a
+          abertura do app termina aqui em vez de num corte seco.
+        */}
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-foreground">GasFlow</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <div className="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center">
+            <span
+              aria-hidden
+              className="gf-anim-pulse-ring absolute inset-0 rounded-2xl bg-primary/20"
+            />
+            <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+              <BrandLogo size="lg" />
+            </span>
+          </div>
+          <BrandName size="lg" showTagline className="gf-anim-rise-in gf-anim-delay-1 items-center" />
+          <p className="gf-anim-rise-in gf-anim-delay-2 mt-2 text-sm text-muted-foreground">
             Sistema operacional para revendas de gás
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="gf-anim-rise-in gf-anim-delay-3 space-y-4">
           {error && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               {error}

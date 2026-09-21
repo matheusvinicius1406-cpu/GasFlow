@@ -1,6 +1,56 @@
 import axios from 'axios'
 
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from './session'
+
 const API_BASE_URL = import.meta.env?.VITE_API_URL || '/api'
+
+// As chaves de sessão vivem em `./session` (módulo sem axios) e são
+// reexportadas aqui para quem já importa do client.
+export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from './session'
+
+function clearSession() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+}
+
+/**
+ * Renovação *single-flight*.
+ *
+ * Várias requests simultâneas que recebem 401 compartilham **uma** chamada de
+ * refresh. Isso não é otimização: a rotação no backend guarda o refresh
+ * anterior para detectar vazamento, então N trocas concorrentes com o mesmo
+ * refresh seriam lidas como reuso e **revogariam a sessão do próprio usuário**.
+ */
+let refreshInFlight: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refresh = localStorage.getItem(REFRESH_TOKEN_KEY)
+  if (!refresh) return null
+  if (!refreshInFlight) {
+    refreshInFlight = api.auth
+      .refresh(refresh)
+      .then((res) => {
+        const access = res.data?.access_token as string | undefined
+        if (!access) return null
+        localStorage.setItem(ACCESS_TOKEN_KEY, access)
+        // O refresh também gira; guardar o novo é o que mantém a sessão viva.
+        if (res.data?.refresh_token) {
+          localStorage.setItem(REFRESH_TOKEN_KEY, res.data.refresh_token)
+        }
+        try {
+          window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: access }))
+        } catch {
+          // Ambiente sem CustomEvent (SSR/teste) — irrelevante para o fluxo.
+        }
+        return access
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -25,14 +75,28 @@ apiClient.interceptors.request.use(
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Don't redirect on login endpoint (let caller handle it)
-      const url = error.config?.url || ''
-      if (!url.includes('/auth/login')) {
-        localStorage.removeItem('gasflow_token')
-        window.location.href = '/login'
+  async (error) => {
+    const status = error.response?.status
+    const url: string = error.config?.url || ''
+    // Endpoints de sessão não entram na renovação: um 401 no login é
+    // credencial errada, e no refresh é sessão morta (não há o que renovar).
+    const isSessionEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
+    const original = error.config as (typeof error.config & { __gfRetried?: boolean }) | undefined
+
+    // B5: access expirado (15 min) → renova e repete **uma** vez. Sem isso o
+    // usuário seria deslogado no meio do dia sem motivo visível.
+    if (status === 401 && !isSessionEndpoint && original && !original.__gfRetried) {
+      const access = await refreshAccessToken()
+      if (access) {
+        original.__gfRetried = true
+        original.headers = { ...original.headers, Authorization: `Bearer ${access}` }
+        return apiClient(original)
       }
+    }
+
+    if (status === 401 && !isSessionEndpoint) {
+      clearSession()
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
@@ -50,6 +114,9 @@ export const api = {
   auth: {
     login: (username: string, password: string) =>
       apiClient.post('/auth/login', { username, password }),
+    // B5: troca o refresh por um par novo (rotação com detecção de reuso).
+    refresh: (refreshToken: string) =>
+      apiClient.post('/auth/refresh', { refresh_token: refreshToken }),
     // P0 (3.8): troca obrigatória/self-service pós-reset
     changePassword: (currentPassword: string, newPassword: string) =>
       apiClient.post('/auth/change-password', {

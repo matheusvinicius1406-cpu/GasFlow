@@ -432,3 +432,24 @@ body {
 .gf-anim-delay-3 {
   animation-delay: 240ms;
 }
+
+/* Deriva lenta dos brilhos de fundo (login). Movimento de 16–22s: é ambiente,
+   não chamariz — quem olha a tela não deve notar que está animando.
+   `prefers-reduced-motion` (bloco acima) zera estas animações. */
+@keyframes gf-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0) scale(1.12);
+  }
+}
+
+.gf-anim-drift {
+  animation: gf-drift 16s var(--easing-default) infinite;
+}
+
+.gf-anim-drift-slow {
+  animation: gf-drift 22s var(--easing-default) infinite reverse;
+}

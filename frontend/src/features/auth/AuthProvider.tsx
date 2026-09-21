@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '@/lib/api/client'
+// Chaves de sessão vêm de `lib/api/session`: o client é mockado inteiro em
+// testes, e constantes usadas por este provider não devem depender do mock.
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from '@/lib/api/session'
 import type { User } from '@/types'
 import { ChangePasswordGate } from './ChangePasswordGate'
 
@@ -40,7 +43,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(localStorage.getItem('gasflow_token'))
+  const [token, setToken] = useState<string | null>(localStorage.getItem(ACCESS_TOKEN_KEY))
   const [permissions, setPermissions] = useState<string[]>([])
   const [mustChangePassword, setMustChangePassword] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -58,11 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPermissions(Array.isArray(data.permissions) ? data.permissions : [])
       setMustChangePassword(Boolean(data.must_change_password))
       // Sessão restaurada do localStorage → repassa o token ao gate IPC.
-      const stored = localStorage.getItem('gasflow_token')
+      const stored = localStorage.getItem(ACCESS_TOKEN_KEY)
       if (stored) void electronSessionBridge()?.reportSessionToken?.(stored)
     } catch {
-      // Token invalid — clear
-      localStorage.removeItem('gasflow_token')
+      // Access e refresh inválidos — a sessão morreu de vez.
+      localStorage.removeItem(ACCESS_TOKEN_KEY)
+      localStorage.removeItem(REFRESH_TOKEN_KEY)
       setToken(null)
       setUser(null)
       setPermissions([])
@@ -93,8 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(data?.error || 'Credenciais inválidas')
     }
 
-    localStorage.setItem('gasflow_token', data.token)
-    setToken(data.token)
+    // B5: guarda o par. `data.token` (opaco) fica como fallback de backend
+    // antigo — a leitura de rotas e o bridge de realtime esperam um token
+    // válido em `gasflow_token` dos dois jeitos.
+    const access = data.access_token || data.token
+    localStorage.setItem(ACCESS_TOKEN_KEY, access)
+    if (data.refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token)
+    setToken(access)
     setUser({
       id: data.user?.id || '',
       email: data.user?.email || email,
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // P0 (3.8): reset admin seta a flag — o cliente bloqueia o app até a troca.
     setMustChangePassword(Boolean(data.user?.must_change_password))
     // P0 (3.6): token novo → gate IPC de permissões no main process.
-    void electronSessionBridge()?.reportSessionToken?.(data.token)
+    void electronSessionBridge()?.reportSessionToken?.(access)
     // Permissões chegam no próximo fetchMe — busca imediata para a sessão.
     try {
       const me = await api.auth.me()
@@ -114,13 +123,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // B5: quando o access expira no meio do uso, o cliente o renova em silêncio.
+  // O main process precisa do token novo para continuar autorizando IPC.
+  useEffect(() => {
+    const onRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail
+      const current = detail || localStorage.getItem(ACCESS_TOKEN_KEY)
+      if (current) void electronSessionBridge()?.reportSessionToken?.(current)
+    }
+    window.addEventListener(SESSION_REFRESHED_EVENT, onRefreshed)
+    return () => window.removeEventListener(SESSION_REFRESHED_EVENT, onRefreshed)
+  }, [])
+
   const logout = async () => {
     try {
       await api.auth.logout()
     } catch {
       // Ignore — local logout still happens
     }
-    localStorage.removeItem('gasflow_token')
+    // B5: sai dos dois. Deixar o refresh para trás permitiria reabrir a sessão
+    // depois do logout (a rotação aceitaria o refresh até ele expirar).
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
     setToken(null)
     setUser(null)
     setPermissions([])
