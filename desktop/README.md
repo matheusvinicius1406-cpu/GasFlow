@@ -125,12 +125,22 @@ Logs para diagnosticar: `updater.checking` / `updater.available` /
 
 ## Migration de schema (SQLite local)
 
-O banco do usuário (`%APPDATA%/gasflow-desktop/gasflow.db`) é criado por
-`Base.metadata.create_all()` — que **não altera tabelas existentes**. Para
-evolutivas de schema, `init_db._ensure_sqlite_columns()` compara o schema real
-(`PRAGMA table_info`) com os models e adiciona colunas faltantes via
-`ALTER TABLE ... ADD COLUMN` (idempotente, não perde dados). A versão aplicada
-fica registrada em `_schema_version` (tabela de 1 linha, upsert idempotente).
+O exe aplica **`alembic upgrade head` no boot**
+(`backend/desktop_entry.py::run_migrations()`), a partir do `migrations_bundle`
+que o spec empacota (`alembic.ini` + `migrations/`):
+
+- banco vazio → a cadeia completa cria tudo + `alembic_version`;
+- banco legado de `create_all` (tem tabelas mas não tem `alembic_version`) →
+  recebe `stamp head` e passa a receber só as revisões pendentes;
+- se a migração falhar, o boot **não** cai: loga
+  `migrations falharam no boot — seguindo com init_db/create_all` e o
+  `init_db` cobre o que faltar.
+
+Rede de compat para bancos antigos: `init_db._ensure_sqlite_columns()` compara o
+schema real (`PRAGMA table_info`) com os models e adiciona as colunas faltantes
+via `ALTER TABLE ... ADD COLUMN` (idempotente, não perde dados); a versão
+ aplicada fica em `_schema_version`. Se um dia divergirem, **o Alembic é a
+fonte de verdade** — o `init_db` é o plano B.
 
 ## Sobre `desktop/dist/` versionado
 

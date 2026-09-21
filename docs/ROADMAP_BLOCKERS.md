@@ -108,11 +108,13 @@ vários pontos**, e mais falso hoje do que em 12/09:
   onefile (`gasflow-backend.spec`, entrypoint `desktop_entry.py`).
 - Auto-update funcional; **última release publicada: v1.1.7** (instalador +
   `latest.yml` + `.blockmap` conferidos pelo próprio workflow).
-- Migração de schema no Desktop: `Base.metadata.create_all()` +
-  `_ensure_sqlite_columns()` (ALTER TABLE aditivo via `PRAGMA table_info`,
-  `init_db.py:99`) + `_ensure_schema_version()` / tabela `_schema_version`
-  (`init_db.py:198,212`). Documentado em `desktop/README.md:126-134`. **Não**
-  é Alembic no exe (ver B2).
+- Migração de schema: o exe aplica **`alembic upgrade head` no boot**
+  (`desktop_entry.py::run_migrations()`, bundle `migrations_bundle` embutido
+  pelo spec), com `stamp head` para bancos legados sem `alembic_version` e
+  degradação graciosa se falhar. Por baixo, `create_all()` +
+  `_ensure_sqlite_columns()` (`init_db.py:99`) + `_schema_version`
+  (`init_db.py:198,212`) atendem bancos antigos. ⚠️ `desktop/README.md:126-134`
+  está **desatualizado**: descreve só o caminho `create_all`. Ver B2.
 
 ### 1.6 Tempo real e localização
 
@@ -131,14 +133,14 @@ vários pontos**, e mais falso hoje do que em 12/09:
 | # | Bloqueio | Status em 21/09 | Evidência / o que resta |
 |---|----------|-----------------|-------------------------|
 | ~~B1~~ | Gate "Require Authenticode signature" no `release.yml` | ✅ **Fechado** (`2498374`) | v1.1.6 e v1.1.7 publicaram com o step fora. |
-| ~~B2~~ | Alembic não roda no exe empacotado | ⚠️ **Resolvido por outro caminho — com resíduo** | Desktop usa `create_all()` + `_ensure_sqlite_columns()` (`init_db.py:99`) + `_schema_version` (`init_db.py:198,212`). Isso cobre **tabelas novas e colunas novas**, que era o medo original. **Resíduo:** migrations que *transformam* dados (backfill, mudança de tipo, drop) não rodam no instalado. Enquanto forem aditivas, ok; a primeira migration não-aditiva exige decidir o caminho Alembic-no-exe. |
+| ~~B2~~ | Alembic não roda no exe empacotado | ✅ **Fechado — Alembic roda no boot do exe** | `desktop_entry.py::run_migrations()` aplica `alembic upgrade head` a partir do `migrations_bundle` embutido no spec: banco vazio cria tudo + `alembic_version`; banco legado de `create_all` (tabelas sem `alembic_version`) recebe `stamp head` e passa a receber só as revisões pendentes; se a migração falha, o app **não** cai (log `migrations falharam no boot — seguindo com init_db/create_all`). Comprovado subindo o exe: log `Running upgrade 12f8390d5be4 -> a7c1e9f2b4d6 -> …` e `/health` respondendo `healthy`. `_ensure_sqlite_columns()` (`init_db.py:99`) segue como rede de compat, **não** como o mecanismo principal. |
 | B3 | Débito de estoque: CONFIRMED vs. DELIVERED | ❌ **ABERTO — decisão de negócio** | O pedido reserva e reverte (`RESERVATION_REVERSAL`), mas `application/delivery/use_cases.py` **não** debita. Migrar o débito sem remover o do pedido = duplo débito. Decidir antes de codar: (a) mover o débito para a entrega DELIVERED, ou (b) pedido debita e a entrega só troca cheio→vazio (física do GLP: sai 1 cheio, entra 1 vazio). |
 | ~~B4~~ | Permissões em código, não no banco | ✅ **Fechado** | `permission_policy_loader.py` (DB sobrepõe, código é fallback) + `user_permissions_override` (`rbac_model.py:55`) + seed (`rbac_seed.py`). |
 | B5 | Sem JWT para sessão multimodal | ⚠️ **Parcial** | Escopo **entregador** pronto (access 15 min + refresh rotativo DB-backed, segredo em 3 níveis). **Falta o operador** (`api/core/auth.py` não emite JWT) — é o que bloqueia sessão simultânea desktop+mobile com escopo por plataforma. |
 | ~~B6~~ | IPC do Electron sem camada de permissão | ✅ **Fechado** | `desktop/src/main/ipc-permissions.ts` (`registerProtectedHandler` consulta a permissão antes de executar; usado em `src/main/index.ts`). |
 | B7 | Fiscal não pode ser "só código" | ❌ **Aberto — externo** | Confirmado no código: as únicas menções a SEFAZ são *"sem SEFAZ"* (`presentation/api/purchase_notes.py:2`, `application/purchase/purchase_service.py`). Continua dependendo de certificado A1/credenciamento. MVP real = deep link para o NFF + persistência local. |
 | B8 | App do entregador vs. LGPD/CLT | ❌ **Aberto — jurídico** | Nada mudou por código. O backend de localização já existe (1.6), então o que falta é o **documento jurídico** antes de soltar o app. |
-| B9 | PyInstaller: CI em 3.12 vs. Docker/produção em 3.14 | ❌ **ABERTO — e é o risco mais concreto daqui** | `.github/workflows/ci.yml:30,144` e `release.yml:62` usam `python-version: "3.12"`; `backend/Dockerfile:1` é `python:3.14-slim`. O instalador sai de um interpretador que não é o de produção. Alinhar CI ao 3.14 (ou provar o spec no 3.14) antes de confiar no artefato. |
+| ~~B9~~ | PyInstaller: CI em 3.12 vs. Docker/produção em 3.14 | ✅ **Fechado** | CI e release agora usam `python-version: "3.14"` (antes 3.12), igual ao `backend/Dockerfile` (`python:3.14-slim`). Validado **antes** de alinhar: PyInstaller 6.22.3 (a versão pinada) compila o spec no 3.14.6, o exe sobe, roda a cadeia Alembic inteira e responde `/health`; a suíte do backend (1662 provas) já rodava no 3.14 local. |
 
 ---
 
@@ -216,7 +218,10 @@ Status de re-verificação em 21/09 ao lado de cada um.
   `12f8390d5be4_baseline_schema_atual_completo_39_` — **tabelas novas nascem em
   migration incremental**, não no baseline. Drift guard em
   `migrations/README.md`.
-- Desktop: **não** usa Alembic (ver B2) — aditivo por `_ensure_sqlite_columns`.
+- Desktop: o exe **usa Alembic no boot** (`desktop_entry.py`), com `stamp head`
+  para banco legado; `_ensure_sqlite_columns()` é rede de compat, não o
+  mecanismo. Migration nova chega ao Desktop porque `migrations/` + `alembic.ini`
+  entram no spec como `migrations_bundle`.
 
 ### Armadilha de schema (leia antes de editar RBAC)
 - O schema **canônico** é `auth_model.py` (`auth_users`, `auth_roles`,
@@ -243,7 +248,7 @@ Status de re-verificação em 21/09 ao lado de cada um.
 | 2 | Timing do débito (pedido vs. entrega) | ❌ **ABERTA — dono do negócio**. Ver B3. |
 | 3 | Roles/permissões: banco com fallback de código vs. banco como fonte única | ✅ **Decidido e implementado**: banco sobrepõe, código é fallback (preferido no doc; `permission_policy_loader.py:191-212`). |
 | 4 | Segredo JWT no Desktop: env + arquivo (ACL/DPAPI) vs. prompt por boot | ✅ **Decidido e implementado**: env → settings → arquivo gerado 1x, ≥32 bytes obrigatório em produção. |
-| 5 | Migração no Desktop: Alembic no exe vs. `create_all` + version guard | ✅ **Decidido e implementado**: `create_all` + `_ensure_sqlite_columns` + `_schema_version`. Reabrir só se aparecer migration não-aditiva (resíduo do B2). |
+| 5 | Migração no Desktop: Alembic no exe vs. `create_all` + version guard | ✅ **Decidido e implementado**: **Alembic no exe** (a opção recomendada aqui) + `create_all`/`_ensure_sqlite_columns` como rede para banco legado. Ver B2. |
 
 ---
 
@@ -254,8 +259,8 @@ realmente falta:
 
 | Passo | Entrega | Destrava | Depende de |
 |-------|---------|----------|------------|
-| ~~0.2~~ | ~~Migração-on-boot no Desktop~~ | — | **Feito** por `create_all` + `_ensure_sqlite_columns`. Resíduo registrado no B2. |
-| 1 | **Alinhar o interpretador do release ao de produção (B9)** | Confiança no instalador | Nada. É o mais barato e o mais crítico. |
+| ~~0.2~~ | ~~Migração-on-boot no Desktop~~ | — | **Feito**: `alembic upgrade head` no boot do exe (`desktop_entry.py`). |
+| ~~1~~ | ~~Alinhar o interpretador do release ao de produção (B9)~~ | — | **Feito**: CI/release em 3.14, com o spec validado no 3.14 antes de alinhar. |
 | 2 | **Decidir o timing do débito (B3)** | Todo o P0 de estoque | Dono do negócio. |
 | 3 | Executar a decisão do B3 no `UpdateDeliveryStatusUseCase` + testes de atomicidade | Núcleo operacional | Passo 2. |
 | 4 | **JWT de operador + sessão multimodal (B5)** | P1/P2 (sessão desktop+mobile por plataforma) | Reusar o padrão de `driver_mobile_auth.py`. |
@@ -274,14 +279,17 @@ correção com feature nova.
   diário idempotente, telas de Admin, gate de permissão no IPC e segredo JWT
   resolvido. O que este documento descrevia como "gap real" virou código.
 - **Aberto de verdade, por ordem de custo/benefício:**
-  1. **B9** — CI compila o instalador em Python 3.12 e a produção roda 3.14.
-     Barato de corrigir e é o que mina a confiança no artefato.
-  2. **B3** — débito na entrega: decisão de negócio, sem ela qualquer código de
+  1. **B3** — débito na entrega: decisão de negócio, sem ela qualquer código de
      estoque pode duplicar débito.
-  3. **B5** — JWT de operador (o do entregador já existe e serve de padrão).
-  4. **B7/B8** — fiscal e LGPD/CLT: não se resolvem com código.
-- **B2 ficou resolvido por outro caminho**, com um resíduo honesto: o Desktop
-  recebe tabelas e colunas novas, mas não migrations que transformam dados.
+  2. **B5** — JWT de operador (o do entregador já existe e serve de padrão).
+  3. **B7/B8** — fiscal e LGPD/CLT: não se resolvem com código.
+
+  Nesta passagem, **B9** foi fechado (CI/release alinhados ao 3.14 de produção,
+  com o spec validado no 3.14 antes de alinhar).
+- **B2 está fechado de verdade:** o exe aplica a cadeia Alembic no boot, então
+  o Desktop recebe migrations incrementais de verdade (não só `create_all`). A
+  versão anterior deste documento (e o próprio `desktop/README.md`) descreviam
+  apenas o caminho antigo — eu tinha escrito "resíduo" aqui e não existe.
 - **Riscos não re-verificados nesta passagem:** 2, 4 (redaction), 6 (forçar
   troca no login), 8, 9, 10, 11 — marcados na PARTE 3 para não virarem "achismo
   silencioso".
