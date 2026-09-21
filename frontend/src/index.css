@@ -293,3 +293,142 @@ body {
   background: var(--primary);
   color: var(--primary-foreground);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOTION — keyframes e utilitários de animação
+
+   Usados pela entrada do app e pela tela de atualização
+   (`src/components/UpdateScreen.tsx`). O bloco de
+   `prefers-reduced-motion` acima zera estas animações — os utilitários
+   terminam no estado final (fill-mode: both), então nada fica
+   invisível para quem pediu menos movimento.
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes gf-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gf-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gf-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gf-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Anel que expande e dissolve — marca "está vivo" durante o trabalho. */
+@keyframes gf-pulse-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Brilho que atravessa uma superfície (chips, barras). */
+@keyframes gf-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+
+/* Barra indeterminada — usada antes de existir percentual real. */
+@keyframes gf-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+/* "Pronto!" — pequeno salto de confirmação no ícone de sucesso. */
+@keyframes gf-complete-pop {
+  0% {
+    transform: scale(0.9);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.gf-anim-fade-in {
+  animation: gf-fade-in var(--duration-normal) var(--easing-out) both;
+}
+
+.gf-anim-rise-in {
+  animation: gf-rise-in var(--duration-slow) var(--easing-out) both;
+}
+
+.gf-anim-pop-in {
+  animation: gf-pop-in var(--duration-slow) var(--easing-out) both;
+}
+
+.gf-anim-pulse-ring {
+  animation: gf-pulse-ring 2.4s var(--easing-out) infinite;
+}
+
+.gf-anim-sheen {
+  animation: gf-sheen 1.8s var(--easing-default) infinite;
+}
+
+.gf-anim-indeterminate {
+  animation: gf-indeterminate 1.4s var(--easing-default) infinite;
+}
+
+.gf-anim-complete {
+  animation: gf-complete-pop var(--duration-slow) var(--easing-out) both;
+}
+
+.gf-anim-delay-1 {
+  animation-delay: 80ms;
+}
+
+.gf-anim-delay-2 {
+  animation-delay: 160ms;
+}
+
+.gf-anim-delay-3 {
+  animation-delay: 240ms;
+}

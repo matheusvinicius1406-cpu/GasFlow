@@ -4,6 +4,36 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🚀 Abertura do app e experiência de atualização
+
+O auto-update existia só como um retângulo no canto: baixava em silêncio,
+sem progresso e sem explicar que aplicar exigia reiniciar. E o app abria em
+tela em branco até o bundle carregar.
+
+- **Splash de entrada** (`index.html` + `src/lib/boot/splash.ts`): o splash
+  com a marca pinta no primeiro frame — antes do bundle, que é o momento da
+  tela branca — e o React o dissolve quando monta. Rede de segurança remove o
+  splash se o bundle não carregar, para não parecer travamento.
+- **Tela de atualização** (`components/UpdateScreen.tsx`): banner com
+  progresso real que **não** bloqueia o trabalho nos estados
+  "disponível/baixando"; overlay com anel pulsante, versão e "Reiniciar e
+  instalar agora" quando a versão está pronta. "Depois" e `Esc` rebaixam o
+  overlay para o banner — o aviso nunca some, e nada é aplicado sem o usuário
+  saber.
+- **Repartição de estados** para não duplicar aviso: `UpdateScreen` cuida de
+  progresso e decisão; `UpdateNotifier` (canto) só de "verificando/erro".
+- **"Tentar novamente"** no erro de verificação: a ponte `update:check` era
+  exposta pelo preload sem nenhum consumidor — quem via "falha ao verificar"
+  não tinha saída nenhuma.
+- Os dois montados na **raiz do `App`**, valendo em qualquer rota (antes o
+  aviso de update só existia dentro do layout logado).
+- **Tokens de movimento** no design system (keyframes + utilitários
+  `gf-anim-*`), todos neutralizados por `prefers-reduced-motion`.
+- **Release**: a verificação pós-publicação agora exige release **publicado**
+  (não rascunho) e publica a URL no resumo do run. Rascunho é pior que
+  release ausente: o `gh` autenticado o enxerga, mas o updater e o cliente
+  não.
+
 ## [1.1.7] - 2026-09-21
 
 ### 🛡️ Integridade do app — auditoria, correções e release

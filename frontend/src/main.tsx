@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AuthProvider } from '@/features/auth'
 import { ThemeProvider } from '@/lib/theme'
 import { ToastProvider } from '@/components/ui/Toast'
+import { dismissBootSplash } from '@/lib/boot/splash'
 import { App } from './App'
 import './index.css'
 
@@ -35,3 +36,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
+
+// Splash de entrada (index.html): dissolve no primeiro frame já com o app
+// montado, para a revelação não deixar a tela vazia entre o fade e o conteúdo.
+requestAnimationFrame(() => dismissBootSplash())

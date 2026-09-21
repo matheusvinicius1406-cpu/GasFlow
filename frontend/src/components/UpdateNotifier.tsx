@@ -1,84 +1,60 @@
-import { useEffect, useState } from 'react'
-
-interface UpdateState {
-  status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'up-to-date'
-  version: string | null
-  progress: number
-  error: string | null
-}
-
-interface GasflowUpdaterApi {
-  check: () => Promise<{ ok: boolean; state?: UpdateState; error?: string }>
-  install: () => Promise<{ ok: boolean; error?: string }>
-  getState: () => Promise<UpdateState>
-  onStateChange: (cb: (state: UpdateState) => void) => () => void
-}
-
-declare global {
-  interface Window {
-    gasflowUpdater?: GasflowUpdaterApi
-  }
-}
-
-const MESSAGES: Record<string, string | ((s: UpdateState) => string)> = {
-  checking: 'Verificando atualizações…',
-  available: (s) => `Nova versão v${s.version} disponível. Baixando…`,
-  downloading: (s) => `Baixando atualização… ${s.progress}%`,
-  ready: (s) => `Versão v${s.version} pronta para instalar.`,
-  error: () => 'Falha ao verificar atualizações (sem conexão ou release indisponível).',
-}
+import { useCallback, useState } from 'react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { useUpdaterState } from '@/lib/update/updater'
 
 /**
- * Notificação de auto-update — canto inferior direito.
- * Só renderiza dentro do Electron (window.gasflowUpdater existe) e apenas
- * quando há algo a dizer (checando / disponível / baixando / pronta / erro).
+ * Aviso de canto (inferior direito) do auto-update.
+ *
+ * Cobre só o que exige pouca atenção — "verificando" e "erro". Os estados com
+ * progresso (`available`/`downloading`) e a decisão de reiniciar (`ready`) são
+ * do `UpdateScreen`, que reparte os estados justamente para não duplicar aviso.
+ * Só renderiza dentro do Electron (`window.gasflowUpdater` existe).
  */
 export function UpdateNotifier() {
-  const [state, setState] = useState<UpdateState>({ status: 'idle', version: null, progress: 0, error: null })
+  const state = useUpdaterState()
+  const [retrying, setRetrying] = useState(false)
 
-  useEffect(() => {
+  /** Refaz a verificação sob demanda (`update:check`) — saída para o erro. */
+  const retry = useCallback(async () => {
     const api = window.gasflowUpdater
-    if (!api) return // rodando no navegador (dev) — sem auto-update
-    let mounted = true
-    api.getState().then((s) => { if (mounted) setState(s) }).catch(() => { /* main ainda não registrou */ })
-    const off = api.onStateChange(setState)
-    return () => { mounted = false; off() }
+    if (!api) return
+    setRetrying(true)
+    try {
+      await api.check()
+    } finally {
+      // O estado que vier do main (checking/available/error) assume daqui.
+      setRetrying(false)
+    }
   }, [])
 
-  if (state.status === 'idle' || state.status === 'up-to-date') return null
+  if (state.status !== 'checking' && state.status !== 'error') return null
 
-  const template = MESSAGES[state.status]
-  const message = typeof template === 'function' ? template(state) : template
-
-  const canInstall = state.status === 'ready'
+  const isError = state.status === 'error'
+  const busy = retrying || state.status === 'checking'
 
   return (
     <div
       data-testid="update-notifier"
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-white shadow-lg"
+      className="gf-anim-rise-in fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-border bg-card px-4 py-3 shadow-lg"
     >
-      <p className="text-sm">{message}</p>
-      {state.status === 'downloading' && (
-        <div
-          className="mt-2 h-1 overflow-hidden rounded bg-slate-700"
-          role="progressbar"
-          aria-valuenow={Math.round(state.progress)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Progresso do download da atualização"
-        >
-          <div className="h-full bg-success transition-all" style={{ width: `${state.progress}%` }} />
-        </div>
-      )}
-      {canInstall && (
-        <button
-          onClick={() => window.gasflowUpdater?.install()}
-          className="mt-2 rounded bg-success px-3 py-1 text-sm text-success-foreground hover:bg-success/90"
-        >
-          Reiniciar e instalar
-        </button>
+      <p className="flex items-center gap-2 text-sm text-foreground">
+        {isError && !busy ? (
+          <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+        ) : (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+        )}
+        {isError && !busy
+          ? 'Falha ao verificar atualizações (sem conexão ou release indisponível).'
+          : 'Verificando atualizações…'}
+      </p>
+
+      {isError && !busy && (
+        <Button variant="outline" size="sm" className="mt-2 w-full" onClick={retry}>
+          Tentar novamente
+        </Button>
       )}
     </div>
   )

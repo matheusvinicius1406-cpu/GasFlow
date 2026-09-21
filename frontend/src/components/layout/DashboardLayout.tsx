@@ -4,7 +4,6 @@ import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { MobileSidebar } from './MobileSidebar'
 import { RealtimeBridge } from '@/components/realtime/RealtimeBridge'
-import { UpdateNotifier } from '@/components/UpdateNotifier'
 import { FloatingCopilot } from '@/components/copilot/FloatingCopilot'
 
 /**
@@ -52,8 +51,10 @@ export function DashboardLayout() {
         </main>
       </div>
 
-      {/* Auto-update (Electron) — canto inferior direito */}
-      <UpdateNotifier />
+      {/*
+        Auto-update (Electron) não fica aqui: `UpdateScreen` e `UpdateNotifier`
+        são montados na raiz do App (src/App.tsx) para valerem em toda rota.
+      */}
 
       {/* IA — bolinha flutuante (reorg F4); não é item de menu */}
       <FloatingCopilot />

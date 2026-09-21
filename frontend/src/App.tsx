@@ -1,5 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { UpdateScreen } from '@/components/UpdateScreen'
+import { UpdateNotifier } from '@/components/UpdateNotifier'
 import { ProtectedRoute } from '@/features/auth'
 import { DashboardPage } from '@/features/dashboard'
 import { OrdersPage, OrderDetailPage, OrderFormPage } from '@/features/orders'
@@ -31,7 +33,8 @@ import { UsersPage, AuditPage } from '@/features/admin'
 
 export function App() {
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       {/* F10.2: página pública de auto-cadastro por convite (hospedada na Vercel; token GF-INV- via query) */}
       <Route path="/cadastro" element={<InviteSignupPage />} />
@@ -132,7 +135,16 @@ export function App() {
             </PermissionRoute>
           }
         />
-      </Route>
-    </Routes>
+        </Route>
+      </Routes>
+
+      {/*
+        Auto-update (Electron) na raiz de propósito: vale em qualquer rota,
+        inclusive /login e /driver, onde o DashboardLayout não existe.
+        `UpdateScreen` = progresso + reiniciar; `UpdateNotifier` = verificando/erro.
+      */}
+      <UpdateScreen />
+      <UpdateNotifier />
+    </>
   )
 }

@@ -5,9 +5,243 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GasFlow - Sistema Operacional</title>
+    <!--
+      Splash de entrada — markup e CSS críticos INLINE de propósito.
+
+      O splash precisa pintar ANTES do bundle (que carrega o index.css), ou
+      seja, no primeiro frame: é o que transforma a tela em branco do boot em
+      uma abertura de app. Quem o remove é `dismissBootSplash()`
+      (src/lib/boot/splash.ts), chamado pelo React assim que o app monta.
+
+      O id abaixo é o mesmo de BOOT_SPLASH_ID — se mudar aqui, mude lá.
+      Estilo auto-contido: não usa variáveis do design system (não existem
+      ainda neste momento da carga).
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+
+      @keyframes gf-boot-fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes gf-boot-pop {
+        from {
+          opacity: 0;
+          transform: scale(0.82);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes gf-boot-rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes gf-boot-ring {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.5;
+        }
+        70% {
+          transform: scale(1.75);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1.75);
+          opacity: 0;
+        }
+      }
+
+      @keyframes gf-boot-sweep {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(400%);
+        }
+      }
+
+      @keyframes gf-boot-glow {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .gf-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: #09090b;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        animation: gf-boot-fade-in 0.25s ease-out both;
+        transition: opacity 0.34s ease-in;
+      }
+
+      /* Estado de saída: some e deixa de capturar cliques. */
+      .gf-boot--leave {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .gf-boot__glow {
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        border-radius: 9999px;
+        background: radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0) 70%);
+        animation: gf-boot-glow 0.8s ease-out both;
+      }
+
+      .gf-boot__content {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .gf-boot__mark {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 72px;
+        height: 72px;
+      }
+
+      .gf-boot__ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        border: 2px solid rgba(249, 115, 22, 0.45);
+        animation: gf-boot-ring 2.2s ease-out infinite;
+      }
+
+      .gf-boot__flame {
+        width: 40px;
+        height: 40px;
+        color: #f97316;
+        animation: gf-boot-pop 0.55s cubic-bezier(0, 0, 0.2, 1) both;
+      }
+
+      .gf-boot__name {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #fafafa;
+        animation: gf-boot-rise 0.45s cubic-bezier(0, 0, 0.2, 1) 0.12s both;
+      }
+
+      .gf-boot__tagline {
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #a1a1aa;
+        animation: gf-boot-rise 0.45s cubic-bezier(0, 0, 0.2, 1) 0.2s both;
+      }
+
+      .gf-boot__bar {
+        position: relative;
+        width: 168px;
+        height: 3px;
+        margin-top: 10px;
+        overflow: hidden;
+        border-radius: 9999px;
+        background: #27272a;
+        animation: gf-boot-fade-in 0.4s ease-out 0.25s both;
+      }
+
+      .gf-boot__bar span {
+        position: absolute;
+        inset: 0;
+        width: 42%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, rgba(249, 115, 22, 0), #f97316, rgba(249, 115, 22, 0));
+        animation: gf-boot-sweep 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .gf-boot,
+        .gf-boot * {
+          animation: none !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <div
+      id="gasflow-boot-splash"
+      class="gf-boot"
+      role="status"
+      aria-live="polite"
+      aria-label="Carregando o GasFlow"
+    >
+      <div class="gf-boot__glow"></div>
+      <div class="gf-boot__content">
+        <div class="gf-boot__mark">
+          <span class="gf-boot__ring"></span>
+          <svg
+            class="gf-boot__flame"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
+            />
+          </svg>
+        </div>
+        <p class="gf-boot__name">GasFlow</p>
+        <p class="gf-boot__tagline">Sistema Operacional</p>
+        <div class="gf-boot__bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+
+    <script>
+      // Rede de segurança: se o bundle não montar (falha de rede/JS), o splash
+      // não pode ficar preso parecendo travamento. Se o React já montou, o nó
+      // foi removido e este timer não faz nada.
+      window.setTimeout(function () {
+        var el = document.getElementById('gasflow-boot-splash')
+        if (!el) return
+        el.classList.add('gf-boot--leave')
+        window.setTimeout(function () {
+          el.remove()
+        }, 400)
+      }, 12000)
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
