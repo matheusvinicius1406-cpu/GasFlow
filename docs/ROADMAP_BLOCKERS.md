@@ -51,7 +51,7 @@ Tem JWT+refresh+multi-tenant prontos (tags `archive/claude-scalability-plan`), p
 
 | # | Bloqueio | Impacto | Resolução necessária |
 |---|----------|---------|---------------------|
-| B1 | **`release.yml` tem o gate "Require Authenticode signature"** (linhas 64–71: `Get-AuthenticodeSignature` → `throw` se não Valid). Sem certificado, **toda release falha e nada é publicado**. | Bloqueia publicar v1.1.2+ e todo o pipeline de evolução. | Remover o step (decisão já aprovada na spec `docs/exe-rebuild-spec.md` #13). Trivial, fazer primeiro. |
+| ~~B1~~ | ~~**`release.yml` tem o gate "Require Authenticode signature"**~~ — **resolvido** em `2498374` (`ci(release): remove gate de assinatura Authenticode`). A v1.1.6 e a v1.1.7 publicaram com esse step fora. | — | Fechado. |
 | B2 | **Alembic não roda no exe empacotado.** `desktop_entry.py` não invoca `alembic upgrade`; o compose de produção aplica no boot, mas o Desktop não. Usuários instalados ficariam **sem as tabelas novas** (users, roles, audit_logs, stock_full/empty, snapshots). | P0 inteiro (novas tabelas) não chega aos usuários do Desktop. | Adicionar migração-on-boot no `desktop_entry.py` (alembic embutido no exe via hiddenimports, apontando para o migrations/ empacotado como resource) **ou** fallback `create_all` com guard de versão. Decidir antes do primeiro PR. |
 | B3 | **Débito de estoque em pedido CONFIRMED conflita com o requisito "somente entregas FINALIZADAS debitam".** Migrar o débito para DELIVERED sem remover o do CONFIRMED = **duplo débito**. | Inconsistência de estoque (o pior tipo de bug para o negócio). | Decidir: (a) mover o débito do pedido para a entrega (pedido só valida/reserva), ou (b) manter débito no CONFIRMED e a entrega só move cheio→vazio (a troca do cilindro é isso fisicamente). A opção (b) reflete a realidade do GLP: na entrega, 1 cheio sai e 1 vazio entra. |
 | B4 | **Permissões em código, não no banco.** O Admin console exige persistir roles/permissões/overrides; hoje `TenantContext` carrega o dict hardcoded. | Sem loader DB→contexto, telas de roles não persistem nada. | Criar tabelas + seed, e um `PolicyLoader` que sobrepõe `ROLE_PERMISSIONS` (código = fallback, banco = fonte). Manter wildcard. |
@@ -127,7 +127,7 @@ Tem JWT+refresh+multi-tenant prontos (tags `archive/claude-scalability-plan`), p
 
 | Passo | Entrega | Desbloqueia |
 |-------|---------|-------------|
-| 0.1 | Remover gate Authenticode do `release.yml` (B1) + publicar v1.1.2 | Pipeline de release inteiro |
+| ~~0.1~~ | ~~Remover gate Authenticode do `release.yml` (B1)~~ — **feito** (`2498374`); pipeline de release publicado até a v1.1.7 | — |
 | 0.2 | Migração-on-boot no `desktop_entry.py` (B2) + validação no instalador | Todas as tabelas novas |
 | 0.3 | Migration: `auth_users` (must_change_password, last_login_at, role) + `roles`, `permissions`, `role_permissions`, `user_permissions_override`, `audit_logs` + seed | P0 RBAC |
 | 0.4 | `PolicyLoader` (banco→TenantContext) + CRUD de usuários (endpoints) + reset de senha + audit em cada mutação | Admin console |
@@ -143,7 +143,38 @@ Tem JWT+refresh+multi-tenant prontos (tags `archive/claude-scalability-plan`), p
 ## PARTE 7 — RESUMO EXECUTIVO
 
 - **Nada do P0 é "do zero"**: segurança FASE 13, delivery domain e atomicidade de estoque já existem — o trabalho é completar (persistir policy, unificar audit, split cheios/vazios).
-- **2 bloqueios triviais** (gate de assinatura, migração no exe) travam TODO o roadmap se não forem os primeiros PRs.
+- **1 bloqueio trivial restante** (migração no exe, B2) trava TODO o roadmap se não for o primeiro PR; o gate de assinatura (B1) já saiu e o pipeline publicou até a v1.1.7.
 - **1 conflito de negócio** (débito CONFIRMED vs. DELIVERED) precisa de decisão do dono antes do código de estoque.
 - **2 dependências externas** (credenciamento fiscal; auditoria jurídica LGPD/CLT) não se resolvem com código — isolá-las no cronograma.
 - O branch arquivado **não** deve ser mergeado (schema incompatível); usar como referência de padrão JWT.
+
+---
+
+## PARTE 8 — DÍVIDAS DECLARADAS NA v1.1.7 (herdadas, com evidência)
+
+Itens que **não** foram corrigidos porque a correção não depende do projeto —
+ficam registrados em vez de silenciados, para não virarem surpresa.
+
+| # | Dívida | Evidência | O que destrava |
+|---|--------|-----------|----------------|
+| D1 | **5 alertas HIGH de `extract-zip`** no serviço WhatsApp, chegando por `whatsapp-web.js` → `puppeteer` → `@puppeteer/browsers`. | `npm audit` no `whatsapp/`. A `2.0.1` é a **última versão publicada** do pacote e é exatamente a que o `overrides` do `package.json` já fixa — não há correção upstream para aplicar. As versões de `extract-zip`/`puppeteer`/`whatsapp-web.js` **não** mudaram na v1.1.7, então não foi introduzido pela release. | Release corrigida do `extract-zip` (ou trocar o motor `wwebjs`, que só é usado no rollback `WA_ENGINE=wwebjs`). Nenhum workflow roda `npm audit`, então não bloqueia CI. |
+| D2 | **TypeScript 7 bloqueado no serviço WhatsApp.** | `typescript-eslint@8.70.0` — o último publicado — declara `peerDependencies.typescript: ">=4.8.4 <6.1.0"`. TS 7.0.2 está fora da faixa, e é o que o lint usa. A PR do dependabot (#25) fica **vermelha** no CI por isso. | Publicação de um `typescript-eslint` que aceite TS 7. Enquanto isso o serviço fica em TS 6 — subir seria trocar typecheck por lint que não roda. |
+| D3 | **10 rotas do serviço WhatsApp sem consumidor no repositório** (`/lists/*/contacts`, `/customers/sync`, `/campaigns/*/preview`, `/whatsapp/accounts/*/media`…). | `backend/tests/integrity_allowlist.json`, check `whatsapp-sem-consumidor`. | Decisão de produto: são API do serviço que o proxy do backend só não expõe. Remover seria decidir produto por auditoria; expor seria criar tela. Ficam na allowlist com motivo. |
+| D4 | **Shim de tipos `frontend/src/test/jest-dom-vitest.d.ts`.** | `@testing-library/jest-dom` 7.x declara `interface Assertion<T = any>` e o Vitest 5 declara `Assertion<R, T>`; a mesclagem de interfaces falha e os matchers somem do `expect`. O shim redeclara a augmentation com a assinatura do Vitest 5. | Suporte a Vitest 5 no `jest-dom`. É shim de compatibilidade, comentado como tal — remover quando o upstream publicar. |
+
+### Infra de release — o que passou a ser regra (v1.1.7)
+
+O gate de CI do release existia desde 16/09 mas **nunca tinha rodado**: como o
+release da v1.1.6 saiu *antes* dele, a v1.1.7 foi a primeira tag a exercitá-lo —
+e reprovou. Os três consertos abaixo são pós-mortem dessa primeira execução:
+
+1. `ci-gate` não fazia `actions/checkout` → workspace vazio → `python3` sai com
+   código 2 em 1s, antes de olhar o CI.
+2. `permissions: contents: write` sem `actions: read` → a consulta às runs
+   voltaria 403 mesmo com o script no lugar.
+3. Ninguém conferia o release publicado: o publish do electron-builder pode
+   terminar **verde** deixando só o `.blockmap`, e aí o auto-update fica sem
+   `latest.yml` para ler. Agora um step confere `.exe`, `.exe.blockmap` e
+   `latest.yml` e reprova o job se faltar algum.
+4. O download do toolchain do electron-builder é o ponto frágil (504 do host de
+   binários matou o build da v1.1.7) → cache do Actions + retry de 3 tentativas.
