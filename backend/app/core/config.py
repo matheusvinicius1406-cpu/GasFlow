@@ -12,7 +12,7 @@ from typing import List
 
 class Settings(BaseModel):
     app_name: str = "GasFlow"
-    app_version: str = "0.1.0"
+    app_version: str = "1.1.7"
 
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")

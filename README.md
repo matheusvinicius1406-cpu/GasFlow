@@ -6,7 +6,7 @@ Sistema operacional para depósitos de gás e água.
 [![Build & Push](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/build-push.yml/badge.svg)](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/build-push.yml)
 [![Coverage](https://img.shields.io/badge/cobertura-57%25-yellowgreen)](https://github.com/matheusvinicius1406-cpu/GasFlow)
 [![E2E](https://img.shields.io/badge/E2E-8%2F8-brightgreen)](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.1.6-blue)](https://github.com/matheusvinicius1406-cpu/GasFlow/releases)
+[![Version](https://img.shields.io/badge/version-1.1.7-blue)](https://github.com/matheusvinicius1406-cpu/GasFlow/releases)
 
 ## Arquitetura
 

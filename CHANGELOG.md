@@ -4,6 +4,97 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-09-21
+
+### 🛡️ Integridade do app — auditoria, correções e release
+
+Antes de publicar, o app inteiro passou por uma varredura que cruza o que
+cada camada expõe com quem consome: tela ↔ endpoint, botão ↔ handler, canal
+IPC ↔ ponte, evento ↔ emissor, rota ↔ consumidor, tabela ↔ superfície,
+módulo ↔ rota. O guard mora dentro da suíte (`backend/tests/`) e roda no CI
+em PR e push — deixa de ser varredura de um dia e passa a ser regra do
+repositório.
+
+- **Guard de integridade** (`tests/integrity_audit.py` +
+  `test_app_integrity.py`): 11 checagens entre frontend, backend, desktop
+  (Electron), serviço WhatsApp, app do entregador (React Native) e banco.
+  Os findings conhecidos ficam em `tests/integrity_allowlist.json`, versionado
+  e com o motivo escrito ao lado — o teste **falha** tanto se aparecer algo
+  fora da lista quanto se um item da lista deixar de existir (allowlist
+  apodrecida também é quebra). Relatório gerado em
+  `docs/auditoria/integridade/` (`python -m tests.integrity_audit --report`).
+- **Dois bugs reais encontrados e corrigidos** — os dois eram 404 silencioso
+  numa tela viva, do tipo que não aparece em log nenhum:
+  - `ContactsCrmPage` chamava `/clients/contacts*`, mas quem serve contatos é
+    o módulo unificado do WhatsApp (`/whatsapp/contacts*`): listar, importar
+    VCF, exportar VCF e reativar contato falhavam.
+  - O app do entregador chamava `/driver/deliveries/:id/:action`, formato que
+    o backend não expõe (ele serve `/api/v1/driver/deliveries/:id/:verbo`) —
+    o caminho agora é explícito por ação, sem segmento adivinhado.
+- **Superfície morta removida**: 44 métodos do preload sem consumidor, 5
+  handlers IPC órfãos no main e o renderer legado `desktop/dist/renderer/`,
+  que era **empacotado no instalador e nunca carregado** (o Electron abre o
+  frontend com `loadURL(backendUrl())`). A ponte IPC viva ficou com 19
+  métodos, todos com uso comprovado no renderer que roda de fato.
+- **Dívida declarada em vez de apagada**: as 10 rotas do serviço WhatsApp sem
+  consumidor no repo (`/lists/*/contacts`, `/customers/sync`,
+  `/campaigns/*/preview` …) continuam existindo — são API de produto do
+  serviço, que o proxy do backend simplesmente não expõe; removê-las seria
+  decisão de produto, não de auditoria. Ficam na allowlist com o motivo.
+- **`tzdata` declarado** (`requirements.txt` + spec do PyInstaller): o exe só
+  carregava a base de fusos porque a máquina de build tinha o pacote por
+  acaso, e a falta dele derrubava as 15 falhas locais da suíte no Windows
+  (`ZoneInfo("America/Sao_Paulo")` sem fallback disponível).
+
+### 📦 Dependabot — as 22 atualizações fechadas por área
+
+Consolidadas em 4 commits (uma área por commit) em vez de mergear as 22
+branches soltas, que conflitavam entre si — três delas mexiam no mesmo bloco
+de dependências do `react`.
+
+- **GitHub Actions + pip**: checkout/setup-node/setup-python para v7,
+  setup-qemu-action v4, PyInstaller 6.22.3, python-multipart 0.0.32 e
+  ruff 0.16.8 nos dois requirements.
+- **Frontend**: React 19.3, Vite 8.3, Vitest 5, ESLint 10, lucide-react 1.47,
+  react-hook-form, react-router-dom e `@types/react*`. Dois ajustes foram
+  necessários, ambos por mudança de contrato das próprias ferramentas:
+  o ESLint 10 deixou de trazer `@eslint/js` de forma transitiva (virou
+  dependência explícita) e a nova config recomendada liga
+  `preserve-caught-error`, que exige `cause` no erro relançado — o
+  `AuthProvider` preserva o erro original ao traduzir a mensagem de login.
+  Já o Vitest 5 mudou `Assertion` para **dois** parâmetros de tipo, o que faz
+  a augmentation do `@testing-library/jest-dom` 7.x (que declara um) não
+  mesclar mais e some com os matchers do `expect`: daí o shim
+  `src/test/jest-dom-vitest.d.ts`, que redeclara a augmentation com a
+  assinatura nova. Remover quando o jest-dom publicar suporte ao Vitest 5.
+- **Serviço WhatsApp + E2E**: `@hapi/boom` 10, dotenv 17, `@types/node` 26.6,
+  ESLint 10 e Playwright 1.63. O ESLint 10 **removeu** o formato `.eslintrc`:
+  o arquivo legado virou `eslint.config.js` (flat), na mesma convenção do
+  frontend, e as duas dependências avulsas do typescript-eslint deram lugar
+  ao pacote meta.
+- **Um bump ficou de fora, e o motivo não é preferência**: TypeScript 7 no
+  serviço WhatsApp. O `typescript-eslint` 8.70.0 — último publicado — declara
+  peer `>=4.8.4 <6.1.0`, ou seja, **nenhuma versão lançada do lint entende o
+  TS 7**. Subir trocaria um typecheck funcionando por um lint que não roda;
+  fica como bloqueio upstream até o lint acompanhar.
+- **Dívida herdada (não introduzida aqui)**: 5 alertas HIGH do `extract-zip`
+  chegando por `whatsapp-web.js` → puppeteer. A 2.0.1 é a última versão
+  publicada e é exatamente a que o `overrides` do projeto já fixa — não há
+  correção upstream para aplicar hoje.
+
+#### Suítes locais na v1.1.7
+
+| Suíte | Resultado |
+|---|---|
+| Backend (ruff · mypy · pytest) | **1662 passed**, 27 skipped, 0 failed |
+| Guard de integridade | 20 findings, **0 pendentes** |
+| Frontend (build · lint · vitest) | 299 testes |
+| WhatsApp (typecheck · build · lint · test) | 94 testes |
+| Agent (typecheck · build · test) | 27 testes |
+| Desktop (typecheck · test) | 71 testes |
+| Mobile (typecheck · test) | 33 testes |
+| E2E (Playwright 1.63) | config válida, 11 specs coletados (run completo no CI) |
+
 ### 🔧 CI/E2E — o stack voltou a subir (e o Postgres a migrar)
 
 O workflow **E2E estava vermelho desde pelo menos 15/09** e o **Trivy nunca

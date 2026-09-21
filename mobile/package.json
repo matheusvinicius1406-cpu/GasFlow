@@ -1,6 +1,6 @@
 {
   "name": "gasflow-mobile",
-  "version": "0.1.0",
+  "version": "1.1.7",
   "private": true,
   "description": "GasFlow App do Entregador — MVP React Native (Fase 2 do roadmap). Lógica de negócio testável sem toolchain RN; UI nativa compilada depois.",
   "main": "index.js",

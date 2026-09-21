@@ -442,7 +442,10 @@ def write_report() -> Path:
             },
             ensure_ascii=False,
             indent=2,
-        ),
+        )
+        # newline final: o hook `check json` do pre-commit normaliza, e o
+        # relatório não deve reescrever o arquivo a cada commit.
+        + "\n",
         encoding="utf-8",
     )
     report = REPORT_DIR / "RELATORIO_v1.1.7.md"
