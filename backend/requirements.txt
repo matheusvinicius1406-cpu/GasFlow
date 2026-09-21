@@ -30,3 +30,7 @@ redis
 
 # Métricas Prometheus (/metrics)
 prometheus-client>=0.26.0
+
+# Fusos IANA (zoneinfo). No Linux o tz db do sistema cobre; no Windows
+# (exe PyInstaller e ambiente de teste) o pacote com os dados é obrigatório.
+tzdata

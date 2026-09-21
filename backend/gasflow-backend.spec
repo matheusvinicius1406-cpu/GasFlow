@@ -10,6 +10,8 @@ hiddenimports = (
     # Executados no boot do exe (desktop_entry.run_migrations):
     + collect_submodules("alembic")
     + collect_submodules("mako")
+    # Fusos IANA: no Windows o zoneinfo depende do pacote tzdata (com os dados)
+    + ["tzdata"]
 )
 
 # Alembic no exe: ini + migrations/ empacotados como datas, lidos em runtime
