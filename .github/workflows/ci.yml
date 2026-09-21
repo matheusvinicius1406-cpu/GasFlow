@@ -27,7 +27,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          # 3.14 e não 3.12: é o interpretador de produção
+          # (`backend/Dockerfile` = python:3.14-slim). Validar em versão
+          # diferente da que roda em campo valida o código errado.
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - name: Install dependencies
@@ -141,7 +144,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          # Mesma versão do job `backend` (3.14 = produção), para que a
+          # migração seja ensaiada no interpretador em que vai rodar.
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - name: Install dependencies
