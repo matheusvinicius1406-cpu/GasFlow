@@ -6,9 +6,14 @@ on:
   push:
     branches: [main]
 
+# `cancel-in-progress` só em pull_request. Em push para a main, cancelar a run
+# anterior derruba a CI de um commit que já pode ser base de release: o gate do
+# release.yml exige uma run de CI **concluída e verde** no commit da tag, e foi
+# assim que a CI da v1.1.7 foi cancelada por um push posterior — o release ficou
+# preso sem nada de errado no código.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
 
