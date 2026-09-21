@@ -56,7 +56,7 @@ export async function fetchMyDeliveries(
   baseUrl: string,
   token: string,
 ): Promise<DeliveryDTO[]> {
-  const data = await requestJson<{ deliveries: DeliveryDTO[] }>(fetchFn, `${baseUrlClean(baseUrl)}/driver/deliveries`, {
+  const data = await requestJson<{ deliveries: DeliveryDTO[] }>(fetchFn, `${baseUrlClean(baseUrl)}/api/v1/driver/deliveries`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data.deliveries ?? [];
@@ -72,7 +72,19 @@ export async function postDeliveryAction(
   args: { deliveryId: string; action: DeliveryAction; clientActionId: string; payload?: Record<string, unknown> },
 ): Promise<void> {
   const { deliveryId, action, clientActionId, payload = {} } = args;
-  await requestJson<unknown>(fetchFn, `${baseUrlClean(baseUrl)}/driver/deliveries/${deliveryId}/${action}`, {
+  // Caminho explícito por ação: o backend expõe um endpoint por verbo
+  // (/accept, /start, /complete, /fail) — sem segmento dinâmico, o que também
+  // deixa o guard de integridade conferir cada rota contra o OpenAPI.
+  const clean = baseUrlClean(baseUrl);
+  const path =
+    action === "accept"
+      ? `${clean}/api/v1/driver/deliveries/${deliveryId}/accept`
+      : action === "start"
+        ? `${clean}/api/v1/driver/deliveries/${deliveryId}/start`
+        : action === "complete"
+          ? `${clean}/api/v1/driver/deliveries/${deliveryId}/complete`
+          : `${clean}/api/v1/driver/deliveries/${deliveryId}/fail`;
+  await requestJson<unknown>(fetchFn, path, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ client_action_id: clientActionId, ...payload }),

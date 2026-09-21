@@ -39,7 +39,7 @@ export function ContactsCrmPage() {
     setLoading(true)
     setError(false)
     try {
-      const res = await apiClient.get('/clients/contacts', {
+      const res = await apiClient.get('/whatsapp/contacts', {
         params: { search: search || undefined, page: 1, page_size: 100 },
       })
       setData(res.data)
@@ -61,7 +61,7 @@ export function ContactsCrmPage() {
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await apiClient.post('/clients/contacts/import-vcf', form, {
+      const res = await apiClient.post('/whatsapp/contacts/import-vcf', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setNotice(`Importação: ${res.data.created} criados, ${res.data.updated} atualizados.`)
@@ -76,7 +76,7 @@ export function ContactsCrmPage() {
   const handleExport = async () => {
     setBusy('export')
     try {
-      const res = await apiClient.get('/clients/contacts/export-vcf', { responseType: 'blob' })
+      const res = await apiClient.get('/whatsapp/contacts/export-vcf', { responseType: 'blob' })
       const url = URL.createObjectURL(res.data as Blob)
       const link = document.createElement('a')
       link.href = url
@@ -111,7 +111,7 @@ export function ContactsCrmPage() {
   const handleReactivate = async (dryRun: boolean) => {
     setBusy(dryRun ? 'preview' : 'reactivate')
     try {
-      const res = await apiClient.post('/clients/contacts/reactivate', { dry_run: dryRun, limit: 50 })
+      const res = await apiClient.post('/whatsapp/contacts/reactivate', { dry_run: dryRun, limit: 50 })
       if (dryRun) {
         setNotice(
           `Reativação: ${res.data.total_eligible} elegíveis (inativos há ${res.data.days} dias). Nada enviado.`,
