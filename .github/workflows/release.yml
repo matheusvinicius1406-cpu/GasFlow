@@ -111,6 +111,10 @@ jobs:
       # instalador, e o auto-update sem `latest.yml` para ler. Falhar aqui é
       # melhor do que descobrir isso no cliente.
       - name: Confere que o release tem instalador, blockmap e latest.yml
+        # `shell: bash` é obrigatório: o runner é windows-latest e o shell
+        # padrão lá é PowerShell, que não entende `$(...)`, `for ... do` nem
+        # `grep -Eq` — o step morria em 1s sem checar nada.
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
