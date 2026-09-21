@@ -50,8 +50,11 @@ def auth_service():
 
 @pytest.fixture
 def db():
-    # Import security models to register them with Base
-    import app.infrastructure.security.models  # noqa: F401
+    # Registra os models ORM canônicos no metadata do Base, para que o
+    # `create_all` abaixo crie o schema de verdade (auth_* em auth_model.py +
+    # RBAC/estoque em rbac_model.py).
+    import app.infrastructure.repositories.auth_model  # noqa: F401
+    import app.infrastructure.repositories.rbac_model  # noqa: F401
 
     engine = create_engine(
         "sqlite:///:memory:",
@@ -241,8 +244,6 @@ class TestConcurrentSharedSession:
     def test_concurrent_validate_token_db_backed(self, db):
         """Concurrent validate_token on one DB-backed AuthService must not
         corrupt the shared session (thread-safety regression)."""
-        import app.infrastructure.security.models  # noqa: F401
-
         # DB-backed service sharing a single session — same shape as the
         # get_auth_service() singleton in app/presentation/dependencies.py.
         from app.infrastructure.database.init_db import engine  # noqa: F401
@@ -562,86 +563,33 @@ class TestResourceOwnership:
 
 
 class TestDatabaseIntegrity:
-    def test_security_tables_created(self, db):
-        """All security tables exist in real DB."""
-        # Import security models to register them with Base
-        import app.infrastructure.security.models  # noqa: F401
+    def test_auth_tables_created(self, db):
+        """O schema real de auth/RBAC existe no banco.
+
+        Antes este teste conferia um schema **paralelo** (`security_*`, em
+        `app/infrastructure/security/models.py`) que a aplicação nunca usou —
+        só os testes o importavam, então ele dava "verde" sobre tabelas que não
+        existem em banco nenhum. Agora confere o schema de produção.
+        """
         from sqlalchemy import inspect
 
-        inspector = inspect(db.get_bind())
-        tables = inspector.get_table_names()
-        expected = [
-            "security_users",
-            "security_sessions",
-            "security_tenants",
-            "security_memberships",
-            "security_roles",
-            "security_role_permissions",
-            "security_audit",
-        ]
-        for t in expected:
-            assert t in tables, f"Missing table: {t}"
-
-    def test_user_model_persistence(self, db):
-        from app.infrastructure.security.models import UserModel
-
-        user = UserModel(
-            id="test-001",
-            username="testuser",
-            email="test@test.com",
-            password_hash="salt:hash",
-            status="ACTIVE",
-        )
-        db.add(user)
-        db.commit()
-        fetched = db.query(UserModel).filter_by(id="test-001").first()
-        assert fetched is not None
-        assert fetched.username == "testuser"
-
-    def test_session_unique_token(self, db):
-        from app.infrastructure.security.models import UserModel, SessionModel
-
-        user = UserModel(id="u1", username="u1", email="u1@test.com", password_hash="salt:hash", status="ACTIVE")
-        db.add(user)
-        db.commit()
-        s1 = SessionModel(
-            id="s1",
-            user_id="u1",
-            tenant_id="t1",
-            token="tok_abc",
-            status="ACTIVE",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
-        )
-        db.add(s1)
-        db.commit()
-        # Duplicate token should fail
-        s2 = SessionModel(
-            id="s2",
-            user_id="u1",
-            tenant_id="t1",
-            token="tok_abc",
-            status="ACTIVE",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
-        )
-        db.add(s2)
-        with pytest.raises(Exception):
-            db.commit()
-
-    def test_audit_index(self, db):
-        from app.infrastructure.security.models import AuditRecordModel
-
-        record = AuditRecordModel(
-            id="a1",
-            actor_id="admin",
-            actor_type="USER",
-            tenant_id="default",
-            action="AUTH_SUCCESS",
-            result="SUCCESS",
-        )
-        db.add(record)
-        db.commit()
-        fetched = db.query(AuditRecordModel).filter_by(id="a1").first()
-        assert fetched.action == "AUTH_SUCCESS"
+        tables = set(inspect(db.get_bind()).get_table_names())
+        expected = {
+            # auth_model.py
+            "auth_users",
+            "auth_sessions",
+            "auth_tenants",
+            "auth_roles",
+            "auth_memberships",
+            "auth_audit_log",
+            # rbac_model.py
+            "permissions",
+            "role_permissions",
+            "user_permissions_override",
+            "stock_daily_snapshots",
+        }
+        missing = {t for t in expected if t not in tables}
+        assert not missing, f"Tabelas ausentes no banco: {sorted(missing)}"
 
 
 # ═══════════════════════════════════════════════════════════

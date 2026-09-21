@@ -1,5 +1,15 @@
 # FASE 13 — FINAL VALIDATION
 
+> ⚠️ **[histórico]** A tabela de schema mais abaixo lista `security_*`
+> (`app/infrastructure/security/models.py`) como o schema de segurança. Essas
+> tabelas **nunca existiram em banco real** e foram removidas — eram um schema
+> paralelo que só o próprio teste importava. O schema canônico é `auth_users`,
+> `auth_sessions`, `auth_tenants`, `auth_roles`, `auth_memberships`,
+> `auth_audit_log` (`app/infrastructure/repositories/auth_model.py`) +
+> `permissions`, `role_permissions`, `user_permissions_override`,
+> `stock_daily_snapshots` (`rbac_model.py`). Ver D5 em
+> `docs/ROADMAP_BLOCKERS.md`.
+
 ## STATUS: APPROVED ✅
 
 ## COMMIT

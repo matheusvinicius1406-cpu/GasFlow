@@ -170,9 +170,7 @@ Status de re-verificação em 21/09 ao lado de cada um.
 10. **Alembic `batch_alter_table` no SQLite** — 🔻 *irrelevante para o Desktop*,
     que não usa Alembic (B2); segue valendo para Docker/produção.
 11. **Compat de auto-update: migrations aditivas** — ⚠️ **vira requisito duro**
-    enquanto o Desktop persistir no caminho `create_all` (ver resíduo do B2).
-12. **Testes backend: senha do conftest** — ✅ *verificado na prática*: a suíte
-    local roda com `ADMIN_PASSWORD=test_password` (não sobrescrever env).
+    enquanto o Desktop persistir no caminho `create_all` (ver resíduo do B2).12. **Testes backend: senha do conftest** — ✅ *verificado na prática*: rode a suíte **sem definir `ADMIN_PASSWORD`** — o `conftest.py` já traz o default (`test_password_123`) e é exatamente como o CI roda. Sobrescrever o env (ex.: `ADMIN_PASSWORD=test_password`) reprova os 17 testes de login/sessão de `test_security.py`, e o efeito só aparece quando o arquivo roda isolado — parece regressão e não é.
 13. **Frontend: React 19 + Vite + zod** — ✅ *verificado*: React 19.3, Vite 8.3,
     Vitest 5; telas novas seguem `features/` (não existe `pages/`), com
     `PermissionsPanel.tsx` e `admin/UsersPage.tsx` como referência de padrão.
