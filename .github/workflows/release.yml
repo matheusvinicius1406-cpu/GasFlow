@@ -81,13 +81,42 @@ jobs:
           npm ci --prefix ../whatsapp
           npm ci --prefix ../frontend
 
+      # O electron-builder baixa binários próprios (electron, nsis, winCodeSign)
+      # a cada build; na v1.1.7 o download morreu com "504 Gateway Time-out" do
+      # host de binários e derrubou o release sem nada de errado no código. Com
+      # o cache, essas dependências passam a vir do cache do Actions.
+      - name: Cache do toolchain do electron
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-toolchain-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            electron-toolchain-${{ runner.os }}-
+
       - name: Build installer candidate
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
+        # `shell: bash`: o shell padrão do windows-latest é PowerShell e o
+        # comportamento dele em falha de comando nativo mudou no 7.4 — em bash
+        # o retry fica explícito e não depende dessa diferença.
+        shell: bash
         # --publish never: em build de tag o electron-builder tentaria publicar
         # aqui e morreria sem GH_TOKEN (o publish correto é o step seguinte).
-        run: npm run build:win -- --publish never
+        # Retry porque a falha conhecida deste passo é de rede (50x no download
+        # do toolchain) — não vale perder o release por isso.
+        run: |
+          for attempt in 1 2 3; do
+            if npm run build:win -- --publish never; then
+              exit 0
+            fi
+            echo "::warning::build do instalador falhou na tentativa $attempt"
+            sleep 20
+          done
+          echo "::error::build do instalador falhou nas 3 tentativas"
+          exit 1
 
       - name: Publish installer
         env:
