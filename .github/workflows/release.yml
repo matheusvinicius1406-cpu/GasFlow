@@ -39,7 +39,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 24 (e não 20): `build:win` também compila o frontend, e o
+          # Vite 8 exige ^20.19 || >=22.12 — mesma versão que o job
+          # `frontend` do ci.yml usa para validar esse build.
+          node-version: "24"
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
