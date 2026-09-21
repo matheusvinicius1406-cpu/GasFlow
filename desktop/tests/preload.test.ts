@@ -1,6 +1,10 @@
 /**
  * Testes do preload (dist/preload/index.js): window.gasflow e window.gasflowUpdater
  * expostos via contextBridge — com electron stubulado.
+ *
+ * A superfície é intencionalmente enxuta: só o que o renderer vivo (React,
+ * servido pelo FastAPI) consome. O guard `backend/tests/test_app_integrity.py`
+ * garante que nenhuma ponte fique sem consumidor.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -44,19 +48,21 @@ test("contextBridge expõe window.gasflow com a API esperada", () => {
   const api = exposed["gasflow"] as Record<string, () => unknown> | undefined;
   assert.ok(api, "window.gasflow deve existir");
   for (const fn of [
-    "getSettings",
-    "saveSettings",
-    "agentStart",
-    "agentStop",
-    "waStart",
-    "waStop",
-    "waGetQr",
-    "listConversations",
+    "exportPdf",
+    "exportCurrentViewPdf",
     "printerList",
     "printerSetName",
     "printerStatus",
     "printerTest",
-    "onLog",
+    "reportSessionToken",
+    "notifySessionChanged",
+    "waWebStatuses",
+    "waWebShow",
+    "waWebBounds",
+    "waWebHide",
+    "waWebRePair",
+    "waWebClose",
+    "onWaWebStatus",
   ]) {
     assert.equal(typeof api?.[fn], "function", `gasflow.${fn} deve ser função`);
   }
@@ -71,11 +77,11 @@ test("contextBridge expõe window.gasflowUpdater (check/install/getState/onState
   assert.equal(typeof api?.onStateChange, "function");
 });
 
-test("onLog registra listener em gasflow:log e devolve unsubscribe", () => {
-  const api = exposed["gasflow"] as { onLog: (cb: () => void) => () => void };
+test("onWaWebStatus registra listener em gasflow:wa-web-status e devolve unsubscribe", () => {
+  const api = exposed["gasflow"] as { onWaWebStatus: (cb: () => void) => () => void };
   const before = registered.length;
-  const off = api.onLog(() => undefined);
+  const off = api.onWaWebStatus(() => undefined);
   assert.equal(registered.length, before + 1);
-  assert.equal(registered[registered.length - 1].channel, "gasflow:log");
+  assert.equal(registered[registered.length - 1].channel, "gasflow:wa-web-status");
   assert.equal(typeof off, "function");
 });

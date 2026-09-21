@@ -353,20 +353,10 @@ function registerProtectedIpc() {
         ipc_permissions_1.clearPermissionCache();
         return { ok: true };
     });
-    // finance:export-pdf → printToPDF do webContents (handler nativo).
-    (0, ipc_permissions_1.registerProtectedHandler)("finance:export-pdf", "finance.export_pdf", async (event) => {
-        const wc = event.sender;
-        const pdf = await wc.printToPDF({
-            landscape: false,
-            printBackground: true,
-            margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
-        });
-        return { ok: true, pdfBase64: pdf.toString("base64") };
-    });
     // reports:export-pdf (F9) → printToPDF da view atual: os gráficos da
     // ReportsPage já estão renderizados no DOM, então imprimimos a própria
     // janela (paisagem — gráficos lado a lado) e salvamos no tmp.
-    // Permissão: finance.export_pdf (mesma gate do finance:export-pdf).
+    // Permissão: finance.export_pdf.
     (0, ipc_permissions_1.registerProtectedHandler)("reports:export-pdf", "finance.export_pdf", async (event) => {
         const wc = event.sender;
         const pdf = await wc.printToPDF({
@@ -415,28 +405,6 @@ function registerProtectedIpc() {
         finally {
             win.destroy();
         }
-    });
-    // finance:export-docx → busca o relatório diário no backend local e monta
-    // um payload Word-compatível (HTML com mso) — sem dependência nova.
-    // Sem permissão, o gate bloqueia antes de qualquer execução.
-    (0, ipc_permissions_1.registerProtectedHandler)("finance:export-docx", "finance.export_docx", async (_event, args) => {
-        const token = await ipc_permissions_1.getToken();
-        const date = args?.date ? `?date=${encodeURIComponent(args.date)}` : "";
-        const { status, body } = await ipc_permissions_1.fetchJson(`${backendUrl()}/reports/daily${date}`, {
-            Authorization: `Bearer ${token ?? ""}`,
-        });
-        if (status !== 200)
-            throw new Error(`backend respondeu ${status}`);
-        const html = [
-            "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
-                "xmlns:w='urn:schemas-microsoft-com:office:word'>",
-            "<head><meta charset='utf-8'><title>GasFlow — Relatório diário</title></head>",
-            "<body><h1>GasFlow — Relatório diário</h1>",
-            `<p>${new Date().toLocaleString('pt-BR')}</p>`,
-            `<pre style="font-family:Consolas,monospace">${JSON.stringify(body, null, 2)}</pre>`,
-            "</body></html>",
-        ].join("");
-        return { ok: true, docxHtml: html };
     });
 }
 // ── IPC de settings ─────────────────────────────────────────────
@@ -521,38 +489,6 @@ function registerWaWebPanelIpc() {
 // settings:setWaEnabled — liga/desliga o serviço WhatsApp em runtime.
 // Persiste em settings.json e inicia/para o waBridge conforme o novo valor.
 function registerSettingsIpc() {
-    electron_1.ipcMain.handle("settings:setWaEnabled", async (_event, enabled) => {
-        const next = enabled === true;
-        settings = { ...settings, waEnabled: next };
-        (0, config_1.saveSettings)(settings);
-        if (next) {
-            logger_1.logger.info("wa.bridge", "waEnabled=true — iniciando waBridge");
-            try {
-                await ensureWaBridge().start();
-                if (settings.waAutoReply)
-                    ensureAssistant().start();
-                return { ok: true, running: true };
-            }
-            catch (e) {
-                logger_1.logger.warn("wa.bridge", `falha ao iniciar: ${e.message}`);
-                return { ok: false, running: false, error: String(e.message) };
-            }
-        }
-        logger_1.logger.info("wa.bridge", "waEnabled=false — parando waBridge");
-        if (waBridge && typeof waBridge.stop === "function") {
-            try {
-                await waBridge.stop();
-                return { ok: true, running: false };
-            }
-            catch (e) {
-                logger_1.logger.warn("wa.bridge", `falha ao parar: ${e.message}`);
-                return { ok: false, running: true, error: String(e.message) };
-            }
-        }
-        // Bridge nem chegou a ser instanciado (boot com waEnabled=false) — nada a parar.
-        logger_1.logger.info("wa.bridge", "waBridge não instanciado — nada a parar");
-        return { ok: true, running: false };
-    });
     // ── Impressão (F10.7) ────────────────────────────────
     // Listar as impressoras INSTALADAS no Windows (só o Electron consegue).
     electron_1.ipcMain.handle("printer:list", async () => {
@@ -649,21 +585,6 @@ function ensureAiSetup() {
     });
     return aiSetup;
 }
-function registerAiSetupIpc() {
-    electron_1.ipcMain.handle("ai:setup-status", () => (aiSetup ? aiSetup.getStatus() : { state: "detecting" }));
-    electron_1.ipcMain.handle("ai:setup-retry", () => {
-        const runner = ensureAiSetup();
-        void runner.run().catch((e) => logger_1.logger.warn("ai.setup", `retry: ${e.message}`));
-        return { ok: true };
-    });
-    electron_1.ipcMain.handle("ai:setup-download", (_event, model) => {
-        const runner = ensureAiSetup();
-        if (typeof model === "string" && model)
-            runner.modelName = model;
-        void runner.pullModel(runner.modelName).catch((e) => logger_1.logger.warn("ai.setup", `pull: ${e.message}`));
-        return { ok: true };
-    });
-}
 // ── Janela ───────────────────────────────────────────────────────────
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
@@ -720,22 +641,12 @@ else {
         // Handlers de settings registrados cedo — o renderer pode chamar a
         // qualquer momento depois do preload.
         registerSettingsIpc();
-        // F10.3: status/resume do orquestrador (painel do operador).
-        electron_1.ipcMain.handle("orchestrator:status", () => {
-            return ensureOrchestrator().statusAll();
-        });
-        electron_1.ipcMain.handle("orchestrator:resume", async (_event, name) => {
-            await ensureOrchestrator().resume(String(name));
-            return ensureOrchestrator().statusAll();
-        });
-        // Gate de permissões IPC (P0 3.6) + handlers finance:export-*.
+        // Gate de permissões IPC (P0 3.6).
         registerProtectedIpc();
         // Protótipo WhatsApp Web (flag waWebPanel.enabled, default OFF):
         // handlers registrados sempre (respondem disabled com flag off);
         // o painel só nasce quando a flag liga.
         registerWaWebPanelIpc();
-        // Item 3: handlers de status/download da IA (antes do runAiSetup).
-        registerAiSetupIpc();
         ai = new ai_service_1.AiService({
             baseUrl: settings.ollamaBaseUrl,
             textModel: settings.ollamaTextModel,
