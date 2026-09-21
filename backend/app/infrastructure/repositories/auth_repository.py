@@ -13,7 +13,7 @@ Repository pattern:
 - SQLAlchemyAuditRepository: audit log
 """
 
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -180,6 +180,56 @@ class SQLAlchemySessionRepository:
         )
         self.db.commit()
         return count
+
+    def set_refresh(self, session_id: str, token_hash: str, expires_at: datetime) -> bool:
+        """Grava o hash do refresh emitido no login (B5).
+
+        Só o sha256 vai ao banco — o token em claro nunca é persistido, então um
+        dump do banco não entrega sessão utilizável.
+        """
+        model = self.get_by_id(session_id)
+        if not model:
+            return False
+        model.refresh_token_hash = token_hash
+        model.refresh_prev_hash = None
+        model.refresh_expires_at = expires_at
+        model.refresh_rotated_at = datetime.utcnow()
+        self.db.commit()
+        return True
+
+    def find_by_refresh_hash(self, token_hash: str) -> Tuple[Optional[AuthSessionModel], bool]:
+        """Busca a sessão pelo hash do refresh apresentado.
+
+        Devolve ``(sessão, é_reuso)``. ``é_reuso=True`` quando o hash casa com o
+        refresh **anterior**, isto é, alguém apresentou um token que já foi
+        rotacionado — sinal de vazamento, e quem chamar deve revogar a sessão.
+        """
+        current = self.db.query(AuthSessionModel).filter(AuthSessionModel.refresh_token_hash == token_hash).first()
+        if current:
+            return current, False
+        stale = self.db.query(AuthSessionModel).filter(AuthSessionModel.refresh_prev_hash == token_hash).first()
+        return stale, stale is not None
+
+    def rotate_refresh(
+        self,
+        session_id: str,
+        prev_hash: str,
+        new_hash: str,
+        new_expires_at: datetime,
+    ) -> bool:
+        """Troca o refresh mantendo o anterior em ``refresh_prev_hash``.
+
+        Guardar o anterior é o que permite detectar reuso depois da rotação.
+        """
+        model = self.get_by_id(session_id)
+        if not model:
+            return False
+        model.refresh_prev_hash = prev_hash
+        model.refresh_token_hash = new_hash
+        model.refresh_expires_at = new_expires_at
+        model.refresh_rotated_at = datetime.utcnow()
+        self.db.commit()
+        return True
 
     def update_last_seen(self, session_id: str):
         model = self.get_by_id(session_id)

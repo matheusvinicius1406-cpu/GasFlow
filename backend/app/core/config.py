@@ -28,6 +28,11 @@ class Settings(BaseModel):
     # env MOBILE_JWT_SECRET (≥32 bytes) ou MOBILE_JWT_SECRET_FILE. Sem nada,
     # dev gera/persiste um secret aleatório fora do repo; produção falha alto.
     mobile_jwt_secret: str = os.getenv("MOBILE_JWT_SECRET", "")
+    # Secret HS256 do access token do OPERADOR (B5). Dedicado e distinto do
+    # mobile: um token do app do entregador nunca é assinado com a chave do
+    # console. Mesma regra de resolução e de produção do mobile
+    # (env OPERATOR_JWT_SECRET ou OPERATOR_JWT_SECRET_FILE, ≥32 bytes).
+    operator_jwt_secret: str = os.getenv("OPERATOR_JWT_SECRET", "")
     session_ttl_minutes: int = int(os.getenv("SESSION_TTL_MINUTES", "60"))
     max_failed_attempts: int = int(os.getenv("MAX_FAILED_ATTEMPTS", "5"))
     lockout_minutes: int = int(os.getenv("LOCKOUT_MINUTES", "15"))

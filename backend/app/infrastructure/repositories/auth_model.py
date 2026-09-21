@@ -54,6 +54,7 @@ class AuthSessionModel(Base):
         UniqueConstraint("token", name="uq_auth_session_token"),
         Index("ix_auth_session_user", "user_id"),
         Index("ix_auth_session_status", "status"),
+        Index("ix_auth_session_refresh_hash", "refresh_token_hash"),
     )
 
     id = Column(String(36), primary_key=True)
@@ -67,6 +68,13 @@ class AuthSessionModel(Base):
     revoked_at = Column(DateTime, nullable=True)
     ip_address = Column(String(50), nullable=False, default="")
     user_agent = Column(String(500), nullable=False, default="")
+    # Operator JWT (B5): a própria sessão é a família do refresh token.
+    # `refresh_prev_hash` existe só para detectar reuso do refresh rotacionado.
+    refresh_token_hash = Column(String(128), nullable=True)
+    refresh_prev_hash = Column(String(128), nullable=True)
+    refresh_expires_at = Column(DateTime, nullable=True)
+    refresh_rotated_at = Column(DateTime, nullable=True)
+    platform = Column(String(20), nullable=True)  # desktop | mobile
 
 
 class AuthTenantModel(Base):

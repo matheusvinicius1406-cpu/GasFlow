@@ -19,13 +19,7 @@ limit 10 login/min/IP; reuse de refresh revoga a família; toda query de
 rota filtra por driver_id do token.
 """
 
-import base64
-import hashlib
-import hmac
-import json
-import os
 import secrets
-import tempfile
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, cast
@@ -33,6 +27,15 @@ from typing import Any, Dict, List, Optional, cast
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.application.security.jwt_crypto import (
+    TokenError,
+    b64url,
+    b64url_decode,
+    decode,
+    encode_with_now,
+    ensure_file_secret,
+    resolve_jwt_secret,
+)
 from app.domain.security.models import RateLimiter
 from app.core.config import settings
 from app.infrastructure.database.dependencies import get_db
@@ -51,13 +54,17 @@ _login_limiter = RateLimiter()
 # ── Mini-JWT HS256 (stdlib) ──────────────────────────────────
 
 
+# Os primitivos (base64url, assinatura, verificação e segredo) vivem em
+# `app/application/security/jwt_crypto.py` e são compartilhados com o token do
+# operador — uma implementação só de verificação de assinatura no app.
+
+
 def _b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+    return b64url(data)
 
 
 def _b64url_decode(data: str) -> bytes:
-    padding = "=" * (-len(data) % 4)
-    return base64.urlsafe_b64decode(data + padding)
+    return b64url_decode(data)
 
 
 def _ensure_file_secret(path: str) -> str:
@@ -68,27 +75,7 @@ def _ensure_file_secret(path: str) -> str:
     desktop/instalação single-machine (o backend empacotado roda no PC do
     depósito, sem orquestração — um arquivo local é aceitável).
     """
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                stored = fh.read().strip()
-            if len(stored) >= 32:
-                return stored
-        except OSError:
-            pass  # ilegível/corrompido → regenera
-    generated = secrets.token_urlsafe(48)
-    tmp_path = f"{path}.{os.getpid()}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        fh.write(generated)
-    os.replace(tmp_path, path)
-    try:
-        os.chmod(path, 0o600)  # POSIX; no-op na prática no Windows
-    except OSError:
-        pass
-    return generated
+    return ensure_file_secret(path)
 
 
 def _jwt_secret() -> str:
@@ -102,47 +89,29 @@ def _jwt_secret() -> str:
          (default: <tempdir>/gasflow/mobile_jwt_secret.key)
       4. fallback "gasflow-dev-secret" APENAS fora de produção (testes/dev)
     """
-    env_secret = os.getenv("MOBILE_JWT_SECRET", "") or settings.mobile_jwt_secret
-    if env_secret:
-        return env_secret
-    path = os.getenv("MOBILE_JWT_SECRET_FILE") or os.path.join(
-        tempfile.gettempdir(), "gasflow", "mobile_jwt_secret.key"
+    # Segredo DEDICADO do mobile — nunca reusa a chave do operador.
+    return resolve_jwt_secret(
+        env_var="MOBILE_JWT_SECRET",
+        file_env_var="MOBILE_JWT_SECRET_FILE",
+        settings_values=(settings.mobile_jwt_secret,),
+        default_file_name="mobile_jwt_secret.key",
+        environment=settings.environment,
     )
-    try:
-        return _ensure_file_secret(path)
-    except OSError:
-        if settings.environment == "production":
-            raise RuntimeError(
-                "MOBILE_JWT_SECRET ou MOBILE_JWT_SECRET_FILE é obrigatório em " "produção (mínimo 32 bytes aleatórios)."
-            ) from None
-        return "gasflow-dev-secret"
 
 
 def issue_access_token(driver_id: str, tenant_id: str, expires_minutes: int = 15) -> str:
     """JWT HS256 mínimo com escopo "mobile" — verificado por hmac constante."""
-    header = {"alg": "HS256", "typ": "JWT"}
-    now = int(datetime.utcnow().timestamp())
-    payload = {
-        "sub": driver_id,
-        "tenant_id": tenant_id,
-        "scope": "mobile",
-        "role": "DRIVER",
-        "iat": now,
-        "exp": now + expires_minutes * 60,
-        "jti": str(uuid.uuid4()),
-    }
-    signing_input = (
-        _b64url(json.dumps(header, separators=(",", ":")).encode())
-        + "."
-        + _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    return encode_with_now(
+        {
+            "sub": driver_id,
+            "tenant_id": tenant_id,
+            "scope": "mobile",
+            "role": "DRIVER",
+            "jti": str(uuid.uuid4()),
+        },
+        _jwt_secret(),
+        expires_seconds=expires_minutes * 60,
     )
-    signature = hmac.new(_jwt_secret().encode(), signing_input.encode(), hashlib.sha256).digest()
-    return signing_input + "." + _b64url(signature)
-
-
-# Clock skew tolerado na validação de exp — celular pode estar adiantado/
-# atrasado (recomendação da auditoria: leeway ≥ 30s).
-_JWT_CLOCK_SKEW_S = 30
 
 
 def verify_access_token(token: str) -> Dict[str, Any]:
@@ -154,26 +123,12 @@ def verify_access_token(token: str) -> Dict[str, Any]:
     - assinatura comparada via hmac.compare_digest (timing-safe)
     - claim exp é OBRIGATÓRIO numérico — token sem exp nunca é aceito
     """
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise HTTPException(401, detail="Invalid token")
     try:
-        header = json.loads(_b64url_decode(parts[0]))
-        payload = json.loads(_b64url_decode(parts[1]))
-    except ValueError as exc:
-        raise HTTPException(401, detail="Invalid token") from exc
-    if not isinstance(header, dict) or header.get("alg") != "HS256":
-        raise HTTPException(401, detail="Invalid token")
-    signing_input = parts[0] + "." + parts[1]
-    expected = hmac.new(_jwt_secret().encode(), signing_input.encode(), hashlib.sha256).digest()
-    if not hmac.compare_digest(_b64url(expected), parts[2]):
-        raise HTTPException(401, detail="Invalid token")
-    exp = payload.get("exp") if isinstance(payload, dict) else None
-    if not isinstance(exp, (int, float)) or exp < datetime.utcnow().timestamp() - _JWT_CLOCK_SKEW_S:
-        raise HTTPException(401, detail="Token expired")
-    if payload.get("scope") != "mobile":
-        raise HTTPException(401, detail="Invalid token scope")
-    return payload
+        return decode(token, _jwt_secret(), expected_scope="mobile")
+    except TokenError as exc:
+        # `exc.message` preserva exatamente os detalhes anteriores
+        # ("Invalid token" / "Token expired" / "Invalid token scope").
+        raise HTTPException(401, detail=exc.message) from exc
 
 
 def _credentials_bearer(authorization: Optional[str]) -> str:

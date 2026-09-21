@@ -34,6 +34,7 @@ from app.domain.security.models import (
     ROLE_PERMISSIONS,
     RateLimiter,
 )
+from app.application.security import operator_token
 from app.core.config import settings
 
 
@@ -201,6 +202,32 @@ class AuthService:
 
         return SQLAlchemySessionRepository(self._db)
 
+    def _resolve_access_token(self, token: str) -> Optional[str]:
+        """Traduz um access JWT do operador para o token da sessão (B5).
+
+        Devolve ``None`` para JWT inválido/expirado ou quando a sessão que ele
+        referencia não existe mais (revogada, expirada, usuário removido). Para
+        token opaco — legado, ou do desktop single-machine — devolve o próprio
+        token, então o caminho anterior continua valendo até ele expirar.
+
+        Existir um único ponto de tradução é proposital: sem ele, `validate_token`
+        e `logout` ganhariam duas implementações paralelas de validação de sessão.
+        """
+        if not token or not operator_token.looks_like_jwt(token):
+            return token
+        try:
+            payload = operator_token.verify_access_token(token)
+        except operator_token.TokenError:
+            return None
+        session_id = str(payload.get("sid") or "")
+        if not session_id:
+            return None
+        if self._use_db:
+            session_model = self._get_session_repo().get_by_id(session_id)
+            return session_model.token if session_model else None
+        session = self._sessions.get(session_id)
+        return session.token if session else None
+
     def _get_tenant_repo(self):
         from app.infrastructure.repositories.auth_repository import SQLAlchemyTenantRepository
 
@@ -292,7 +319,14 @@ class AuthService:
     # ── Authentication ───────────────────────────────────
 
     @_db_synchronized
-    def login(self, username: str, password: str, ip_address: str = "", user_agent: str = "") -> Dict[str, Any]:
+    def login(
+        self,
+        username: str,
+        password: str,
+        ip_address: str = "",
+        user_agent: str = "",
+        platform: str = operator_token.PLATFORM_DESKTOP,
+    ) -> Dict[str, Any]:
         """Authenticate user and create session.
         Generic error messages prevent user enumeration."""
         GENERIC_ERROR = "Invalid credentials."
@@ -400,11 +434,33 @@ class AuthService:
                 self._sessions[session.id] = session
                 self._sessions_by_token[token] = session.id
 
+        # B5: emite o par access (JWT curto, preso ao `sid`) + refresh rotativo.
+        # O token opaco continua sendo gravado na sessão: ele é o `sid` e segue
+        # como caminho de compatibilidade de quem já tinha token.
+        refresh_token = operator_token.generate_refresh_token()
+        if self._use_db:
+            self._get_session_repo().set_refresh(
+                session.id,
+                operator_token.hash_refresh_token(refresh_token),
+                operator_token.refresh_expiry(),
+            )
+        access_token = operator_token.issue_access_token(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            session_id=session.id,
+            role=system_role.value,
+            platform=platform if platform in operator_token.VALID_PLATFORMS else operator_token.PLATFORM_DESKTOP,
+        )
+
         self._audit(user.id, tenant_id, AuditAction.AUTH_SUCCESS.value, result="SUCCESS", ip=ip_address)
 
         return {
             "success": True,
             "token": token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "Bearer",
+            "expires_in": operator_token.ACCESS_TTL_MINUTES * 60,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -419,8 +475,88 @@ class AuthService:
         }
 
     @_db_synchronized
+    def refresh_session(self, refresh_token: str, *, ip_address: str = "") -> Optional[Dict[str, Any]]:
+        """Rotaciona o par access+refresh do operador (B5).
+
+        Devolve ``None`` para refresh desconhecido, de sessão não ativa ou
+        expirado. Reuso de um refresh já rotacionado **revoga a sessão**: um
+        token trocado só reaparece se vazou, e nesse caso a família inteira
+        morre — mesmo sinal que o fluxo do app do entregador já detecta.
+        """
+        if not refresh_token or not self._use_db:
+            # Sem DB não existe família de refresh para rotacionar.
+            return None
+        repo = self._get_session_repo()
+        presented_hash = operator_token.hash_refresh_token(refresh_token)
+        session_model, is_reuse = repo.find_by_refresh_hash(presented_hash)
+        if not session_model:
+            return None
+        if is_reuse:
+            repo.revoke(session_model.id)
+            logger.warning("refresh.reuse — sessão %s revogada", session_model.id)
+            self._audit(
+                session_model.user_id,
+                session_model.tenant_id,
+                AuditAction.SESSION_REVOKED.value,
+                result="REFRESH_REUSE",
+                ip=ip_address,
+            )
+            return None
+        if session_model.status != "ACTIVE":
+            return None
+        if not session_model.expires_at or datetime.utcnow() > session_model.expires_at:
+            return None
+        if session_model.refresh_expires_at and datetime.utcnow() > session_model.refresh_expires_at:
+            return None
+
+        user_model = self._get_user_repo().get_by_id(session_model.user_id)
+        if not user_model:
+            return None
+        user = self._db_user_to_domain(user_model)
+        if not user.is_active:
+            return None
+
+        membership = self._get_membership(user.id, session_model.tenant_id)
+        role = self._get_role(membership.role_id) if membership else None
+        system_role = role.system_role if role else SystemRole.OPERATOR
+
+        new_refresh = operator_token.generate_refresh_token()
+        repo.rotate_refresh(
+            session_model.id,
+            presented_hash,
+            operator_token.hash_refresh_token(new_refresh),
+            operator_token.refresh_expiry(),
+        )
+        access_token = operator_token.issue_access_token(
+            user_id=user.id,
+            tenant_id=session_model.tenant_id,
+            session_id=session_model.id,
+            role=system_role.value,
+            platform=operator_token.PLATFORM_DESKTOP,
+        )
+        self._audit(
+            user.id,
+            session_model.tenant_id,
+            AuditAction.AUTH_SUCCESS.value,
+            result="REFRESH",
+            ip=ip_address,
+        )
+        return {
+            "success": True,
+            "access_token": access_token,
+            "refresh_token": new_refresh,
+            "token_type": "Bearer",
+            "expires_in": operator_token.ACCESS_TTL_MINUTES * 60,
+            "tenant_id": session_model.tenant_id,
+            "role": system_role.value,
+        }
+
+    @_db_synchronized
     def logout(self, token: str) -> bool:
-        """Revoke a session."""
+        """Revoke a session. Aceita o access JWT ou o token opaco da sessão."""
+        token = self._resolve_access_token(token)
+        if not token:
+            return False
         if self._use_db:
             session_repo = self._get_session_repo()
             session_model = session_repo.get_by_token(token)
@@ -444,7 +580,16 @@ class AuthService:
 
     @_db_synchronized
     def validate_token(self, token: str) -> Optional[TenantContext]:
-        """Validate token and return tenant context."""
+        """Validate token and return tenant context.
+
+        Aceita o access JWT do operador (B5) **ou** o token opaco de sessão.
+        Nos dois casos a linha da sessão é a fonte de verdade, então revogar
+        sessão corta o acesso na hora — sem esperar o JWT expirar.
+        """
+        if not token:
+            return None
+
+        token = self._resolve_access_token(token)
         if not token:
             return None
 

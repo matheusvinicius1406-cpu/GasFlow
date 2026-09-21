@@ -92,9 +92,13 @@ vários pontos**, e mais falso hoje do que em 12/09:
   implementado em `init_db.py:312-432`.
 - `deduct_stock_atomic` é o caminho de débito
   (`app/application/inventory/use_cases.py:79,138`).
-- **A entrega continua sem tocar estoque**: `app/application/delivery/use_cases.py`
-  não referencia `stock`/`deduct`. Requisito "somente entregas FINALIZADAS
-  debitam" segue **não implementado** → B3.
+- **[Corrigido — ver B3] O débito está na ENTREGA, não no pedido.**
+  `app/application/delivery/use_cases.py` não chama estoque, mas quem chama é
+  `delivery_persistence_repository.py:269` →
+  `inventory_repository.py::deliver_stock_atomic` (SALE + troca cheio→vazio no
+  mesmo commit), com o espelho no app do entregador
+  (`driver_stock_service.py:240`). O pedido (`order/use_cases.py`) **não** toca
+  estoque por decisão explícita.
 
 ### 1.4 Branch arquivado (`archive/claude-scalability-plan`)
 
@@ -134,7 +138,7 @@ vários pontos**, e mais falso hoje do que em 12/09:
 |---|----------|-----------------|-------------------------|
 | ~~B1~~ | Gate "Require Authenticode signature" no `release.yml` | ✅ **Fechado** (`2498374`) | v1.1.6 e v1.1.7 publicaram com o step fora. |
 | ~~B2~~ | Alembic não roda no exe empacotado | ✅ **Fechado — Alembic roda no boot do exe** | `desktop_entry.py::run_migrations()` aplica `alembic upgrade head` a partir do `migrations_bundle` embutido no spec: banco vazio cria tudo + `alembic_version`; banco legado de `create_all` (tabelas sem `alembic_version`) recebe `stamp head` e passa a receber só as revisões pendentes; se a migração falha, o app **não** cai (log `migrations falharam no boot — seguindo com init_db/create_all`). Comprovado subindo o exe: log `Running upgrade 12f8390d5be4 -> a7c1e9f2b4d6 -> …` e `/health` respondendo `healthy`. `_ensure_sqlite_columns()` (`init_db.py:99`) segue como rede de compat, **não** como o mecanismo principal. |
-| B3 | Débito de estoque: CONFIRMED vs. DELIVERED | ❌ **ABERTO — decisão de negócio** | O pedido reserva e reverte (`RESERVATION_REVERSAL`), mas `application/delivery/use_cases.py` **não** debita. Migrar o débito sem remover o do pedido = duplo débito. Decidir antes de codar: (a) mover o débito para a entrega DELIVERED, ou (b) pedido debita e a entrega só troca cheio→vazio (física do GLP: sai 1 cheio, entra 1 vazio). |
+| B3 | Débito de estoque: CONFIRMED vs. DELIVERED | ✅ **DECIDIDO E IMPLEMENTADO** — opção (a) | **Correção de 21/09:** a versão anterior deste doc dizia "aberto" e descrevia o pedido como quem reserva/reverte. Isso era o estado **pré-migração**. O código implementa a decisão B3(a) v3: o pedido **não** toca estoque; o débito é na entrega DELIVERED (`inventory_repository.py::deliver_stock_atomic`, SALE + troca cheio→vazio no mesmo commit; `reverse_delivery_stock_atomic` no cancelamento pós-DELIVERED), e um one-shot de dados desfez os débitos antigos do pedido — `init_db.py::_revert_premature_stock_debits` (marcador `stock_debit_migration_v3`, `reference_type = RESERVATION_REVERSAL`). **Trocar para "pedido debita" não é correção de bug: é mudança de regra**, e exigiria uma migração v4 para re-debitar os pedidos que o v3 creditou de volta. |
 | ~~B4~~ | Permissões em código, não no banco | ✅ **Fechado** | `permission_policy_loader.py` (DB sobrepõe, código é fallback) + `user_permissions_override` (`rbac_model.py:55`) + seed (`rbac_seed.py`). |
 | B5 | Sem JWT para sessão multimodal | ⚠️ **Parcial** | Escopo **entregador** pronto (access 15 min + refresh rotativo DB-backed, segredo em 3 níveis). **Falta o operador** (`api/core/auth.py` não emite JWT) — é o que bloqueia sessão simultânea desktop+mobile com escopo por plataforma. |
 | ~~B6~~ | IPC do Electron sem camada de permissão | ✅ **Fechado** | `desktop/src/main/ipc-permissions.ts` (`registerProtectedHandler` consulta a permissão antes de executar; usado em `src/main/index.ts`). |
@@ -198,8 +202,8 @@ Status de re-verificação em 21/09 ao lado de cada um.
 - Movimentos: `domain/inventory/stock_movement.py` (`MovementType`) +
   `RESERVATION_REVERSAL` para reversão.
 - Gancho de entrega: `application/delivery/use_cases.py::UpdateDeliveryStatusUseCase`
-  — **hoje não mexe em estoque**; é onde o débito entraria se a decisão do B3
-  for "entregar debita".
+  **não mexe em estoque**; quem mexe é o repositório de persistência da entrega
+  (`delivery_persistence_repository.py:269` → `deliver_stock_atomic`).
 
 ### Release/packaging
 - Ordem obrigatória do build local: PyInstaller do backend **antes** do
@@ -243,7 +247,7 @@ Status de re-verificação em 21/09 ao lado de cada um.
 | # | Decisão | Status |
 |---|---------|--------|
 | 1 | Estoque cheios/vazios: aditivo + `quantity` como total, ou substituir | ✅ **Decidido e implementado**: aditivo (`quantity_full`/`quantity_empty`) com `quantity` sincronizado como total (`init_db.py:240-248`). |
-| 2 | Timing do débito (pedido vs. entrega) | ❌ **ABERTA — dono do negócio**. Ver B3. |
+| 2 | Timing do débito (pedido vs. entrega) | ✅ **Fechada por código — decisão B3(a) v3**: o débito é na entrega DELIVERED e a migração one-shot já desfez os débitos antigos do pedido. Reabrir = mudança de regra + migração v4. Ver B3. |
 | 3 | Roles/permissões: banco com fallback de código vs. banco como fonte única | ✅ **Decidido e implementado**: banco sobrepõe, código é fallback (preferido no doc; `permission_policy_loader.py:191-212`). |
 | 4 | Segredo JWT no Desktop: env + arquivo (ACL/DPAPI) vs. prompt por boot | ✅ **Decidido e implementado**: env → settings → arquivo gerado 1x, ≥32 bytes obrigatório em produção. |
 | 5 | Migração no Desktop: Alembic no exe vs. `create_all` + version guard | ✅ **Decidido e implementado**: **Alembic no exe** (a opção recomendada aqui) + `create_all`/`_ensure_sqlite_columns` como rede para banco legado. Ver B2. |
@@ -259,8 +263,8 @@ realmente falta:
 |-------|---------|----------|------------|
 | ~~0.2~~ | ~~Migração-on-boot no Desktop~~ | — | **Feito**: `alembic upgrade head` no boot do exe (`desktop_entry.py`). |
 | ~~1~~ | ~~Alinhar o interpretador do release ao de produção (B9)~~ | — | **Feito**: CI/release em 3.14, com o spec validado no 3.14 antes de alinhar. |
-| 2 | **Decidir o timing do débito (B3)** | Todo o P0 de estoque | Dono do negócio. |
-| 3 | Executar a decisão do B3 no `UpdateDeliveryStatusUseCase` + testes de atomicidade | Núcleo operacional | Passo 2. |
+| 2 | ~~Decidir o timing do débito (B3)~~ — **feito**: débito na entrega (`deliver_stock_atomic`), migração v3 aplicada | Todo o P0 de estoque | — |
+| 3 | Cobrir com teste de atomicidade o par `deliver_stock_atomic` / `reverse_delivery_stock_atomic` (idempotência + clamp de vazios) | Núcleo operacional | — |
 | 4 | **JWT de operador + sessão multimodal (B5)** | P1/P2 (sessão desktop+mobile por plataforma) | Reusar o padrão de `driver_mobile_auth.py`. |
 | 5 | Fiscal: deep link NFF + dados locais (B7) | P2 Fiscal | Decisões externas (contabilidade/certificado). |
 | 6 | Documento LGPD/CLT (B8) | App do entregador | Jurídico. |
@@ -277,9 +281,10 @@ correção com feature nova.
   diário idempotente, telas de Admin, gate de permissão no IPC e segredo JWT
   resolvido. O que este documento descrevia como "gap real" virou código.
 - **Aberto de verdade, por ordem de custo/benefício:**
-  1. **B3** — débito na entrega: decisão de negócio, sem ela qualquer código de
-     estoque pode duplicar débito.
-  2. **B5** — JWT de operador (o do entregador já existe e serve de padrão).
+  1. **B3** — ✅ fechado por código (débito na entrega + migração v3 dos
+     débitos antigos do pedido). Não é mais bloqueio de negócio.
+  2. **B5** — JWT de operador ✅ implementado (access JWT + refresh rotativo);
+     o do entregador já existia e serve de padrão.
   3. **B7/B8** — fiscal e LGPD/CLT: não se resolvem com código.
 
   Nesta passagem, **B9** foi fechado (CI/release alinhados ao 3.14 de produção,

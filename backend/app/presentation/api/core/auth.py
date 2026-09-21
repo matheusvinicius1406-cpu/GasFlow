@@ -1,7 +1,8 @@
 """
 Auth API — FASE 13
 
-POST /auth/login — Authenticate
+POST /auth/login — Authenticate (emite access JWT + refresh)
+POST /auth/refresh — Rotaciona access+refresh (B5)
 POST /auth/logout — Revoke session
 GET /auth/me — Current user
 GET /auth/users — List users (admin)
@@ -10,7 +11,7 @@ GET /auth/roles — List roles
 GET /auth/audit — Audit log (admin)
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
@@ -26,15 +27,41 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=1, max_length=200)
+    # B5: a plataforma entra no access token (desktop x mobile). Default desktop
+    # para não quebrar cliente que já chama /auth/login sem esse campo.
+    platform: str = Field("desktop", max_length=20)
 
 
 class LoginResponse(BaseModel):
     success: bool
+    # `token` segue sendo o token opaco da sessão (compatibilidade); o console
+    # usa `access_token` + `refresh_token`.
     token: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: str = "Bearer"
+    expires_in: Optional[int] = None
     user: Optional[dict] = None
     tenant_id: Optional[str] = None
     role: Optional[str] = None
     expires_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    """B5: corpo do refresh é o token opaco emitido no login."""
+
+    refresh_token: str = Field(..., min_length=16, max_length=500)
+
+
+class RefreshResponse(BaseModel):
+    success: bool
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: str = "Bearer"
+    expires_in: Optional[int] = None
+    tenant_id: Optional[str] = None
+    role: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -89,24 +116,63 @@ class TenantInfo(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     auth = get_auth_service()
-    result = auth.login(req.username, req.password)
+    result = auth.login(
+        req.username,
+        req.password,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("user-agent", ""),
+        platform=req.platform,
+    )
     if not result["success"]:
         raise HTTPException(status_code=401, detail=result["error"])
     return LoginResponse(**result)
 
 
-@router.post("/logout")
-async def logout(ctx: TenantContext = Depends(get_tenant_context)):
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh(req: RefreshRequest, request: Request):
+    """B5: troca o refresh por um par novo (rotação com detecção de reuso).
+
+    401 é a resposta para refresh inválido **e** para reuso de refresh já
+    rotacionado (a sessão foi revogada no segundo caso) — o cliente deve voltar
+    para a tela de login nos dois.
+    """
     auth = get_auth_service()
-    # Find and revoke current session
-    sessions = auth.get_active_sessions(ctx.user_id)
-    for s in sessions:
-        if s.tenant_id == ctx.tenant_id:
-            s.revoke()
-            break
-    return {"success": True}
+    result = auth.refresh_session(req.refresh_token, ip_address=_client_ip(request))
+    if not result:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    return RefreshResponse(**result)
+
+
+@router.post("/logout")
+async def logout(request: Request, ctx: TenantContext = Depends(get_tenant_context)):
+    """Revoga a sessão do caller (funciona com access JWT ou token opaco).
+
+    Antes isto chamava `revoke()` num modelo ORM que não tem esse método: em
+    modo DB o endpoint respondia 500 e a sessão ficava viva. A revogação real é
+    pelo repositório, a partir do token que chegou no header.
+    """
+    auth = get_auth_service()
+    token = _bearer_token(request)
+    if token and auth.logout(token):
+        return {"success": True}
+    raise HTTPException(status_code=401, detail="Invalid session")
+
+
+def _bearer_token(request: Request) -> str:
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return ""
+
+
+def _client_ip(request: Request) -> str:
+    """IP do cliente para a trilha de auditoria (proxy-aware no primeiro hop)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else ""
 
 
 @router.get("/me")

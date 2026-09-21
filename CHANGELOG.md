@@ -4,6 +4,41 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔐 Sessão do operador em JWT (B5)
+
+O console usava só uma sessão opaca no banco: sem token de curta duração, sem
+renovação e sem escopo por plataforma — qualquer sessão desktop+mobile dependia
+de manter o mesmo token vivo para sempre.
+
+- **Access JWT (HS256, 15 min) + refresh opaco rotativo (7 dias)**, com o mesmo
+  desenho já aprovado no app do entregador. O JWT carrega o `sid` da sessão, e
+  a validação continua lendo a linha da sessão: **revogar sessão corta o acesso
+  na hora**, sem esperar o token expirar.
+- **Segredo dedicado** (`OPERATOR_JWT_SECRET` → settings → arquivo gerado 1x),
+  separado do segredo do entregador: um token de um escopo nunca vale no outro.
+- **Rotação com detecção de reuso**: refresh já trocado que reaparece revoga a
+  sessão inteira (é o sinal de token vazado).
+- **`POST /auth/refresh`** novo; `/auth/login` passa a devolver
+  `access_token` + `refresh_token` (o campo `token` continua, para não quebrar
+  cliente antigo) e aceita `platform`.
+- **Frontend renova sozinho** quando o access expira, com *single-flight*: sem
+  isso, requests paralelas trocariam o mesmo refresh e o backend leria reuso —
+  ou seja, o app deslogaria o próprio usuário.
+- **Bug corrigido no caminho**: `POST /auth/logout` chamava `revoke()` num
+  modelo ORM que não tem esse método — em modo DB o endpoint respondia 500 e a
+  sessão continuava viva. Agora revoga pelo repositório, a partir do token do
+  header.
+
+### 🎬 Entrada do app e tela de login
+
+- **Login com entrada em cascata**: marca → título → campos, com o brilho de
+  fundo derivando devagar. Usa os componentes de marca e os tokens de movimento
+  do design system (acompanha o tema do cliente, respeita
+  `prefers-reduced-motion`) — antes eram um `<h1>GasFlow</h1>` fixo e um cartão
+  sem identidade.
+- O splash estático do boot dissolve no mesmo instante em que o login monta, então
+  a abertura do app termina numa transição em vez de num corte.
+
 ### 🚀 Abertura do app e experiência de atualização
 
 O auto-update existia só como um retângulo no canto: baixava em silêncio,
