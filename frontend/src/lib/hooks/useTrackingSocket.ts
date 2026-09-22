@@ -20,7 +20,9 @@ import {
   mergeTrackingState,
   parseDriverAlertEvent,
   parseDriverLocationEvent,
+  parseRouteOptimizedEvent,
   type DriverAlert,
+  type OptimizedRoute,
   type TrackingState,
 } from '@/lib/tracking'
 
@@ -43,6 +45,7 @@ export function useTrackingSocket({
 }: UseTrackingSocketOptions = {}) {
   const [pointsByDriver, setPointsByDriver] = useState<TrackingState>({})
   const [alerts, setAlerts] = useState<DriverAlert[]>([])
+  const [optimizedRoutes, setOptimizedRoutes] = useState<Record<string, OptimizedRoute>>({})
 
   const token = useMemo(() => {
     if (typeof window === 'undefined') return null
@@ -51,6 +54,13 @@ export function useTrackingSocket({
 
   const onEvent = useCallback(
     (message: unknown) => {
+      // Fase 8: rota otimizada (polyline da sequência no mapa).
+      const optimized = parseRouteOptimizedEvent(message)
+      if (optimized) {
+        setOptimizedRoutes((prev) => ({ ...prev, [optimized.driver_id]: optimized }))
+        return
+      }
+
       // Fase 7.3: alertas operacionais (parado/desviado) do mesmo canal.
       const alert = parseDriverAlertEvent(message)
       if (alert) {
@@ -77,5 +87,5 @@ export function useTrackingSocket({
     setAlerts((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
-  return { pointsByDriver, lastByDriver, alerts, dismissAlert, isConnected, reconnectAttempts }
+  return { pointsByDriver, lastByDriver, alerts, dismissAlert, optimizedRoutes, isConnected, reconnectAttempts }
 }

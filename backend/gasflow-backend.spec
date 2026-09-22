@@ -30,7 +30,11 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # ortools entra como dependência do backend web (Fase 8), mas fica FORA do
+    # exe desktop: bundlá-lo arrasta protobuf/pandas (~200 MB) para um binário
+    # que serve um PC único, e o import já é opcional no código — excluído aqui,
+    # o otimizador cai na ordem original (comportamento documentado).
+    excludes=["ortools"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

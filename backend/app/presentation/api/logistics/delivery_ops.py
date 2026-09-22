@@ -182,6 +182,12 @@ async def assign_delivery(delivery_id: str, req: AssignRequest, ctx: TenantConte
         driver.set_busy()
         drv_repo.db.commit()
 
+        # Fase 8 (decisão 10–12): otimização best-effort. Não atrasa nem
+        # derruba a confirmação da atribuição — qualquer exceção é engolida
+        # e logada em debug. O padrão segue `_evaluate_alerts` no
+        # `driver_location_service.py`.
+        _try_optimize_after_assign(ctx.tenant_id, req.driver_id)
+
         return {"success": True, "delivery": new_record.to_dict()}
     finally:
         db.close()
@@ -707,6 +713,13 @@ class DriverSuggestRequest(BaseModel):
     delivery_id: str
 
 
+class RouteOptimizeRequest(BaseModel):
+    """Fase 8: reordenar as entregas de um entregador."""
+
+    driver_id: str
+    delivery_ids: List[str] = []
+
+
 @router.get("/drivers/{driver_id}/stock")
 async def get_driver_stock(driver_id: str, ctx: TenantContext = Depends(get_tenant_context)):
     """Saldos do estoque carregado pelo entregador, por produto."""
@@ -879,6 +892,90 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
             for pc, qty in demand.items()
         ]
 
+        # Fase 9: com a flag ligada, o ranking passa pelo DispatchScorer (posição
+        # do histórico, prazo e fairness), mas o GATE de elegibilidade continua o
+        # mesmo — `filter_candidate` segue decidindo quem pode receber a entrega.
+        # Score não é elegibilidade: capacidade física não se negocia por ponto.
+        from app.core.config import settings
+
+        if settings.delivery_smart_dispatch_enabled:
+            from app.application.dispatch.scorer import DispatchScorer
+            from app.domain.delivery.dispatch_engine import filter_candidate
+
+            verdicts = [(c, filter_candidate(c, order)) for c in candidates]
+            eligible = [c.driver_id for c, verdict in verdicts if verdict.valid]
+            scored = DispatchScorer(db, ctx.tenant_id).score(delivery_id=req.delivery_id, candidate_driver_ids=eligible)
+
+            by_id = {c.driver_id: c for c in candidates}
+            recommendations = []
+            for scored_driver in scored[:3]:
+                candidate = by_id.get(scored_driver.driver_id)
+                capacity_fit: dict = {}
+                if candidate is not None:
+                    for item in order.items:
+                        available = candidate.capacity.get(item.product_codigo, 0)
+                        capacity_fit[item.product_codigo] = {
+                            "product": item.product_name,
+                            "needed": item.quantity,
+                            "available": available,
+                            "fits": available >= item.quantity,
+                        }
+                recommendations.append(
+                    {
+                        "driver_id": scored_driver.driver_id,
+                        "driver_name": scored_driver.driver_name,
+                        "vehicle_id": candidate.vehicle_id if candidate else None,
+                        "vehicle_plate": candidate.vehicle_plate if candidate else None,
+                        "score": scored_driver.total,
+                        "distance_km": scored_driver.distance_km,
+                        "capacity_fit": capacity_fit,
+                        "explanation": scored_driver.reasons,
+                    }
+                )
+
+            # Fase 9: publica dispatch.scored para auditoria (só quando o scorer
+            # decidiu — flag ligada, fluxo real). Não é publicado pelo preview
+            # read-only (decisão 6).
+            if scored:
+                from app.domain.events.event_bus import EventType, publish_delivery_event
+
+                publish_delivery_event(
+                    EventType.DISPATCH_SCORED,
+                    req.delivery_id,
+                    ctx.tenant_id,
+                    data={
+                        "delivery_id": req.delivery_id,
+                        "candidates": [
+                            {
+                                "driver_id": s.driver_id,
+                                "total": s.total,
+                                "breakdown": s.breakdown,
+                            }
+                            for s in scored
+                        ],
+                    },
+                )
+
+            return {
+                "success": True,
+                "order_id": delivery.order_id,
+                "total_candidates": len(candidates),
+                "eligible": len(scored),
+                "rejected_count": len(candidates) - len(scored),
+                "rejected": [
+                    {
+                        "driver_id": c.driver_id,
+                        "driver_name": c.driver_name,
+                        "reason": verdict.reason.value if verdict.reason else "UNKNOWN",
+                        "details": verdict.details,
+                    }
+                    for c, verdict in verdicts
+                    if not verdict.valid
+                ],
+                "recommendations": recommendations,
+                "source": "dispatch-scorer",
+            }
+
         engine = DispatchEngine(mode=DispatchMode.ASSISTED)
         return engine.recommend(order, candidates)
     finally:
@@ -924,6 +1021,241 @@ async def delivery_eta(
         return eta
     finally:
         db.close()
+
+
+# ── Rota otimizada (Fase 8) ────────────────────────────
+
+
+@router.post("/route/optimize")
+async def optimize_delivery_route(req: RouteOptimizeRequest, ctx: TenantContext = Depends(get_tenant_context)):
+    """Reordena as entregas do entregador para minimizar a distância (Fase 8).
+
+    - 409 quando a flag `DELIVERY_SMART_ROUTING_ENABLED` está desligada — não
+      silenciar: quem pediu algo desligado precisa saber que está desligado;
+    - 404 entregador inexistente/inativo, ou entrega fora do tenant (o filtro
+      de tenant acontece no repositório — não vazamos existência);
+    - 422 entregador sem posição conhecida, entrega sem coordenadas ou lista
+      vazia: é a verdade do dado, não um erro de digitação.
+
+    Publica `route.optimized` no barramento existente; o app do entregador
+    reordena a lista ao receber (o payload traz `ordered_delivery_ids`).
+    """
+    from app.application.routing.optimizer import DeliveryRouteOptimizer
+    from app.core.config import settings
+    from app.domain.events.event_bus import EventType, publish_driver_event
+    from app.infrastructure.repositories.delivery_persistence_repository import (
+        SQLAlchemyDeliveryPersistenceRepository,
+        SQLAlchemyDriverLocationRepository,
+    )
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
+    from app.infrastructure.routing.factory import get_routing_provider
+
+    if not settings.delivery_smart_routing_enabled:
+        raise HTTPException(
+            409,
+            "Otimização de rota desligada (DELIVERY_SMART_ROUTING_ENABLED=false)",
+        )
+
+    db = _get_db()
+    try:
+        model = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id).find_by_id_as_model(req.driver_id)
+        if model is None or not model.ativo:
+            raise HTTPException(404, "Entregador não encontrado")
+
+        loc_repo = SQLAlchemyDriverLocationRepository(db)
+        latest = loc_repo.latest_history_point(ctx.tenant_id, req.driver_id)
+        if latest is None:
+            latest = loc_repo.get_location(ctx.tenant_id, req.driver_id)
+        if latest is None or latest.latitude is None or latest.longitude is None:
+            raise HTTPException(422, "Entregador sem posição conhecida")
+
+        del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
+        points = []
+        for delivery_id in req.delivery_ids:
+            record = del_repo.get_delivery(delivery_id)
+            if record is None:
+                raise HTTPException(404, f"Entrega {delivery_id} não encontrada")
+            if record.address_lat is None or record.address_lng is None:
+                raise HTTPException(422, f"Entrega {delivery_id} sem coordenadas")
+            points.append((delivery_id, float(record.address_lat), float(record.address_lng)))
+        if not points:
+            raise HTTPException(422, "Nenhuma entrega para otimizar")
+
+        payload = DeliveryRouteOptimizer(get_routing_provider()).optimize(
+            origin=(float(latest.latitude), float(latest.longitude)),
+            deliveries=points,
+        )
+        result = {
+            "driver_id": req.driver_id,
+            "ordered_delivery_ids": payload.ordered_delivery_ids,
+            "total_distance_km": payload.total_distance_km,
+            "total_duration_s": payload.total_duration_s,
+            "improvement_km": payload.improvement_km,
+            "provider": payload.provider,
+            "geometry": payload.geometry,
+        }
+
+        publish_driver_event(
+            EventType.ROUTE_OPTIMIZED,
+            req.driver_id,
+            ctx.tenant_id,
+            data={
+                "driver_id": req.driver_id,
+                "ordered_delivery_ids": payload.ordered_delivery_ids,
+                "total_distance_km": payload.total_distance_km,
+                "improvement_km": payload.improvement_km,
+                "provider": payload.provider,
+                "geometry": payload.geometry,
+                "changed": payload.ordered_delivery_ids != req.delivery_ids,
+            },
+        )
+        return result
+    finally:
+        db.close()
+
+
+@router.get("/dispatch/candidates/{delivery_id}")
+async def dispatch_candidates(delivery_id: str, ctx: TenantContext = Depends(get_tenant_context)):
+    """Preview somente-leitura do score de despacho (Fase 9).
+
+    Serve para o operador **entender** por que o sistema sugere quem sugere —
+    o breakdown e os motivos vêm junto. Sem efeito colateral: só lê.
+    """
+    from app.application.dispatch.scorer import DispatchScorer
+    from app.core.config import settings
+
+    if not settings.delivery_smart_dispatch_enabled:
+        raise HTTPException(
+            409,
+            "Score de despacho desligado (DELIVERY_SMART_DISPATCH_ENABLED=false)",
+        )
+
+    db = _get_db()
+    try:
+        try:
+            scores = DispatchScorer(db, ctx.tenant_id).score(delivery_id=delivery_id)
+        except LookupError:
+            raise HTTPException(404, "Entrega não encontrada") from None
+        return {
+            "candidates": [
+                {
+                    "driver_id": s.driver_id,
+                    "driver_name": s.driver_name,
+                    "total": s.total,
+                    "breakdown": s.breakdown,
+                    "reasons": s.reasons,
+                    "distance_km": s.distance_km,
+                    "active_deliveries": s.active_deliveries,
+                    "has_recent_position": s.has_recent_position,
+                }
+                for s in scores
+            ]
+        }
+    finally:
+        db.close()
+
+
+# ── Gatilho automático pós-atribuição (Fase 8) ──────────
+
+
+def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
+    """Otimização best-effort da rota do entregador após atribuição.
+
+    Chamado pelo endpoint de assign. Qualquer exceção é engolida — a
+    atribuição NÃO pode falhar por causa da otimização.
+    """
+    try:
+        from app.core.config import settings
+
+        if not settings.delivery_smart_routing_enabled:
+            return
+
+        from app.application.routing.optimizer import DeliveryRouteOptimizer
+        from app.domain.events.event_bus import EventType, publish_driver_event
+        from app.infrastructure.database.init_db import engine
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDeliveryPersistenceRepository,
+            SQLAlchemyDriverLocationRepository,
+        )
+        from app.infrastructure.routing.factory import get_routing_provider
+        from sqlalchemy.orm import Session as DBSession
+
+        db = DBSession(bind=engine)
+        try:
+            del_repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
+            # Busca todas as entregas atribuídas a este entregador.
+            from app.infrastructure.repositories.delivery_persistence_model import DeliveryRecord
+
+            active_statuses = ("ASSIGNED", "DISPATCHED", "EN_ROUTE")
+            deliveries = (
+                db.query(DeliveryRecord)
+                .filter(
+                    DeliveryRecord.tenant_id == tenant_id,
+                    DeliveryRecord.driver_id == driver_id,
+                    DeliveryRecord.status.in_(active_statuses),
+                )
+                .order_by(DeliveryRecord.created_at.asc())
+                .all()
+            )
+            if len(deliveries) < 2:
+                # Uma ou nenhuma entrega: não há o que reordenar, mas
+                # publicamos o evento para manter o app sincronizado.
+                if deliveries:
+                    publish_driver_event(
+                        EventType.ROUTE_OPTIMIZED,
+                        driver_id,
+                        tenant_id,
+                        data={
+                            "driver_id": driver_id,
+                            "ordered_delivery_ids": [d.delivery_id for d in deliveries],
+                            "total_distance_km": 0.0,
+                            "improvement_km": 0.0,
+                            "provider": "haversine",
+                            "changed": False,
+                        },
+                    )
+                return
+
+            # Posição do entregador.
+            loc_repo = SQLAlchemyDriverLocationRepository(db)
+            latest = loc_repo.latest_history_point(tenant_id, driver_id)
+            if latest is None:
+                latest = loc_repo.get_location(tenant_id, driver_id)
+            if latest is None or latest.latitude is None or latest.longitude is None:
+                return  # sem posição: nada a otimizar
+
+            points = []
+            for d in deliveries:
+                if d.address_lat is not None and d.address_lng is not None:
+                    points.append((d.delivery_id, float(d.address_lat), float(d.address_lng)))
+            if len(points) < 2:
+                return
+
+            result = DeliveryRouteOptimizer(get_routing_provider()).optimize(
+                origin=(float(latest.latitude), float(latest.longitude)),
+                deliveries=points,
+            )
+            changed = result.ordered_delivery_ids != [d.delivery_id for d in deliveries]
+            publish_driver_event(
+                EventType.ROUTE_OPTIMIZED,
+                driver_id,
+                tenant_id,
+                data={
+                    "driver_id": driver_id,
+                    "ordered_delivery_ids": result.ordered_delivery_ids,
+                    "total_distance_km": result.total_distance_km,
+                    "improvement_km": result.improvement_km,
+                    "provider": result.provider,
+                    "changed": changed,
+                },
+            )
+        finally:
+            db.close()
+    except Exception:
+        # Best-effort: loga e segue. A atribuição já foi confirmada.
+        import logging
+
+        logging.getLogger("gasflow.routing").debug("routing.optimize_after_assign.failed", exc_info=True)
 
 
 # ── Driver Locations (Database-backed) ─────────────────

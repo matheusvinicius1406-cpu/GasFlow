@@ -345,7 +345,7 @@ export function ChangePasswordScreenWired() {
 // ("Password change required") é estado de app → levanta o gate, sem
 // reconectar em loop.
 
-export function useDriverRealtime(): void {
+export function useDriverRealtime(opts?: { onRouteOptimized?: (orderedIds: string[]) => void }): void {
   const token = useSessionStore((s) => s.accessToken);
   const connection = useConnectionStore((s) => s.connection);
   const setMustChangePassword = useSessionStore((s) => s.setMustChangePassword);
@@ -364,6 +364,17 @@ export function useDriverRealtime(): void {
       socketRef.current = socket;
       attachDriverSocket({
         socket,
+        onEvent: (data: unknown) => {
+          // Fase 8: reordenação da rota por evento (decisão 13).
+          const msg = data as Record<string, unknown> | null;
+          if (msg && msg.type === "route.optimized" && msg.data) {
+            const d = msg.data as Record<string, unknown>;
+            const ids = d.ordered_delivery_ids;
+            if (Array.isArray(ids) && ids.length > 0) {
+              opts?.onRouteOptimized?.(ids as string[]);
+            }
+          }
+        },
         onOpen: () => {
           attempt = 0;
         },
@@ -445,7 +456,33 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
   // F2.5: gate de rastreamento acompanha as entregas desta tela (auto on/off).
   useTrackingGate(deliveries);
   // Realtime: eventos do canal driver:{driver_id} + gate de senha (4003).
-  useDriverRealtime();
+  // Fase 8: ao receber route.optimized, reordena os ids conhecidos e dispara
+  // refetch para completar (decisão 13).
+  useDriverRealtime({
+    onRouteOptimized: useCallback(
+      (orderedIds: string[]) => {
+        setDeliveries((prev) => {
+          const byId = new Map(prev.map((d) => [d.delivery_id, d]));
+          const reordered: RouteDelivery[] = [];
+          for (const id of orderedIds) {
+            const d = byId.get(id);
+            if (d) {
+              reordered.push(d);
+              byId.delete(id);
+            }
+          }
+          // Desconhecidos ficam no fim (nunca perde entrega da tela).
+          for (const d of byId.values()) {
+            reordered.push(d);
+          }
+          return reordered;
+        });
+        // Refetch para pegar entregas que o evento não conhecia.
+        void reload();
+      },
+      [reload],
+    ),
+  });
 
   return (
     <View style={{ flex: 1 }}>

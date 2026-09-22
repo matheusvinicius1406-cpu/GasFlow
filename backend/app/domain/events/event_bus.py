@@ -48,6 +48,14 @@ class EventType(str, Enum):
     DISPATCH_RECOMMENDED = "dispatch.recommended"
     DISPATCH_ASSIGNED = "dispatch.assigned"
     DISPATCH_REPLANNED = "dispatch.replanned"
+    # Fase 8: rota reordenada pelo otimizador. Vai para `tenant:{id}` e
+    # `driver:{id}` — o app do entregador reordena a lista sem refetch porque o
+    # payload já traz `ordered_delivery_ids`.
+    ROUTE_OPTIMIZED = "route.optimized"
+    # Fase 9: score de despacho para auditoria. Publicado quando o scorer decide
+    # (flag ligada, fluxo de sugestão real). Não é publicado pelo endpoint de
+    # preview/diagnóstico (read-only).
+    DISPATCH_SCORED = "dispatch.scored"
 
     # Communication events
     COMMUNICATION_PROXIMITY = "communication.proximity"

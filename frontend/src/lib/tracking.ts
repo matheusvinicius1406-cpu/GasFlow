@@ -168,3 +168,45 @@ export function latestByDriver(
   }
   return out
 }
+
+/**
+ * Rota otimizada por entregador (Fase 8). Recebida pelo WebSocket quando o
+ * operador ou o gatilho automático reordena a rota do entregador.
+ */
+export interface OptimizedRoute {
+  driver_id: string
+  ordered_delivery_ids: string[]
+  geometry: [number, number][] | null
+  improvement_km: number
+  provider: string
+  changed: boolean
+}
+
+/** Extrai um `route.optimized` do envelope do WebSocket (ou `null`). */
+export function parseRouteOptimizedEvent(
+  message: unknown
+): OptimizedRoute | null {
+  if (!message || typeof message !== 'object') return null
+  const envelope = message as {
+    type?: unknown
+    event?: { type?: unknown; aggregate_id?: unknown; data?: Record<string, unknown> }
+  }
+  if (envelope.type !== 'event' || !envelope.event) return null
+  if (String(envelope.event.type ?? '') !== 'route.optimized') return null
+
+  const data = envelope.event.data ?? {}
+  const driverId = String(data.driver_id ?? envelope.event.aggregate_id ?? '')
+  const ids = data.ordered_delivery_ids
+  if (!driverId || !Array.isArray(ids)) return null
+
+  return {
+    driver_id: driverId,
+    ordered_delivery_ids: ids.map(String),
+    geometry: Array.isArray(data.geometry)
+      ? (data.geometry as [number, number][])
+      : null,
+    improvement_km: numOrNull(data.improvement_km) ?? 0,
+    provider: String(data.provider ?? 'unknown'),
+    changed: Boolean(data.changed),
+  }
+}

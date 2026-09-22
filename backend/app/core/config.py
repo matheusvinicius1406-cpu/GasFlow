@@ -124,6 +124,47 @@ class Settings(BaseModel):
         os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0"),
     )
 
+    # ── Entrega inteligente (Fases 8–10) ───────────────────
+    # Fase 8 — sequenciamento de rota (OR-Tools). Desligada (default), o
+    # endpoint POST /delivery/route/optimize responde 409 em vez de silenciar:
+    # quem pediu algo desligado precisa saber que está desligado.
+    delivery_smart_routing_enabled: bool = os.getenv("DELIVERY_SMART_ROUTING_ENABLED", "false").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    # Fase 9 — score de despacho extraído (DispatchScorer). Desligada (default),
+    # /delivery/dispatch/suggest mantém exatamente o cálculo inline de hoje.
+    delivery_smart_dispatch_enabled: bool = os.getenv("DELIVERY_SMART_DISPATCH_ENABLED", "false").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    # Fase 10 — provedor de roteamento: haversine (default, zero infra, em
+    # memória) | osrm (opt-in, self-hosted, ver docs/routing/osrm.md).
+    routing_provider: str = os.getenv("ROUTING_PROVIDER", "haversine").strip().lower()
+    osrm_base_url: str = os.getenv("OSRM_BASE_URL", "").strip()
+    # Timeout curto: o provider é otimização, não caminho crítico.
+    osrm_timeout_seconds: float = float(os.getenv("OSRM_TIMEOUT_SECONDS", "2"))
+    # Circuit breaker: após N falhas seguidas o OSRM fica de fora por M segundos
+    # (evita pagar o timeout em toda request quando o serviço está caído).
+    osrm_breaker_failures: int = int(os.getenv("OSRM_BREAKER_FAILURES", "3"))
+    osrm_breaker_cooldown_s: int = int(os.getenv("OSRM_BREAKER_COOLDOWN_S", "60"))
+    # Velocidade média assumida quando não há provedor de malha viária (km/h).
+    # Mesmo valor do fallback do ETA (Fase 7.1) para as duas estimativas
+    # contarem a mesma história.
+    routing_default_speed_kmh: float = float(os.getenv("ROUTING_DEFAULT_SPEED_KMH", "28"))
+    # Pesos do DispatchScorer (Fase 9). Rebalanceados na hora do score, então
+    # mudar um peso não exige mexer nos outros.
+    dispatch_weight_proximity: float = float(os.getenv("DISPATCH_WEIGHT_PROXIMITY", "0.45"))
+    dispatch_weight_load: float = float(os.getenv("DISPATCH_WEIGHT_LOAD", "0.25"))
+    dispatch_weight_deadline: float = float(os.getenv("DISPATCH_WEIGHT_DEADLINE", "0.20"))
+    dispatch_weight_fairness: float = float(os.getenv("DISPATCH_WEIGHT_FAIRNESS", "0.10"))
+    # Fase 9: entregas concorrentes que "enchem" o entregador (denominador do
+    # load). Configurável para calibrar à realidade da frota sem misturar unidades
+    # (não usa capacidade de estoque aqui — isso já é gate de elegibilidade).
+    dispatch_load_full_deliveries: float = float(os.getenv("DISPATCH_LOAD_FULL_DELIVERIES", "4"))
+
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

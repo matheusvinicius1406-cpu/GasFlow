@@ -34,3 +34,10 @@ prometheus-client>=0.26.0
 # Fusos IANA (zoneinfo). No Linux o tz db do sistema cobre; no Windows
 # (exe PyInstaller e ambiente de teste) o pacote com os dados é obrigatório.
 tzdata
+
+# Otimização de sequência de entrega (Fase 8 — VRP/TSP). Apache-2.0, roda
+# self-hosted, sem conta e sem limite de requisições. O import é OPCIONAL no
+# código: sem o wheel instalado (ou no exe desktop, que o exclui — ver
+# gasflow-backend.spec) o otimizador devolve a ordem original e o resto do
+# sistema continua funcionando.
+ortools
