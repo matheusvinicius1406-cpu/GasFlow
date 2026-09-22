@@ -35,6 +35,22 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
             model.password_hash = password_hash
             self.db.commit()
 
+    def get_tracking_epoch(self, codigo: str) -> int:
+        """Epoch de revogação do link público (0 quando não configurada)."""
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return 0
+        return int(model.tracking_epoch or 0)
+
+    def bump_tracking_epoch(self, codigo: str) -> int:
+        """Incrementa a epoch — invalida todos os links já emitidos."""
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return 0
+        model.tracking_epoch = int(model.tracking_epoch or 0) + 1
+        self.db.commit()
+        return int(model.tracking_epoch)
+
     def find_by_username(self, username: str):
         """Find an active driver by username."""
         model = (

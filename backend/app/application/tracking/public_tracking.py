@@ -1,12 +1,20 @@
-"""Token de rastreio público (Fase 7.2).
+"""Token de rastreio público (Parte 1 — fixes 3 e 4).
 
 Stateless — **nenhuma tabela nova**. O token é um HMAC-SHA256 (base64url) sobre
-um payload com escopo mínimo: tenant + driver + expiração. Somente leitura e
-**sem PII**: o snapshot público devolve só coordenadas e o horário.
+um payload com escopo mínimo: tenant + driver + expiração + **epoch**.
 
-Segredo **dedicado** ao escopo (`PUBLIC_TRACKING_SECRET`), resolvido pelo mesmo
-`resolve_jwt_secret` dos outros tokens — um token público nunca é assinado com a
-chave do operador (nem o contrário).
+Correções desta versão:
+
+3. **Teto de TTL.** Antes o emissor aceitava qualquer `ttl_seconds`; agora o
+   limite é `MAX_TTL_S` (24 h) e o endpoint rejeita acima disso com 422.
+4. **Revogação.** O token embute a `tracking_epoch` vigente do entregador. Se o
+   admin revoga (incrementa a epoch em `delivery_drivers.tracking_epoch`), todo
+   link já emitido deixa de valer — o snapshot responde **410 Gone**, que é
+   semanticamente correto: o link existiu e foi revogado (não é 401 de link
+   inválido).
+
+Segredo **dedicado** ao escopo (`PUBLIC_TRACKING_SECRET`) — um token público
+nunca é assinado com a chave do operador (nem o contrário).
 """
 
 from __future__ import annotations
@@ -22,8 +30,9 @@ from app.application.security.jwt_crypto import resolve_jwt_secret
 from app.core.config import settings
 
 PUBLIC_TRACKING_SCOPE = "public_tracking"
-DEFAULT_TTL_SECONDS = 6 * 3600
-MAX_TTL_SECONDS = 24 * 3600
+DEFAULT_TTL_S = 6 * 3600
+#: Teto duro do link público (24 h) — um link "para sempre" é um vazamento.
+MAX_TTL_S = 86400
 
 
 def public_tracking_secret() -> str:
@@ -54,13 +63,19 @@ def issue_public_tracking_token(
     *,
     tenant_id: str,
     driver_id: str,
-    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    ttl_seconds: int = DEFAULT_TTL_S,
+    epoch: int = 0,
 ) -> str:
-    """Emite o token do link público (uso: operador/admin)."""
-    ttl = max(60, min(int(ttl_seconds), MAX_TTL_SECONDS))
+    """Emite o token do link público (uso: operador/admin).
+
+    `epoch` é a `delivery_drivers.tracking_epoch` do momento da emissão: é o que
+    permite revogar depois.
+    """
+    ttl = max(1, min(int(ttl_seconds), MAX_TTL_S))
     payload = {
         "t": tenant_id,
         "d": driver_id,
+        "e": int(epoch),
         "exp": int(time.time()) + ttl,
         "scope": PUBLIC_TRACKING_SCOPE,
     }
@@ -69,7 +84,11 @@ def issue_public_tracking_token(
 
 
 def verify_public_tracking_token(token: str) -> Optional[Dict[str, Any]]:
-    """Valida assinatura, escopo e expiração. `None` para qualquer token ruim."""
+    """Valida assinatura, escopo e expiração. `None` para qualquer token ruim.
+
+    O payload devolvido inclui `e` (epoch) — quem chama compara com a epoch
+    atual do entregador para decidir entre válido e revogado.
+    """
     if not token or "." not in token:
         return None
     body, _, signature = token.partition(".")
@@ -85,6 +104,7 @@ def verify_public_tracking_token(token: str) -> Optional[Dict[str, Any]]:
         return None
     try:
         expired = int(payload.get("exp", 0)) < int(time.time())
+        payload["e"] = int(payload.get("e", 0))
     except (TypeError, ValueError):
         return None
     if expired or not payload.get("t") or not payload.get("d"):

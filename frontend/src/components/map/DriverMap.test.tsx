@@ -1,25 +1,28 @@
 /**
- * DriverMap — F1b (mapa do operador).
+ * DriverMap — F1b + Fase 6 + Parte 1 (fixes 5 e 6).
  *
  * jsdom não tem layout nem canvas: o Leaflet real não renderiza tiles aqui.
  * Mockamos o módulo leaflet e validamos o comportamento do componente:
- * estado vazio com/instrução, e container com aria-label quando há pontos.
- * A matemática de fitBounds/marcadores é do Leaflet — coberta pelo pacote.
+ * estado vazio, container, trails, e — o que os fixes 5/6 cobrem — **de onde
+ * parte a linha do destino** e **como o ETA é rotulado**.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { DriverMap, type DriverMapPoint } from './DriverMap'
 
-const layerGroupMock = {
-  addTo: vi.fn().mockReturnThis(),
-  clearLayers: vi.fn(),
-}
+// `vi.hoisted` é obrigatório aqui: `vi.mock` é içado acima dos imports, então
+// qualquer const declarada depois cairia em TDZ na hora de montar a factory.
+const mocks = vi.hoisted(() => ({
+  layerGroup: { addTo: vi.fn().mockReturnThis(), clearLayers: vi.fn() },
+  // Capturado para inspecionarmos o HTML do popup do destino.
+  bindPopup: vi.fn(() => ({ addTo: vi.fn() })),
+}))
 
 vi.mock('leaflet', () => {
-  const layerGroup = vi.fn(() => layerGroupMock)
+  const layerGroup = vi.fn(() => mocks.layerGroup)
   const tileLayer = vi.fn(() => ({ addTo: vi.fn() }))
   const marker = vi.fn(() => ({
-    bindPopup: vi.fn().mockReturnThis(),
+    bindPopup: mocks.bindPopup,
     addTo: vi.fn(),
   }))
   const latLngBounds = vi.fn(() => ({ pad: vi.fn().mockReturnThis() }))
@@ -30,10 +33,6 @@ vi.mock('leaflet', () => {
   }
   const map = vi.fn(() => mapInstance)
   const divIcon = vi.fn((x) => x)
-
-  type Chain = Record<string, unknown>
-  const chainable = (obj: Chain): Chain => obj
-  void chainable
 
   return {
     default: {
@@ -46,6 +45,7 @@ vi.mock('leaflet', () => {
       polyline,
     },
     __mockMapInstance: mapInstance,
+    __bindPopup: mocks.bindPopup,
   }
 })
 
@@ -61,6 +61,23 @@ const makePoint = (over: Partial<DriverMapPoint> = {}): DriverMapPoint => ({
   age_seconds: 10,
   ...over,
 })
+
+/** Última polyline tracejada (a do destino) e o primeiro ponto dela. */
+function dashedOrigin(): [number, number] {
+  const mock = leaflet as unknown as { polyline: ReturnType<typeof vi.fn> }
+  const dashed = mock.polyline.mock.calls.filter(
+    (call) => (call[1] as { dashArray?: string } | undefined)?.dashArray
+  )
+  expect(dashed.length).toBeGreaterThan(0)
+  const path = dashed[dashed.length - 1]![0] as [number, number][]
+  return path[0]!
+}
+
+/** HTML do popup do destino. */
+function destinationPopup(): string {
+  const html = mocks.bindPopup.mock.calls.map((c) => String(c[0]))
+  return html.find((h) => h.includes('Destino')) ?? ''
+}
 
 describe('DriverMap', () => {
   beforeEach(() => {
@@ -117,6 +134,84 @@ describe('DriverMap', () => {
     // Após unmount, um novo mount cria uma nova instância (remove foi chamado).
     render(<DriverMap points={[makePoint()]} />)
     expect(mock.map).toHaveBeenCalledTimes(2)
+    cleanup()
+  })
+
+  // ── Parte 1, fix 5/6 ────────────────────────────────────
+
+  it('fix 6: a linha do destino NÃO parte da primeira posição da lista', () => {
+    const points = [
+      makePoint({ driver_id: 'antigo', latitude: -30.01, longitude: -51.11 }),
+      makePoint({ driver_id: 'atual', latitude: -30.05, longitude: -51.25 }),
+    ]
+    render(
+      <DriverMap
+        points={points}
+        destination={{ latitude: -30.09, longitude: -51.30, etaLabel: '12 min' }}
+      />
+    )
+
+    // Sem `driverId`, a origem é a ÚLTIMA posição — antes saía da primeira.
+    expect(dashedOrigin()).toEqual([-30.05, -51.25])
+    cleanup()
+  })
+
+  it('fix 5: usa a posição do entregador do destino quando informado', () => {
+    const points = [
+      makePoint({ driver_id: 'alheio', latitude: -30.01, longitude: -51.11 }),
+      makePoint({ driver_id: 'dono', latitude: -30.05, longitude: -51.25 }),
+    ]
+    render(
+      <DriverMap
+        points={points}
+        destination={{
+          latitude: -30.09,
+          longitude: -51.30,
+          etaLabel: '12 min',
+          driverId: 'alheio',
+        }}
+      />
+    )
+
+    expect(dashedOrigin()).toEqual([-30.01, -51.11])
+    cleanup()
+  })
+
+  it('fix 5: ETA estimado ganha "~" e aviso de estimativa', () => {
+    render(
+      <DriverMap
+        points={[makePoint()]}
+        destination={{
+          latitude: -30.09,
+          longitude: -51.30,
+          etaLabel: '12 min',
+          speedSource: 'default',
+        }}
+      />
+    )
+
+    const html = destinationPopup()
+    expect(html).toContain('~12 min')
+    expect(html).toContain('estimado')
+    cleanup()
+  })
+
+  it('fix 5: ETA medido sai sem "~"', () => {
+    render(
+      <DriverMap
+        points={[makePoint()]}
+        destination={{
+          latitude: -30.09,
+          longitude: -51.30,
+          etaLabel: '8 min',
+          speedSource: 'history',
+        }}
+      />
+    )
+
+    const html = destinationPopup()
+    expect(html).toContain('Chega em 8 min')
+    expect(html).not.toContain('~')
     cleanup()
   })
 })

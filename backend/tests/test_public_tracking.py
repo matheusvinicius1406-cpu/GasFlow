@@ -81,6 +81,92 @@ class TestToken:
         assert verify_public_tracking_token("a.b") is None
 
 
+class TestTtlLimit:
+    def test_ttl_acima_do_maximo_devolve_422(self, client, admin_headers):
+        res = client.post(
+            "/public/tracking/link?driver_id=qualquer&ttl_seconds=999999",
+            headers=admin_headers,
+        )
+        assert res.status_code == 422, res.text
+
+    def test_ttl_zero_devolve_422(self, client, admin_headers):
+        res = client.post("/public/tracking/link?driver_id=qualquer&ttl_seconds=0", headers=admin_headers)
+        assert res.status_code == 422, res.text
+
+    def test_emissor_clampa_o_ttl_mesmo_chamado_direto(self):
+        from app.application.tracking.public_tracking import MAX_TTL_S
+
+        token = issue_public_tracking_token(tenant_id="t1", driver_id="d1", ttl_seconds=MAX_TTL_S * 10)
+        assert verify_public_tracking_token(token) is not None
+
+
+class TestRevocation:
+    def _driver_with_position(self, app_db, prefix="rev"):
+        from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDriverLocationRepository,
+        )
+
+        driver_id = f"{prefix}-{uuid.uuid4().hex[:6]}"
+        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Revogável", telefone="91999995555"))
+        app_db.commit()
+        SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.55, -46.63)
+        return driver_id
+
+    def test_revogacao_invalida_link_com_410(self, client, admin_headers, app_db):
+        driver_id = self._driver_with_position(app_db)
+
+        created = client.post(f"/public/tracking/link?driver_id={driver_id}", headers=admin_headers)
+        assert created.status_code == 200, created.text
+        token = created.json()["token"]
+        assert client.get(f"/public/tracking/{token}").status_code == 200
+
+        revoked = client.post(f"/public/tracking/revoke/{driver_id}", headers=admin_headers)
+        assert revoked.status_code == 200, revoked.text
+        assert revoked.json()["revoked"] is True
+        assert revoked.json()["epoch"] >= 1
+
+        after = client.get(f"/public/tracking/{token}")
+        assert after.status_code == 410, after.text
+
+    def test_link_novo_funciona_apos_revogacao(self, client, admin_headers, app_db):
+        driver_id = self._driver_with_position(app_db, prefix="rev2")
+        client.post(f"/public/tracking/revoke/{driver_id}", headers=admin_headers)
+
+        created = client.post(f"/public/tracking/link?driver_id={driver_id}", headers=admin_headers)
+        assert created.status_code == 200, created.text
+        assert created.json()["epoch"] >= 1
+        assert client.get(f"/public/tracking/{created.json()['token']}").status_code == 200
+
+    def test_revogacao_exige_admin(self, client, admin_headers, app_db):
+        driver_id = self._driver_with_position(app_db, prefix="rev3")
+        res = client.post(f"/public/tracking/revoke/{driver_id}")
+        assert res.status_code in (401, 403), res.text
+
+    def test_revogacao_de_entregador_inexistente_404(self, client, admin_headers):
+        res = client.post("/public/tracking/revoke/nao-existe-98765", headers=admin_headers)
+        assert res.status_code == 404, res.text
+
+    def test_link_de_outro_tenant_nao_vaza_posicao(self, client, app_db):
+        """Token forjado para outro tenant nunca devolve posição de terceiro."""
+        from app.infrastructure.repositories.delivery_persistence_repository import (
+            SQLAlchemyDriverLocationRepository,
+        )
+
+        driver_id = f"cross-{uuid.uuid4().hex[:6]}"
+        from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
+
+        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Outro", telefone="91999994444"))
+        app_db.commit()
+        SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.55, -46.63)
+
+        # Token assinado (segredo válido) mas com tenant de outro cliente.
+        forged = issue_public_tracking_token(tenant_id="tenant-alheio", driver_id=driver_id)
+        res = client.get(f"/public/tracking/{forged}")
+        assert res.status_code in (404, 410), res.text
+        assert "-23.55" not in res.text
+
+
 class TestEndpoints:
     def test_link_exige_admin_ou_operador(self, client):
         res = client.post("/public/tracking/link?driver_id=qualquer")
@@ -153,10 +239,13 @@ class TestEndpoints:
 
     def test_updated_at_serializa_o_timestamp(self, client, app_db):
         driver_id = f"pub3-{uuid.uuid4().hex[:6]}"
+        from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
         from app.infrastructure.repositories.delivery_persistence_repository import (
             SQLAlchemyDriverLocationRepository,
         )
 
+        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Ciclano", telefone="91999996666"))
+        app_db.commit()
         SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.5, -46.6)
         token = issue_public_tracking_token(tenant_id="default", driver_id=driver_id)
         body = client.get(f"/public/tracking/{token}").json()

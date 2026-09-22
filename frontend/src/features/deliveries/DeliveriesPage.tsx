@@ -105,7 +105,7 @@ export function DeliveriesPage() {
   const { data: locations } = useDriverLocations()
   // Fase 6: posições ao vivo por WebSocket (canal tenant:{id}). O polling fica
   // apenas como carga inicial/fallback — se o WS cair, mantém o último estado.
-  const { pointsByDriver, lastByDriver, alerts, dismissAlert } = useTrackingSocket()
+  const { pointsByDriver, lastByDriver, alerts, dismissAlert, optimizedRoutes } = useTrackingSocket()
   const createDelivery = useCreateDelivery()
   const assignDelivery = useAssignDelivery()
   const updateStatus = useUpdateDeliveryStatus()
@@ -148,8 +148,15 @@ export function DeliveriesPage() {
         latitude: eta.destination.latitude,
         longitude: eta.destination.longitude,
         etaLabel: formatEta(eta.eta_seconds),
+        // Parte 1 (fix 5): o rótulo precisa dizer quando é estimativa e a linha
+        // precisa sair do entregador certo, não da primeira posição da lista.
+        speedSource: eta.speed_source,
+        driverId: eta.driver_id,
       }
     : undefined
+
+  // Fase 8: rota otimizada do entregador com entrega ativa (polynomial azul).
+  const optimizedRoute = eta?.driver_id ? optimizedRoutes[eta.driver_id] ?? null : null
 
   const handleCreateDelivery = async () => {
     if (!newDelivery.order_id || !newDelivery.customer_codigo || !newDelivery.customer_name) return
@@ -326,6 +333,7 @@ export function DeliveriesPage() {
                 points={mapPoints}
                 trails={pointsByDriver}
                 destination={destination}
+                optimizedRoute={optimizedRoute}
                 className="h-80"
               />
             </CardContent>

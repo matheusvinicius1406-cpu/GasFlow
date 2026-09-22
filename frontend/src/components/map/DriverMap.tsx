@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
-import type { DriverLocationUpdate } from '@/lib/tracking'
+import type { DriverLocationUpdate, OptimizedRoute } from '@/lib/tracking'
 
 /**
  * DriverMap — mapa do operador com a posição dos entregadores (F1b).
@@ -39,6 +39,17 @@ export interface MapDestination {
   longitude: number
   /** Rótulo do ETA (ex.: "12 min") mostrado no popup do destino. */
   etaLabel?: string
+  /**
+   * Parte 1 (fix 5): `"default"` significa velocidade média estimada, não
+   * medida — o rótulo ganha `~` para não vender precisão que não existe.
+   */
+  speedSource?: 'history' | 'default'
+  /**
+   * Entregador a quem o destino pertence. É a origem da linha tracejada: sem
+   * isto o mapa escolhia a **primeira** posição da lista e a linha saía de um
+   * ponto de 30 min atrás.
+   */
+  driverId?: string
 }
 
 interface DriverMapProps {
@@ -55,6 +66,11 @@ interface DriverMapProps {
    * polyline do trecho recente; atualizado incrementalmente pelo WebSocket.
    */
   trails?: Record<string, DriverLocationUpdate[]>
+  /**
+   * Fase 8: rota otimizada do entregador selecionado. Desenha a polyline da
+   * sequência com marcadores numerados (pontos de parada).
+   */
+  optimizedRoute?: OptimizedRoute | null
 }
 
 /** Marcador circular: verde (fresco) / cinza (stale). */
@@ -77,7 +93,7 @@ function ageLabel(ageSeconds?: number): string {
   return `${Math.floor(minutes / 60)}h atrás`
 }
 
-export function DriverMap({ points, className = 'h-72', trails, destination }: DriverMapProps) {
+export function DriverMap({ points, className = 'h-72', trails, destination, optimizedRoute }: DriverMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
@@ -134,7 +150,10 @@ export function DriverMap({ points, className = 'h-72', trails, destination }: D
 
     // Fase 7.1: linha tracejada até o endereço da entrega em rota.
     if (destination && valid.length > 0) {
-      const origin = valid[0]!
+      const origin =
+        (destination.driverId
+          ? valid.find((p) => p.driver_id === destination.driverId)
+          : undefined) ?? valid[valid.length - 1]!
       L.polyline(
         [
           [origin.latitude, origin.longitude],
@@ -144,16 +163,40 @@ export function DriverMap({ points, className = 'h-72', trails, destination }: D
       ).addTo(layer)
       L.marker([destination.latitude, destination.longitude], { icon: createDotIcon(false) })
         .bindPopup(
-          `<strong>Destino</strong>${destination.etaLabel ? `<br/>Chega em ~${escapeHtml(destination.etaLabel)}` : ''}`
+          `<strong>Destino</strong>${formatEtaLine(destination)}`
         )
         .addTo(layer)
+    }
+
+    // Fase 8: polyline da sequência otimizada (azul, com marcadores numerados).
+    if (optimizedRoute && optimizedRoute.geometry && optimizedRoute.geometry.length >= 2) {
+      const path = optimizedRoute.geometry
+        .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
+        .map(([lat, lng]) => [lat, lng] as [number, number])
+      if (path.length >= 2) {
+        L.polyline(path, { color: '#2563eb', weight: 4, opacity: 0.8 }).addTo(layer)
+        // Marcadores numerados: 1 = origem (entregador), 2..N = pontos de parada.
+        const numberedIcon = (n: number) =>
+          L.divIcon({
+            className: 'gasflow-route-number',
+            html: `<span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#2563eb;color:white;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.3);">${n}</span>`,
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+            popupAnchor: [0, -14],
+          })
+        for (let i = 0; i < path.length; i++) {
+          L.marker(path[i], { icon: numberedIcon(i + 1) })
+            .bindPopup(`<strong>Parada ${i + 1}</strong>`)
+            .addTo(layer)
+        }
+      }
     }
 
     if (valid.length > 0) {
       const bounds = L.latLngBounds(valid.map((p) => [p.latitude, p.longitude] as [number, number]))
       map.fitBounds(bounds.pad(0.25), { maxZoom: 15 })
     }
-  }, [points, trails, destination])
+  }, [points, trails, destination, optimizedRoute])
 
   if (points.length === 0) {
     return (
@@ -168,6 +211,17 @@ export function DriverMap({ points, className = 'h-72', trails, destination }: D
   }
 
   return <div ref={containerRef} className={`${className} z-0 rounded-lg border border-border`} aria-label="Mapa de entregadores" />
+}
+
+/**
+ * Linha do popup do destino. `speedSource="default"` é estimativa por
+ * velocidade média → `~12 min` deixa isso explícito para o operador.
+ */
+function formatEtaLine(destination: MapDestination): string {
+  if (!destination.etaLabel) return ''
+  const prefix = destination.speedSource === 'default' ? '~' : ''
+  const source = destination.speedSource === 'default' ? ' (estimado)' : ''
+  return `<br/>Chega em ${prefix}${escapeHtml(destination.etaLabel)}${source}`
 }
 
 function escapeHtml(s: string): string {

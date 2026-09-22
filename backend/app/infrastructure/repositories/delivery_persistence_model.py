@@ -197,6 +197,25 @@ class DriverLocationHistoryRecord(Base):
     received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class TrackingAlertStateRecord(Base):
+    """Estado do cooldown de alertas de rastreio (Parte 1, fix 1).
+
+    Uma linha por `(tenant, driver, kind)`. Persistir (em vez de guardar em
+    memória) é o que faz o cooldown sobreviver a restart — o alerta piscando
+    era justamente o sintoma de não haver memória nenhuma.
+    """
+
+    __tablename__ = "tracking_alert_state"
+
+    __table_args__ = (UniqueConstraint("tenant_id", "driver_id", "kind", name="uq_tracking_alert_state"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String, default="default", nullable=False, index=True)
+    driver_id = Column(String(36), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)
+    last_sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class OutboxEntry(Base):
     """Event outbox — guarantees at-least-once event delivery."""
 

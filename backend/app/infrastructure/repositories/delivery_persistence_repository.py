@@ -19,6 +19,7 @@ from app.infrastructure.repositories.delivery_persistence_model import (
     DriverLocationHistoryRecord,
     DriverLocationRecord,
     OutboxEntry,
+    TrackingAlertStateRecord,
     DriverSessionRecord,
     DriverRefreshTokenRecord,
     OfflineSyncLogRecord,
@@ -180,6 +181,22 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
             .filter(DeliveryRecord.driver_id == driver_id)
             .order_by(DeliveryRecord.created_at.desc())
             .all()
+        )
+
+    def count_assigned_since(self, driver_id: str, since: datetime) -> int:
+        """Entregas atribuídas ao entregador desde `since` (fairness do despacho, Fase 9).
+
+        Conta por `assigned_at` (não `created_at`): o que interessa é quantas
+        entregas caíram no colo dele na janela, não quando o pedido nasceu.
+        """
+        return (
+            self._filter_by_tenant(DeliveryRecord)
+            .filter(
+                DeliveryRecord.driver_id == driver_id,
+                DeliveryRecord.assigned_at.isnot(None),
+                DeliveryRecord.assigned_at >= since,
+            )
+            .count()
         )
 
     def count_by_driver(self, driver_id: str) -> Dict[str, int]:
@@ -606,6 +623,22 @@ class SQLAlchemyDriverLocationRepository:
         self.db.commit()
         return deleted
 
+    def latest_history_point(self, tenant_id: str, driver_id: str) -> Optional[DriverLocationHistoryRecord]:
+        """Ponto mais recente do histórico append-only (Fase 9).
+
+        É a posição que o despacho usa: a linha de `driver_locations` é só o
+        upsert da última posição e pode estar congelada há horas.
+        """
+        return (
+            self.db.query(DriverLocationHistoryRecord)
+            .filter(
+                DriverLocationHistoryRecord.tenant_id == tenant_id,
+                DriverLocationHistoryRecord.driver_id == driver_id,
+            )
+            .order_by(DriverLocationHistoryRecord.recorded_at.desc())
+            .first()
+        )
+
     def get_location(self, tenant_id: str, driver_id: str) -> Optional[DriverLocationRecord]:
         return (
             self.db.query(DriverLocationRecord)
@@ -653,6 +686,69 @@ class SQLAlchemyDriverLocationRepository:
             DriverLocationRecord.is_stale == False,
         ).update({"is_stale": True})
         self.db.commit()
+
+
+# ── Tracking Alert State Repository (Parte 1) ───────────
+
+
+class SQLAlchemyTrackingAlertRepository:
+    """Estado do cooldown dos alertas de rastreio — uma linha por (tenant, driver, kind).
+
+    Persistir no banco é o que faz o cooldown sobreviver a restart do processo
+    (o sintoma original era o alerta reenviando a cada lote de ingestão).
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_last_sent_at(self, tenant_id: str, driver_id: str, kind: str) -> Optional[datetime]:
+        row = (
+            self.db.query(TrackingAlertStateRecord)
+            .filter(
+                TrackingAlertStateRecord.tenant_id == tenant_id,
+                TrackingAlertStateRecord.driver_id == driver_id,
+                TrackingAlertStateRecord.kind == kind,
+            )
+            .first()
+        )
+        return row.last_sent_at if row else None
+
+    def mark_sent(self, tenant_id: str, driver_id: str, kind: str, sent_at: datetime) -> None:
+        row = (
+            self.db.query(TrackingAlertStateRecord)
+            .filter(
+                TrackingAlertStateRecord.tenant_id == tenant_id,
+                TrackingAlertStateRecord.driver_id == driver_id,
+                TrackingAlertStateRecord.kind == kind,
+            )
+            .first()
+        )
+        if row:
+            row.last_sent_at = sent_at
+        else:
+            self.db.add(
+                TrackingAlertStateRecord(
+                    tenant_id=tenant_id,
+                    driver_id=driver_id,
+                    kind=kind,
+                    last_sent_at=sent_at,
+                )
+            )
+        self.db.commit()
+
+    def clear_kind(self, tenant_id: str, driver_id: str, kind: str) -> int:
+        """Zera o cooldown de um tipo (usado quando o entregador volta a se mover)."""
+        deleted = (
+            self.db.query(TrackingAlertStateRecord)
+            .filter(
+                TrackingAlertStateRecord.tenant_id == tenant_id,
+                TrackingAlertStateRecord.driver_id == driver_id,
+                TrackingAlertStateRecord.kind == kind,
+            )
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
 
 
 # ── Outbox Repository ──────────────────────────────────
