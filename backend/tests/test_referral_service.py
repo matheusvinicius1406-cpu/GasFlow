@@ -104,7 +104,7 @@ class TestReferralService:
         # Cria 10 referrals no mês corrente
         month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         for i in range(10):
-            referred = _create_client(db, f"11{i:04d}", f"Referred {i}", f"1199999{1000+i}")
+            referred = _create_client(db, f"11{i:04d}", f"Referred {i}", f"1199999{1000 + i}")
             referral = ReferralModel(
                 id=f"test-ref-11-{i:02d}",
                 tenant_id="default",
@@ -128,7 +128,7 @@ class TestReferralService:
         # Cria 9 referrals no mês corrente
         month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         for i in range(9):
-            referred = _create_client(db, f"10{i:04d}", f"Referred {i}", f"1199999{2000+i}")
+            referred = _create_client(db, f"10{i:04d}", f"Referred {i}", f"1199999{2000 + i}")
             referral = ReferralModel(
                 id=f"test-ref-10-{i:02d}",
                 tenant_id="default",
@@ -277,7 +277,7 @@ class TestReferralService:
         """F4.5 bugfix: 200 cupons gerados devem ter códigos únicos."""
         codes = set()
         for i in range(200):
-            referrer = _create_client(db, f"61{i:04d}", f"Unique-{i}", f"1199999{6100+i}")
+            referrer = _create_client(db, f"61{i:04d}", f"Unique-{i}", f"1199999{6100 + i}")
             svc = ReferralService(db, "default")
             referral = svc.generate_invite(referrer.codigo)
             coupon = db.query(CouponModel).filter(CouponModel.id == referral.referrer_coupon_id).first()
@@ -293,7 +293,7 @@ class TestReferralService:
         codes = []
         for i in range(5):
             token = svc.generate_invite(referrer.codigo).invite_token
-            referred = _create_client(db, f"62{i:04d}", f"BV-{i}", f"1199999{6300+i}")
+            referred = _create_client(db, f"62{i:04d}", f"BV-{i}", f"1199999{6300 + i}")
             svc.complete_signup(token, referred.nome, referred.telefone)
 
         # Pega todos os cupons BEMVINDO

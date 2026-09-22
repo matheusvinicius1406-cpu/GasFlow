@@ -55,7 +55,7 @@ export function createUpdateState(deps: { log?: (level: "info" | "warn", scope: 
             } catch {
                 // Um listener quebrado não deve derrubar o updater.
             }
-    }
+        }
         return state;
     }
     function subscribe(fn: UpdateStateListener): () => boolean {

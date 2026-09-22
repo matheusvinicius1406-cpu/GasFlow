@@ -2,13 +2,12 @@
  * GasFlow App do Entregador — entry RN (F2 do spec).
  *
  * Responsabilidades do container:
- * 1. Carregar o consentimento LGPD persistido ANTES de decidir a rota inicial
- *    (loadPersistedConsent + setConsentStorage com AsyncStorage quando disponível).
- * 2. Resolver a conexão ativa (LAN → nuvem → offline, logic/connection.ts) e
- *    publicar no connection store usado pelos contêineres wired.
- * 3. Montar o RootNavigator (gates de login/consentimento nas telas).
+ * 1. Animacao de splash no boot (AnimatedSplash com fade/scale/pulse).
+ * 2. Carregar o consentimento LGPD persistido ANTES de decidir a rota inicial.
+ * 3. Resolver a conexao ativa (LAN → nuvem → offline) e publicar no connection store.
+ * 4. Montar o RootNavigator (gates de login/consentimento nas telas).
  *
- * Compila com o toolchain RN (React Native 0.76). A lógica de negócio continua
+ * Compila com o toolchain RN (React Native 0.76). A logica de negocio continua
  * em src/logic/*, testada em CI via node --test (sem toolchain RN).
  */
 
@@ -17,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import * as Keychain from "react-native-keychain";
 
+import AnimatedSplash from "./src/screens/AnimatedSplash";
 import RootNavigator from "./src/navigation/RootNavigator";
 import {
   loadPersistedConsent,
@@ -28,43 +28,59 @@ import { setTokenStorage, createKeychainTokenStorage, type KeychainLike } from "
 import { resolveConnection } from "./src/logic/connection";
 import { getConnectionTargets } from "./src/logic/config";
 import { useConnectionStore } from "./src/containers/wired";
+import { requestLocationPermission } from "./src/logic/permissions";
 
 /**
- * Storage do consentimento no RN. O AsyncStorage é dependência nativa — para
- * não exigir pod/android build na F2, usamos o storage em memória por padrão
+ * Storage do consentimento no RN. O AsyncStorage e dependencia nativa — para
+ * nao exigir pod/android build na F2, usamos o storage em memoria por padrao
  * e trocamos por AsyncStorage quando o pacote estiver no projeto (F2.5).
  */
 setConsentStorage(createMemoryConsentStorage());
 
 /**
- * Sessão: o token vive no Keystore do Android (EncryptedSharedPreferences) via
- * react-native-keychain — NUNCA em AsyncStorage em texto puro. É o que faz a
- * sessão persistir ao fechar/reabrir o app.
+ * Sessao: o token vive no Keystore do Android (EncryptedSharedPreferences) via
+ * react-native-keychain — NUNCA em AsyncStorage em texto puro. E o que faz a
+ * sessao persistir ao fechar/reabrir o app.
  */
 setTokenStorage(createKeychainTokenStorage(Keychain as unknown as KeychainLike));
 
 export default function App() {
   const [booted, setBooted] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const setConnection = useConnectionStore((s) => s.setConnection);
 
   useEffect(() => {
     void (async () => {
+      // 1. Solicitar permissao de GPS antes de qualquer coisa
+      await requestLocationPermission();
+
+      // 2. Carregar consentimento persistido
       await loadPersistedConsent();
-      // Sessão persistida (Keystore): reabrir o app não pede login de novo.
+
+      // 3. Restaurar sessao persistida (Keystore)
       await restorePersistedSession();
-      // F2.5: alvos reais (LAN/relay) de logic/config.ts — o desktop pode
-      // sobrescrever no boot (QR/configurações) via setConnectionConfig.
+
+      // 4. Resolver conexao ativa (LAN → relay → cloud)
       const targets = getConnectionTargets();
       const resolved = await resolveConnection(targets, fetch);
       setConnection(resolved, targets.cloud?.relayToken ?? "");
+
+      // 5. Boot concluido — marcar para splash sair
       setBooted(true);
+
+      // Splash fica visivel por mais 600ms apos o boot para a animacao completar
+      setTimeout(() => setSplashVisible(false), 600);
     })();
   }, [setConnection]);
 
-  if (!booted) return null; // splash nativo cobre este instante
   return (
-    <SafeAreaProvider>
-      <RootNavigator />
-    </SafeAreaProvider>
+    <>
+      <AnimatedSplash visible={splashVisible} />
+      {booted && (
+        <SafeAreaProvider>
+          <RootNavigator />
+        </SafeAreaProvider>
+      )}
+    </>
   );
 }

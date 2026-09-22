@@ -45,7 +45,7 @@ export default function ConsentScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.button, (!checked || false) && styles.buttonDisabled]}
+        style={[styles.button, !checked && styles.buttonDisabled]}
         disabled={!checked}
         onPress={() => acceptConsent()}
         testID="consent-accept"

@@ -535,7 +535,7 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
         setDelivery((prev) => (prev ? { ...prev, status: kind === "complete" ? "DELIVERED" : kind === "start" ? "EN_ROUTE" : prev.status } : prev));
       }
     },
-    [deliveryId, token, connection.baseUrl]
+    [deliveryId, token, connection.baseUrl, connection.mode]
   );
 
   if (!delivery) {

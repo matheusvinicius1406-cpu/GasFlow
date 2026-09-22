@@ -295,7 +295,7 @@ def _make_msg(phone="5511999887766", text="Olá", account="primary", msg_id=None
     return {
         "account_id": account,
         "sender_phone": phone,
-        "provider_message_id": msg_id or f"msg_{phone}_{int(time.time()*1000)}",
+        "provider_message_id": msg_id or f"msg_{phone}_{int(time.time() * 1000)}",
         "text": text,
         "message_type": "TEXT",
         "from_me": from_me,

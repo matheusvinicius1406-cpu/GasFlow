@@ -78,7 +78,7 @@ class TestRedisSlidingWindowRateLimiter:
     def test_allows_until_limit(self, limiter, fake_redis):
         for i in range(5):
             allowed, _ = limiter.check("k", 5, 60)
-            assert allowed is True, f"request {i+1} should be allowed"
+            assert allowed is True, f"request {i + 1} should be allowed"
 
     def test_blocks_after_limit(self, limiter, fake_redis):
         for _ in range(5):

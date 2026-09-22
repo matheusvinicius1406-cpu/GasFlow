@@ -203,8 +203,7 @@ class CloudApiAdapter(WhatsAppProvider):
             self._last_error = message
             if code == ERR_NOT_IN_24H_WINDOW and payload.get("type") == "text":
                 message += (
-                    " [dica] Fora da janela de 24h: use send_template com um "
-                    "template aprovado para este destinatário."
+                    " [dica] Fora da janela de 24h: use send_template com um template aprovado para este destinatário."
                 )
             logger.warning(f"[cloud_api] send failed: HTTP {resp.status_code}: {message}")
             return SendResult(
@@ -264,7 +263,7 @@ class CloudApiAdapter(WhatsAppProvider):
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=SEND_TIMEOUT)
         self._connected = True
-        logger.info(f"[cloud_api] connected phone={self._phone} " f"quality={data.get('quality_rating', 'unknown')}")
+        logger.info(f"[cloud_api] connected phone={self._phone} quality={data.get('quality_rating', 'unknown')}")
 
     async def stop(self) -> None:
         """Fecha o cliente HTTP; a Cloud API é stateless do lado do backend."""
@@ -404,7 +403,7 @@ class CloudApiAdapter(WhatsAppProvider):
         waba = waba_id or os.getenv("WHATSAPP_CLOUD_API_WABA_ID", "")
         if not waba:
             raise WhatsAppConnectionError(
-                "WABA ID não configurado: defina WHATSAPP_CLOUD_API_WABA_ID " "ou passe waba_id explicitamente.",
+                "WABA ID não configurado: defina WHATSAPP_CLOUD_API_WABA_ID ou passe waba_id explicitamente.",
                 provider="cloud_api",
             )
         params: Dict[str, Any] = {

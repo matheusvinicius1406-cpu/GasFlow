@@ -298,8 +298,7 @@ def _audit_rows(db, resource_id):
 
     return db.execute(
         text(
-            "SELECT action, before_json, after_json FROM auth_audit_log "
-            "WHERE resource='contact' AND resource_id=:rid"
+            "SELECT action, before_json, after_json FROM auth_audit_log WHERE resource='contact' AND resource_id=:rid"
         ),
         {"rid": resource_id},
     ).fetchall()

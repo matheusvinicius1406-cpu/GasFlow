@@ -78,7 +78,7 @@ class MockProvider(WhatsAppProvider):
         await asyncio.sleep(self._latency_ms / 1000)
         return SendResult(
             success=True,
-            message_id=f"mock_{int(time.time()*1000)}",
+            message_id=f"mock_{int(time.time() * 1000)}",
             provider=self.provider_type,
         )
 

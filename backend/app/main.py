@@ -51,6 +51,7 @@ from app.presentation.api.communication import router as communication_router
 from app.presentation.api.segmentation import router as segmentation_router
 from app.presentation.api.reorder import router as reorder_router
 from app.presentation.api.whatsapp.automation import router as whatsapp_automation_router
+from app.presentation.api.mobile_version import router as mobile_version_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, setup_logging
@@ -305,6 +306,7 @@ app.include_router(leads_router)
 app.include_router(integrations_router)
 app.include_router(contacts_crm_router)
 app.include_router(purchase_notes_router)
+app.include_router(mobile_version_router)
 
 # Seed das configurações padrão (idempotente)
 from sqlalchemy.orm import Session as DBSession

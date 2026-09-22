@@ -33,8 +33,7 @@ logger = logging.getLogger("gasflow.driver_notification")
 # uma por tenant, e reaproveitada em todas as atribuições).
 RULE_NAME = "driver_assignment_notification"
 RULE_DESCRIPTION = (
-    "Zap do entregador na atribuição de entrega (F3). "
-    "Disparado pelo AssignmentService; envio pelo executor existente."
+    "Zap do entregador na atribuição de entrega (F3). Disparado pelo AssignmentService; envio pelo executor existente."
 )
 DEFAULT_TEMPLATE = (
     "Olá {{driver_name}}! Nova entrega atribuída: pedido {{order_ref}} "

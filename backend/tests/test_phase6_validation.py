@@ -611,8 +611,8 @@ def test_search_empty_returns_all(test_db):
 
     for i in range(3):
         c = ClientModel(
-            codigo=f"00000{i+1}",
-            nome=f"Client {i+1}",
+            codigo=f"00000{i + 1}",
+            nome=f"Client {i + 1}",
             telefone=f"1199999999{i}",
             rua="Rua A",
             numero=str(i + 1),
@@ -650,8 +650,8 @@ def test_pagination_basic(test_db):
 
     for i in range(25):
         c = ClientModel(
-            codigo=f"{i+1:06d}",
-            nome=f"Client {i+1}",
+            codigo=f"{i + 1:06d}",
+            nome=f"Client {i + 1}",
             telefone=f"1199999{i:05d}",
             rua="Rua A",
             numero=str(i + 1),
@@ -690,8 +690,8 @@ def test_pagination_large_page_size(test_db):
 
     for i in range(5):
         c = ClientModel(
-            codigo=f"{i+1:06d}",
-            nome=f"Client {i+1}",
+            codigo=f"{i + 1:06d}",
+            nome=f"Client {i + 1}",
             telefone=f"1199999{i:05d}",
             rua="Rua A",
             numero=str(i + 1),

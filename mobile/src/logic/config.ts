@@ -43,3 +43,15 @@ export function getConnectionTargets(): {
       : null,
   };
 }
+
+/**
+ * Retorna a versao atual do app (do build.gradle via React NativeDeviceInfo ou fallback).
+ * No Android real, estoaria em buildConfig; para MVP, hardcoded + override possivel.
+ */
+let _appVersion = "1.2.0";
+export function getCurrentAppVersion(): string {
+  return _appVersion;
+}
+export function setAppVersion(version: string): void {
+  _appVersion = version;
+}

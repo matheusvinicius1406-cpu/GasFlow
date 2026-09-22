@@ -97,7 +97,7 @@ class ReferralService:
 
         token = f"{TOKEN_PREFIX}{secrets.token_urlsafe(TOKEN_LENGTH)}"
         referrer_coupon = self._create_referral_coupon(
-            code=f"INDICA-{token[len(TOKEN_PREFIX):len(TOKEN_PREFIX)+12].upper()}",
+            code=f"INDICA-{token[len(TOKEN_PREFIX) : len(TOKEN_PREFIX) + 12].upper()}",
             value=value,
             coupon_type=coupon_type,
             owner_codigo=referrer_client_codigo,

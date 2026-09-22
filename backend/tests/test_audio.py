@@ -275,7 +275,7 @@ def _make_audio(
     phone="5511999887766", text="order", account="primary", msg_id=None, mime="audio/ogg", size=1000, duration=2.0
 ):
     return AudioMessage(
-        provider_message_id=msg_id or f"audio_{phone}_{int(time.time()*1000)}",
+        provider_message_id=msg_id or f"audio_{phone}_{int(time.time() * 1000)}",
         account_id=account,
         sender_phone=phone,
         mime_type=mime,

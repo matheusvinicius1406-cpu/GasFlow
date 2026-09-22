@@ -1,23 +1,26 @@
 /**
- * RootNavigator — auth gate + consent gate do App do Entregador (F2 do spec).
+ * RootNavigator — auth gate + consent gate do App do Entregador.
  *
- * Ordem de navegação (C4 do prompt):
- *   login → consentimento LGPD (1º acesso) → rota do dia → detalhe da entrega
+ * Ordem de navegacao:
+ *   login → consentimento LGPD (1o acesso) → rota do dia → detalhe da entrega
  *
- * - Sem sessão → Login (swipe desabilitado: gates não são puláveis).
- * - Com sessão e sem consentimento válido → Consent (bloqueante).
- * - Com sessão + consentimento → RouteToday.
+ * - Sem sessao → Login (swipe desabilitado: gates nao sao pulaveis).
+ * - Com sessao e sem consentimento valido → Consent (bloqueante).
+ * - Com sessao + consentimento → RouteToday.
  * - `consentLoaded` evita flash do consent enquanto o storage carrega.
  *
- * As telas renderizadas são os contêineres wired (containers/wired.tsx),
- * que ligam store de sessão + API + fila offline às telas de apresentação.
+ * Transicoes animadas:
+ * - Login/Consent → RouteToday: slide_from_right
+ * - RouteToday → DeliveryDetail: slide_from_bottom
+ * - Login/Consent: fade
  */
 
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import AnimatedSplash from "../screens/AnimatedSplash";
 import ConsentScreen from "../screens/ConsentScreen";
 import {
   LoginScreenWired,
@@ -60,35 +63,39 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName={initialRoute}
-        screenOptions={{ gestureEnabled: false }} // gates não são puláveis por swipe
+        screenOptions={{
+          gestureEnabled: false,
+          animation: "slide_from_right",
+          contentStyle: { backgroundColor: "#ffffff" },
+        }}
       >
         {!consentLoaded ? (
-          // Splash mínimo enquanto o consentimento persistido carrega.
+          // Splash minimo enquanto o consentimento persistido carrega.
           <Stack.Screen name="RouteToday" options={{ headerShown: false }}>
             {() => (
               <View style={styles.splash} testID="boot-splash">
-                <Text>Carregando…</Text>
+                <AnimatedSplash visible={true} />
               </View>
             )}
           </Stack.Screen>
         ) : !accessToken ? (
-          <Stack.Screen name="Login" options={{ headerShown: false }}>
+          <Stack.Screen name="Login" options={{ headerShown: false, animation: "fade" }}>
             {() => <LoginScreenWired />}
           </Stack.Screen>
         ) : mustChangePassword ? (
-          <Stack.Screen name="ChangePassword" options={{ headerShown: false }}>
+          <Stack.Screen name="ChangePassword" options={{ headerShown: false, animation: "fade" }}>
             {() => <ChangePasswordScreenWired />}
           </Stack.Screen>
         ) : !hasValidConsent ? (
-          <Stack.Screen name="Consent" options={{ headerShown: false, title: "Consentimento" }}>
+          <Stack.Screen name="Consent" options={{ headerShown: false, title: "Consentimento", animation: "fade" }}>
             {() => <ConsentScreen />}
           </Stack.Screen>
         ) : (
           <>
-            <Stack.Screen name="RouteToday" options={{ title: "Rota do Dia" }}>
+            <Stack.Screen name="RouteToday" options={{ title: "Rota do Dia", animation: "slide_from_right" }}>
               {(props: RouteTodayScreenWiredProps) => <RouteTodayScreenWired {...props} />}
             </Stack.Screen>
-            <Stack.Screen name="DeliveryDetail" options={{ title: "Entrega" }}>
+            <Stack.Screen name="DeliveryDetail" options={{ title: "Entrega", animation: "slide_from_bottom" }}>
               {(props: DeliveryDetailScreenWiredProps) => <DeliveryDetailScreenWired {...props} />}
             </Stack.Screen>
           </>

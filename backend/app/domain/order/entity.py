@@ -135,7 +135,7 @@ class Order:
     def _verificar_imutabilidade(self):
         """Verifica se o pedido pode ser alterado."""
         if self.status in TERMINAL_STATUSES:
-            raise ValueError(f"Pedido {self.codigo} está em status {self.status.value} " f"e não pode ser alterado")
+            raise ValueError(f"Pedido {self.codigo} está em status {self.status.value} e não pode ser alterado")
 
     def confirmar(self):
         """Confirma o pedido."""

@@ -1,0 +1,7 @@
+{
+  "latest_version": "1.2.0",
+  "download_url": "https://github.com/matheusvinicius1406-cpu/GasFlow/releases/latest/download/app-release.apk",
+  "changelog": "Sistema operacional de entregas com rastreamento em tempo real, animacoes de splash, e verificacao de atualizacoes automaticas.",
+  "min_required": "1.0.0",
+  "release_date": "2026-09-22"
+}

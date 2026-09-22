@@ -90,7 +90,7 @@ class BaileysAdapter(WhatsAppProvider):
         except httpx.ConnectError as exc:
             self._connected = False
             raise WhatsAppConnectionError(
-                "Baileys service not available. " "A Baileys-based Node.js service needs to be built.",
+                "Baileys service not available. A Baileys-based Node.js service needs to be built.",
                 provider="baileys",
             ) from exc
         except Exception as e:

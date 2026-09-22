@@ -178,5 +178,5 @@ class ReactivationService:
             if last and last >= cutoff:
                 continue
             eligible.append(client)
-        eligible.sort(key=lambda c: (c.last_interaction_at or c.updated_at or c.created_at or datetime.utcnow()))
+        eligible.sort(key=lambda c: c.last_interaction_at or c.updated_at or c.created_at or datetime.utcnow())
         return eligible, cutoff, template

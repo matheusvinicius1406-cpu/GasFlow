@@ -85,7 +85,7 @@ DEFAULT_TEMPLATES = {
     CommunicationEvent.ARRIVAL: MessageTemplate(
         event=CommunicationEvent.ARRIVAL,
         subject="Entregador chegou",
-        body=("Olá, {customer_name}! O entregador acabou de chegar " "ao local da entrega do pedido #{order_code}."),
+        body=("Olá, {customer_name}! O entregador acabou de chegar ao local da entrega do pedido #{order_code}."),
         variables=["customer_name", "order_code"],
         cooldown_minutes=60,
     ),
@@ -114,7 +114,7 @@ DEFAULT_TEMPLATES = {
     CommunicationEvent.DELAY: MessageTemplate(
         event=CommunicationEvent.DELAY,
         subject="Atraso na entrega",
-        body=("Olá, {customer_name}! Tivemos um pequeno atraso " "na entrega do seu pedido. Agradecemos a paciência!"),
+        body=("Olá, {customer_name}! Tivemos um pequeno atraso na entrega do seu pedido. Agradecemos a paciência!"),
         variables=["customer_name"],
         cooldown_minutes=60,
     ),

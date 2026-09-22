@@ -144,7 +144,7 @@ class TestRegisterReferral:
                     "phone": "11999993100",
                 }
             )
-            assert result.success is True, f"Tentativa {i+1} deveria passar"
+            assert result.success is True, f"Tentativa {i + 1} deveria passar"
 
         # 4ª tentativa com mesmo telefone deve ser bloqueada
         token = _create_invite_token(db, referrer.codigo)

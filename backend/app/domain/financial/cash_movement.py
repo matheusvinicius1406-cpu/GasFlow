@@ -47,4 +47,4 @@ class CashMovement:
         self.created_at = created_at or datetime.utcnow()
 
     def __repr__(self):
-        return f"CashMovement(type={self.type.value}, amount=R${self.amount}, " f"balance_after=R${self.balance_after})"
+        return f"CashMovement(type={self.type.value}, amount=R${self.amount}, balance_after=R${self.balance_after})"

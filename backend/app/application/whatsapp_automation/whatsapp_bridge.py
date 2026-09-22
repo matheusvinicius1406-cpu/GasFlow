@@ -64,9 +64,7 @@ class WhatsAppSendBridge:
                     if response.status_code == 200:
                         data = response.json()
                         if data.get("success"):
-                            logger.info(
-                                f"[whatsapp-bridge] Message sent to {phone} " f"(msg_id={data.get('messageId')})"
-                            )
+                            logger.info(f"[whatsapp-bridge] Message sent to {phone} (msg_id={data.get('messageId')})")
                             return {
                                 "success": True,
                                 "message_id": data.get("messageId"),
@@ -74,26 +72,26 @@ class WhatsAppSendBridge:
                             }
                         else:
                             last_error = data.get("error", "Unknown error")
-                            logger.warning(f"[whatsapp-bridge] Send failed (attempt {attempt+1}): {last_error}")
+                            logger.warning(f"[whatsapp-bridge] Send failed (attempt {attempt + 1}): {last_error}")
                     elif response.status_code == 429:
                         # Rate limited — back off
                         last_error = "Rate limited by WhatsApp service"
-                        logger.warning(f"[whatsapp-bridge] Rate limited (attempt {attempt+1})")
+                        logger.warning(f"[whatsapp-bridge] Rate limited (attempt {attempt + 1})")
                     else:
                         last_error = f"HTTP {response.status_code}: {response.text[:200]}"
                         logger.warning(
-                            f"[whatsapp-bridge] Unexpected status (attempt {attempt+1}): {response.status_code}"
+                            f"[whatsapp-bridge] Unexpected status (attempt {attempt + 1}): {response.status_code}"
                         )
 
             except httpx.TimeoutException:
                 last_error = "Timeout connecting to WhatsApp service"
-                logger.warning(f"[whatsapp-bridge] Timeout (attempt {attempt+1})")
+                logger.warning(f"[whatsapp-bridge] Timeout (attempt {attempt + 1})")
             except httpx.ConnectError:
                 last_error = "Cannot connect to WhatsApp service"
-                logger.warning(f"[whatsapp-bridge] Connection error (attempt {attempt+1})")
+                logger.warning(f"[whatsapp-bridge] Connection error (attempt {attempt + 1})")
             except Exception as e:
                 last_error = str(e)
-                logger.error(f"[whatsapp-bridge] Unexpected error (attempt {attempt+1}): {e}")
+                logger.error(f"[whatsapp-bridge] Unexpected error (attempt {attempt + 1}): {e}")
 
             # Exponential backoff with jitter
             if attempt < MAX_RETRIES - 1:
