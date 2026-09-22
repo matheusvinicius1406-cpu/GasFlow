@@ -130,6 +130,11 @@ de inativos) e a IA pode corrigir o endereço na própria conversa (tool
 | `GASFLOW_SERVICE_KEY` | serviço WhatsApp | — | Enviada como `X-GasFlow-Key` (mesmo valor de `MARCOS_GAS_API_KEY`) |
 | `WHATSAPP_SERVICE_KEY` / `MARCOS_GAS_API_KEY` | backend | — | Chave esperada pelo backend nas chamadas do serviço |
 | `AUTOMATION_POLL_SECONDS` | backend | `0` (off) | Intervalo do executor de automações em background |
+| `DELIVERY_SMART_ROUTING_ENABLED` | backend | `false` | Liga a Fase 8 (otimização de sequência com OR-Tools). Desligado, o endpoint `/route/optimize` responde 409 |
+| `DELIVERY_SMART_DISPATCH_ENABLED` | backend | `false` | Liga a Fase 9 (scorer de despacho no `/dispatch/suggest`). Desligado, mantém o cálculo inline atual |
+| `ROUTING_PROVIDER` | backend | `haversine` | Provedor de roteamento: `haversine` (zero infra) ou `osrm` (self-hosted) |
+| `OSRM_BASE_URL` | backend | `""` | URL do OSRM (ex.: `http://osrm:5000`). Sem URL, cai no haversine |
+| `DISPATCH_LOAD_FULL_DELIVERIES` | backend | `4` | Entregas concorrentes que "enchem" o entregador (denominador do load no scorer) |
 
 ## Stack
 

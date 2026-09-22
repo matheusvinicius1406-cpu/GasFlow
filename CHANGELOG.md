@@ -4,6 +4,65 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔧 Correções do rastreio (Parte 1)
+
+Seis correções em bugs reais de produção, sem mudar a API:
+
+- **Cooldown de alertas (Fix 1):** `TrackingAlertsService` agora mantém cooldown
+  de 15 min por `(tenant, driver, kind)` — evita que o alerta pisque o dia
+  inteiro. Estado persistido em `tracking_alert_state` (sobrevive a restart).
+- **Reset por movimento (Fix 2):** cooldown reseta quando o entregador volta a
+  andar (> 200 m).
+- **Gate do DEVIATED (Fix 2):** `DEVIATED` só aciona com `status == "EN_ROUTE"`
+  **e** a menos de 3 km do destino — evita falso positivo na volta ao depósito.
+- **TTL máximo do link público (Fix 3):** `MAX_TTL_S = 86400` (24 h); request
+  acima disso → **422**. Token embute `e` (epoch do driver).
+- **Revogação por epoch (Fix 4):** `POST /public/tracking/revoke/{driver_id}`
+  incrementa `tracking_epoch` → link antigo retorna **410 Gone**.
+- **Origem da linha de ETA (Fix 5):** `DriverMap` usa a **última** posição como
+  origem da polyline tracejada (antes saía de um ponto de 30 min atrás).
+- **Rótulo honesto (Fix 5):** quando `speed_source == "default"`, o rótulo ganha
+  `~` (ex.: `~12 min`) para não vender precisão que não existe.
+- **Migration `f3a9c1e7d204`:** adiciona `delivery_drivers.tracking_epoch` e
+  cria tabela `tracking_alert_state`.
+
+### 🚀 Entrega inteligente (Fases 8–10, Opção D)
+
+Sistema completo de roteamento e despacho inteligente, tudo open source e gratuito.
+
+#### Fase 8 — Sequenciamento de rota (OR-Tools)
+- **`RoutingProvider` (ABC):** contrato de roteamento por matriz NxN em
+  `app/domain/routing/provider.py`. Duas implementações:
+  `HaversineRoutingProvider` (default, zero infra) e `OsrmRoutingProvider`
+  (opt-in, malha viária real).
+- **`DeliveryRouteOptimizer`:** resolve TSP/caminho aberto com OR-Tools
+  (Apache-2.0). Ganho < 5% mantém a ordem original. Sem OR-Tools instalado,
+  fallback transparente (`provider="fallback"`).
+- **`POST /delivery/route/optimize`:** endpoint escopado por tenant. 409 quando a
+  flag `DELIVERY_SMART_ROUTING_ENABLED` está desligada.
+- **Gatilho automático:** função na camada de aplicação chamada best-effort
+  após `PATCH /deliveries/{id}/assign`. Publica `route.optimized` no barramento.
+- **App do entregador:** ao receber `route.optimized`, reordena ids conhecidos e
+  dispara refetch para completar (decisão 13).
+
+#### Fase 9 — Melhor entregador (DispatchScorer)
+- **`DispatchScorer`:** módulo testável que pontua entregadores por proximidade
+  (posição do histórico), carga, prazo e fairness. Pesos configuráveis por env.
+- **Integração:** com a flag `DELIVERY_SMART_DISPATCH_ENABLED` ligada,
+  `/delivery/dispatch/suggest` delega ao scorer mantendo o gate de elegibilidade.
+- **`GET /delivery/dispatch/candidates/{delivery_id}`:** preview read-only do
+  score para o operador. 409 quando a flag está desligada.
+- **`dispatch.scored`:** evento publicado para auditoria quando o scorer decide.
+
+#### Fase 10 — OSRM self-hosted
+- **`OsrmRoutingProvider`:** chama OSRM via HTTP (`/table` para matrizes,
+  `/route` para geometria). Timeout curto (2 s) + circuit breaker.
+- **Fallback transparente:** OSRM offline/timeout → haversine. `provider`
+  no payload denuncia a fonte.
+- **`docker-compose.osrm.yml`:** arquivo opt-in para documentação do deploy.
+- **`docs/routing/osrm.md`:** pipeline completo (extract → partition → customize
+  → routed), requisitos de hardware, troubleshooting.
+
 ### 🧭 Rastreio: ETA, link público, alertas e replay (Fase 7)
 
 A camada de rastreio ganhou o que faltava para operar de verdade — tudo em cima

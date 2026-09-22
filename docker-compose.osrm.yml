@@ -1,0 +1,43 @@
+# OSRM Self-Hosted (Fase 10) — deploy opt-in
+#
+# ATENÇÃO: este arquivo é para documentação e deploy manual.
+# NÃO roda no CI. NÃO é parte do build padrão.
+#
+# Uso:
+#   docker compose -f docker-compose.osrm.yml up -d
+#
+# Pré-requisitos:
+#   - Extrair dados do OSM (ver docs/routing/osrm.md)
+#   - Arquivo .osrm no diretório ./data
+
+version: "3.8"
+
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    container_name: gasflow-osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+    command: >
+      osrm-routed
+      --algorithm mld
+      --threads 4
+      /data/brazil-latest.osrm
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health/v1/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "4"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

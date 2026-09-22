@@ -115,6 +115,19 @@ python -m alembic downgrade -1
 | WHATSAPP_SERVICE_URL | http://localhost:3000 | WhatsApp service URL |
 | LOG_LEVEL | INFO | Logging level |
 | POSTGRES_PASSWORD | gasflow | PostgreSQL password (Docker) |
+| DELIVERY_SMART_ROUTING_ENABLED | false | Fase 8: sequenciamento de rota com OR-Tools |
+| DELIVERY_SMART_DISPATCH_ENABLED | false | Fase 9: score de despacho extraído (DispatchScorer) |
+| ROUTING_PROVIDER | haversine | Fase 10: `haversine` ou `osrm` |
+| OSRM_BASE_URL | (vazio) | URL do OSRM self-hosted |
+| OSRM_TIMEOUT_SECONDS | 2 | Timeout por request ao OSRM |
+| OSRM_BREAKER_FAILURES | 3 | Falhas seguidas para abrir o breaker |
+| OSRM_BREAKER_COOLDOWN_S | 60 | Janela do breaker antes da sondagem |
+| ROUTING_DEFAULT_SPEED_KMH | 28 | Velocidade média assumida sem provedor real |
+| DISPATCH_WEIGHT_PROXIMITY | 0.45 | Peso do componente de proximidade |
+| DISPATCH_WEIGHT_LOAD | 0.25 | Peso do componente de carga |
+| DISPATCH_WEIGHT_DEADLINE | 0.20 | Peso do componente de prazo |
+| DISPATCH_WEIGHT_FAIRNESS | 0.10 | Peso do componente de justiça |
+| DISPATCH_LOAD_FULL_DELIVERIES | 4 | Entregas concorrentes que "enchem" o entregador |
 
 ## Monitoring
 
