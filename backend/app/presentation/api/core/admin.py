@@ -23,7 +23,8 @@ from pydantic import BaseModel, Field
 from app.application.security.permission_policy_loader import get_policy_loader
 from app.domain.security.models import TenantContext
 from app.infrastructure.database.init_db import engine
-from app.infrastructure.repositories.auth_model import AuthRoleModel, AuthUserModel
+from app.infrastructure.repositories.auth_model import AuthMembershipModel, AuthRoleModel, AuthUserModel
+from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
 from app.presentation.dependencies import require_permission
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -124,6 +125,21 @@ class ResetPasswordResponse(BaseModel):
     success: bool
     temporary_password: str
     must_change_password: bool
+
+
+class CreateDriverBody(BaseModel):
+    """Cadastro do entregador: cria a entidade de negócio + a credencial."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=1, max_length=50)
+    document: Optional[str] = Field(None, max_length=50)  # CPF/CNH (nullable)
+    username: Optional[str] = Field(None, min_length=3, max_length=100)
+
+
+class CreateDriverResponse(BaseModel):
+    driver_id: str
+    username: str
+    temporary_password: str
 
 
 class UpdateRolePermissionsBody(BaseModel):
@@ -328,6 +344,217 @@ async def activate_user(
 
         _audit_mutation(ctx, "RESOURCE_MODIFIED", "user", user.id, before, _user_snapshot(user))
         return {"success": True, "user": _user_snapshot(user)}
+    finally:
+        db.close()
+
+
+# ── Drivers (entregador ↔ credencial) ───────────────────
+
+
+def _driver_role(db):
+    return db.query(AuthRoleModel).filter(AuthRoleModel.name == "DRIVER").first()
+
+
+def _next_driver_codigo(db, tenant_id: str) -> str:
+    """Próximo código sequencial de entregador no tenant (6 dígitos).
+
+    Mesma convenção do SQLAlchemyDeliveryDriverRepository.proximo_codigo — aqui
+    inline para permanecer na mesma transação do cadastro.
+
+    Usa o **maior código numérico** do tenant, não a última linha por `id`:
+    o `codigo` é único por tenant e pode ser criado fora de ordem (importação,
+    seed, testes), então ordenar por `id` recolocava um código já usado e
+    estourava a `uq_driver_tenant_codigo`.
+    """
+    highest = 0
+    rows = db.query(DeliveryDriverModel.codigo).filter(DeliveryDriverModel.tenant_id == tenant_id).all()
+    for (codigo,) in rows:
+        if codigo is None:
+            continue
+        try:
+            highest = max(highest, int(str(codigo)))
+        except (TypeError, ValueError):
+            continue
+    return f"{highest + 1:06d}"
+
+
+def _find_driver_user(db, driver_id: str, role_id: Optional[str]):
+    query = db.query(AuthUserModel).filter(AuthUserModel.driver_id == driver_id)
+    if role_id:
+        query = query.filter(AuthUserModel.role_id == role_id)
+    return query.first()
+
+
+def _driver_payload(driver: DeliveryDriverModel, user: Optional[AuthUserModel]) -> dict:
+    """Serializa entregador + credencial vinculada. NUNCA inclui senha/hash."""
+    return {
+        "driver_id": driver.codigo,
+        "name": driver.nome,
+        "phone": driver.telefone,
+        "document": driver.document,
+        "active": bool(driver.ativo),
+        "status": driver.status,
+        "username": user.username if user else None,
+        "credential_status": user.status if user else None,
+        "must_change_password": bool(user.must_change_password) if user else None,
+    }
+
+
+@router.get("/drivers")
+async def list_drivers(ctx: TenantContext = Depends(require_permission("user.read"))):
+    """Lista entregadores do tenant com a credencial vinculada (sem senha)."""
+    db = _session()
+    try:
+        role = _driver_role(db)
+        drivers = (
+            db.query(DeliveryDriverModel)
+            .filter(DeliveryDriverModel.tenant_id == ctx.tenant_id)
+            .order_by(DeliveryDriverModel.codigo)
+            .all()
+        )
+        users = {
+            u.driver_id: u
+            for u in db.query(AuthUserModel).filter(AuthUserModel.driver_id.isnot(None)).all()
+            if role is None or u.role_id == role.id
+        }
+        return {"drivers": [_driver_payload(d, users.get(d.codigo)) for d in drivers]}
+    finally:
+        db.close()
+
+
+@router.post("/drivers", status_code=201, response_model=CreateDriverResponse)
+async def create_driver(
+    body: CreateDriverBody,
+    ctx: TenantContext = Depends(require_permission("user.create")),
+):
+    """Cadastra o entregador: entidade `delivery_drivers` + credencial de acesso.
+
+    Cria a entidade de negócio e o `User(role=DRIVER, driver_id=codigo,
+    must_change_password=True)` na MESMA transação. A senha temporária aparece
+    apenas nesta resposta — nunca em log/audit/listagem.
+    """
+    from app.domain.security.models import hash_password
+
+    db = _session()
+    try:
+        role = _driver_role(db)
+        if role is None:
+            raise HTTPException(status_code=400, detail="Role DRIVER not found")
+
+        codigo = _next_driver_codigo(db, ctx.tenant_id)
+        username = body.username or f"drv_{codigo}"
+        if db.query(AuthUserModel).filter(AuthUserModel.username == username).first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        temp_password = _generate_temp_password()
+        driver = DeliveryDriverModel(
+            tenant_id=ctx.tenant_id,
+            codigo=codigo,
+            nome=body.name,
+            telefone=body.phone,
+            document=body.document,
+            ativo=True,
+            status="AVAILABLE",
+        )
+        user_id = str(uuid.uuid4())
+        user = AuthUserModel(
+            id=user_id,
+            username=username,
+            email="",
+            display_name=body.name,
+            password_hash=hash_password(temp_password),
+            status="ACTIVE",
+            role_id=role.id,
+            driver_id=codigo,
+            must_change_password=True,
+            created_by=ctx.user_id,
+        )
+        # O papel efetivo é resolvido pela membership em `validate_token`/login —
+        # sem ela o contexto cairia em OPERATOR. Entra na mesma transação.
+        membership = AuthMembershipModel(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            tenant_id=ctx.tenant_id,
+            role_id=role.id,
+        )
+        db.add(driver)
+        db.add(user)
+        db.add(membership)
+        db.commit()
+        db.refresh(driver)
+        db.refresh(user)
+
+        # TODO (Fase 2): envio da senha temporária por SMS/WhatsApp fica aqui;
+        # hoje ela só existe nesta resposta. Rate limiting e device binding do
+        # app do entregador são decididos no cliente/APK, não neste cadastro.
+        _audit_mutation(ctx, "USER_CREATED", "driver", codigo, None, _driver_payload(driver, user))
+        return CreateDriverResponse(driver_id=codigo, username=username, temporary_password=temp_password)
+    finally:
+        db.close()
+
+
+@router.post("/drivers/{driver_id}/reset-password", response_model=ResetPasswordResponse)
+async def reset_driver_password(
+    driver_id: str,
+    ctx: TenantContext = Depends(require_permission("user.reset_password")),
+):
+    """Nova senha temporária para o entregador; religa a troca obrigatória."""
+    from app.domain.security.models import hash_password
+
+    db = _session()
+    try:
+        role = _driver_role(db)
+        user = _find_driver_user(db, driver_id, role.id if role else None)
+        if not user:
+            raise HTTPException(status_code=404, detail="Driver credential not found")
+        before = _user_snapshot(user)
+
+        temp_password = _generate_temp_password()
+        user.password_hash = hash_password(temp_password)
+        user.must_change_password = True
+        user.updated_at = datetime.utcnow()
+        db.commit()
+
+        _audit_mutation(ctx, "PASSWORD_CHANGED", "driver", driver_id, before, {"must_change_password": True})
+        return ResetPasswordResponse(success=True, temporary_password=temp_password, must_change_password=True)
+    finally:
+        db.close()
+
+
+@router.delete("/drivers/{driver_id}")
+async def deactivate_driver(
+    driver_id: str,
+    ctx: TenantContext = Depends(require_permission("user.deactivate")),
+):
+    """Desativa entregador E credencial, revogando as sessões do usuário."""
+    from app.infrastructure.repositories.auth_repository import SQLAlchemySessionRepository
+
+    db = _session()
+    try:
+        driver = (
+            db.query(DeliveryDriverModel)
+            .filter(DeliveryDriverModel.tenant_id == ctx.tenant_id, DeliveryDriverModel.codigo == driver_id)
+            .first()
+        )
+        if not driver:
+            raise HTTPException(status_code=404, detail="Driver not found")
+
+        role = _driver_role(db)
+        user = _find_driver_user(db, driver_id, role.id if role else None)
+        before = _driver_payload(driver, user)
+
+        driver.ativo = False
+        driver.status = "DISABLED"
+        driver.updated_at = datetime.utcnow()
+        revoked = 0
+        if user:
+            user.status = "DISABLED"
+            user.updated_at = datetime.utcnow()
+            revoked = SQLAlchemySessionRepository(db).revoke_all_for_user(user.id)
+        db.commit()
+
+        _audit_mutation(ctx, "USER_DISABLED", "driver", driver_id, before, _driver_payload(driver, user))
+        return {"success": True, "driver_id": driver_id, "revoked_sessions": revoked}
     finally:
         db.close()
 

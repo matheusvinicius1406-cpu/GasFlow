@@ -12,6 +12,7 @@ import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Pa
 import { apiClient } from '@/lib/api/client'
 import { DriverMap } from '@/components/map/DriverMap'
 import type { DriverMapPoint } from '@/components/map/DriverMap'
+import { useTrackingSocket } from '@/lib/hooks/useTrackingSocket'
 import type { DeliveryDriver } from '@/types'
 import { DriverStockCard } from './DriverStockCard'
 
@@ -41,9 +42,11 @@ const DEFAULT_STATUS_CONFIG: StatusConfigEntry = { label: 'Desconhecido', varian
 
 export function DriversPage() {
   const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
-  const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean; age_seconds?: number }>>({})
+  const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean; age_seconds?: number; today_distance_km?: number }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  // Fase 6: posições/trajetos ao vivo por WebSocket (canal tenant:{id}).
+  const { pointsByDriver, lastByDriver } = useTrackingSocket()
   // F7: motorista selecionado para ver/gerenciar o estoque carregado
   const [stockDriver, setStockDriver] = useState<string | null>(null)
 
@@ -103,7 +106,24 @@ export function DriversPage() {
     timestamp: loc.timestamp,
     is_stale: loc.is_stale,
     age_seconds: loc.age_seconds,
+    // Fase 7.5: km do dia calculados do histórico (vêm em /delivery/locations).
+    today_distance_km: loc.today_distance_km,
   }))
+
+  // Fase 6: a posição ao vivo (WS) sobrepõe a do fetch inicial.
+  const pointsById = new Map(mapPoints.map((p) => [p.driver_id, p]))
+  for (const live of Object.values(lastByDriver)) {
+    pointsById.set(live.driver_id, {
+      driver_id: live.driver_id,
+      name: drivers.find(d => d.codigo === live.driver_id)?.nome,
+      latitude: live.latitude,
+      longitude: live.longitude,
+      timestamp: live.recorded_at,
+      is_stale: false,
+      age_seconds: 0,
+    })
+  }
+  const mergedMapPoints: DriverMapPoint[] = [...pointsById.values()]
 
   return (
     <Page>
@@ -128,7 +148,7 @@ export function DriversPage() {
       <Card>
         <CardHeader><CardTitle>Mapa de Motoristas</CardTitle></CardHeader>
         <CardContent>
-          <DriverMap points={mapPoints} className="h-72" />
+          <DriverMap points={mergedMapPoints} trails={pointsByDriver} className="h-72" />
         </CardContent>
       </Card>
 

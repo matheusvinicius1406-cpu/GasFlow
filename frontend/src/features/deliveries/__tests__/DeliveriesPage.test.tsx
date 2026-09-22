@@ -20,6 +20,9 @@ vi.mock('@/lib/api/hooks', () => ({
   useAssignDelivery: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDeliveryStatus: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDriverLocations: () => ({ data: [] }),
+  // Fase 7.1: ETA + formatação (a página usa para a linha tracejada).
+  useDeliveryEta: () => ({ data: null }),
+  formatEta: (seconds: number) => `${Math.max(1, Math.round(seconds / 60))} min`,
 }))
 
 import { DeliveriesPage } from '../DeliveriesPage'

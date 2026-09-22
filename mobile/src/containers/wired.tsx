@@ -10,26 +10,31 @@
  * injetado aqui. Sem rede: ações passam pela fila e a rota mostra cache.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import LoginScreen from "../screens/LoginScreen";
+import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import RouteTodayScreen, { type RouteDelivery } from "../screens/RouteTodayScreen";
 import DeliveryDetailScreen, { type DeliveryDetail } from "../screens/DeliveryDetailScreen";
 import { useSessionStore } from "../logic/session";
 import {
-  mobileLogin,
+  operatorLogin,
+  changePassword,
   fetchMyDeliveries,
   fetchDriverMe,
+  driverWsUrl,
   postDeliveryAction,
   postDriverLocation,
   postDriverLocationRelay,
   type DeliveryDTO,
 } from "../logic/api";
+import { attachDriverSocket, reconnectDelay } from "../logic/realtime";
 import { OfflineQueue, type QueueItem, type QueueStorage } from "../logic/offlineQueue";
 import { resolveConnection, type ResolvedConnection } from "../logic/connection";
-import { TrackingController, type TrackingDeps } from "../logic/tracking";
+import { TrackingController, type TrackingDeps, type GpsPosition } from "../logic/tracking";
+import { createBackgroundTracking } from "../logic/backgroundTracking";
 
 export type RouteTodayScreenWiredProps = NativeStackScreenProps<RootStackParamList, "RouteToday">;
 export type DeliveryDetailScreenWiredProps = NativeStackScreenProps<RootStackParamList, "DeliveryDetail">;
@@ -86,6 +91,47 @@ function getGeolocation(): {
   return Geolocation;
 }
 
+/**
+ * Fase 5: captura em segundo plano.
+ *
+ * A lib nativa (@ikolvi/tracelet) entra atrás do adaptador; se ela não
+ * estiver disponível (autolink pendente, iOS sem pod), o adaptador cai no
+ * `foregroundWatch` abaixo — o rastreio continua funcionando em primeiro plano.
+ */
+const foregroundWatch = (onPosition: (pos: GpsPosition) => void, onError: (e: Error) => void) => {
+  const geo = getGeolocation();
+  const watchId = geo.watchPosition(
+    (p) =>
+      onPosition({
+        latitude: p.coords.latitude,
+        longitude: p.coords.longitude,
+        accuracy: p.coords.accuracy ?? undefined,
+        speed: p.coords.speed ?? undefined,
+        bearing: p.coords.heading ?? undefined,
+        timestamp: p.timestamp,
+      }),
+    (e) => onError(new Error(e.message ?? `GPS erro ${e.code ?? "?"}`)),
+    { enableHighAccuracy: true, distanceFilter: 10, timeout: 15_000, maximumAge: 30_000 },
+  );
+  return () => geo.clearWatch(watchId);
+};
+
+const backgroundTracking = createBackgroundTracking({
+  // TODO(Fase 5 — background real): passa `tracelet: Tracelet` quando a lib
+  // estiver utilizável. Hoje ela está BLOQUEADA (ver mobile/README.md):
+  // `@ikolvi/tracelet@0.1.0-alpha.1` é publicada sem o submódulo `core`
+  // (`Unresolved reference: core` no :ikolvi_tracelet:compileReleaseKotlin) e
+  // com um `<service>` fora do `<application>` no manifest (AAPT rejeita).
+  // Com `null`, o adaptador usa o foregroundWatch abaixo — mesmo rastreio de
+  // antes, agora atrás da costura que liga o background quando ele voltar.
+  tracelet: null,
+  fallback: foregroundWatch,
+  log: (level, message) => {
+    if (level === "warn") console.warn(`[tracking] ${message}`);
+    else console.log(`[tracking] ${message}`);
+  },
+});
+
 let trackingController: TrackingController | null = null;
 
 /** Controller singleton do rastreamento (gate B2 + cadência + roteamento). */
@@ -108,23 +154,9 @@ export function getTrackingController(): TrackingController {
       tenantId: trackingRuntime.tenantId,
       connection: useConnectionStore.getState().connection,
     }),
-    watch: (onPosition, onError) => {
-      const geo = getGeolocation();
-      const watchId = geo.watchPosition(
-        (p) =>
-          onPosition({
-            latitude: p.coords.latitude,
-            longitude: p.coords.longitude,
-            accuracy: p.coords.accuracy ?? undefined,
-            speed: p.coords.speed ?? undefined,
-            bearing: p.coords.heading ?? undefined,
-            timestamp: p.timestamp,
-          }),
-        (e) => onError(new Error(e.message ?? `GPS erro ${e.code ?? "?"}`)),
-        { enableHighAccuracy: true, distanceFilter: 10, timeout: 15_000, maximumAge: 30_000 },
-      );
-      return () => geo.clearWatch(watchId);
-    },
+    // Fase 5: background real via @ikolvi/tracelet (com fallback de
+    // primeiro plano). O gate/cadência/fila continuam no controller.
+    watch: (onPosition, onError) => backgroundTracking.watch(onPosition, onError),
     queue: deliveryQueue,
   };
   trackingController = new TrackingController(deps);
@@ -170,6 +202,28 @@ export function useTrackingGate(deliveries: RouteDelivery[]): void {
     if (token) controller.start();
     else controller.stop();
   }, [token]);
+}
+
+/**
+ * Fase 5.3 — geofencing por entrega.
+ *
+ * Registra um fence (~150 m). No ENTER, a UI deve apenas SUGERIR "marcar como
+ * chegou" — nunca concluir a entrega sozinho.
+ *
+ * TODO(geofence-enter): ligar o evento de entry do fence ao botão "cheguei"
+ * na tela da rota. O DTO atual (`RouteDelivery`) não carrega lat/lng do
+ * endereço, então quem chamar precisa passar as coordenadas da entrega.
+ */
+export function registerDeliveryGeofence(delivery: {
+  delivery_id: string;
+  latitude: number;
+  longitude: number;
+}): Promise<boolean> {
+  return backgroundTracking.addDeliveryGeofence({
+    id: delivery.delivery_id,
+    latitude: delivery.latitude,
+    longitude: delivery.longitude,
+  });
 }
 
 function toRoute(d: DeliveryDTO): RouteDelivery {
@@ -234,6 +288,10 @@ export function makeTransport() {
 }
 
 // ── Login (wired) ────────────────────────────────────────────
+//
+// Autentica na auth PRINCIPAL (`/auth/login`): o entregador é um usuário com
+// role DRIVER. O `must_change_password` resultante decide se o app vai para a
+// tela de troca antes de qualquer tela do entregador (gate no RootNavigator).
 
 export function LoginScreenWired() {
   const setSession = useSessionStore((s) => s.setSession);
@@ -241,13 +299,92 @@ export function LoginScreenWired() {
   const doLogin = useCallback(
     async (username: string, password: string) => {
       const { connection } = useConnectionStore.getState();
-      if (!connection.baseUrl) throw new Error("offline");
-      return mobileLogin(fetch, connection.baseUrl, username, password);
+      if (!connection.baseUrl) throw new Error("Sem conexão com o depósito.");
+      const result = await operatorLogin(fetch, connection.baseUrl, username, password);
+      const access = result.access_token || result.token || "";
+      // driver_id é resolvido pelo /driver/me; aqui só a sessão.
+      setSession({ access_token: access, refresh_token: result.refresh_token, driver_id: "" });
+      useSessionStore.setState({
+        username,
+        mustChangePassword: Boolean(result.user?.must_change_password),
+      });
+      return { access_token: access, refresh_token: result.refresh_token, driver_id: "" };
     },
-    []
+    [setSession]
   );
 
-  return <LoginScreen onLogin={setSession} doLogin={doLogin} />;
+  // A navegação reage ao store (accessToken); o onLogin é redundante aqui.
+  return <LoginScreen onLogin={() => undefined} doLogin={doLogin} />;
+}
+
+// ── Troca de senha obrigatória (wired) ───────────────────────
+
+export function ChangePasswordScreenWired() {
+  const accessToken = useSessionStore((s) => s.accessToken);
+  const username = useSessionStore((s) => s.username);
+  const clearSession = useSessionStore((s) => s.clearSession);
+  const setMustChangePassword = useSessionStore((s) => s.setMustChangePassword);
+
+  const onSubmit = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const { connection } = useConnectionStore.getState();
+      if (!connection.baseUrl || !accessToken) throw new Error("Sem conexão com o depósito.");
+      await changePassword(fetch, connection.baseUrl, accessToken, currentPassword, newPassword);
+      // Backend limpou a flag; o gate libera as telas do entregador.
+      setMustChangePassword(false);
+    },
+    [accessToken, setMustChangePassword]
+  );
+
+  return <ChangePasswordScreen username={username} onSubmit={onSubmit} onLogout={clearSession} />;
+}
+
+// ── Realtime (wired) ─────────────────────────────────────────
+//
+// Conecta no canal `driver:{driver_id}` do backend. Um fechamento 4003
+// ("Password change required") é estado de app → levanta o gate, sem
+// reconectar em loop.
+
+export function useDriverRealtime(): void {
+  const token = useSessionStore((s) => s.accessToken);
+  const connection = useConnectionStore((s) => s.connection);
+  const setMustChangePassword = useSessionStore((s) => s.setMustChangePassword);
+  const socketRef = useRef<{ close: () => void } | null>(null);
+
+  useEffect(() => {
+    if (!token || connection.mode === "offline" || !connection.baseUrl) return;
+
+    let closed = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (closed) return;
+      const socket = new WebSocket(driverWsUrl(connection.baseUrl as string, token));
+      socketRef.current = socket;
+      attachDriverSocket({
+        socket,
+        onOpen: () => {
+          attempt = 0;
+        },
+        onPasswordChangeRequired: () => setMustChangePassword(true),
+        onClose: () => {
+          if (closed) return;
+          attempt += 1;
+          timer = setTimeout(connect, reconnectDelay(attempt));
+        },
+        log: (message) => console.log(`[ws] ${message}`),
+      });
+    };
+    connect();
+
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [token, connection.mode, connection.baseUrl, setMustChangePassword]);
 }
 
 // ── Rota do dia (wired) ─────────────────────────────────────
@@ -257,6 +394,8 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
   const { connection } = useConnectionStore();
   const [deliveries, setDeliveries] = useState<RouteDelivery[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Fase 7.5: km do dia (calculado do histórico no backend).
+  const [todayDistanceKm, setTodayDistanceKm] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     if (!token || !connection.baseUrl) {
@@ -272,9 +411,25 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
     }
   }, [token, connection.baseUrl]);
 
+  const reloadDistance = useCallback(async () => {
+    if (!token || !connection.baseUrl) return;
+    try {
+      const me = await fetchDriverMe(fetch, connection.baseUrl, token);
+      setTodayDistanceKm(me.today_distance_km ?? 0);
+    } catch {
+      // offline: mantém o último valor conhecido na tela
+    }
+  }, [token, connection.baseUrl]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    void reloadDistance();
+    const timer = setInterval(() => void reloadDistance(), 60_000);
+    return () => clearInterval(timer);
+  }, [reloadDistance]);
 
   // Replay da fila ao ficar online (C4.3: confirmação offline → sync depois).
   const flushQueue = useCallback(async () => {
@@ -289,12 +444,15 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
 
   // F2.5: gate de rastreamento acompanha as entregas desta tela (auto on/off).
   useTrackingGate(deliveries);
+  // Realtime: eventos do canal driver:{driver_id} + gate de senha (4003).
+  useDriverRealtime();
 
   return (
     <View style={{ flex: 1 }}>
       {error ? <Text style={styles.offlineBanner}>{error}</Text> : null}
       <RouteTodayScreen
         deliveries={deliveries}
+        todayDistanceKm={todayDistanceKm ?? undefined}
         onStartRoute={() => {
           // F2.5: rastreio já liga sozinho com entrega atribuída (gate B2);
           // o botão antecipa/força a vontade do entregador.

@@ -13,7 +13,7 @@ Models:
 - AuthAuditModel: auth_audit_log table
 """
 
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, DateTime, JSON, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
@@ -26,6 +26,10 @@ class AuthUserModel(Base):
     __table_args__ = (
         UniqueConstraint("username", name="uq_auth_user_username"),
         Index("ix_auth_user_status", "status"),
+        # Vínculo com entregador: quando presente, nunca vazio. A equivalência
+        # completa (role==DRIVER ⟺ driver_id IS NOT NULL) é validada no serviço
+        # — o role vive em auth_roles (relacional), fora do alcance de um CHECK.
+        CheckConstraint("driver_id IS NULL OR driver_id <> ''", name="ck_auth_user_driver_id_nonempty"),
     )
 
     id = Column(String(36), primary_key=True)
@@ -41,6 +45,9 @@ class AuthUserModel(Base):
     must_change_password = Column(Boolean, nullable=False, default=False)
     last_login_at = Column(DateTime, nullable=True)
     created_by = Column(String(36), nullable=True)  # admin que criou o usuário
+    # Entregador: guarda `delivery_drivers.codigo` (identidade usada em todo o
+    # grafo — delivery_records.driver_id, driver_stock e canal WS driver:{id}).
+    driver_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

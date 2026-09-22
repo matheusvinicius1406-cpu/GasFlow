@@ -885,6 +885,47 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         db.close()
 
 
+# ── ETA até o endereço da entrega (Fase 7.1) ───────────
+
+
+@router.get("/deliveries/{delivery_id}/eta")
+async def delivery_eta(
+    delivery_id: str,
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """ETA do entregador atribuído até o endereço da entrega.
+
+    - 404 quando a entrega não existe (no tenant) ou não tem entregador;
+    - 404 quando o entregador ainda não tem posição conhecida;
+    - 422 quando o endereço não tem coordenadas — é a verdade: sem lat/lng não
+      há como estimar, e inventar coordenada seria pior que o erro.
+    """
+    from app.application.tracking.eta_service import DriverEtaService
+    from app.infrastructure.repositories.delivery_persistence_repository import (
+        SQLAlchemyDeliveryPersistenceRepository,
+    )
+
+    db = _get_db()
+    try:
+        record = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id=ctx.tenant_id).get_delivery(delivery_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Entrega não encontrada")
+        if not record.driver_id:
+            raise HTTPException(status_code=404, detail="Entrega sem entregador atribuído")
+        if record.address_lat is None or record.address_lng is None:
+            raise HTTPException(status_code=422, detail="Endereço da entrega sem coordenadas")
+
+        eta = DriverEtaService(db, ctx.tenant_id).eta_to(
+            driver_id=record.driver_id,
+            destination=(record.address_lat, record.address_lng),
+        )
+        if not eta:
+            raise HTTPException(status_code=404, detail="Sem posição do entregador")
+        return eta
+    finally:
+        db.close()
+
+
 # ── Driver Locations (Database-backed) ─────────────────
 
 
@@ -899,6 +940,11 @@ async def list_driver_locations(ctx: TenantContext = Depends(get_tenant_context)
     try:
         loc_repo = SQLAlchemyDriverLocationRepository(db)
         locations = loc_repo.get_all_locations(ctx.tenant_id)
+        # Fase 3.3: distância do dia lida do histórico append-only (antes, só 0).
+        for loc in locations:
+            loc_driver = loc.get("driver_id")
+            if loc_driver:
+                loc["today_distance_km"] = loc_repo.today_distance_km(ctx.tenant_id, loc_driver)
         return {"locations": locations}
     finally:
         db.close()

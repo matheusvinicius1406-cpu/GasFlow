@@ -1,12 +1,22 @@
 import axios from 'axios'
 
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from './session'
+import {
+  ACCESS_TOKEN_KEY,
+  PASSWORD_CHANGE_REQUIRED_EVENT,
+  REFRESH_TOKEN_KEY,
+  SESSION_REFRESHED_EVENT,
+} from './session'
 
 const API_BASE_URL = import.meta.env?.VITE_API_URL || '/api'
 
 // As chaves de sessão vivem em `./session` (módulo sem axios) e são
 // reexportadas aqui para quem já importa do client.
-export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from './session'
+export {
+  ACCESS_TOKEN_KEY,
+  PASSWORD_CHANGE_REQUIRED_EVENT,
+  REFRESH_TOKEN_KEY,
+  SESSION_REFRESHED_EVENT,
+} from './session'
 
 function clearSession() {
   localStorage.removeItem(ACCESS_TOKEN_KEY)
@@ -97,6 +107,12 @@ apiClient.interceptors.response.use(
     if (status === 401 && !isSessionEndpoint) {
       clearSession()
       window.location.href = '/login'
+    }
+
+    // P0 (3.8 reforçado): o backend recusa rotas fora de /auth enquanto a troca
+    // de senha está pendente. Levanta o gate em vez de deixar um 403 mudo.
+    if (status === 403 && error.response?.data?.detail === 'Password change required') {
+      window.dispatchEvent(new Event(PASSWORD_CHANGE_REQUIRED_EVENT))
     }
     return Promise.reject(error)
   }

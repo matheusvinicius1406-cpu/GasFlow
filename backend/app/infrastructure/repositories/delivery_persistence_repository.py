@@ -9,12 +9,14 @@ import hashlib
 import uuid
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.infrastructure.repositories.delivery_persistence_model import (
     DeliveryRecord,
+    DriverLocationHistoryRecord,
     DriverLocationRecord,
     OutboxEntry,
     DriverSessionRecord,
@@ -27,6 +29,50 @@ from app.infrastructure.repositories.tenant_mixin import TenantMixin
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Fase 3 — histórico de posições
+MAX_HISTORY_BATCH = 500  # insert em lote por request
+MAX_HISTORY_READ = 5000  # leitura paginada
+MAX_HISTORY_SPAN = 20000  # teto para cálculo de distância do dia
+DEFAULT_TRACKING_TZ = "America/Sao_Paulo"
+
+
+def _coerce_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_dt(value: Any) -> Optional[datetime]:
+    """Aceita datetime ou string ISO; devolve naive UTC (convenção do repo)."""
+    if value is None:
+        return None
+    dt: Optional[datetime]
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _local_day_start_utc(now_utc: datetime, tz_name: str = DEFAULT_TRACKING_TZ) -> datetime:
+    """Meia-noite local (tz_name) do dia de `now_utc`, convertida para UTC naive."""
+    try:
+        start_local = now_utc.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
+    except Exception:  # pragma: no cover - tz desconhecida → UTC
+        start_local = now_utc.replace(tzinfo=timezone.utc)
+    start_local = start_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
@@ -85,6 +131,25 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
 
     def get_delivery(self, delivery_id: str) -> Optional[DeliveryRecord]:
         return self._filter_by_tenant(DeliveryRecord).filter(DeliveryRecord.delivery_id == delivery_id).first()
+
+    #: Status em que o entregador está de fato em rota (mesma lista do app).
+    ACTIVE_ROUTING_STATUSES = ("ASSIGNED", "DISPATCHED", "EN_ROUTE")
+
+    def find_active_delivery(self, driver_id: str) -> Optional[DeliveryRecord]:
+        """Entrega em rota do entregador (a mais antiga ainda aberta).
+
+        Usada pelos alertas do rastreio (Fase 7.3) para saber a qual entrega a
+        posição se refere, sem exigir que o app informe `delivery_id`.
+        """
+        return (
+            self._filter_by_tenant(DeliveryRecord)
+            .filter(
+                DeliveryRecord.driver_id == driver_id,
+                DeliveryRecord.status.in_(self.ACTIVE_ROUTING_STATUSES),
+            )
+            .order_by(DeliveryRecord.id.asc())
+            .first()
+        )
 
     def list_deliveries(
         self,
@@ -425,6 +490,121 @@ class SQLAlchemyDriverLocationRepository:
         self.db.commit()
         self.db.refresh(existing)
         return existing
+
+    # ── Histórico append-only (Fase 3) ─────────────────────
+
+    def bulk_insert_history(
+        self,
+        tenant_id: str,
+        driver_id: str,
+        points: List[Dict[str, Any]],
+        received_at: Optional[datetime] = None,
+    ) -> int:
+        """Grava pontos no histórico (append-only). Devolve quantos foram aceitos.
+
+        Pontos malformados (lat/lng ausente ou não numérico) são descartados sem
+        derrubar o lote. Limita a MAX_HISTORY_BATCH por chamada.
+        """
+        if not points:
+            return 0
+        now = received_at or datetime.utcnow()
+        rows: List[DriverLocationHistoryRecord] = []
+        for point in points[:MAX_HISTORY_BATCH]:
+            lat = _coerce_float(point.get("latitude", point.get("lat")))
+            lng = _coerce_float(point.get("longitude", point.get("lng")))
+            if lat is None or lng is None:
+                continue
+            recorded = _coerce_dt(point.get("recorded_at")) or now
+            rows.append(
+                DriverLocationHistoryRecord(
+                    tenant_id=tenant_id,
+                    driver_id=driver_id,
+                    latitude=lat,
+                    longitude=lng,
+                    accuracy_m=_coerce_float(point.get("accuracy_m", point.get("accuracy"))),
+                    speed_kmh=_coerce_float(point.get("speed_kmh", point.get("speed"))),
+                    heading_deg=_coerce_float(point.get("heading_deg", point.get("heading", point.get("bearing")))),
+                    recorded_at=recorded,
+                    received_at=now,
+                )
+            )
+        if rows:
+            self.db.add_all(rows)
+            self.db.commit()
+        return len(rows)
+
+    def get_history(
+        self,
+        tenant_id: str,
+        driver_id: str,
+        from_ts: Optional[datetime] = None,
+        to_ts: Optional[datetime] = None,
+        limit: int = MAX_HISTORY_READ,
+    ) -> List[DriverLocationHistoryRecord]:
+        """Leitura paginada do histórico, sempre escopada por tenant + driver."""
+        query = self.db.query(DriverLocationHistoryRecord).filter(
+            DriverLocationHistoryRecord.tenant_id == tenant_id,
+            DriverLocationHistoryRecord.driver_id == driver_id,
+        )
+        if from_ts:
+            query = query.filter(DriverLocationHistoryRecord.recorded_at >= from_ts)
+        if to_ts:
+            query = query.filter(DriverLocationHistoryRecord.recorded_at <= to_ts)
+        return (
+            query.order_by(DriverLocationHistoryRecord.recorded_at.asc())
+            .limit(max(1, min(int(limit), MAX_HISTORY_READ)))
+            .all()
+        )
+
+    def distance_km_between(
+        self,
+        tenant_id: str,
+        driver_id: str,
+        from_ts: Optional[datetime] = None,
+        to_ts: Optional[datetime] = None,
+    ) -> float:
+        """Soma haversine entre pontos consecutivos do histórico (Python, portátil)."""
+        from app.domain.delivery.driver import _haversine_km
+
+        rows = self.db.query(
+            DriverLocationHistoryRecord.latitude,
+            DriverLocationHistoryRecord.longitude,
+        ).filter(
+            DriverLocationHistoryRecord.tenant_id == tenant_id,
+            DriverLocationHistoryRecord.driver_id == driver_id,
+        )
+        if from_ts:
+            rows = rows.filter(DriverLocationHistoryRecord.recorded_at >= from_ts)
+        if to_ts:
+            rows = rows.filter(DriverLocationHistoryRecord.recorded_at <= to_ts)
+        points = rows.order_by(DriverLocationHistoryRecord.recorded_at.asc()).limit(MAX_HISTORY_SPAN).all()
+        total = 0.0
+        for (lat1, lng1), (lat2, lng2) in zip(points, points[1:]):
+            total += _haversine_km(lat1, lng1, lat2, lng2)
+        return round(total, 3)
+
+    def today_distance_km(
+        self,
+        tenant_id: str,
+        driver_id: str,
+        now: Optional[datetime] = None,
+        tz_name: str = DEFAULT_TRACKING_TZ,
+    ) -> float:
+        """Distância do dia local (default America/Sao_Paulo) a partir do histórico."""
+        end = now or datetime.utcnow()
+        start = _local_day_start_utc(end, tz_name)
+        return self.distance_km_between(tenant_id, driver_id, from_ts=start, to_ts=end)
+
+    def purge_history_older_than(self, days: int = 90) -> int:
+        """LGPD: retenção do histórico (default 90 dias, igual a driver_locations)."""
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        deleted = (
+            self.db.query(DriverLocationHistoryRecord)
+            .filter(DriverLocationHistoryRecord.recorded_at < cutoff)
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
 
     def get_location(self, tenant_id: str, driver_id: str) -> Optional[DriverLocationRecord]:
         return (

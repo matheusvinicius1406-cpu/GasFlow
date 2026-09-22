@@ -40,6 +40,10 @@ class User:
     # P0 (3.3/3.8): reset de senha seta a flag; o próximo login informa ao
     # cliente que a troca é obrigatória antes de seguir usando o sistema.
     must_change_password: bool = False
+    # Vínculo com o entregador quando role=DRIVER. Guarda `delivery_drivers.codigo`
+    # (a identidade usada em todo o grafo: delivery_records.driver_id,
+    # driver_stock.driver_id e o canal WS driver:{id}) — não o id serial.
+    driver_id: Optional[str] = None
 
     @property
     def is_locked(self) -> bool:
@@ -200,6 +204,13 @@ class TenantContext:
     role: SystemRole = SystemRole.OPERATOR
     permissions: Set[str] = field(default_factory=set)
     session_id: str = ""
+    # P0 (3.8 reforçado): true enquanto a troca de senha está pendente (reset
+    # pelo admin). O middleware recusa qualquer rota fora da allowlist — antes
+    # a imposição era só do cliente e um token ignorava a flag.
+    must_change_password: bool = False
+    # Entregador autenticado pelo /auth/login: preenchido quando role=DRIVER,
+    # com o `delivery_drivers.codigo` do vínculo (escopo das queries e do WS).
+    driver_id: Optional[str] = None
 
     @property
     def is_authenticated(self) -> bool:

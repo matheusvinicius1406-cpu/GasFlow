@@ -23,6 +23,7 @@ vi.mock('leaflet', () => {
     addTo: vi.fn(),
   }))
   const latLngBounds = vi.fn(() => ({ pad: vi.fn().mockReturnThis() }))
+  const polyline = vi.fn(() => ({ addTo: vi.fn() }))
   const mapInstance = {
     remove: vi.fn(),
     fitBounds: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('leaflet', () => {
       layerGroup,
       latLngBounds,
       divIcon,
+      polyline,
     },
     __mockMapInstance: mapInstance,
   }
@@ -79,6 +81,31 @@ describe('DriverMap', () => {
 
     const mock = leaflet as unknown as { map: ReturnType<typeof vi.fn> }
     expect(mock.map).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('F6: desenha a polyline do trajeto quando há trails', () => {
+    const trails = {
+      drv1: [
+        { driver_id: 'drv1', latitude: -30.03, longitude: -51.21, recorded_at: '2026-09-22T12:00:00Z' },
+        { driver_id: 'drv1', latitude: -30.04, longitude: -51.22, recorded_at: '2026-09-22T12:00:30Z' },
+      ],
+    }
+    render(<DriverMap points={[makePoint()]} trails={trails} />)
+
+    const mock = leaflet as unknown as { polyline: ReturnType<typeof vi.fn> }
+    expect(mock.polyline).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('não desenha polyline com menos de 2 pontos', () => {
+    const trails = {
+      drv1: [{ driver_id: 'drv1', latitude: -30.03, longitude: -51.21, recorded_at: '2026-09-22T12:00:00Z' }],
+    }
+    render(<DriverMap points={[makePoint()]} trails={trails} />)
+
+    const mock = leaflet as unknown as { polyline: ReturnType<typeof vi.fn> }
+    expect(mock.polyline).not.toHaveBeenCalled()
     cleanup()
   })
 

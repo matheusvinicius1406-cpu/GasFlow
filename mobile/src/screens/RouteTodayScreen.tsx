@@ -18,6 +18,8 @@ interface Props {
   deliveries: RouteDelivery[];
   onStartRoute: () => void;
   onOpenDelivery: (deliveryId: string) => void;
+  /** Fase 7.5: km percorridos hoje (vem do /driver/me). */
+  todayDistanceKm?: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,13 +32,22 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: "Falhou",
 };
 
-export default function RouteTodayScreen({ deliveries, onStartRoute, onOpenDelivery }: Props) {
+export default function RouteTodayScreen({
+  deliveries,
+  onStartRoute,
+  onOpenDelivery,
+  todayDistanceKm,
+}: Props) {
   const done = deliveries.filter((d) => d.status === "DELIVERED").length;
   return (
     <View style={styles.container}>
       <Text style={styles.counter}>
         {done} de {deliveries.length} concluídas
       </Text>
+      {/* Fase 7.5: distância do dia (calculada do histórico no backend). */}
+      {typeof todayDistanceKm === "number" ? (
+        <Text style={styles.distance}>Hoje: {todayDistanceKm.toFixed(1)} km</Text>
+      ) : null}
       <TouchableOpacity style={styles.button} onPress={onStartRoute}>
         <Text style={styles.buttonText}>Iniciar Rota</Text>
       </TouchableOpacity>
@@ -58,6 +69,7 @@ export default function RouteTodayScreen({ deliveries, onStartRoute, onOpenDeliv
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   counter: { fontSize: 16, marginBottom: 8 },
+  distance: { fontSize: 14, color: "#555", marginBottom: 8 },
   button: { backgroundColor: "#0a7", borderRadius: 8, padding: 14, alignItems: "center", marginBottom: 12 },
   buttonText: { color: "#fff", fontWeight: "bold" },
   card: { borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, marginBottom: 8 },

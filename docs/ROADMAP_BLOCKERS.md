@@ -3,6 +3,8 @@
 **Original:** 12/09/2026
 **Re-baseline:** 21/09/2026 — verificado item por item contra o código, com
 evidência (`arquivo:linha`).
+**Re-verificação de riscos:** 22/09/2026 — PARTE 3 itens 2, 4, 6, 8, 9, 10 e
+11 conferidos contra o código; **B5 re-baselined para fechado**.
 **Escopo:** pré-análise de viabilidade do roadmap multimodal (RBAC/Admin,
 Financeiro, Estoque, Fiscal, Motoristas, Inteligência, App do Entregador,
 Auditoria).
@@ -76,10 +78,14 @@ vários pontos**, e mais falso hoje do que em 12/09:
   (`core/config.py:28-30`) → arquivo gerado **uma vez** em
   `MOBILE_JWT_SECRET_FILE` (default `<tempdir>/gasflow/mobile_jwt_secret.key`).
   Em produção, env **ou** arquivo é obrigatório, mínimo 32 bytes aleatórios.
-- **Operador ainda NÃO usa JWT**: `app/presentation/api/core/auth.py` não emite
-  token — a sessão de operador segue no modelo atual.
+- **Operador emite JWT (B5 fechado)**: `app/presentation/api/core/auth.py`
+  devolve `access_token` (JWT HS256 15 min, com `sid`) + `refresh_token`
+  (opaco, rotativo) desde a migration `a4c8e2f6b1d3`; a validação continua
+  lendo a linha da sessão, então revogar corta o acesso na hora. Implementação
+  em `application/security/operator_token.py` + `auth_service.py`; segredo
+  dedicado `OPERATOR_JWT_SECRET`, separado do entregador.
 
-### 1.3 Estoque — ✅ parcialmente implementado (ver B3)
+### 1.3 Estoque — ✅ implementado (decisão B3(a) v3 — ver B3)
 
 - `inventory` (`quantity`, `minimum`, `maximum`) + **`quantity_full` /
   `quantity_empty`** (`app/application/inventory/snapshot_service.py:118-119`;
@@ -140,7 +146,7 @@ vários pontos**, e mais falso hoje do que em 12/09:
 | ~~B2~~ | Alembic não roda no exe empacotado | ✅ **Fechado — Alembic roda no boot do exe** | `desktop_entry.py::run_migrations()` aplica `alembic upgrade head` a partir do `migrations_bundle` embutido no spec: banco vazio cria tudo + `alembic_version`; banco legado de `create_all` (tabelas sem `alembic_version`) recebe `stamp head` e passa a receber só as revisões pendentes; se a migração falha, o app **não** cai (log `migrations falharam no boot — seguindo com init_db/create_all`). Comprovado subindo o exe: log `Running upgrade 12f8390d5be4 -> a7c1e9f2b4d6 -> …` e `/health` respondendo `healthy`. `_ensure_sqlite_columns()` (`init_db.py:99`) segue como rede de compat, **não** como o mecanismo principal. |
 | B3 | Débito de estoque: CONFIRMED vs. DELIVERED | ✅ **DECIDIDO E IMPLEMENTADO** — opção (a) | **Correção de 21/09:** a versão anterior deste doc dizia "aberto" e descrevia o pedido como quem reserva/reverte. Isso era o estado **pré-migração**. O código implementa a decisão B3(a) v3: o pedido **não** toca estoque; o débito é na entrega DELIVERED (`inventory_repository.py::deliver_stock_atomic`, SALE + troca cheio→vazio no mesmo commit; `reverse_delivery_stock_atomic` no cancelamento pós-DELIVERED), e um one-shot de dados desfez os débitos antigos do pedido — `init_db.py::_revert_premature_stock_debits` (marcador `stock_debit_migration_v3`, `reference_type = RESERVATION_REVERSAL`). **Trocar para "pedido debita" não é correção de bug: é mudança de regra**, e exigiria uma migração v4 para re-debitar os pedidos que o v3 creditou de volta. |
 | ~~B4~~ | Permissões em código, não no banco | ✅ **Fechado** | `permission_policy_loader.py` (DB sobrepõe, código é fallback) + `user_permissions_override` (`rbac_model.py:55`) + seed (`rbac_seed.py`). |
-| B5 | Sem JWT para sessão multimodal | ⚠️ **Parcial** | Escopo **entregador** pronto (access 15 min + refresh rotativo DB-backed, segredo em 3 níveis). **Falta o operador** (`api/core/auth.py` não emite JWT) — é o que bloqueia sessão simultânea desktop+mobile com escopo por plataforma. |
+| ~~B5~~ | Sem JWT para sessão multimodal | ✅ **Fechado** | Operador agora emite **access JWT (HS256, 15 min)** + **refresh opaco rotativo (7 dias, detecção de reuso)**, com segredo dedicado `OPERATOR_JWT_SECRET` separado do entregador (`application/security/operator_token.py`, `presentation/api/core/auth.py`, migration `a4c8e2f6b1d3_operator_jwt_refresh_tokens`); o escopo entregador já existia e serviu de padrão. Frontend renova sozinho com *single-flight* (`frontend/src/lib/api/client.ts`) para não deslogar o próprio usuário. |
 | ~~B6~~ | IPC do Electron sem camada de permissão | ✅ **Fechado** | `desktop/src/main/ipc-permissions.ts` (`registerProtectedHandler` consulta a permissão antes de executar; usado em `src/main/index.ts`). |
 | B7 | Fiscal não pode ser "só código" | ❌ **Aberto — externo** | Confirmado no código: as únicas menções a SEFAZ são *"sem SEFAZ"* (`presentation/api/purchase_notes.py:2`, `application/purchase/purchase_service.py`). Continua dependendo de certificado A1/credenciamento. MVP real = deep link para o NFF + persistência local. |
 | B8 | App do entregador vs. LGPD/CLT | ❌ **Aberto — jurídico** | Nada mudou por código. O backend de localização já existe (1.6), então o que falta é o **documento jurídico** antes de soltar o app. |
@@ -154,27 +160,63 @@ Status de re-verificação em 21/09 ao lado de cada um.
 
 1. **SQLite + concorrência / snapshot idempotente** — ✅ *verificado*: unicidade
    `(tenant_id, snapshot_date, product_codigo)` + índices (`rbac_model.py:79-81`).
-2. **Timezone do snapshot** (`utcnow()` vs. data local do depósito) — ⚠️ **não
-   re-verificado** nesta passagem.
+2. **Timezone do snapshot** — ✅ *verificado*: a data do snapshot sai de
+   `_local_today()`, que resolve no fuso `STOCK_SNAPSHOT_TZ` (default
+   `America/Belem`) — nunca de `utcnow()` (`snapshot_service.py:24-38,50,62`).
+   O `datetime.utcnow()` que aparece ali (:145) só atualiza `updated_at` de um
+   upsert, não decide o dia.
 3. **Reversão de entrega cancelada** — ✅ *verificado*: existe o par
    `RESERVATION_REVERSAL` (`init_db.py:312-432`).
-4. **`audit_logs` com before/after e PII** — ⚠️ **parcial**: o before/after
-   existe (`f2b9d4c6a8e0`); a política de redaction **não** foi verificada.
+4. **`audit_logs` com before/after e PII** — ✅ *verificado*: o before/after
+   existe (`f2b9d4c6a8e0`) e as mutações de admin passam por `_clean()`, que
+   remove `password`/`password_hash` antes de gravar
+   (`presentation/api/core/admin.py:52-70`; contrato declarado no docstring do
+   módulo). O que permanece no snapshot é PII de identificação (email,
+   `display_name`) — por design, é o dado que torna o log útil; a senha **nunca**
+   entra.
 5. **Segredo JWT no Desktop** — ✅ *verificado*: env → settings → arquivo gerado
    1x (`driver_mobile_auth.py:99-116`), obrigatório ≥32 bytes em produção.
-6. **`must_change_password` no fluxo de login** — ⚠️ **parcial**: a flag existe
-   no modelo (`models.py:42`), o endpoint de reset existe (`admin.py:247`) e o
-   `AuthProvider` carrega `mustChangePassword` (`AuthProvider.tsx:31`); se o
-   login **força** a troca, não foi verificado.
+6. **`must_change_password` no fluxo de login** — ✅ *verificado* (força no
+   cliente): a flag sai no login e no `/auth/me`, o `AuthProvider` a carrega
+   (`AuthProvider.tsx:31-62`) e o `ProtectedRoute` renderiza o
+   `ChangePasswordGate` antes de **qualquer** rota (`AuthProvider.tsx:226`;
+   `features/auth/ChangePasswordGate.tsx`), que só libera após
+   `POST /auth/change-password` limpar a flag. Coberto em
+   `ChangePasswordGate.test.tsx` e `test_p0_regression.py`. **Ressalva:** a
+   imposição é de UI; o backend **não** bloqueia rotas com a flag ligada — é
+   UX obrigatória, não barreira de segurança.
 7. **Localização do motorista sem Redis** — ✅ *verificado*: tabela
    `driver_locations` (`delivery_persistence_model.py:133`) + serviço com
    auditoria e janela de horário.
-8. **Push de realtime reusando o WebSocket** — ⚠️ **não re-verificado**.
-9. **Fallback de IA keyless (toggle default-off)** — ⚠️ **não re-verificado**.
-10. **Alembic `batch_alter_table` no SQLite** — 🔻 *irrelevante para o Desktop*,
-    que não usa Alembic (B2); segue valendo para Docker/produção.
-11. **Compat de auto-update: migrations aditivas** — ⚠️ **vira requisito duro**
-    enquanto o Desktop persistir no caminho `create_all` (ver resíduo do B2).12. **Testes backend: senha do conftest** — ✅ *verificado na prática*: rode a suíte **sem definir `ADMIN_PASSWORD`** — o `conftest.py` já traz o default (`test_password_123`) e é exatamente como o CI roda. Sobrescrever o env (ex.: `ADMIN_PASSWORD=test_password`) reprova os 17 testes de login/sessão de `test_security.py`, e o efeito só aparece quando o arquivo roda isolado — parece regressão e não é.
+8. **Push de realtime reusando o WebSocket** — ✅ *verificado*: o pipeline
+   Domain Event → Event Bus → WebSocket Manager → clientes existe
+   (`infrastructure/realtime/websocket.py`), com canais por `tenant:*` e
+   `delivery:*` (:134-138) e propagação cross-worker via Redis Pub/Sub
+   (`infrastructure/realtime/pubsub.py`); os eventos de entrega/motorista já
+   saem por `publish_delivery_event`/`publish_driver_event`
+   (`presentation/api/logistics/driver_api.py`, `assignment_service.py`).
+9. **Fallback de IA keyless** — ✅ *verificado, com correção de premissa*: **não
+   existe provider externo de fallback** (decisão Fase 4.2 cenário B) — sem
+   Ollama saudável o resultado é `NullProvider` com log, nunca um provedor sem
+   chave (`application/ai/provider_factory.py:3-6,108-110`;
+   `infrastructure/ai/null_provider.py`). Correção: o toggle **não** é
+   default-off — `ai.enabled` nasce **True** (`domain/settings/models.py:52`;
+   env `AI_ENABLED` default `true`), e o admin desliga em runtime. O risco
+   original (chave ausente habilitando fallback externo) não se materializa.
+10. **Alembic `batch_alter_table` no SQLite** — ✅ *auditado em 22/09*:
+    nenhuma operação do caminho de **upgrade** ficou fora de batch sem suporte
+    nativo no SQLite. Os únicos `drop_column` fora de batch estão em
+    `downgrade()` (que o Desktop não roda) e o SQLite do ambiente é 3.50.4;
+    a cadeia completa roda em SQLite nos testes (15 passed). Risco residual
+    documentado para migrations futuras: constraint/índice sem nome em tabela
+    existente e FK de terceiros para tabela recriada. Ver
+    `docs/migrations/2026-09-sqlite-batch-audit.md`.
+11. **Compat de auto-update: migrations aditivas** — ⚠️ *amolece, não some*:
+    com o Alembic no boot (B2) as migrações incrementais chegam de fato ao
+    Desktop, o que **remove** o requisito duro que valia para o caminho
+    `create_all` puro. Segue boa prática (o app pode atualizar sobre banco
+    antigo), mas deixou de ser a única proteção.
+12. **Testes backend: senha do conftest** — ✅ *verificado na prática*: rode a suíte **sem definir `ADMIN_PASSWORD`** — o `conftest.py` já traz o default (`test_password_123`) e é exatamente como o CI roda. Sobrescrever o env (ex.: `ADMIN_PASSWORD=test_password`) reprova os 17 testes de login/sessão de `test_security.py`, e o efeito só aparece quando o arquivo roda isolado — parece regressão e não é.
 13. **Frontend: React 19 + Vite + zod** — ✅ *verificado*: React 19.3, Vite 8.3,
     Vitest 5; telas novas seguem `features/` (não existe `pages/`), com
     `PermissionsPanel.tsx` e `admin/UsersPage.tsx` como referência de padrão.
@@ -264,8 +306,8 @@ realmente falta:
 | ~~0.2~~ | ~~Migração-on-boot no Desktop~~ | — | **Feito**: `alembic upgrade head` no boot do exe (`desktop_entry.py`). |
 | ~~1~~ | ~~Alinhar o interpretador do release ao de produção (B9)~~ | — | **Feito**: CI/release em 3.14, com o spec validado no 3.14 antes de alinhar. |
 | 2 | ~~Decidir o timing do débito (B3)~~ — **feito**: débito na entrega (`deliver_stock_atomic`), migração v3 aplicada | Todo o P0 de estoque | — |
-| 3 | Cobrir com teste de atomicidade o par `deliver_stock_atomic` / `reverse_delivery_stock_atomic` (idempotência + clamp de vazios) | Núcleo operacional | — |
-| 4 | **JWT de operador + sessão multimodal (B5)** | P1/P2 (sessão desktop+mobile por plataforma) | Reusar o padrão de `driver_mobile_auth.py`. |
+| ~~3~~ | ~~Cobrir com teste de atomicidade o par `deliver_stock_atomic` / `reverse_delivery_stock_atomic`~~ | — | **Feito**: `backend/tests/test_delivery_stock_reversal.py` (round-trip da entrega + reversão, idempotência por referência, clamp de vazios, entrega sem estoque e não-vazamento entre produtos; clamp conferido por mutação). |
+| ~~4~~ | ~~JWT de operador + sessão multimodal (B5)~~ | — | **Feito**: ver B5 na PARTE 2 e 1.2. |
 | 5 | Fiscal: deep link NFF + dados locais (B7) | P2 Fiscal | Decisões externas (contabilidade/certificado). |
 | 6 | Documento LGPD/CLT (B8) | App do entregador | Jurídico. |
 
@@ -293,12 +335,18 @@ correção com feature nova.
   o Desktop recebe migrations incrementais de verdade (não só `create_all`). A
   versão anterior deste documento (e o próprio `desktop/README.md`) descreviam
   apenas o caminho antigo — eu tinha escrito "resíduo" aqui e não existe.
-- **Riscos não re-verificados nesta passagem:** 2, 4 (redaction), 6 (forçar
-  troca no login), 8, 9, 10, 11 — marcados na PARTE 3 para não virarem "achismo
-  silencioso".
-- **Achado novo desta passagem (D5):** há um **segundo schema de RBAC**
-  (`security_*`) que a aplicação não usa — só o próprio teste o importa. Não
-  quebra nada hoje; é a armadilha de editar o arquivo errado.
+- **Riscos re-verificados na passagem de 22/09:** 2 (timezone do snapshot —
+  local, não UTC), 4 (redaction — senha nunca entra no log), 6
+  (`must_change_password` — forçado na UI, **não** no backend), 8 (realtime
+  WebSocket + Redis Pub/Sub) e 9 (IA sem fallback externo; toggle default
+  **on**, não off). O item 10 foi **auditado** (nenhuma operação de upgrade
+  fora de batch sem suporte no SQLite — ver
+  `docs/migrations/2026-09-sqlite-batch-audit.md`) e o item 11 foi re-escopado:
+  com o Alembic no exe (B2), o requisito de migração aditiva amolece.
+- **D5 (schema fantasma) foi resolvido:** o segundo modelo de RBAC
+  (`security_*`, `app/infrastructure/security/models.py`) foi **removido**
+  junto de seus testes (commit `ae4d0aa`). O canônico segue `auth_model.py` +
+  `rbac_model.py` — a armadilha de editar o arquivo errado deixou de existir.
 - O branch arquivado **não** deve ser mergeado; a parte útil (JWT/refresh) já
   foi absorvida.
 
@@ -314,7 +362,7 @@ ficam registrados em vez de silenciados, para não virarem surpresa.
 | D1 | **5 alertas HIGH de `extract-zip`** no serviço WhatsApp, chegando por `whatsapp-web.js` → `puppeteer` → `@puppeteer/browsers`. | `npm audit` no `whatsapp/`. A `2.0.1` é a **última versão publicada** do pacote e é exatamente a que o `overrides` do `package.json` já fixa — não há correção upstream para aplicar. As versões de `extract-zip`/`puppeteer`/`whatsapp-web.js` **não** mudaram na v1.1.7, então não foi introduzido pela release. | Release corrigida do `extract-zip` (ou trocar o motor `wwebjs`, que só é usado no rollback `WA_ENGINE=wwebjs`). Nenhum workflow roda `npm audit`, então não bloqueia CI. |
 | D2 | **TypeScript 7 bloqueado no serviço WhatsApp.** | `typescript-eslint@8.70.0` — o último publicado — declara `peerDependencies.typescript: ">=4.8.4 <6.1.0"`. TS 7.0.2 está fora da faixa, e é o que o lint usa. A PR do dependabot (#25) fica **vermelha** no CI por isso. | Publicação de um `typescript-eslint` que aceite TS 7. Enquanto isso o serviço fica em TS 6 — subir seria trocar typecheck por lint que não roda. |
 | D3 | **10 rotas do serviço WhatsApp sem consumidor no repositório** (`/lists/*/contacts`, `/customers/sync`, `/campaigns/*/preview`, `/whatsapp/accounts/*/media`…). | `backend/tests/integrity_allowlist.json`, check `whatsapp-sem-consumidor`. | Decisão de produto: são API do serviço que o proxy do backend só não expõe. Remover seria decidir produto por auditoria; expor seria criar tela. Ficam na allowlist com motivo. |
-| D5 | **Schema paralelo `security_*` ("schema fantasma").** `app/infrastructure/security/models.py` define `security_users`, `security_roles`, `security_role_permissions`, `security_tenants`, `security_memberships`, `security_sessions`, `security_audit` — um segundo modelo de RBAC, parecido com o canônico. | Nenhum módulo da aplicação o importa: o único importador é `backend/tests/test_security.py`. As tabelas **não** aparecem no baseline Alembic (0 ocorrências de `security_`) nem entram no metadata do runtime, então **não existem em nenhum banco real** — e o teste passa porque cria o próprio schema. | Decisão de dono: **remover** (junto do teste, se ele só testa o fantasma) ou **promover** a canônico. Enquanto existir, é o tipo de arquivo em que um implementador de RBAC editaria por engano. Não é quebra de tela hoje, é risco de trabalho no lugar errado. |
+| D5 | **Schema paralelo `security_*` ("schema fantasma").** `app/infrastructure/security/models.py` define `security_users`, `security_roles`, `security_role_permissions`, `security_tenants`, `security_memberships`, `security_sessions`, `security_audit` — um segundo modelo de RBAC, parecido com o canônico. | Nenhum módulo da aplicação o importa: o único importador é `backend/tests/test_security.py`. As tabelas **não** aparecem no baseline Alembic (0 ocorrências de `security_`) nem entram no metadata do runtime, então **não existem em nenhum banco real** — e o teste passa porque cria o próprio schema. | ✅ **Resolvido em 21/09**: o schema paralelo foi **removido** junto de seus testes (commit `ae4d0aa`). O canônico segue `auth_model.py` + `rbac_model.py`. |
 | D4 | **Shim de tipos `frontend/src/test/jest-dom-vitest.d.ts`.** | `@testing-library/jest-dom` 7.x declara `interface Assertion<T = any>` e o Vitest 5 declara `Assertion<R, T>`; a mesclagem de interfaces falha e os matchers somem do `expect`. O shim redeclara a augmentation com a assinatura do Vitest 5. | Suporte a Vitest 5 no `jest-dom`. É shim de compatibilidade, comentado como tal — remover quando o upstream publicar. |
 
 ### Infra de release — o que passou a ser regra (v1.1.7)

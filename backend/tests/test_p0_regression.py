@@ -76,7 +76,18 @@ def _create_operator(client, admin_headers) -> tuple[str, str]:
 
     login = client.post("/auth/login", json={"username": username, "password": "InitialPass1!"})
     assert login.status_code == 200
-    return login.json()["token"], user_id
+    token = login.json()["token"]
+
+    # P0 (3.8 reforçado): sem trocar a senha, o token cairia no bloqueio de
+    # rota do backend — e o teste de permissão passaria por engano. Troca para
+    # isolar o que cada caso quer provar.
+    changed = client.post(
+        "/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "InitialPass1!", "new_password": "OperatorPass1!"},
+    )
+    assert changed.status_code == 200, changed.text
+    return token, user_id
 
 
 # ═══════════════════════════════════════════════════════════

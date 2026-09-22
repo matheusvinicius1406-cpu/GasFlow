@@ -21,6 +21,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import ConsentScreen from "../screens/ConsentScreen";
 import {
   LoginScreenWired,
+  ChangePasswordScreenWired,
   RouteTodayScreenWired,
   DeliveryDetailScreenWired,
   RouteTodayScreenWiredProps,
@@ -30,6 +31,7 @@ import { useSessionStore } from "../logic/session";
 
 export type RootStackParamList = {
   Login: undefined;
+  ChangePassword: undefined;
   Consent: undefined;
   RouteToday: undefined;
   DeliveryDetail: { deliveryId: string };
@@ -40,15 +42,19 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   const accessToken = useSessionStore((s) => s.accessToken);
   const consentLoaded = useSessionStore((s) => s.consentLoaded);
+  const mustChangePassword = useSessionStore((s) => s.mustChangePassword);
   const hasValidConsent = useSessionStore((s) => s.hasValidConsent());
 
+  // Ordem: login → troca de senha (bloqueante) → consentimento LGPD → rota.
   const initialRoute: keyof RootStackParamList = !consentLoaded
     ? "RouteToday" // placeholder durante o load (evita flash do consent)
     : !accessToken
       ? "Login"
-      : !hasValidConsent
-        ? "Consent"
-        : "RouteToday";
+      : mustChangePassword
+        ? "ChangePassword"
+        : !hasValidConsent
+          ? "Consent"
+          : "RouteToday";
 
   return (
     <NavigationContainer>
@@ -68,6 +74,10 @@ export default function RootNavigator() {
         ) : !accessToken ? (
           <Stack.Screen name="Login" options={{ headerShown: false }}>
             {() => <LoginScreenWired />}
+          </Stack.Screen>
+        ) : mustChangePassword ? (
+          <Stack.Screen name="ChangePassword" options={{ headerShown: false }}>
+            {() => <ChangePasswordScreenWired />}
           </Stack.Screen>
         ) : !hasValidConsent ? (
           <Stack.Screen name="Consent" options={{ headerShown: false, title: "Consentimento" }}>

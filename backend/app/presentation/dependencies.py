@@ -18,7 +18,7 @@ Usage in router:
 import hmac
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 from app.application.security.auth_service import AuthService
 from app.domain.security.models import TenantContext, SystemRole
@@ -42,14 +42,35 @@ def get_auth_service() -> AuthService:
 
 # ── Core Dependency: Tenant Context ─────────────────────
 
+# P0 (3.8 reforçado): rotas que continuam acessíveis enquanto a troca de
+# senha está pendente. Qualquer outra responde 403 até a senha ser trocada.
+# O `logout` fica aqui de propósito: quem entrou numa sessão forçada precisa
+# sair dela sem depender do suporte.
+_PASSWORD_CHANGE_ALLOWED_PATHS = frozenset(
+    {
+        "/auth/me",
+        "/auth/change-password",
+        "/auth/logout",
+    }
+)
 
-def get_tenant_context(authorization: Optional[str] = Header(None)) -> TenantContext:
-    """Extract and validate tenant context from Authorization header.
 
-    Used by all protected endpoints.
-    Returns TenantContext with user_id, tenant_id, role, permissions.
-    Raises 401 if token is missing, invalid, or expired.
+def _route_without_mount_prefix(path: str) -> str:
+    """Remove o prefixo de montagem (/api/v1, /api) para comparar a rota.
+
+    Os mesmos routers são servidos em `/auth/...` e em `/api/auth/...`, então
+    a allowlist precisa enxergar a rota canônica nos dois casos.
     """
+    for prefix in ("/api/v1", "/api"):
+        if path == prefix:
+            return "/"
+        if path.startswith(prefix + "/"):
+            return path[len(prefix) :]
+    return path
+
+
+def _resolve_tenant_context(authorization: Optional[str]) -> TenantContext:
+    """Valida o token e devolve o contexto — sem a checagem de senha pendente."""
     auth = get_auth_service()
     token = ""
     if authorization and authorization.startswith("Bearer "):
@@ -60,6 +81,31 @@ def get_tenant_context(authorization: Optional[str] = Header(None)) -> TenantCon
     return ctx
 
 
+def get_tenant_context(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+) -> TenantContext:
+    """Extract and validate tenant context from Authorization header.
+
+    Used by all protected endpoints.
+    Returns TenantContext with user_id, tenant_id, role, permissions.
+    Levanta 401 se o token está ausente, inválido ou expirado, e 403 enquanto
+    o usuário tem troca de senha pendente (fora da allowlist de /auth).
+    """
+    ctx = _resolve_tenant_context(authorization)
+
+    # P0 (3.8): a flag era só de UI — um cliente que a ignorasse seguia
+    # navegando. Aqui o backend passa a recusar toda rota fora da allowlist
+    # até a troca de senha acontecer.
+    if ctx.must_change_password and _route_without_mount_prefix(request.url.path) not in _PASSWORD_CHANGE_ALLOWED_PATHS:
+        raise HTTPException(
+            status_code=403,
+            detail="Password change required",
+            headers={"X-GasFlow-Password-Change-Required": "1"},
+        )
+    return ctx
+
+
 # ── Admin-only Dependency ───────────────────────────────
 
 
@@ -67,6 +113,18 @@ def require_admin(ctx: TenantContext = Depends(get_tenant_context)) -> TenantCon
     """Require admin role. Raises 403 if not admin."""
     if ctx.role != SystemRole.ADMIN and not ctx.has_permission("admin.*"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return ctx
+
+
+def require_driver(ctx: TenantContext = Depends(get_tenant_context)) -> TenantContext:
+    """Exige role DRIVER (403 caso contrário).
+
+    Não recheca `must_change_password`: o gate global (get_tenant_context) já
+    recusa rotas fora de /auth enquanto a troca está pendente. Todas as queries
+    do app do entregador devem escopar por `ctx.tenant_id` E `ctx.driver_id`.
+    """
+    if ctx.role != SystemRole.DRIVER:
+        raise HTTPException(status_code=403, detail="Driver access required")
     return ctx
 
 
@@ -125,6 +183,7 @@ def require_permission(permission: str):
 
 
 def require_whatsapp_service_or_user(
+    request: Request,
     authorization: Optional[str] = Header(None),
     x_gasflow_key: Optional[str] = Header(None),
 ) -> TenantContext:
@@ -149,7 +208,7 @@ def require_whatsapp_service_or_user(
             session_id="service",
         )
     # Fallback: usuário normal (Bearer token)
-    return get_tenant_context(authorization)
+    return get_tenant_context(request, authorization)
 
 
 def require_whatsapp_service(

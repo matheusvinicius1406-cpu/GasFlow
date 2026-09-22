@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Truck, RefreshCw, Package, MapPin, Clock, CheckCircle, XCircle, Plus, UserCog, ArrowRight, Sparkles } from 'lucide-react'
+import { Truck, RefreshCw, Package, MapPin, Clock, CheckCircle, XCircle, Plus, UserCog, ArrowRight, Sparkles, AlertTriangle } from 'lucide-react'
+import { Alert } from '@/components/ui/Alert'
+import type { DriverAlert } from '@/lib/tracking'
 import { driverStockApi, type DispatchSuggestionResponse } from '@/lib/api/driverStock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -18,10 +20,21 @@ import {
   useAssignDelivery,
   useUpdateDeliveryStatus,
   useDriverLocations,
+  useDeliveryEta,
+  formatEta,
 } from '@/lib/api/hooks'
 import { DriverMap } from '@/components/map/DriverMap'
 import type { DriverMapPoint } from '@/components/map/DriverMap'
+import { useTrackingSocket } from '@/lib/hooks/useTrackingSocket'
 import type { DeliveryDriverExtended } from '@/types'
+
+/** Texto humano do alerta de rastreio (Fase 7.3). */
+function describeAlert(alert: DriverAlert): string {
+  if (alert.kind === 'STALLED') {
+    return `Entregador parado há ${alert.minutes ?? 10} min com entrega em rota.`
+  }
+  return `Entregador ${alert.deviation_km ?? '?'} km fora da rota da entrega.`
+}
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'default'; icon: typeof Truck }> = {
   PENDING: { label: 'Pendente', variant: 'secondary', icon: Clock },
@@ -90,6 +103,9 @@ export function DeliveriesPage() {
   const { data: driversData } = useDeliveryDrivers()
   const { data: summary } = useDeliverySummary()
   const { data: locations } = useDriverLocations()
+  // Fase 6: posições ao vivo por WebSocket (canal tenant:{id}). O polling fica
+  // apenas como carga inicial/fallback — se o WS cair, mantém o último estado.
+  const { pointsByDriver, lastByDriver, alerts, dismissAlert } = useTrackingSocket()
   const createDelivery = useCreateDelivery()
   const assignDelivery = useAssignDelivery()
   const updateStatus = useUpdateDeliveryStatus()
@@ -98,10 +114,42 @@ export function DeliveriesPage() {
   const drivers = driversData?.drivers ?? []
 
   // F1b: pontos do mapa — posições + nome do motorista quando conhecido.
-  const mapPoints: DriverMapPoint[] = (locations ?? []).map((loc) => ({
+  const polledPoints: DriverMapPoint[] = (locations ?? []).map((loc) => ({
     ...loc,
     name: drivers.find(d => d.id === loc.driver_id)?.name,
   }))
+
+  // Fase 6: a posição do WS sobrepõe a do polling (mais recente vence), sem
+  // refetch — o marcador anda de forma incremental.
+  const pointsById = new Map(polledPoints.map((p) => [p.driver_id, p]))
+  for (const live of Object.values(lastByDriver)) {
+    pointsById.set(live.driver_id, {
+      driver_id: live.driver_id,
+      name: drivers.find(d => d.id === live.driver_id)?.name,
+      latitude: live.latitude,
+      longitude: live.longitude,
+      accuracy: live.accuracy_m ?? null,
+      speed: live.speed_kmh ?? null,
+      timestamp: live.recorded_at,
+      is_stale: false,
+      age_seconds: 0,
+      // Fase 7.5: preserva a distância do dia vinda do backend no ponto ao vivo.
+      today_distance_km: pointsById.get(live.driver_id)?.today_distance_km,
+    })
+  }
+  const mapPoints: DriverMapPoint[] = [...pointsById.values()]
+
+  // Fase 7.1: ETA + linha tracejada até o endereço da primeira entrega em rota.
+  const activeDelivery =
+    deliveries.find((d) => ['ASSIGNED', 'DISPATCHED', 'EN_ROUTE'].includes(d.status)) ?? null
+  const { data: eta } = useDeliveryEta(activeDelivery?.id ?? null)
+  const destination = eta
+    ? {
+        latitude: eta.destination.latitude,
+        longitude: eta.destination.longitude,
+        etaLabel: formatEta(eta.eta_seconds),
+      }
+    : undefined
 
   const handleCreateDelivery = async () => {
     if (!newDelivery.order_id || !newDelivery.customer_codigo || !newDelivery.customer_name) return
@@ -243,11 +291,43 @@ export function DeliveriesPage() {
             <StatCard title="Em Rota" value={summary.deliveries.by_status?.EN_ROUTE ?? 0} icon={Truck} />
           </div>
 
-          {/* F1b: mapa do operador — posição dos entregadores (polling 30s) */}
+          {/* Fase 7.3: alertas operacionais (parado/desviado) vindos do barramento */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              {alerts.map((alert, index) => (
+                <Alert
+                  key={`${alert.driver_id}-${alert.kind}-${index}`}
+                  variant={alert.kind === 'DEVIATED' ? 'error' : 'default'}
+                  title={alert.kind === 'DEVIATED' ? 'Entregador desviado' : 'Entregador parado'}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      {describeAlert(alert)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs underline"
+                      onClick={() => dismissAlert(index)}
+                    >
+                      dispensar
+                    </button>
+                  </div>
+                </Alert>
+              ))}
+            </div>
+          )}
+
+          {/* F1b/F6: mapa do operador — posição + trajeto ao vivo (WebSocket) */}
           <Card>
             <CardHeader><CardTitle>Mapa de Entregadores</CardTitle></CardHeader>
             <CardContent>
-              <DriverMap points={mapPoints} className="h-80" />
+              <DriverMap
+                points={mapPoints}
+                trails={pointsByDriver}
+                destination={destination}
+                className="h-80"
+              />
             </CardContent>
           </Card>
         </>

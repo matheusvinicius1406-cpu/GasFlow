@@ -32,6 +32,7 @@ from app.presentation.api.logistics.delivery_ops import router as delivery_ops_r
 from app.presentation.api.core.dashboard import router as dashboard_router
 from app.presentation.api.logistics.driver_api import router as driver_api_router
 from app.presentation.api.logistics.driver_mobile_auth import router as driver_mobile_router
+from app.presentation.api.logistics.driver_self import router as driver_self_router
 from app.presentation.api.printer import router as printer_router
 from app.presentation.api.finance.payments import router as payments_router
 from app.presentation.api.finance.reports import router as reports_router
@@ -39,6 +40,7 @@ from app.presentation.api.core.settings import router as settings_router
 from app.presentation.api.core.admin import router as admin_router
 from app.presentation.api.coupons import router as coupons_router
 from app.presentation.api.public_signup import router as public_signup_router
+from app.presentation.api.public_tracking import router as public_tracking_router
 from app.presentation.api.leads import router as leads_router
 from app.presentation.api.integrations import router as integrations_router
 from app.presentation.api.whatsapp.contacts import router as contacts_crm_router
@@ -283,6 +285,7 @@ app.include_router(auth_router)
 app.include_router(delivery_ops_router)
 app.include_router(driver_api_router)
 app.include_router(driver_mobile_router)
+app.include_router(driver_self_router)
 app.include_router(printer_router)
 app.include_router(payments_router)
 app.include_router(reports_router)
@@ -297,6 +300,7 @@ app.include_router(settings_router)
 app.include_router(admin_router)
 app.include_router(coupons_router)
 app.include_router(public_signup_router)
+app.include_router(public_tracking_router)
 app.include_router(leads_router)
 app.include_router(integrations_router)
 app.include_router(contacts_crm_router)
@@ -349,6 +353,7 @@ if _frontend_dist and _Path(_frontend_dist).is_dir():
         auth_router,
         delivery_ops_router,
         driver_api_router,
+        driver_self_router,
         printer_router,
         payments_router,
         reports_router,

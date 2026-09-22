@@ -1,20 +1,69 @@
 /**
- * api — cliente HTTP do App do Entregador (F2).
+ * api — cliente HTTP do App do Entregador.
+ *
+ * O entregador NÃO tem mais login próprio: autentica na **auth principal**
+ * (`POST /auth/login`), herdando o gate de `must_change_password` no HTTP e no
+ * WebSocket. As rotas do app vivem em `/driver/*` (namespace novo, escopado por
+ * tenant + driver). O login antigo (`/auth/mobile/login`, `/api/v1/driver/*`)
+ * continua no backend marcado `# LEGACY`, mas o app migrado não o usa.
  *
  * Funções puras: baseUrl/fetch/token injetados — testável em node --test.
- * Endpoints reais do backend GasFlow:
- *   POST /auth/mobile/login          → { access_token, refresh_token, driver_id }
- *   GET  /driver/deliveries          → { deliveries: [...] }
- *   POST /driver/deliveries/:id/:action  (accept|start|complete|fail)
  *
- * O client_action_id vai no corpo de cada ação (idempotência controlada pela
- * fila offline — offlineQueue.ts deduplica pelo id e marca synced só no 200).
+ *   POST /auth/login            → { access_token, refresh_token, user, role }
+ *   GET  /auth/me               → { id, username, role, must_change_password }
+ *   POST /auth/change-password  → limpa a flag de troca
+ *   GET  /driver/deliveries     → { deliveries: [...] }
+ *   GET  /driver/me             → perfil + janela LGPD + cadência
  */
 
-export interface LoginTokens {
+// ── Gate de troca de senha ───────────────────────────────────
+
+/**
+ * Lançada quando o backend recusa uma rota por troca de senha pendente
+ * (`403` + `X-GasFlow-Password-Change-Required: 1`, ou `detail` equivalente
+ * quando o header não atravessa o proxy). O app trata como **estado**, não erro.
+ */
+export class PasswordChangeRequiredError extends Error {
+  constructor() {
+    super("Password change required");
+    this.name = "PasswordChangeRequiredError";
+  }
+}
+
+function passwordChangeRequired(res: Response, detail: unknown): boolean {
+  if (res.status !== 403) return false;
+  if (res.headers?.get?.("X-GasFlow-Password-Change-Required") === "1") return true;
+  return (detail as { detail?: string } | null)?.detail === "Password change required";
+}
+
+// ── Tipos ────────────────────────────────────────────────────
+
+export interface OperatorUser {
+  id: string;
+  username: string;
+  email?: string;
+  display_name?: string;
+  must_change_password?: boolean;
+}
+
+export interface LoginResult {
   access_token: string;
   refresh_token: string;
-  driver_id: string;
+  /** Compat: backends antigos devolvem só `token` (opaco). */
+  token?: string;
+  role: string;
+  tenant_id: string;
+  user: OperatorUser;
+}
+
+export interface MeDTO {
+  id: string;
+  username: string;
+  display_name?: string;
+  role: string;
+  tenant_id: string;
+  permissions?: string[];
+  must_change_password: boolean;
 }
 
 export interface DeliveryDTO {
@@ -25,6 +74,20 @@ export interface DeliveryDTO {
   status: string;
 }
 
+export interface DriverMeDTO {
+  driver_id: string;
+  name: string;
+  phone: string;
+  status: string;
+  active: boolean;
+  tenant_id: string;
+  tracking_interval_seconds: number;
+  /** Janela LGPD "HH:MM-HH:MM" — mesma regra reforçada no ingest (403 fora dela). */
+  work_hours?: string | null;
+  /** Fase 7.5: distância percorrida hoje (km), calculada do histórico. */
+  today_distance_km?: number;
+}
+
 function baseUrlClean(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
 }
@@ -33,34 +96,96 @@ async function requestJson<T>(fetchFn: typeof fetch, url: string, init: RequestI
   const res = await fetchFn(url, init);
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
+    if (passwordChangeRequired(res, detail)) throw new PasswordChangeRequiredError();
     throw new Error((detail as { error?: string; detail?: string }).error ?? `HTTP ${res.status}`);
   }
   return (await res.json()) as T;
 }
 
-export async function mobileLogin(
+// ── Sessão (auth principal) ──────────────────────────────────
+
+export async function operatorLogin(
   fetchFn: typeof fetch,
   baseUrl: string,
   username: string,
   password: string,
-): Promise<LoginTokens> {
-  return requestJson<LoginTokens>(fetchFn, `${baseUrlClean(baseUrl)}/auth/mobile/login`, {
+): Promise<LoginResult> {
+  return requestJson<LoginResult>(fetchFn, `${baseUrlClean(baseUrl)}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    // platform=mobile: a sessão fica marcada como app do entregador (B5).
+    body: JSON.stringify({ username, password, platform: "mobile" }),
   });
 }
 
-export async function fetchMyDeliveries(
+export async function fetchMe(fetchFn: typeof fetch, baseUrl: string, token: string): Promise<MeDTO> {
+  return requestJson<MeDTO>(fetchFn, `${baseUrlClean(baseUrl)}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function changePassword(
   fetchFn: typeof fetch,
   baseUrl: string,
   token: string,
-): Promise<DeliveryDTO[]> {
-  const data = await requestJson<{ deliveries: DeliveryDTO[] }>(fetchFn, `${baseUrlClean(baseUrl)}/api/v1/driver/deliveries`, {
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ success: boolean }> {
+  return requestJson<{ success: boolean }>(fetchFn, `${baseUrlClean(baseUrl)}/auth/change-password`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
+// ── Entregas ─────────────────────────────────────────────────
+
+function formatAddress(addr: unknown): string {
+  if (!addr || typeof addr !== "object") return typeof addr === "string" ? addr : "";
+  const a = addr as Record<string, unknown>;
+  const line = [a.street, a.number].filter(Boolean).join(", ");
+  const rest = [line, a.neighborhood, a.city].filter(Boolean).join(" — ");
+  return rest;
+}
+
+/** Normaliza o DeliveryRecord do backend (`id`, `address` objeto) para o DTO do app. */
+function toDeliveryDTO(raw: Record<string, unknown>): DeliveryDTO {
+  return {
+    delivery_id: String(raw.id ?? raw.delivery_id ?? ""),
+    customer_name: String(raw.customer_name ?? ""),
+    address: formatAddress(raw.address),
+    phone: (raw.phone ?? raw.customer_phone) as string | undefined,
+    status: String(raw.status ?? ""),
+  };
+}
+
+export async function fetchMyDeliveries(fetchFn: typeof fetch, baseUrl: string, token: string): Promise<DeliveryDTO[]> {
+  const data = await requestJson<{ deliveries: Record<string, unknown>[] }>(
+    fetchFn,
+    `${baseUrlClean(baseUrl)}/driver/deliveries`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return (data.deliveries ?? []).map(toDeliveryDTO);
+}
+
+export async function fetchDriverMe(fetchFn: typeof fetch, baseUrl: string, token: string): Promise<DriverMeDTO> {
+  return requestJson<DriverMeDTO>(fetchFn, `${baseUrlClean(baseUrl)}/driver/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return data.deliveries ?? [];
 }
+
+/** URL do WebSocket de realtime para o canal `driver:{driver_id}`. */
+export function driverWsUrl(baseUrl: string, token: string): string {
+  const clean = baseUrlClean(baseUrl).replace(/^http/, "ws");
+  return `${clean}/ws?token=${encodeURIComponent(token)}`;
+}
+
+// ── Ações de entrega ─────────────────────────────────────────
+//
+// TODO (próxima fase): mover para `/driver/*` (auth principal). Hoje estas
+// rotas são as legadas `/api/v1/driver/*`, que só aceitam a sessão/JWT antigo;
+// o backend precisa expor accept/start/complete/fail no namespace novo antes
+// de o app migrado usá-las. A tela de rota (lista) já usa o namespace novo.
 
 export type DeliveryAction = "accept" | "start" | "complete" | "fail";
 
@@ -72,9 +197,6 @@ export async function postDeliveryAction(
   args: { deliveryId: string; action: DeliveryAction; clientActionId: string; payload?: Record<string, unknown> },
 ): Promise<void> {
   const { deliveryId, action, clientActionId, payload = {} } = args;
-  // Caminho explícito por ação: o backend expõe um endpoint por verbo
-  // (/accept, /start, /complete, /fail) — sem segmento dinâmico, o que também
-  // deixa o guard de integridade conferir cada rota contra o OpenAPI.
   const clean = baseUrlClean(baseUrl);
   const path =
     action === "accept"
@@ -91,28 +213,9 @@ export async function postDeliveryAction(
   });
 }
 
-// ── Rastreamento (F2.5) ──────────────────────────────────────
+// ── Rastreamento ─────────────────────────────────────────────
 
-/** Espelha DriverMeResponse do backend (driver_api.py). */
-export interface DriverMeDTO {
-  driver_id: string;
-  name: string;
-  phone: string;
-  status: string;
-  active: boolean;
-  tenant_id: string;
-  tracking_interval_seconds: number;
-  /** Janela LGPD "HH:MM-HH:MM" — mesma regra reforçada no ingest (403 fora dela). */
-  work_hours?: string | null;
-}
-
-export async function fetchDriverMe(fetchFn: typeof fetch, baseUrl: string, token: string): Promise<DriverMeDTO> {
-  return requestJson<DriverMeDTO>(fetchFn, `${baseUrlClean(baseUrl)}/api/v1/driver/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-/** Posição no formato do ingest LAN (/api/v1/driver/location). */
+/** Posição no formato do ingest. */
 export interface DriverLocationBody {
   latitude: number;
   longitude: number;
@@ -121,7 +224,12 @@ export interface DriverLocationBody {
   bearing?: number;
 }
 
-/** LAN: POST direto no backend com o JWT do entregador (throttle 10s no servidor). */
+/**
+ * Ingest LAN da posição.
+ *
+ * TODO (próxima fase): mover para `/driver/location` (auth principal). Hoje é
+ * a rota legada `/api/v1/driver/location`, que só aceita a sessão/JWT antigo.
+ */
 export async function postDriverLocation(
   fetchFn: typeof fetch,
   baseUrl: string,

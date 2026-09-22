@@ -15,8 +15,16 @@
 import React, { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import * as Keychain from "react-native-keychain";
+
 import RootNavigator from "./src/navigation/RootNavigator";
-import { loadPersistedConsent, setConsentStorage, createMemoryConsentStorage } from "./src/logic/session";
+import {
+  loadPersistedConsent,
+  restorePersistedSession,
+  setConsentStorage,
+  createMemoryConsentStorage,
+} from "./src/logic/session";
+import { setTokenStorage, createKeychainTokenStorage, type KeychainLike } from "./src/logic/tokenStorage";
 import { resolveConnection } from "./src/logic/connection";
 import { getConnectionTargets } from "./src/logic/config";
 import { useConnectionStore } from "./src/containers/wired";
@@ -28,6 +36,13 @@ import { useConnectionStore } from "./src/containers/wired";
  */
 setConsentStorage(createMemoryConsentStorage());
 
+/**
+ * Sessão: o token vive no Keystore do Android (EncryptedSharedPreferences) via
+ * react-native-keychain — NUNCA em AsyncStorage em texto puro. É o que faz a
+ * sessão persistir ao fechar/reabrir o app.
+ */
+setTokenStorage(createKeychainTokenStorage(Keychain as unknown as KeychainLike));
+
 export default function App() {
   const [booted, setBooted] = useState(false);
   const setConnection = useConnectionStore((s) => s.setConnection);
@@ -35,6 +50,8 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       await loadPersistedConsent();
+      // Sessão persistida (Keystore): reabrir o app não pede login de novo.
+      await restorePersistedSession();
       // F2.5: alvos reais (LAN/relay) de logic/config.ts — o desktop pode
       // sobrescrever no boot (QR/configurações) via setConnectionConfig.
       const targets = getConnectionTargets();

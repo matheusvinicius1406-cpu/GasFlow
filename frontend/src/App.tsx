@@ -30,6 +30,7 @@ import { LoginPage, PermissionRoute } from '@/features/auth'
 import { InviteSignupPage } from '@/features/public-signup'
 import { DriverLoginPage, DriverHomePage } from '@/features/driver'
 import { UsersPage, AuditPage } from '@/features/admin'
+import { PublicTracking } from '@/features/tracking'
 
 export function App() {
   return (
@@ -40,6 +41,8 @@ export function App() {
       <Route path="/cadastro" element={<InviteSignupPage />} />
       <Route path="/driver/login" element={<DriverLoginPage />} />
       <Route path="/driver" element={<DriverHomePage />} />
+      {/* Fase 7.2: link público de rastreio — sem login e sem menu */}
+      <Route path="/track/:token" element={<PublicTracking />} />
       <Route
         path="/"
         element={

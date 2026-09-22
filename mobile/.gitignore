@@ -7,3 +7,5 @@ android/app/debug/
 android/app/release/
 *.keystore
 !debug.keystore
+# Segredos locais de assinatura (NUNCA versionar)
+android/keystore.properties

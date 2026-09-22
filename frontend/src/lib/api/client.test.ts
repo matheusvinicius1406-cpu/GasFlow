@@ -9,7 +9,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
-import { api, apiClient, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from './client'
+import {
+  api,
+  apiClient,
+  ACCESS_TOKEN_KEY,
+  PASSWORD_CHANGE_REQUIRED_EVENT,
+  REFRESH_TOKEN_KEY,
+  SESSION_REFRESHED_EVENT,
+} from './client'
 
 const originalAdapter = apiClient.defaults.adapter
 
@@ -175,5 +182,50 @@ describe('apiClient — renovação do access token', () => {
     expect(urls).toEqual(['/auth/login'])
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-1')
     expect(window.location.href).toBe('')
+  })
+})
+
+describe('apiClient — troca de senha pendente (P0 3.8)', () => {
+  /** Rejeição 403 "Password change required" no formato do interceptor. */
+  function forbid(config: InternalAxiosRequestConfig, detail: string): Promise<never> {
+    const error = Object.assign(new Error('Request failed with status code 403'), {
+      config,
+      response: {
+        status: 403,
+        statusText: 'Forbidden',
+        data: { detail },
+        headers: {},
+        config,
+      },
+    })
+    return Promise.reject(error)
+  }
+
+  it('emite o evento de troca obrigatória quando o backend recusa a rota', async () => {
+    localStorage.setItem(ACCESS_TOKEN_KEY, 'access')
+    const seen = vi.fn()
+    window.addEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, seen)
+
+    apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) =>
+      forbid(config, 'Password change required')) as Adapter
+
+    await expect(apiClient.get('/dashboard')).rejects.toBeTruthy()
+
+    expect(seen).toHaveBeenCalledTimes(1)
+    window.removeEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, seen)
+  })
+
+  it('não emite para 403 de permissão (detail diferente)', async () => {
+    localStorage.setItem(ACCESS_TOKEN_KEY, 'access')
+    const seen = vi.fn()
+    window.addEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, seen)
+
+    apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) =>
+      forbid(config, "Permission 'user.create' required")) as Adapter
+
+    await expect(apiClient.get('/dashboard')).rejects.toBeTruthy()
+
+    expect(seen).not.toHaveBeenCalled()
+    window.removeEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, seen)
   })
 })

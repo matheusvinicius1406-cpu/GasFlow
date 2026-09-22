@@ -13,6 +13,8 @@ Redis/network) and use the in-memory event bus.
 """
 
 import json
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -266,6 +268,39 @@ def test_ws_rejects_channel_from_other_tenant(client, admin_token):
         with client.websocket_connect(f"/ws?token={admin_token}&channel=tenant:other-tenant"):
             pass
     assert exc.value.code == 4003
+
+
+def test_ws_rejects_pending_password_change(client, admin_token):
+    """P0 (3.8 reforçado): o canal de realtime segue a mesma regra do HTTP."""
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    username = f"ws_pwd_{uuid.uuid4().hex[:8]}"
+    created = client.post(
+        "/admin/users",
+        headers=admin_headers,
+        json={
+            "username": username,
+            "email": f"{username}@gasflow.local",
+            "password": "InitialPass1!",
+            "role": "OPERATOR",
+        },
+    )
+    assert created.status_code == 201, created.text
+    user_id = created.json()["user_id"]
+
+    reset = client.post(f"/admin/users/{user_id}/reset-password", headers=admin_headers)
+    assert reset.status_code == 200, reset.text
+    temp_password = reset.json()["temporary_password"]
+
+    login = client.post("/auth/login", json={"username": username, "password": temp_password})
+    assert login.status_code == 200, login.text
+    assert login.json()["user"]["must_change_password"] is True
+    token = login.json()["token"]
+
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(f"/ws?token={token}"):
+            pass
+    assert exc.value.code == 4003
+    assert "Password change required" in (exc.value.reason or "")
 
 
 def test_realtime_stats_endpoint(client):

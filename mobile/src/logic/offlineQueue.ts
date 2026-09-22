@@ -28,7 +28,12 @@ export interface QueueItem {
 export interface QueueStorage {
   all(): QueueItem[];
   save(item: QueueItem): void;
+  /** Opcional: quando existe, itens prontos/vencidos são apagados de verdade. */
+  remove?(clientActionId: string): void;
 }
+
+/** Fase 5: retenção local das posições (mesma janela da lib de background). */
+export const LOCATION_RETENTION_DAYS = 7;
 
 const BASE_BACKOFF_MS = 2_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
@@ -59,6 +64,14 @@ export class OfflineQueue {
 
   /** Registra ação ANTES do envio — id gerado aqui (prompt: "cada ação inclui client_action_id"). */
   enqueue(kind: QueueItem["kind"], deliveryId: string, payload: Record<string, unknown> = {}): QueueItem {
+    // Fase 5: posições são append-only — deduplica por `recorded_at` (replay do
+    // background não empilha o mesmo ponto) e aplica a retenção local de 7 dias.
+    if (kind === "location") {
+      const duplicate = this.findLocationByRecordedAt(payload.recorded_at);
+      if (duplicate) return duplicate;
+      this.pruneLocations();
+    }
+
     const item: QueueItem = {
       client_action_id: this.idGen(),
       kind,
@@ -71,6 +84,40 @@ export class OfflineQueue {
     };
     this.storage.save(item);
     return item;
+  }
+
+  /** Posição já enfileirada com o mesmo `recorded_at` (idempotência do replay). */
+  private findLocationByRecordedAt(recordedAt: unknown): QueueItem | null {
+    if (typeof recordedAt !== "string" || !recordedAt) return null;
+    return (
+      this.storage
+        .all()
+        .find((i) => i.kind === "location" && i.payload.recorded_at === recordedAt) ?? null
+    );
+  }
+
+  /**
+   * Descarta posições já enviadas ou vencidas (default 7 dias).
+   *
+   * Com `storage.remove` apaga de fato; sem ele, apenas marca como `synced`
+   * para que `pending()` não as reenvie.
+   */
+  pruneLocations(retentionDays: number = LOCATION_RETENTION_DAYS): number {
+    const cutoff = this.clock() - retentionDays * 24 * 60 * 60 * 1000;
+    let removed = 0;
+    for (const item of this.storage.all()) {
+      if (item.kind !== "location") continue;
+      const isSynced = item.status === "synced";
+      const isExpired = item.createdAt < cutoff;
+      if (!isSynced && !isExpired) continue;
+      if (this.storage.remove) {
+        this.storage.remove(item.client_action_id);
+      } else {
+        item.status = "synced";
+      }
+      removed += 1;
+    }
+    return removed;
   }
 
   pending(): QueueItem[] {

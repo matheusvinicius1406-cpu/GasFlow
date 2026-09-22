@@ -18,9 +18,11 @@ class DeliveryDriverModel(Base):
     nome = Column(String, nullable=False)
     telefone = Column(String, nullable=False)
     placa = Column(String, nullable=True)
-    ativo = Column(Boolean, default=True)
+    ativo = Column(Boolean, default=True)  # equivalente a `is_active`
+    document = Column(String, nullable=True)  # CPF/CNH — nullable
     username = Column(String, nullable=True, unique=False)
     password_hash = Column(String, nullable=True)
     status = Column(String, default="AVAILABLE")
     vehicle_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

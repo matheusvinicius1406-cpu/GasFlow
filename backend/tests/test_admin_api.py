@@ -61,7 +61,19 @@ def _create_operator(client, admin_headers) -> str:
 
     login = client.post("/auth/login", json={"username": username, "password": "InitialPass1!"})
     assert login.status_code == 200, login.text
-    return login.json()["token"], user_id
+    token = login.json()["token"]
+
+    # P0 (3.8 reforçado): o usuário nasce com must_change_password=True e o
+    # backend agora bloqueia rotas fora de /auth até a troca. Troca aqui para
+    # que os testes de permissão exercitem a permissão — não o bloqueio de
+    # senha pendente (ambos são 403, mas por motivos diferentes).
+    changed = client.post(
+        "/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "InitialPass1!", "new_password": "OperatorPass1!"},
+    )
+    assert changed.status_code == 200, changed.text
+    return token, user_id
 
 
 # ── 403 sem permissão ───────────────────────────────────
@@ -300,3 +312,48 @@ def test_audit_log_filters_by_actor_and_period(client, admin_headers):
     # Paginação.
     paged = client.get("/admin/audit", headers=admin_headers, params={"limit": 2, "offset": 0}).json()["records"]
     assert len(paged) <= 2
+
+
+# ── P0 (3.8) reforçado: bloqueio no backend ─────────────
+
+
+def _forced_headers(client, admin_headers):
+    """Operador com troca de senha pendente: devolve (headers, temp_password)."""
+    _, user_id = _create_operator(client, admin_headers)
+    reset = client.post(f"/admin/users/{user_id}/reset-password", headers=admin_headers)
+    assert reset.status_code == 200, reset.text
+    temp_password = reset.json()["temporary_password"]
+
+    users = client.get("/admin/users", headers=admin_headers).json()["users"]
+    username = next(u["username"] for u in users if u["id"] == user_id)
+    login = client.post("/auth/login", json={"username": username, "password": temp_password})
+    assert login.status_code == 200, login.text
+    assert login.json()["user"]["must_change_password"] is True
+    return {"Authorization": f"Bearer {login.json()['token']}"}, temp_password
+
+
+def test_must_change_password_blocks_protected_routes(client, admin_headers):
+    """Troca pendente fecha tudo fora de /auth — não só a UI."""
+    forced, _ = _forced_headers(client, admin_headers)
+
+    blocked = client.get("/dashboard", headers=forced)
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["detail"] == "Password change required"
+    assert blocked.headers.get("X-GasFlow-Password-Change-Required") == "1"
+
+    # Allowlist continua acessível.
+    assert client.get("/auth/me", headers=forced).status_code == 200
+
+
+def test_must_change_password_clears_after_change(client, admin_headers):
+    """Troca correta libera as rotas de novo, sem novo login."""
+    forced, temp_password = _forced_headers(client, admin_headers)
+    assert client.get("/dashboard", headers=forced).status_code == 403
+
+    changed = client.post(
+        "/auth/change-password",
+        headers=forced,
+        json={"current_password": temp_password, "new_password": "NovaSenha123"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert client.get("/dashboard", headers=forced).status_code == 200

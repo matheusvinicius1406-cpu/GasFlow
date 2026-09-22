@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
+import type { DriverLocationUpdate } from '@/lib/tracking'
 
 /**
  * DriverMap — mapa do operador com a posição dos entregadores (F1b).
@@ -29,12 +30,31 @@ export interface DriverMapPoint {
   timestamp: string
   is_stale: boolean
   age_seconds?: number
+  /** Fase 7.5: distância percorrida hoje (km), quando o backend informar. */
+  today_distance_km?: number
+}
+
+export interface MapDestination {
+  latitude: number
+  longitude: number
+  /** Rótulo do ETA (ex.: "12 min") mostrado no popup do destino. */
+  etaLabel?: string
 }
 
 interface DriverMapProps {
   points: DriverMapPoint[]
   /** Altura do mapa (classe Tailwind no container). Default: h-72. */
   className?: string
+  /**
+   * Fase 7.1: destino (endereço da entrega em rota). Desenha a **linha
+   * tracejada** do entregador até o endereço do último ponto conhecido.
+   */
+  destination?: MapDestination
+  /**
+   * Fase 6: trajetos por entregador (`driver_id` → pontos ordenados). Desenha a
+   * polyline do trecho recente; atualizado incrementalmente pelo WebSocket.
+   */
+  trails?: Record<string, DriverLocationUpdate[]>
 }
 
 /** Marcador circular: verde (fresco) / cinza (stale). */
@@ -57,7 +77,7 @@ function ageLabel(ageSeconds?: number): string {
   return `${Math.floor(minutes / 60)}h atrás`
 }
 
-export function DriverMap({ points, className = 'h-72' }: DriverMapProps) {
+export function DriverMap({ points, className = 'h-72', trails, destination }: DriverMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
@@ -97,7 +117,34 @@ export function DriverMap({ points, className = 'h-72' }: DriverMapProps) {
       const label = p.name || p.driver_id
       L.marker([p.latitude, p.longitude], { icon: createDotIcon(p.is_stale) })
         .bindPopup(
-          `<strong>${escapeHtml(label)}</strong><br/>${p.is_stale ? 'Posição antiga' : 'Em movimento'} · ${ageLabel(p.age_seconds)}`
+          `<strong>${escapeHtml(label)}</strong><br/>${p.is_stale ? 'Posição antiga' : 'Em movimento'} · ${ageLabel(p.age_seconds)}${typeof p.today_distance_km === 'number' ? `<br/>Hoje: ${p.today_distance_km.toFixed(1)} km` : ''}`
+        )
+        .addTo(layer)
+    }
+
+    // Fase 6: polyline do trajeto recente (mesmo trajeto = 1 origem de dados,
+    // sem re-render do mapa inteiro — só a LayerGroup é reescrita).
+    for (const trail of Object.values(trails ?? {})) {
+      const path = trail
+        .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+        .map((p) => [p.latitude, p.longitude] as [number, number])
+      if (path.length < 2) continue
+      L.polyline(path, { color: '#16a34a', weight: 3, opacity: 0.7 }).addTo(layer)
+    }
+
+    // Fase 7.1: linha tracejada até o endereço da entrega em rota.
+    if (destination && valid.length > 0) {
+      const origin = valid[0]!
+      L.polyline(
+        [
+          [origin.latitude, origin.longitude],
+          [destination.latitude, destination.longitude],
+        ],
+        { color: '#f59e0b', weight: 3, dashArray: '6 6' }
+      ).addTo(layer)
+      L.marker([destination.latitude, destination.longitude], { icon: createDotIcon(false) })
+        .bindPopup(
+          `<strong>Destino</strong>${destination.etaLabel ? `<br/>Chega em ~${escapeHtml(destination.etaLabel)}` : ''}`
         )
         .addTo(layer)
     }
@@ -106,7 +153,7 @@ export function DriverMap({ points, className = 'h-72' }: DriverMapProps) {
       const bounds = L.latLngBounds(valid.map((p) => [p.latitude, p.longitude] as [number, number]))
       map.fitBounds(bounds.pad(0.25), { maxZoom: 15 })
     }
-  }, [points])
+  }, [points, trails, destination])
 
   if (points.length === 0) {
     return (

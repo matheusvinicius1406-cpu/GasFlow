@@ -4,6 +4,138 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🧭 Rastreio: ETA, link público, alertas e replay (Fase 7)
+
+A camada de rastreio ganhou o que faltava para operar de verdade — tudo em cima
+do histórico (Fase 3) e do barramento/Mapa já existentes. Nada de serviço pago,
+API key ou tabela nova.
+
+- **ETA (7.1):** `GET /delivery/deliveries/{id}/eta` devolve `eta_seconds`,
+  `distance_km` e `speed_source` (`history` quando há amostra; `default` quando
+  não há). A velocidade vem da média dos últimos 15 min do histórico; o ETA
+  mínimo é 60 s. **422** quando o endereço não tem coordenadas (não inventamos
+  geocoding) e **404** quando falta entregador ou posição. No painel, o mapa
+  desenha a **linha tracejada** até o destino com o rótulo do ETA.
+- **Link público (7.2):** `POST /public/tracking/link` (admin/operador) emite um
+  token HMAC **stateless** (escopo `public_tracking`, tenant + driver + expiração,
+  máx. 24 h). `GET /public/tracking/{token}` é lido **sem autenticação** e devolve
+  só `driver_id`, coordenadas e horário — **sem PII**. Segredo dedicado ao escopo
+  (`PUBLIC_TRACKING_SECRET`), nunca a chave do operador. No painel, a rota
+  pública `/track/:token` mostra só o mapa, sem menu e sem login.
+- **Alertas (7.3):** `TrackingAlertsService` marca **STALLED** (parado: < 60 m em
+  10 min com entrega em rota) e **DEVIATED** (posição além de 1,2 km do endereço
+  da entrega), e publica `driver.alert` no barramento existente. A avaliação roda
+  **uma vez por lote** de ingestão, não por ponto. O painel mostra um banner com
+  opção de dispensar.
+- **Replay do dia (7.4):** o painel reproduz o trajeto a partir do próprio
+  `GET /driver/locations/history` — sem backend novo.
+- **`today_distance_km` visível (7.5):** agora aparece no popup do mapa do painel
+  e num card no topo da tela de rota do app.
+
+### 📱 App do entregador: sessão segura, fila de rastreio e APK assinado
+
+O app do entregador (React Native bare em `mobile/`) passou a usar a auth
+principal e ganhou empacotamento de release.
+
+- **Sessão no keystore**: access/refresh em `react-native-keychain`
+  (Keystore/Keychain), nunca em `AsyncStorage` puro; logout e `401` limpam.
+- **Gate de senha pendente no app**: `403` + `X-GasFlow-Password-Change-Required:
+  1` e WS fechando `4003` levam à tela de troca de senha como **estado de app**.
+- **Fila offline de rastreio**: posições passam a ser deduplicadas por
+  `recorded_at` (replay do background não empilha o mesmo ponto) e têm
+  retenção local de **7 dias**.
+- **Adaptador de GPS em segundo plano** (`src/logic/backgroundTracking.ts`):
+  config pronta (`distanceFilter` ~20 m, precisão HIGH, foreground service,
+  lote 50, retenção 7 dias), geofencing (~150 m, apenas SUGERE "marcar como
+  chegou") e **fallback** para o rastreio de primeiro plano — com testes
+  usando um fake da lib.
+- **APK release assinado**: `build.gradle` lê `android/keystore.properties`
+  (gitignored) e cai na chave de debug quando ela não existe. Keystore própria
+  gerada (SHA-256 `47:10:07:…:0C`) e custódia documentada em `mobile/README.md`
+  junto de build, ambientes, distribuição e teste manual E2E.
+
+**Bloqueio reportado:** `@ikolvi/tracelet@0.1.0-alpha.1` **não compila** no
+Android — o pacote publicado omite o submódulo `core`
+(`Unresolved reference: core`), traz um `<service>` fora do `<application>` no
+manifest (AAPT rejeita) e exige `minSdk 26`. A lib foi removida e o rastreio
+segue em primeiro plano, atrás da costura do adaptador (passo a passo para
+religar em `mobile/README.md`).
+
+### 🗺️ Localização, mapa e rastreador (Fases 3, 4 e 6)
+
+O rastreio só guardava a **última** posição (upsert em `driver_locations`) e o
+painel a lia por **polling de 30s**. Sem histórico não havia distância, replay,
+geofencing nem ETA; e o mapa só se movia a cada meio minuto.
+
+**Histórico append-only (Fase 3)**
+
+- Nova tabela **`driver_location_history`** (migration `e7b1c3d5f9a2`, reversível):
+  `tenant_id`, `driver_id`, `latitude`, `longitude`, `accuracy_m`, `speed_kmh`,
+  `heading_deg`, `recorded_at`, `received_at`, com índices compostos
+  `(driver_id, recorded_at)` e `(tenant_id, recorded_at)`.
+- `driver_locations` **continua** sendo a "última posição" — nada que já lia dela
+  mudou. O histórico é o log imutável, base para distância/replay/geofencing.
+- Repositório: `bulk_insert_history` (lote até 500), `get_history` (paginado),
+  `distance_km_between` (haversine entre pontos consecutivos) e
+  `purge_history_older_than` (retenção LGPD de 90 dias). Escopo **sempre** por
+  `tenant_id` + `driver_id`.
+- **`today_distance_km`** deixou de ser um campo morto (= 0): agora é calculado
+  do histórico do dia no fuso `America/Sao_Paulo`, exposto em `GET /driver/me` e
+  na listagem de posições do operador.
+- `driver_id` guarda `delivery_drivers.codigo` (String), a mesma identidade de
+  `driver_locations` e do canal WS `driver:{id}` — não o `id` serial.
+
+**Ingestão + realtime (Fase 4)**
+
+- **`POST /driver/locations`** (auth `require_driver`): lote de até 500 pontos,
+  grava o histórico, atualiza a última posição e **publica no barramento
+  existente** (evento `driver.location_updated`) — que já roteia para
+  `tenant:{id}` / `driver:{id}` / `operations:{id}`. Nenhum `/ws/tracking` novo.
+- **`GET /driver/locations/history`** (admin/operador), escopado por tenant.
+- Work-hours (LGPD) valem para a ingestão em lote, com audit em caso de recusa.
+
+**Painel web (Fase 6)**
+
+- **Polling de 30s removido**: `useDriverLocations` passou a ser só a carga
+  inicial/fallback e **`useTrackingSocket`** assina `tenant:{id}` pelo mesmo
+  `/ws` (mesma reconexão com backoff), acumulando o trajeto por entregador.
+- `DriverMap` ganhou **polyline do trajeto** (`trails`), atualizada de forma
+  incremental; a posição do WS sobrepõe a do fetch inicial (mais recente vence).
+- O painel já usava **Leaflet + tiles OpenStreetMap** (BSD-2, sem API key).
+  Mantido em vez de trocar por MapLibre: mesma restrição (open source, sem
+  serviço pago) sem descartar um componente já testado nem introduzir um mapa
+  paralelo.
+- Lib pura e testável `lib/tracking.ts` (`parseDriverLocationEvent`,
+  `mergeTrackingState`): dedupe por `recorded_at`, ordenação, janela de tempo e
+  teto de pontos.
+
+
+### 🚚 Cadastro de entregador com credencial própria
+
+Antes o entregador era só uma entidade de negócio (`delivery_drivers`) com um
+subsistema de login paralelo (`driver_sessions` + JWT mobile). Agora ele ganha
+credencial na auth principal — sem um segundo sistema de identidade.
+
+- **`POST /admin/drivers`** cria a entidade de negócio **e** a credencial
+  (`User(role=DRIVER, driver_id=..., must_change_password=True)`) na mesma
+  transação e devolve `{driver_id, username, temporary_password}` — a senha
+  aparece **uma única vez** (nunca em log, audit ou listagem).
+- **`POST /admin/drivers/{id}/reset-password`**, **`DELETE /admin/drivers/{id}`**
+  (desativa driver + usuário e **revoga as sessões**) e **`GET /admin/drivers`**.
+- **Login pela auth principal**: o entregador autentica em `POST /auth/login` e
+  herda, de graça, o gate de `must_change_password` no HTTP e no WebSocket.
+  Novo `require_driver` (403 para quem não é `DRIVER`) e namespace **`/driver/*`**
+  escopado por `tenant_id` + `driver_id` (ex.: `GET /driver/deliveries`).
+- O `driver_id` guarda `delivery_drivers.codigo` — a identidade usada em todo o
+  grafo (`delivery_records.driver_id`, `driver_stock`, canal WS `driver:{id}`),
+  não o `id` serial. A invariante é validada no serviço; o banco garante apenas
+  que `driver_id`, quando presente, não é vazio (o role vive em `auth_roles`,
+  fora do alcance de um `CHECK`).
+- Migration `c2d8e4f6a1b3`: `auth_users.driver_id` (+ índice e check) e
+  `delivery_drivers.document`/`updated_at`.
+- O login antigo do app (`driver_api.py`) fica marcado `# LEGACY` — não
+  estenda; ele existe só para não quebrar clientes antigos.
+
 ### 🔐 Sessão do operador em JWT (B5)
 
 O console usava só uma sessão opaca no banco: sem token de curta duração, sem
@@ -68,6 +200,46 @@ tela em branco até o bundle carregar.
   (não rascunho) e publica a URL no resumo do run. Rascunho é pior que
   release ausente: o `gh` autenticado o enxerga, mas o updater e o cliente
   não.
+
+### 🔒 Troca de senha pendente agora bloqueia no backend
+
+O `must_change_password` só existia como aviso: o login devolvia a flag e o
+frontend mostrava o gate, mas nenhuma rota do backend era de fato recusada —
+um cliente que ignorasse a flag (script, token reaproveitado) seguia operando
+normalmente.
+
+- **O middleware passou a recusar** qualquer rota fora de `/auth` enquanto a
+  troca está pendente, com `403` e o header
+  `X-GasFlow-Password-Change-Required: 1`. A allowlist mantém acessíveis
+  apenas `/auth/me`, `/auth/change-password` e `/auth/logout`. O canal de
+  **WebSocket de realtime** segue a mesma regra — a conexão fecha com
+  `4003 / "Password change required"`.
+- A allowlist é comparada **sem o prefixo de montagem**, porque os mesmos
+  routers são servidos em `/auth/...` e em `/api/auth/...`.
+- **Cobertura nova**: um teste garante o 403 (com o marcador) numa rota
+  protegida e que a troca correta libera o acesso sem novo login. Os helpers
+  de teste que criavam operador passaram a trocar a senha antes, para que os
+  testes de permissão continuem provando **permissão**, e não o bloqueio.
+- **No frontend**, um `403` de senha pendente em pleno uso emite um evento que
+  o `AuthProvider` ouve e levanta o gate — antes esse caso viraria um erro
+  mudo, sem tela para resolver.
+- **Auditoria das migrations no SQLite** documentada em
+  `docs/migrations/2026-09-sqlite-batch-audit.md` — nenhuma operação do
+  caminho de upgrade ficou fora de batch sem suporte nativo.
+
+### 🧪 Testes e limpeza de dívida
+
+- **Reversão de entrega coberta.** O caminho de volta da decisão B3(a) v3
+  (`reverse_delivery_stock_atomic`) não era exercitado por teste nenhum — o
+  `min()` do clamp de vazios podia sumir sem fazer assert algum falhar. Agora
+  são cinco casos: round-trip da entrega + reversão, idempotência por
+  referência, clamp com a base sem vazios para receber, entrega sem estoque e
+  não-vazamento entre produtos. O clamp é conferido por mutação
+  (`backend/tests/test_delivery_stock_reversal.py`).
+- **Schema fantasma `security_*` removido (dívida D5).** O segundo modelo de
+  RBAC — que nenhum módulo da aplicação importava e que nenhum banco real
+  continha — saiu junto de seus testes. O canônico segue `auth_model.py` +
+  `rbac_model.py`, eliminando a armadilha de editar o arquivo errado.
 
 ## [1.1.7] - 2026-09-21
 

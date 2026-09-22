@@ -14,12 +14,21 @@
 
 import { create } from "zustand";
 
+import { getTokenStorage } from "./tokenStorage.ts";
+
 export const CONSENT_VERSION = "1.0"; // bump quando o termo mudar → pede de novo
 
 export interface SessionState {
   accessToken: string | null;
   refreshToken: string | null;
   driverId: string | null;
+  /** Nome de login exibido no gate de senha. */
+  username: string | null;
+  /**
+   * P0 (3.8): true pós-reset admin — o app fica bloqueado na tela de troca até
+   * `POST /auth/change-password` limpar a flag no backend.
+   */
+  mustChangePassword: boolean;
 
   /** LGPD: consentimento de rastreamento aceito? (null = ainda não perguntado) */
   consentAcceptedAt: string | null;
@@ -27,6 +36,9 @@ export interface SessionState {
   consentLoaded: boolean;
 
   setSession(tokens: { access_token: string; refresh_token: string; driver_id: string }): void;
+  /** Restaura a sessão persistida (Keystore) no boot — não passa por login. */
+  restoreToken(token: string): void;
+  setMustChangePassword(value: boolean): void;
   clearSession(): void;
   acceptConsent(now?: Date): void;
   setConsentLoaded(): void;
@@ -72,15 +84,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   accessToken: null,
   refreshToken: null,
   driverId: null,
+  username: null,
+  mustChangePassword: false,
   consentAcceptedAt: null,
   consentVersion: null,
   consentLoaded: false,
 
-  setSession: ({ access_token, refresh_token, driver_id }) =>
-    set({ accessToken: access_token, refreshToken: refresh_token, driverId: driver_id }),
+  setSession: ({ access_token, refresh_token, driver_id }) => {
+    set({ accessToken: access_token, refreshToken: refresh_token, driverId: driver_id });
+    // Custódia do token: Keystore (produção) — nunca AsyncStorage em texto puro.
+    void getTokenStorage().set(access_token).catch(() => {
+      /* falha de persistência não derruba a sessão em memória */
+    });
+  },
 
-  clearSession: () =>
-    set({ accessToken: null, refreshToken: null, driverId: null }),
+  restoreToken: (token) => set({ accessToken: token }),
+
+  setMustChangePassword: (value) => set({ mustChangePassword: value }),
+
+  clearSession: () => {
+    set({ accessToken: null, refreshToken: null, driverId: null, mustChangePassword: false });
+    void getTokenStorage().clear().catch(() => undefined);
+  },
 
   acceptConsent: (now = new Date()) => {
     const acceptedAt = now.toISOString();
@@ -119,4 +144,21 @@ export async function loadPersistedConsent(): Promise<void> {
   } finally {
     useSessionStore.getState().setConsentLoaded();
   }
+}
+
+/**
+ * Boot: restaura o token do Keystore. É o que faz "fechar e reabrir o app →
+ * sessão persiste" sem passar pelo login de novo. Devolve se havia sessão.
+ */
+export async function restorePersistedSession(): Promise<boolean> {
+  try {
+    const token = await getTokenStorage().get();
+    if (token) {
+      useSessionStore.getState().restoreToken(token);
+      return true;
+    }
+  } catch {
+    /* Keystore indisponível → cai no login */
+  }
+  return false;
 }

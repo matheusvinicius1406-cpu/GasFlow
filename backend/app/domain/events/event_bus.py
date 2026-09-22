@@ -31,11 +31,14 @@ class EventType(str, Enum):
     DELIVERY_FAILED = "delivery.failed"
     DELIVERY_CANCELLED = "delivery.cancelled"
 
-    # Driver events
+    # Driver events (thin: os mesmos nomes vivem em
+    # app/domain/events/event_bus.py — este enum é o do motor de automação)
     DRIVER_AVAILABLE = "driver.available"
     DRIVER_UNAVAILABLE = "driver.unavailable"
     DRIVER_LOCATION_UPDATED = "driver.location_updated"
     DRIVER_PAUSED = "driver.paused"
+    # Fase 7.3: entregador parado ou desviado da entrega em andamento.
+    DRIVER_ALERT = "driver.alert"
 
     # Order events
     ORDER_CREATED = "order.created"

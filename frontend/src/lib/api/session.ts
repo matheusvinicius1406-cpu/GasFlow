@@ -22,3 +22,10 @@ export const REFRESH_TOKEN_KEY = 'gasflow_refresh'
 
 /** Emitido quando o access é renovado — o desktop re-registra o token no main. */
 export const SESSION_REFRESHED_EVENT = 'gasflow:session-refreshed'
+
+/**
+ * Emitido quando o backend recusa uma rota por troca de senha pendente
+ * (`403` + `detail: "Password change required"`). O `AuthProvider` ouve e
+ * levanta o gate — sem isso um reset em pleno uso viraria um 403 mudo.
+ */
+export const PASSWORD_CHANGE_REQUIRED_EVENT = 'gasflow:password-change-required'

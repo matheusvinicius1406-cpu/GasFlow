@@ -454,8 +454,9 @@ export function useDeliveryDrivers(params?: { status?: string }) {
 
 /**
  * Posições GPS dos entregadores para o mapa do operador (F1b).
- * Polling de 30s (padrão do repo — driver.location_updated NÃO vai por WS:
- * refetch storms; ver lib/realtime.ts).
+ * Fase 6: o polling de 30s foi removido. A carga inicial vem daqui (fallback
+ * quando o WebSocket não conecta) e as posições ao vivo chegam por
+ * `useTrackingSocket` (evento `driver.location_updated`, canal `tenant:{id}`).
  */
 export function useDriverLocations() {
   return useQuery({
@@ -464,8 +465,80 @@ export function useDriverLocations() {
       const { data } = await apiClient.get('/delivery/locations')
       return (data?.locations ?? []) as DriverLocationPoint[]
     },
-    refetchInterval: 30000,
+    staleTime: 30_000,
   })
+}
+
+/**
+ * Fase 7.1: ETA do entregador até o endereço da entrega.
+ *
+ * Só roda quando a entrega está de fato em rota (`enabled`) — evita bater no
+ * endpoint para entregas concluídas. Refetch de 60s como rede de segurança: a
+ * posição ao vivo já vem por WebSocket, o ETA é derivado.
+ */
+export function useDeliveryEta(deliveryId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['delivery-eta', deliveryId],
+    enabled: Boolean(deliveryId) && enabled,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/delivery/deliveries/${deliveryId}/eta`)
+      return data as {
+        driver_id: string
+        distance_km: number
+        speed_kmh: number
+        speed_source: 'history' | 'default'
+        eta_seconds: number
+        eta_at: string
+        origin: { latitude: number; longitude: number }
+        destination: { latitude: number; longitude: number }
+      }
+    },
+  })
+}
+
+/**
+ * Fase 7.4: histórico de posições do entregador (replay do dia).
+ *
+ * O backend já devolve os pontos ordenados por `recorded_at`; aqui só
+ * repassamos a janela pedida.
+ */
+export function useDriverHistory(
+  driverId: string | null,
+  options: { fromTs?: string; toTs?: string; limit?: number } = {}
+) {
+  const { fromTs, toTs, limit = 2000 } = options
+  return useQuery({
+    queryKey: ['driver-history', driverId, fromTs, toTs, limit],
+    enabled: Boolean(driverId),
+    queryFn: async () => {
+      const params = new URLSearchParams({ driver_id: String(driverId), limit: String(limit) })
+      if (fromTs) params.set('from_ts', fromTs)
+      if (toTs) params.set('to_ts', toTs)
+      const { data } = await apiClient.get(`/driver/locations/history?${params.toString()}`)
+      return data as {
+        driver_id: string
+        count: number
+        points: Array<{
+          latitude: number
+          longitude: number
+          accuracy_m?: number | null
+          speed_kmh?: number | null
+          heading_deg?: number | null
+          recorded_at: string
+        }>
+      }
+    },
+  })
+}
+
+/** Formata segundos de ETA como "12 min" / "1h05". */
+export function formatEta(etaSeconds: number): string {
+  const minutes = Math.max(1, Math.round(etaSeconds / 60))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}h${String(rest).padStart(2, '0')}` : `${hours}h`
 }
 
 export function useDeliverySummary() {

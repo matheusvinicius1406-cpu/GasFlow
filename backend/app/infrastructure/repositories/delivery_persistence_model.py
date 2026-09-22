@@ -11,7 +11,19 @@ Includes:
 - Outbox entries for event delivery
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, JSON, Index, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
@@ -144,6 +156,45 @@ class DriverLocationRecord(Base):
     bearing = Column(Float, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_stale = Column(Boolean, default=False)
+
+
+class DriverLocationHistoryRecord(Base):
+    """Histórico append-only de posições GPS (Fase 3).
+
+    `driver_locations` continua sendo a "última posição" (upsert). Esta tabela
+    é o log imutável que destrava distância percorrida, replay do dia,
+    geofencing e ETA. `driver_id` guarda `delivery_drivers.codigo` — mesma
+    identidade de `driver_locations` e do canal WS `driver:{id}`.
+
+    Variante sem PostGIS (padrão). Com PostGIS, trocar lat/lng por
+    `geography(POINT, 4326)` + índice GiST (ver docs/migrations).
+    """
+
+    __tablename__ = "driver_location_history"
+
+    __table_args__ = (
+        Index("ix_driver_loc_hist_driver_time", "driver_id", "recorded_at"),
+        Index("ix_driver_loc_hist_tenant_time", "tenant_id", "recorded_at"),
+    )
+
+    # BigInteger com variante Integer p/ SQLite (só INTEGER PRIMARY KEY
+    # autoincrementa no SQLite; BIGINT não é alias de rowid).
+    id = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    tenant_id = Column(String, default="default", nullable=False, index=True)
+    driver_id = Column(String(36), nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    accuracy_m = Column(Float, nullable=True)
+    speed_kmh = Column(Float, nullable=True)
+    heading_deg = Column(Float, nullable=True)
+    # Naive UTC na coluna (convenção do repo, compatível com SQLite); o
+    # tz-aware fica na borda (API/UI).
+    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class OutboxEntry(Base):

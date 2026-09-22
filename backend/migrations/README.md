@@ -55,5 +55,8 @@ aponta a divergência.
 
 - O app mantém `init_db()/create_all` apenas para testes e dev rápido
   (semanticamente igual ao baseline). Produção deve usar `alembic upgrade head`.
-- `security_*` (app/infrastructure/security/models.py) é código morto
-  (nenhum importador) e não faz parte do schema.
+- O schema fantasma `security_*` (app/infrastructure/security/models.py) era
+  código morto (nenhum importador) e foi **removido** (dívida D5). O schema
+  canônico é `auth_model.py` + `rbac_model.py`.
+- Auditoria de segurança do batch no SQLite (Desktop):
+  `docs/migrations/2026-09-sqlite-batch-audit.md`.

@@ -328,7 +328,13 @@ def _get_db_session():
 
 
 async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
-    """Driver app login. Returns session token.
+    """Driver app login (LEGACY). Returns session token.
+
+    # LEGACY — login antigo do app do entregador, com sessão própria
+    # (`driver_sessions`, JWT mobile). O fluxo novo autentica o entregador pela
+    # auth principal (`POST /auth/login`, ver `driver_self.py`), herdando o gate
+    # de `must_change_password` no HTTP e no WS. NÃO construa em cima deste
+    # caminho; ele fica apenas para não quebrar clientes antigos.
 
     Auth flow:
     1. Find driver by username in database (delivery_drivers table)

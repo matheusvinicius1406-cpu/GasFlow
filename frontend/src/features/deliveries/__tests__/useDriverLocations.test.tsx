@@ -74,7 +74,7 @@ describe('useDriverLocations (F1b)', () => {
     })
   })
 
-  it('faz polling: refetch no intervalo de 30s', async () => {
+  it('F6: não faz polling automático (posições vêm por WebSocket)', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const { result } = renderHook(() => useDriverLocations(), { wrapper: createWrapper() })
 
@@ -83,10 +83,11 @@ describe('useDriverLocations (F1b)', () => {
     const callsAfterFirstLoad = getMock.mock.calls.length
     expect(callsAfterFirstLoad).toBeGreaterThan(0)
 
-    // Avança 31s → refetch automático do refetchInterval
+    // Avança 31s → SEM refetch (o polling de 30s foi substituído por
+    // useTrackingSocket; este hook é só a carga inicial/fallback).
     await vi.advanceTimersByTimeAsync(31_000)
 
-    expect(getMock.mock.calls.length).toBeGreaterThan(callsAfterFirstLoad)
+    expect(getMock.mock.calls.length).toBe(callsAfterFirstLoad)
   })
 
   it('retorna lista vazia quando o backend não tem posições', async () => {

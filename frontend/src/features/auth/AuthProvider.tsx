@@ -3,7 +3,12 @@ import { Navigate } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 // Chaves de sessão vêm de `lib/api/session`: o client é mockado inteiro em
 // testes, e constantes usadas por este provider não devem depender do mock.
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SESSION_REFRESHED_EVENT } from '@/lib/api/session'
+import {
+  ACCESS_TOKEN_KEY,
+  PASSWORD_CHANGE_REQUIRED_EVENT,
+  REFRESH_TOKEN_KEY,
+  SESSION_REFRESHED_EVENT,
+} from '@/lib/api/session'
 import type { User } from '@/types'
 import { ChangePasswordGate } from './ChangePasswordGate'
 
@@ -133,6 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener(SESSION_REFRESHED_EVENT, onRefreshed)
     return () => window.removeEventListener(SESSION_REFRESHED_EVENT, onRefreshed)
+  }, [])
+
+  // P0 (3.8 reforçado): um 403 de "senha pendente" em pleno uso levanta o gate
+  // — o backend passou a recusar rotas, então o usuário não pode ficar no escuro.
+  useEffect(() => {
+    const onRequired = () => setMustChangePassword(true)
+    window.addEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, onRequired)
+    return () => window.removeEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, onRequired)
   }, [])
 
   const logout = async () => {

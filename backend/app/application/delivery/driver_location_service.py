@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.infrastructure.repositories.delivery_persistence_repository import (
     SQLAlchemyDriverLocationRepository,
+    _coerce_dt,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,32 +110,93 @@ class DriverLocationService:
             raise WorkHoursViolation("Fora do horário de trabalho — localização não coletada")
 
         repo = SQLAlchemyDriverLocationRepository(self.db)
-        accepted = 0
+        now = recorded_server_time or datetime.utcnow()
+
+        normalized: List[Dict[str, Any]] = []
         for pos in positions:
-            lat_raw, lng_raw = pos.get("lat"), pos.get("lng")
-            if lat_raw is None or lng_raw is None:
-                continue
-            try:
-                lat = float(lat_raw)
-                lng = float(lng_raw)
-            except (TypeError, ValueError):
+            lat = _opt_float(pos.get("lat", pos.get("latitude")))
+            lng = _opt_float(pos.get("lng", pos.get("longitude")))
+            if lat is None or lng is None:
                 continue  # posição malformada é descartada, não rejeita o lote
-            repo.upsert_location(
-                tenant_id=self.tenant_id,
-                driver_id=self.driver_id,
-                latitude=lat,
-                longitude=lng,
-                accuracy=_opt_float(pos.get("accuracy")),
-                speed=_opt_float(pos.get("speed")),
-                bearing=_opt_float(pos.get("heading")),
+            normalized.append(
+                {
+                    "latitude": lat,
+                    "longitude": lng,
+                    "accuracy_m": _opt_float(pos.get("accuracy", pos.get("accuracy_m"))),
+                    "speed_kmh": _opt_float(pos.get("speed", pos.get("speed_kmh"))),
+                    "heading_deg": _opt_float(pos.get("heading", pos.get("heading_deg", pos.get("bearing")))),
+                    "recorded_at": pos.get("recorded_at"),
+                }
             )
-            accepted += 1
+
+        if not normalized:
+            return {"accepted": 0, "throttled": 0}
+
+        # Fase 3: histórico append-only (log imutável) — base de distância,
+        # replay e geofencing.
+        accepted = repo.bulk_insert_history(self.tenant_id, self.driver_id, normalized, received_at=now)
+
+        # `driver_locations` continua sendo a "última posição" (upsert único):
+        # gravamos apenas o ponto mais recente do lote.
+        latest = max(normalized, key=lambda p: _coerce_dt(p.get("recorded_at")) or now)
+        repo.upsert_location(
+            tenant_id=self.tenant_id,
+            driver_id=self.driver_id,
+            latitude=latest["latitude"],
+            longitude=latest["longitude"],
+            accuracy=latest["accuracy_m"],
+            speed=latest["speed_kmh"],
+            bearing=latest["heading_deg"],
+        )
+
+        self._publish_location(latest, now)
+
+        # Fase 7.3: alertas avaliados UMA vez por lote (não por ponto) — parado
+        # ou desviado da entrega em andamento, publicados no barramento.
+        if accepted:
+            self._evaluate_alerts()
 
         self._audit(
             "driver.location.batch",
             {"accepted": accepted, "rejected": len(positions) - accepted},
         )
         return {"accepted": accepted, "throttled": 0}
+
+    def _evaluate_alerts(self) -> None:
+        """Best-effort: um alerta que falha não pode derrubar a ingestão."""
+        try:
+            from app.application.tracking.alerts_service import TrackingAlertsService
+
+            TrackingAlertsService(self.db, self.tenant_id).evaluate(driver_id=self.driver_id)
+        except Exception:  # pragma: no cover - best-effort
+            logger.debug("driver_location.alerts_failed", exc_info=True)
+
+    def _publish_location(self, point: Dict[str, Any], now: datetime) -> None:
+        """Publica no barramento realtime existente (sem hub novo).
+
+        O roteamento do ConnectionManager já entrega `driver.*` em
+        `tenant:{tenant_id}`, `driver:{driver_id}` e `operations:{tenant_id}`
+        — é o mesmo canal que o painel/operador assina.
+        """
+        try:
+            from app.domain.events.event_bus import EventType, publish_driver_event
+
+            publish_driver_event(
+                EventType.DRIVER_LOCATION_UPDATED,
+                self.driver_id,
+                self.tenant_id,
+                data={
+                    "driver_id": self.driver_id,
+                    "latitude": point["latitude"],
+                    "longitude": point["longitude"],
+                    "accuracy_m": point["accuracy_m"],
+                    "speed_kmh": point["speed_kmh"],
+                    "heading_deg": point["heading_deg"],
+                    "recorded_at": (_coerce_dt(point.get("recorded_at")) or now).isoformat(),
+                },
+            )
+        except Exception:  # pragma: no cover - best-effort, não derruba a ingestão
+            logger.debug("driver_location.publish_failed", exc_info=True)
 
     def latest(self) -> Optional[Dict[str, Any]]:
         repo = SQLAlchemyDriverLocationRepository(self.db)

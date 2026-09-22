@@ -262,6 +262,7 @@ class AuthService:
             failed_login_attempts=model.failed_login_attempts,
             locked_until=model.locked_until,
             must_change_password=bool(getattr(model, "must_change_password", False)),
+            driver_id=getattr(model, "driver_id", None),
         )
 
     def _db_session_to_domain(self, model) -> Session:
@@ -633,6 +634,8 @@ class AuthService:
                 role=system_role,
                 permissions=permissions,
                 session_id=session_model.id,
+                must_change_password=bool(getattr(user, "must_change_password", False)),
+                driver_id=getattr(user_model, "driver_id", None),
             )
         else:
             session_id = self._sessions_by_token.get(token)
@@ -655,6 +658,8 @@ class AuthService:
                 role=system_role,
                 permissions=permissions,
                 session_id=session.id,
+                must_change_password=bool(getattr(user, "must_change_password", False)),
+                driver_id=getattr(user, "driver_id", None),
             )
 
     # ── RBAC ─────────────────────────────────────────────

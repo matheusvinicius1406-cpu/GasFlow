@@ -249,7 +249,13 @@ def _verify_ws_token(token: str) -> Optional[dict]:
                 "user_id": ctx.user_id,
                 "tenant_id": ctx.tenant_id,
                 "role": ctx.role.value if hasattr(ctx.role, "value") else str(ctx.role),
-                "driver_id": "",
+                # Entregador autenticado pelo /auth/login: o contexto já traz o
+                # codigo do driver, então a sessão cai no canal driver:{codigo}
+                # (mesmo canal do app legado), sem subsistema novo.
+                "driver_id": ctx.driver_id or "",
+                # P0 (3.8): a sessão é válida, mas a troca de senha está
+                # pendente — o endpoint recusa o canal (ver websocket_endpoint).
+                "must_change_password": bool(ctx.must_change_password),
             }
     except Exception:
         # Token inválido/expirado cai no fluxo de driver auth abaixo.
@@ -299,6 +305,12 @@ async def websocket_endpoint(
     meta = _verify_ws_token(token)
     if not meta:
         await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    # P0 (3.8 reforçado): mesma regra do HTTP — uma sessão de operador com
+    # troca de senha pendente não abre o canal de eventos operacionais.
+    if meta.get("must_change_password"):
+        await websocket.close(code=4003, reason="Password change required")
         return
 
     # Derive channel from role if not specified
