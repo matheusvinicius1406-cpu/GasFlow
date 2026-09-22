@@ -185,7 +185,9 @@ export function DriverMap({ points, className = 'h-72', trails, destination, opt
             popupAnchor: [0, -14],
           })
         for (let i = 0; i < path.length; i++) {
-          L.marker(path[i], { icon: numberedIcon(i + 1) })
+          const pt = path[i]
+          if (!pt) continue
+          L.marker(pt, { icon: numberedIcon(i + 1) })
             .bindPopup(`<strong>Parada ${i + 1}</strong>`)
             .addTo(layer)
         }

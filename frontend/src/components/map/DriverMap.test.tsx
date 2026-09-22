@@ -75,7 +75,8 @@ function dashedOrigin(): [number, number] {
 
 /** HTML do popup do destino. */
 function destinationPopup(): string {
-  const html = mocks.bindPopup.mock.calls.map((c) => String(c[0]))
+  const calls = mocks.bindPopup.mock.calls as unknown as [string][]
+  const html = calls.map((c) => String(c[0]))
   return html.find((h) => h.includes('Destino')) ?? ''
 }
 

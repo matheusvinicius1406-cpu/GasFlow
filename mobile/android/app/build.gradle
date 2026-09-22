@@ -99,8 +99,8 @@ android {
         applicationId "com.gasflowdriver"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1.7"
+        versionCode 3
+        versionName "1.2.0"
     }
     signingConfigs {
         debug {
