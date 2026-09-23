@@ -2,6 +2,7 @@
 DeliveryDriver Repository Implementation — Implementação SQLAlchemy do repositório de entregadores.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.orm import Session
@@ -9,6 +10,18 @@ from app.domain.delivery.entity import DeliveryDriver
 from app.domain.delivery.repository import DeliveryDriverRepository
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
+
+logger = logging.getLogger(__name__)
+
+
+def _is_valid_codigo(codigo: Optional[str]) -> bool:
+    """Padrão de identidade do entregador: exatamente 6 dígitos.
+
+    Mesma regra validada pela entidade (`__post_init__`). Vivem fora dela os
+    drivers de teste/integração semeados direto no banco (ex.: tokens de
+    rastreio público usam códigos alfanuméricos) — ver _to_entity.
+    """
+    return bool(codigo) and len(codigo) == 6 and codigo.isdigit()
 
 
 class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
@@ -27,6 +40,26 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
             ativo=model.ativo,
             created_at=model.created_at,
         )
+
+    def _to_entities_safe(self, models) -> List[DeliveryDriver]:
+        """Hidrata uma lista tolerando linhas com `codigo` fora do padrão.
+
+        A entidade valida codigo/nome/telefone no `__post_init__` e lança
+        ValueError. Um único registro legado/corrompido (ou de teste, semeado
+        direto no banco) derrubava a LISTAGEM INTEIRA com 500 — um registro
+        ruim não pode custar o endpoint todo. Linha inválida: WARNING com o
+        código e o tenant, e pula.
+        """
+        drivers: List[DeliveryDriver] = []
+        for m in models:
+            try:
+                drivers.append(self._to_entity(m))
+            except ValueError as exc:
+                logger.warning(
+                    "delivery.driver.legacy_row_skipped",
+                    extra={"codigo": m.codigo, "tenant_id": m.tenant_id, "reason": str(exc)},
+                )
+        return drivers
 
     def set_credentials(self, codigo: str, username: str, password_hash: str):
         """Set login credentials for a driver."""
@@ -177,7 +210,7 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
 
     def listar_todos(self) -> List[DeliveryDriver]:
         models = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.ativo == True).all()
-        return [self._to_entity(m) for m in models]
+        return self._to_entities_safe(models)
 
     def desativar(self, codigo: str) -> Optional[DeliveryDriver]:
         model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
@@ -189,8 +222,16 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
         return self._to_entity(model)
 
     def proximo_codigo(self) -> str:
-        last = self._filter_by_tenant(DeliveryDriverModel).order_by(DeliveryDriverModel.id.desc()).first()
-        if not last:
-            return "000001"
-        next_id = int(last.codigo) + 1
-        return f"{next_id:06d}"
+        """Próximo código sequencial (6 dígitos), ignorando linhas inválidas.
+
+        `order_by(id.desc())` pode devolver um registro com codigo legado/
+        alfanumérico (semeado em teste ou corrompido) — `int(codigo)` estouraria
+        ValueError na CRIAÇÃO. Desce a ordem até achar o último código numérico
+        válido; sem nenhum, recomeça em 000001.
+        """
+        models = self._filter_by_tenant(DeliveryDriverModel).order_by(DeliveryDriverModel.id.desc()).all()
+        for last in models:
+            if _is_valid_codigo(last.codigo):
+                next_id = int(last.codigo) + 1
+                return f"{next_id:06d}"
+        return "000001"

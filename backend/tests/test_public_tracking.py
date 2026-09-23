@@ -108,7 +108,11 @@ class TestRevocation:
         )
 
         driver_id = f"{prefix}-{uuid.uuid4().hex[:6]}"
-        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Revogável", telefone="91999995555"))
+        app_db.add(
+            DeliveryDriverModel(
+                tenant_id="default", codigo=driver_id, nome="Revogável", telefone="91999995555", ativo=False
+            )
+        )
         app_db.commit()
         SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.55, -46.63)
         return driver_id
@@ -156,7 +160,11 @@ class TestRevocation:
         driver_id = f"cross-{uuid.uuid4().hex[:6]}"
         from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
 
-        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Outro", telefone="91999994444"))
+        app_db.add(
+            DeliveryDriverModel(
+                tenant_id="default", codigo=driver_id, nome="Outro", telefone="91999994444", ativo=False
+            )
+        )
         app_db.commit()
         SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.55, -46.63)
 
@@ -185,7 +193,13 @@ class TestEndpoints:
                 codigo=driver_id,
                 nome="Fulano da Silva",
                 telefone="91999998888",
-                ativo=True,
+                # ativo=False: este módulo roda ANTES do test_tenant_isolation
+                # na MESMA suite (banco compartilhado) — driver ativo com codigo
+                # fora do padrão de 6 dígitos vazava para `GET /delivery-drivers/`
+                # e derrubava a listagem com ValueError (flaky do CI). O snapshot
+                # público não consulta `ativo` (só existencia + epoch + posicao),
+                # então o teste continua cobrindo o que sempre cobriu.
+                ativo=False,
             )
         )
         app_db.commit()
@@ -225,7 +239,11 @@ class TestEndpoints:
             SQLAlchemyDriverLocationRepository,
         )
 
-        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Beltrano", telefone="91999997777"))
+        app_db.add(
+            DeliveryDriverModel(
+                tenant_id="default", codigo=driver_id, nome="Beltrano", telefone="91999997777", ativo=False
+            )
+        )
         app_db.commit()
         SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.5, -46.6)
 
@@ -244,7 +262,11 @@ class TestEndpoints:
             SQLAlchemyDriverLocationRepository,
         )
 
-        app_db.add(DeliveryDriverModel(tenant_id="default", codigo=driver_id, nome="Ciclano", telefone="91999996666"))
+        app_db.add(
+            DeliveryDriverModel(
+                tenant_id="default", codigo=driver_id, nome="Ciclano", telefone="91999996666", ativo=False
+            )
+        )
         app_db.commit()
         SQLAlchemyDriverLocationRepository(app_db).upsert_location("default", driver_id, -23.5, -46.6)
         token = issue_public_tracking_token(tenant_id="default", driver_id=driver_id)
