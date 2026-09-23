@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Overlay de recursos do build de DEBUG.
+
+  O debug NÃO embute o bundle JS — ele carrega do Metro (localhost:8081) a cada
+  abertura, como manda a variante debuggable do plugin com.facebook.react. Para
+  ninguém confundir os dois na gaveta do celular, o rótulo do debug é distinto:
+  o release continua "GasFlowDriver" (src/main/res/values/strings.xml) e aparece
+  na gaveta como "GasFlow Entregador (dev)".
+-->
+<resources>
+    <string name="app_name">GasFlow Entregador (dev)</string>
+</resources>

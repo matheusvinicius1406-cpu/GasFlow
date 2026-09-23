@@ -85,7 +85,7 @@ test("cadência: envio só a cada intervalo; primeira posição sai na hora", ()
 
 const POS: GpsPosition = { latitude: -1.4558, longitude: -48.4902, speed: 30, accuracy: 10, timestamp: 1_000 };
 
-test("envio: lan usa POST /api/v1/driver/location com JWT", async () => {
+test("envio: lan usa POST /driver/location com JWT", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchFn = (async (url: string, init: RequestInit) => {
     calls.push({ url, init });
@@ -97,7 +97,7 @@ test("envio: lan usa POST /api/v1/driver/location com JWT", async () => {
     POS,
   );
   assert.equal(via, "lan");
-  assert.equal(calls[0].url, "http://dep:8000/api/v1/driver/location");
+  assert.equal(calls[0].url, "http://dep:8000/driver/location");
   assert.equal((calls[0].init.headers as Record<string, string>).Authorization, "Bearer jwt");
   const body = JSON.parse(String(calls[0].init.body));
   assert.equal(body.latitude, -1.4558);

@@ -15,7 +15,7 @@
  * cadência, roteamento de envio, fila).
  *
  * Envio pelo canal ativo (connection.ts):
- *   - lan    → POST /api/v1/driver/location (JWT do entregador; throttle 10s
+ *   - lan    → POST /driver/location (JWT do entregador; throttle 10s
  *              e work-hours reforçados no servidor)
  *   - cloud  → POST {relay}/driver/location (X-Relay-Token; relay é pipe
  *              burro — backend valida driver/tenant/audit)

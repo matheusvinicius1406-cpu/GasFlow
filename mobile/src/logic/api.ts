@@ -182,10 +182,10 @@ export function driverWsUrl(baseUrl: string, token: string): string {
 
 // ── Ações de entrega ─────────────────────────────────────────
 //
-// TODO (próxima fase): mover para `/driver/*` (auth principal). Hoje estas
-// rotas são as legadas `/api/v1/driver/*`, que só aceitam a sessão/JWT antigo;
-// o backend precisa expor accept/start/complete/fail no namespace novo antes
-// de o app migrado usá-las. A tela de rota (lista) já usa o namespace novo.
+// Namespace `/driver/*`, protegido por `require_driver` — a MESMA auth do app
+// (`/auth/login`). As rotas antigas `/api/v1/driver/*` aceitavam só sessão de
+// driver no banco ou JWT de escopo `mobile`, que o app não tem: respondiam 401
+// em aceitar/iniciar/concluir/falhar.
 
 export type DeliveryAction = "accept" | "start" | "complete" | "fail";
 
@@ -200,12 +200,12 @@ export async function postDeliveryAction(
   const clean = baseUrlClean(baseUrl);
   const path =
     action === "accept"
-      ? `${clean}/api/v1/driver/deliveries/${deliveryId}/accept`
+      ? `${clean}/driver/deliveries/${deliveryId}/accept`
       : action === "start"
-        ? `${clean}/api/v1/driver/deliveries/${deliveryId}/start`
+        ? `${clean}/driver/deliveries/${deliveryId}/start`
         : action === "complete"
-          ? `${clean}/api/v1/driver/deliveries/${deliveryId}/complete`
-          : `${clean}/api/v1/driver/deliveries/${deliveryId}/fail`;
+          ? `${clean}/driver/deliveries/${deliveryId}/complete`
+          : `${clean}/driver/deliveries/${deliveryId}/fail`;
   await requestJson<unknown>(fetchFn, path, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -227,8 +227,8 @@ export interface DriverLocationBody {
 /**
  * Ingest LAN da posição.
  *
- * TODO (próxima fase): mover para `/driver/location` (auth principal). Hoje é
- * a rota legada `/api/v1/driver/location`, que só aceita a sessão/JWT antigo.
+ * Namespace `/driver/*` (auth principal). A rota antiga
+ * `/api/v1/driver/location` exigia sessão de driver/JWT de escopo `mobile`.
  */
 export async function postDriverLocation(
   fetchFn: typeof fetch,
@@ -238,7 +238,7 @@ export async function postDriverLocation(
 ): Promise<{ success: boolean; throttled?: boolean }> {
   return requestJson<{ success: boolean; throttled?: boolean }>(
     fetchFn,
-    `${baseUrlClean(baseUrl)}/api/v1/driver/location`,
+    `${baseUrlClean(baseUrl)}/driver/location`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

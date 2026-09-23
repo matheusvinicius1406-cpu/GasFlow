@@ -64,6 +64,89 @@ JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot" \
 Artefato: `android/app/build/outputs/apk/release/app-release.apk` (~53 MB).
 O APK fica **fora do git** (`mobile/.gitignore` → `android/app/build/`).
 
+## Desenvolvimento (debug × release)
+
+**Regra de ouro:** `debug` é desenvolvimento e **só roda com Metro**; `release` é
+uso real, com o bundle JS embutido. O celular do entregador recebe **release** —
+nunca debug.
+
+| | `debug` | `release` |
+|---|---|---|
+| Bundle JS | baixado do Metro (`localhost:8081`) | embutido (`assets/index.android.bundle`) |
+| Abre sem Metro | não | sim (até em modo avião) |
+| Rótulo na gaveta | `GasFlow Entregador (dev)` | `GasFlowDriver` |
+| Assinatura | debug key | keystore de release |
+
+O rótulo distinto vem do overlay `android/app/src/debug/res/values/strings.xml`;
+o do release, de `android/app/src/main/res/values/strings.xml`.
+
+### Instalar o release no aparelho
+
+```bash
+# assinaturas debug/release não se sobrepõem — desinstale antes
+adb uninstall com.gasflowdriver
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+
+# confirma que NÃO é debuggable
+adb shell dumpsys package com.gasflowdriver | grep -E "versionName|debuggable"
+```
+
+Atalho para a instalação: `npm run android:release`.
+
+### Rodar em modo debug (só para desenvolvimento)
+
+Opção A — **USB** (recomendado: não depende de Wi-Fi nem de IP adivinhado):
+
+```bash
+adb reverse tcp:8081 tcp:8081     # a porta 8081 do celular aponta para o PC
+npm start                         # Metro (deixe numa aba)
+npx react-native run-android      # instala o debug e conecta no Metro
+```
+
+Opção B — **Wi-Fi** (celular na mesma rede do PC):
+
+1. `ipconfig` → anotar o IPv4 do PC (ex.: `192.168.0.10`).
+2. No app: **Dev Menu** (chacoalhar o celular) → *Dev Settings* →
+   *Debug server host & port for device* → `192.168.0.10:8081`.
+3. `npm start`.
+4. Liberar a porta **8081** no firewall do Windows.
+
+### Confirmar que o release embutiu o bundle
+
+```bash
+unzip -l android/app/build/outputs/apk/release/app-release.apk | grep index.android.bundle
+```
+
+Precisa aparecer `assets/index.android.bundle`. Nesta versão (RN 0.76) o
+bundling é do plugin `com.facebook.react`, aplicado em `android/app/build.gradle`
+com `debuggableVariants` no default (`["debug"]`) — ou seja, **só** o debug pula a
+task de bundle. Não existe `apply from: "…/react.gradle"` aqui: esse é o formato
+antigo do RN e, adicionado nesta versão, duplicaria a configuração.
+
+## Erros comuns
+
+### "Could not connect to development server"
+
+Você instalou o APK **debug**. O debug não embute o bundle JS — ele carrega do
+Metro (`localhost:8081`) a cada abertura e só funciona com o celular alcançando
+um Metro rodando. A URL do erro denuncia: `dev=true` + `minify=false`.
+
+Solução: instalar o **release**.
+
+```bash
+adb uninstall com.gasflowdriver
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+```
+
+Para trabalhar em modo debug (desenvolvimento), siga a seção "Desenvolvimento".
+
+### "Unable to load script … bundle 'index.android.bundle' is packaged correctly for release"
+
+Mesma causa do erro acima: o debug não tem bundle para carregar. Se aparecer com
+o **release** instalado, o bundle não foi embutido no build — confira o
+`assets/index.android.bundle` dentro do APK (ver "Desenvolvimento") e refaça o
+`./gradlew assembleRelease`.
+
 ## Assinatura e custódia da keystore
 
 O `release` lê `android/keystore.properties` (gitignored). Sem o arquivo, o
@@ -104,6 +187,12 @@ A base URL **nunca** é hardcoded em produção: é resolvida em runtime pela te
 de conexão (`src/logic/connection.ts`), com modos `lan` / `cloud` / `offline`.
 Em `dev`/`staging`/`prod` muda apenas o endereço informado pelo operador —
 o mesmo binário serve os três.
+
+O modo `lan` fala **HTTP em texto puro**, então o manifest principal declara
+`android:usesCleartextTraffic="true"` (`android/app/src/main/AndroidManifest.xml`).
+Sem isso o release (targetSdk 34) bloqueia cleartext desde o Android 9 e só o
+debug funcionaria na rede do depósito. O modo `cloud` usa HTTPS. Mudar essa
+política exige **rebuild do release** — não basta reinstalar o APK.
 
 ## Distribuição
 
