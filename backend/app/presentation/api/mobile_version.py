@@ -8,6 +8,7 @@ no boot para verificar se ha atualizacao disponivel.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -24,8 +25,28 @@ class MobileVersionResponse(BaseModel):
     release_date: str
 
 
-# Caminho para o arquivo version.json (configuravel via env ou fallback)
-_VERSION_FILE = Path(__file__).resolve().parent.parent.parent.parent / "mobile_version.json"
+# Nome do arquivo de versao na raiz do repositorio
+_VERSION_FILENAME = "mobile_version.json"
+
+
+def _version_file() -> Path:
+    """Localiza o `mobile_version.json`.
+
+    Ordem de resolucao:
+    1. env `MOBILE_VERSION_FILE` (caminho absoluto ou relativo ao cwd);
+    2. raiz do repositorio — `backend/app/presentation/api/mobile_version.py`
+       sobe 4 pastas (api → presentation → app → backend) ate `GasFlow/`,
+       onde o arquivo e versionado no deploy.
+
+    Resolvido a cada request (e nao no import) para que o override por env
+    funcione em runtime e nos testes.
+    """
+    override = os.getenv("MOBILE_VERSION_FILE")
+    if override:
+        return Path(override)
+    repo_root = Path(__file__).resolve().parents[4]
+    return repo_root / _VERSION_FILENAME
+
 
 # Versao padrao caso o arquivo nao exista
 _DEFAULT_VERSION = {
@@ -45,10 +66,11 @@ async def get_mobile_version():
     Se nao existir ou estiver incompleto, retorna os valores padrao.
     """
     data = dict(_DEFAULT_VERSION)
+    version_file = _version_file()
 
-    if _VERSION_FILE.is_file():
+    if version_file.is_file():
         try:
-            with open(_VERSION_FILE, "r", encoding="utf-8") as f:
+            with open(version_file, "r", encoding="utf-8") as f:
                 file_data = json.load(f)
             # Merge: arquivo sobrescreve defaults
             for key in data:

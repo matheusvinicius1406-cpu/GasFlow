@@ -2,6 +2,7 @@
 DeliveryDriver Repository Implementation — Implementação SQLAlchemy do repositório de entregadores.
 """
 
+from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from app.domain.delivery.entity import DeliveryDriver
@@ -98,6 +99,81 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
     def buscar_por_codigo(self, codigo: str) -> Optional[DeliveryDriver]:
         model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
         return self._to_entity(model) if model else None
+
+    def set_status(self, codigo: str, status: str) -> bool:
+        """Grava o status do entregador ("AVAILABLE", "BUSY", "OFFLINE"...).
+
+        O campo `status` existe no **model**; a entidade devolvida por
+        `buscar_por_codigo` é um dataclass desconectado (só codigo/nome/
+        telefone/placa/ativo), então mutar a entidade não chega ao banco. Foi a
+        origem de vários 500 em `delivery_ops` (chamadas a `set_busy()`,
+        `set_available()` etc. que a entidade não tem).
+        """
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return False
+        model.status = status
+        model.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True
+
+    def update_profile(self, codigo: str, nome: str, telefone: str, placa: Optional[str]) -> bool:
+        """Grava os campos de cadastro (nome/telefone/placa) no model.
+
+        Mesmo motivo do `set_status`: a entidade devolvida por
+        `buscar_por_codigo` é um dataclass desconectado — mutar nela não chega ao
+        banco, e o `__post_init__` dela valida codigo/nome/telefone.
+        """
+        if not nome or not nome.strip():
+            raise ValueError("nome é obrigatório")
+        if not telefone or not telefone.strip():
+            raise ValueError("telefone é obrigatório")
+
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return False
+        model.nome = nome.strip()
+        model.telefone = telefone.strip()
+        model.placa = placa
+        model.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True
+
+    def set_vehicle_and_document(self, codigo: str, document: Optional[str], vehicle_id: Optional[str]) -> bool:
+        """Grava CNH/documento e veículo — colunas do model sem par na entidade.
+
+        A entidade `DeliveryDriver` modela só codigo/nome/telefone/placa/ativo; o
+        `document` (CPF/CNH) e o `vehicle_id` vivem apenas no model. Sem isto, a
+        criação aceitaria os campos no request e os descartaria em silêncio.
+        """
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return False
+        if document is not None:
+            model.document = document
+        if vehicle_id is not None:
+            model.vehicle_id = vehicle_id
+        model.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True
+
+    def snapshot(self, codigo: str) -> Optional[dict]:
+        """Retrato do entregador lido do model — o que as respostas de API devolvem."""
+        model = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.codigo == codigo).first()
+        if not model:
+            return None
+        return {
+            "codigo": model.codigo,
+            "nome": model.nome,
+            "telefone": model.telefone,
+            "placa": model.placa,
+            "document": model.document,
+            "vehicle_id": model.vehicle_id,
+            "ativo": bool(model.ativo),
+            "status": model.status or "AVAILABLE",
+            "tenant_id": model.tenant_id,
+            "created_at": model.created_at,
+        }
 
     def listar_todos(self) -> List[DeliveryDriver]:
         models = self._filter_by_tenant(DeliveryDriverModel).filter(DeliveryDriverModel.ativo == True).all()

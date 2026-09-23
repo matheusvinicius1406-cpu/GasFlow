@@ -13,7 +13,7 @@ caminho antigo — ver `# LEGACY` lá. Não estenda aquele fluxo.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -21,6 +21,19 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.domain.security.models import SystemRole, TenantContext
 from app.presentation.dependencies import require_driver, require_role
+
+# Handlers compartilhados das ações de entrega — a nota completa está na seção
+# "Ações de entrega" mais abaixo.
+from app.presentation.api.logistics.driver_api import (
+    ActionRequest,
+    LocationUpdate,
+    handle_accept_delivery,
+    handle_arrive_delivery,
+    handle_complete_delivery,
+    handle_fail_delivery,
+    handle_start_delivery,
+    handle_update_location,
+)
 
 router = APIRouter(prefix="/driver", tags=["driver-self"])
 
@@ -115,6 +128,78 @@ async def get_my_profile(ctx: TenantContext = Depends(require_driver)):
         db.close()
 
 
+# ── Ações de entrega — auth principal ─────────────────────────────────────
+#
+# As ações existiam só em `/api/v1/driver/*` (`driver_v1` → `_authenticate_driver`),
+# que aceita **sessão de driver no banco** ou **JWT de escopo `mobile`**. O app
+# loga em `/auth/login` (auth principal) e não tem nenhum dos dois → 401 em
+# aceitar/iniciar/concluir/falhar. Aqui as mesmas ações ficam no namespace do
+# app, atrás de `require_driver`, escopadas por `ctx.tenant_id` e `ctx.driver_id`.
+#
+# Os handlers de `driver_api.py` são reaproveitados: a lógica de transição de
+# estado, a idempotência DB-backed e a publicação no barramento são as mesmas.
+# O passo seguinte da migração move esses handlers para um módulo compartilhado
+# e aposenta `driver_api`/`driver_v1` — junto da página web `/driver`, que ainda
+# é o outro consumidor do namespace antigo.
+
+
+def _shared_ctx(ctx: TenantContext) -> Dict[str, Any]:
+    """Adapta o `TenantContext` ao dict que os handlers compartilhados esperam."""
+    if not ctx.driver_id:
+        raise HTTPException(status_code=403, detail="Driver not linked to a delivery_driver")
+    return {"tenant_id": ctx.tenant_id, "driver_id": ctx.driver_id, "role": str(ctx.role)}
+
+
+@router.post("/deliveries/{delivery_id}/accept")
+async def accept_my_delivery(
+    delivery_id: str,
+    req: ActionRequest = ActionRequest(),
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Aceita a entrega atribuída ao próprio entregador."""
+    return await handle_accept_delivery(_shared_ctx(ctx), delivery_id, req)
+
+
+@router.post("/deliveries/{delivery_id}/start")
+async def start_my_delivery(
+    delivery_id: str,
+    req: ActionRequest = ActionRequest(),
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Inicia a rota da entrega do próprio entregador."""
+    return await handle_start_delivery(_shared_ctx(ctx), delivery_id, req)
+
+
+@router.post("/deliveries/{delivery_id}/arrive")
+async def arrive_my_delivery(
+    delivery_id: str,
+    req: ActionRequest = ActionRequest(),
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Marca chegada ao destino."""
+    return await handle_arrive_delivery(_shared_ctx(ctx), delivery_id, req)
+
+
+@router.post("/deliveries/{delivery_id}/complete")
+async def complete_my_delivery(
+    delivery_id: str,
+    req: ActionRequest = ActionRequest(),
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Conclui a entrega (com prova opcional)."""
+    return await handle_complete_delivery(_shared_ctx(ctx), delivery_id, req)
+
+
+@router.post("/deliveries/{delivery_id}/fail")
+async def fail_my_delivery(
+    delivery_id: str,
+    req: ActionRequest,
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Reporta falha na entrega."""
+    return await handle_fail_delivery(_shared_ctx(ctx), delivery_id, req)
+
+
 # ── Fase 4: ingestão em lote + realtime ────────────────────────────────────
 
 
@@ -168,6 +253,20 @@ async def ingest_locations(
         return {"accepted": int(result.get("accepted", 0))}
     finally:
         db.close()
+
+
+@router.post("/location")
+async def update_my_location(
+    req: LocationUpdate,
+    ctx: TenantContext = Depends(require_driver),
+):
+    """Posição do próprio entregador — alias principal do ingest legado.
+
+    Mesma semântica do handler compartilhado: janela LGPD (403 fora dela),
+    throttle de 10 s e evento realtime. O caminho em lote
+    (`POST /driver/locations`) segue sendo o preferido para o app offline.
+    """
+    return await handle_update_location(_shared_ctx(ctx), req)
 
 
 @router.get("/locations/history")

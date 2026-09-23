@@ -367,12 +367,14 @@ if _frontend_dist and _Path(_frontend_dist).is_dir():
         reorder_router,
         whatsapp_automation_router,
         settings_router,
+        admin_router,
         coupons_router,
         public_signup_router,
         leads_router,
         integrations_router,
         contacts_crm_router,
         purchase_notes_router,
+        mobile_version_router,
     ]
     for _r in _root_routers:
         app.include_router(_r, prefix="/api")

@@ -147,12 +147,44 @@ def frontend_api_calls() -> list[tuple[str, str, str]]:
 # ── Coletor: backend ──────────────────────────────────────────────────────
 
 
-def backend_routes() -> set[str]:
-    """Rotas canônicas do FastAPI (OpenAPI), nas formas raiz e sem prefixo."""
+def websocket_routes() -> set[str]:
+    """Caminhos de WebSocket da app — o OpenAPI não os expõe.
+
+    Nesta versão do FastAPI os routers incluídos ficam aninhados em
+    `_IncludedRouter` (cada nível guardando o próprio prefixo), então a
+    coleta desce a árvore manualmente.
+    """
+    from fastapi.routing import APIWebSocketRoute, _IncludedRouter
+
     from app.main import app
 
+    paths: set[str] = set()
+
+    def walk(routes, prefix: str) -> None:
+        for route in routes:
+            if isinstance(route, _IncludedRouter):
+                walk(route.original_router.routes, prefix + route.include_context.prefix)
+            elif isinstance(route, APIWebSocketRoute):
+                paths.add(prefix + route.path)
+            elif getattr(route, "routes", None):
+                walk(route.routes, prefix)
+
+    walk(app.routes, "")
+    return paths
+
+
+def backend_routes() -> set[str]:
+    """Rotas canônicas do FastAPI (OpenAPI + WebSocket), raiz e sem prefixo.
+
+    WebSocket entra junto porque o app mobile abre `ws://host/ws`; sem ele o
+    guard acusaria endpoint inexistente para uma rota que existe.
+    """
+    from app.main import app
+
+    paths = set(app.openapi().get("paths", {})) | websocket_routes()
+
     routes: set[str] = set()
-    for path in app.openapi().get("paths", {}):
+    for path in paths:
         normalized = normalize_path(path)
         routes.add(normalized)
         routes.add(normalize_path(strip_prefix(normalized)))
