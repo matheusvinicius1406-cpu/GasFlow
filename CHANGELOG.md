@@ -4,6 +4,48 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 📲 App do entregador — ações de entrega na auth principal
+
+- **Aceitar/iniciar/concluir/falhar respondiam 401:** o app loga em
+  `/auth/login` (JWT principal), mas as ações existiam só em
+  `/api/v1/driver/*`, que aceita sessão de driver no banco ou JWT de escopo
+  `mobile` — nenhum dos dois o app tem. As mesmas ações agora existem em
+  `/driver/deliveries/{id}/{accept|start|arrive|complete|fail}`, atrás de
+  `require_driver`, escopadas por `tenant_id` + `driver_id`, reaproveitando os
+  handlers compartilhados (transição de estado, idempotência e realtime
+  idênticos). `POST /driver/location` (singular) entrou na mesma leva — alias
+  do ingest legado com a mesma janela LGPD e throttle de 10 s; o app migrou
+  para o namespace novo e os testes de rastreio acompanham.
+
+### 🌐 Painel web — o que faltava operar
+
+- **Cancelar pagamento e despesa:** os endpoints `/payments/{id}/cancel` e
+  `/finance/expenses/{id}/cancel` existiam sem tela. A `FinancePage` ganhou o
+  botão (só em itens ativos), confirmação citando valor/origem, trava por item
+  contra duplo clique e mensagens por status (404 recarrega a lista, 409
+  explica que há regra de negócio, 403 diz que falta permissão).
+- **Cancelar execução pendente de automação WhatsApp:**
+  `/automation/whatsapp/executions/{id}/cancel` também não tinha tela — a aba
+  Execuções listava envios pendentes sem deixar parar nenhum. Mesmo padrão de
+  confirmação e erro; a regra continua ativa para os próximos clientes.
+- **Revogar links de rastreio:** `POST /public/tracking/revoke/{driver_id}`
+  (incrementa `tracking_epoch` → links antigos respondem **410**) ganhou botão
+  na `DriversPage`, com confirmação que cita o nome do entregador.
+- **Página de Integrações** (`settings/integrations`, guard
+  `integration.read`) para a gestão de revendas.
+- **Página de Automações** (`/automation`, `WorkflowsPage`) — o motor interno
+  de workflows e aprovações, separado das regras de WhatsApp do menu próprio.
+
+### 🔁 Diversos
+
+- **`GET /mobile/version` com override:** o caminho do `mobile_version.json`
+  passou a resolver a cada request (não no import) e respeita a env
+  `MOBILE_VERSION_FILE` — funciona em runtime e nos testes.
+- **Audit de integridade enxerga WebSocket:** o OpenAPI não expõe rotas `ws`,
+  então o guard acusava endpoint inexistente para `ws://host/ws`, que o app
+  abre. A coleta desce a árvore de routers incluídos e junta as rotas
+  WebSocket às HTTP.
+
 ### 🧑‍🔧 CRUD de entregadores — editar, excluir e uma criação só
 
 - **Editar não salvava:** a tela chamava `PUT /delivery-drivers/{codigo}`, que
