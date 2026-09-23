@@ -170,3 +170,50 @@ docker compose logs -f postgres
 1. Run integrity check: `python scripts/db_integrity_check.py`
 2. Check tenant_id on all records
 3. Review repository filters
+
+## Entregadores (drivers)
+
+`delivery_drivers` é a **fonte única** de identidade do entregador. As tabelas
+`delivery_records`, `driver_locations` e a de histórico guardam o `codigo`
+(string de 6 dígitos), **não** o `id` — por isso **`codigo` é imutável**: trocá-lo
+órfãa entregas, posições e histórico.
+
+### Criar — `POST /admin/drivers` (canônico) e `POST /delivery/drivers` (alias)
+
+`POST /admin/drivers` é o **caminho canônico**: cria a entidade `delivery_drivers`
++ o `User(role=DRIVER)` + a membership na mesma transação e devolve a **senha
+temporária** (aparece uma única vez; o app exige a troca no primeiro acesso).
+Requer admin.
+
+`POST /delivery/drivers` é **alias documentado**: mesmo efeito e mesmo contrato de
+resposta (`driver_id`, `username`, `temporary_password`). Antes ele criava **apenas
+a entidade** — entregador sem credencial, que **não conseguia abrir o app**.
+
+Os dois passam pelo `CreateDriverWithCredentialUseCase` (camada de aplicação),
+então não voltam a divergir: **nenhum caminho público cria entregador sem
+login**. O audit é gravado uma vez por criação.
+
+### Editar — `PUT /delivery-drivers/{codigo}` (admin)
+
+Campos editáveis: `nome`, `telefone`, `placa`, `document` (CPF/CNH),
+`vehicle_id`, `status`. Atualização parcial. `codigo` no corpo → **422**.
+Entregador de outro tenant → **404** (nunca 403, que vazaria a existência).
+
+### Excluir — `DELETE /admin/drivers/{id}` (admin)
+
+Soft delete, um efeito só:
+
+1. `ativo=false` — o **cadastro** sai de circulação;
+2. `status=DISABLED` — o **estado operacional** também (são dois conceitos:
+   `ativo` é cadastro, `status` é operacional);
+3. `User` vinculado desativado e **sessões revogadas** — o login morre na hora;
+4. `tracking_epoch` incrementado — os **links públicos de rastreio** já emitidos
+   passam a responder **410**;
+5. registro em `auth_audit_log` (quem, quando, qual entregador).
+
+Entrega em rota (`ASSIGNED`, `DISPATCHED`, `EN_ROUTE`) → **409** e nada é
+alterado: excluir deixaria entrega órfã apontando para entregador desligado.
+O histórico de entregas e posições é preservado — a linha nunca é apagada.
+
+`PATCH /delivery-drivers/{codigo}/disable` é **alias** do mesmo use case
+(mantido por compatibilidade).

@@ -4,6 +4,57 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🧑‍🔧 CRUD de entregadores — editar, excluir e uma criação só
+
+- **Editar não salvava:** a tela chamava `PUT /delivery-drivers/{codigo}`, que
+  não existia (405). A rota agora existe, é admin-only, escopada por tenant
+  (entregador de outro tenant → 404) e rejeita `codigo` no corpo com **422** —
+  ele é a identidade gravada em entregas, posições e histórico. Grava todos os
+  campos editáveis (`nome`, `telefone`, `placa`, `document`, `vehicle_id`,
+  `status`). O `GET /{codigo}` passou a devolver o mesmo contrato, então a tela
+  de edição não perde mais `document`/`vehicle_id`/`status` ao abrir.
+- **Botão de excluir:** a `DriversPage` ganhou "Excluir" com confirmação que cita
+  o **nome** do entregador. O endpoint já existia e não tinha tela — a exclusão
+  de usuário tinha botão, a de entregador não.
+- **Excluir é soft delete com um só efeito:** `ativo=false` (cadastro) +
+  `status=DISABLED` (operacional) + `User` desativado + sessões revogadas +
+  `tracking_epoch` incrementado (links públicos de rastreio já emitidos passam a
+  responder **410**) + registro em `auth_audit_log`. Entrega em rota
+  (`ASSIGNED`/`DISPATCHED`/`EN_ROUTE`) → **409** e o entregador continua ativo.
+  `PATCH /delivery-drivers/{codigo}/disable` virou alias do mesmo use case —
+  antes só derrubava `ativo`, ou seja, dois "excluir" com efeitos diferentes.
+- **Criação consolidada em `POST /admin/drivers`:** é o caminho canônico, único
+  que cria a entidade **e** a credencial de login. A `DriverFormPage` migrou para
+  ele e agora mostra a senha temporária antes de sair da tela — antes ela criava
+  entregador **sem login**, que não conseguia abrir o app. O helper morto
+  `api.drivers` saiu do client do frontend.
+- **`POST /delivery/drivers` virou alias do canônico:** antes criava só a
+  entidade, então o entregador cadastrado por essa URL não tinha como logar. Os
+  dois entrypoints agora passam pelo `CreateDriverWithCredentialUseCase` (camada
+  de aplicação) — mesmo efeito, mesmo contrato de resposta
+  (`driver_id`/`username`/`temporary_password`) e auditoria uma vez por criação.
+  Não existe mais caminho público que crie entregador sem credencial.
+- **Campo fantasma removido:** a tela enviava e lia `vehicle_type`, que não existe
+  no request nem na resposta (o Pydantic descartava em silêncio e o formulário
+  voltava para MOTORCYCLE). Virou "CNH / Documento", que é o `document` real.
+
+### 📱 App do entregador — debug × release
+
+- **Release embute o bundle:** o APK de release carrega
+  `assets/index.android.bundle` (conferido dentro do próprio APK); o de debug
+  baixa do Metro em `localhost:8081` e só abre com Metro acessível — por isso não
+  vai para o celular do entregador.
+- **Rótulos distintos:** o debug instala como “GasFlow Entregador (dev)” (overlay
+  `android/app/src/debug/res/values/`), para não confundir os dois ícones na
+  gaveta.
+- **Docs e atalho:** `mobile/README.md` ganhou as seções “Desenvolvimento
+  (debug × release)” e “Erros comuns” — o “Could not connect to development
+  server” é instalação de debug por engano — e o script `npm run android:release`.
+- **Cleartext no release:** o manifest principal passa a declarar
+  `android:usesCleartextTraffic="true"`. O modo LAN é `http://{ip}:{port}` e o
+  `targetSdk 34` bloqueia cleartext desde o Android 9 — o flag só existia no
+  manifest de debug, então só o debug logava na rede do depósito.
+
 ### 🔧 Correções do rastreio (Parte 1)
 
 Seis correções em bugs reais de produção, sem mudar a API:

@@ -8,6 +8,7 @@ All state is backed by the database — no in-memory stores.
 from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
+from app.presentation.schemas.delivery import CreateDriverResponse
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -178,9 +179,12 @@ async def assign_delivery(delivery_id: str, req: AssignRequest, ctx: TenantConte
         if not new_record:
             raise HTTPException(400, f"Cannot assign in status {delivery.status}")
 
-        # Set driver busy via domain object
-        driver.set_busy()
-        drv_repo.db.commit()
+        # O status do entregador vive no model — a entidade devolvida por
+        # `buscar_por_codigo` é um dataclass desconectado e não tem `set_busy()`.
+        # Chamar o método antigo estourava AttributeError: a atribuição era
+        # persistida e a resposta virava 500, derrubando também a otimização de
+        # rota logo abaixo.
+        drv_repo.set_status(req.driver_id, "BUSY")
 
         # Fase 8 (decisão 10–12): otimização best-effort. Não atrasa nem
         # derruba a confirmação da atribuição — qualquer exceção é engolida
@@ -238,10 +242,8 @@ async def update_delivery_status(
         terminal_states = {"DELIVERED", "CANCELLED", "FAILED"}
         if req.status in terminal_states and delivery.driver_id:
             drv_repo = SQLAlchemyDeliveryDriverRepository(db, ctx.tenant_id)
-            driver = drv_repo.buscar_por_codigo(delivery.driver_id)
-            if driver:
-                driver.set_available()
-                drv_repo.db.commit()
+            # Libera o entregador (mesmo motivo do assign: escrita no model).
+            drv_repo.set_status(delivery.driver_id, "AVAILABLE")
 
         return {"success": True, "delivery": result.to_dict()}
     finally:
@@ -251,27 +253,47 @@ async def update_delivery_status(
 # ── Driver Endpoints (Database-backed) ─────────────────
 
 
-@router.post("/drivers")
+@router.post("/drivers", status_code=201, response_model=CreateDriverResponse)
 async def create_driver(req: CreateDriverRequest, ctx: TenantContext = Depends(require_admin)):
+    """Alias de `POST /admin/drivers`: cadastra entregador **com** credencial.
+
+    Mesmo efeito e mesmo contrato do canônico — entidade + `User(role=DRIVER)` +
+    membership na mesma transação, devolvendo a senha temporária. Antes esta
+    rota criava só a entidade, e o entregador cadastrado por aqui **não tinha
+    como abrir o app** (o login é `/auth/login`).
+
+    `license_number` é gravado em `document` (CPF/CNH): o nome é o do request
+    histórico, a coluna é a do model. Nenhum campo do request é descartado.
+    """
     from sqlalchemy.orm import Session as DBSession
+    from app.application.delivery.use_cases import (
+        CreateDriverWithCredentialUseCase,
+        DriverRoleMissingError,
+        DriverUsernameTakenError,
+    )
     from app.infrastructure.database.init_db import engine
-    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
-    from app.domain.delivery.driver import Driver as DriverDomain
 
     db = DBSession(bind=engine)
     try:
-        repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
-        driver = DriverDomain(
-            tenant_id=ctx.tenant_id,
-            name=req.name,
-            phone=req.phone,
-            license_number=req.license_number,
-            vehicle_id=req.vehicle_id,
-        )
-        repo.criar(driver)
-        return {"success": True, "driver": driver.to_dict()}
+        try:
+            result = CreateDriverWithCredentialUseCase(db, ctx.tenant_id, actor_id=ctx.user_id or "").execute(
+                nome=req.name,
+                telefone=req.phone,
+                document=req.license_number,
+                vehicle_id=req.vehicle_id,
+            )
+        except DriverRoleMissingError as exc:
+            raise HTTPException(400, "Role DRIVER not found") from exc
+        except DriverUsernameTakenError as exc:
+            raise HTTPException(400, "Username already exists") from exc
     finally:
         db.close()
+
+    return CreateDriverResponse(
+        driver_id=result["driver_id"],
+        username=result["username"],
+        temporary_password=result["temporary_password"],
+    )
 
 
 @router.get("/drivers")
@@ -300,10 +322,10 @@ async def get_driver(driver_id: str, ctx: TenantContext = Depends(get_tenant_con
     db = DBSession(bind=engine)
     try:
         repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
-        driver = repo.buscar_por_codigo(driver_id)
-        if not driver:
+        snapshot = repo.snapshot(driver_id)
+        if not snapshot:
             raise HTTPException(404, "Driver not found")
-        return {"driver": driver.to_dict()}
+        return {"driver": snapshot}
     finally:
         db.close()
 
@@ -353,23 +375,15 @@ async def update_driver_status(driver_id: str, status: str, ctx: TenantContext =
     db = DBSession(bind=engine)
     try:
         repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
-        driver = repo.buscar_por_codigo(driver_id)
-        if not driver:
+        if not repo.snapshot(driver_id):
             raise HTTPException(404, "Driver not found")
         try:
             new_status = DriverStatus(status)
         except ValueError as exc:
             raise HTTPException(400, f"Invalid status: {status}") from exc
-        if new_status == DriverStatus.AVAILABLE:
-            driver.set_available()
-        elif new_status == DriverStatus.OFFLINE:
-            driver.go_offline()
-        elif new_status == DriverStatus.INACTIVE:
-            driver.deactivate()
-        else:
-            driver.status = new_status
-        repo.db.commit()
-        return {"success": True, "driver": driver.to_dict()}
+        # Persiste pelo model — mutar a entidade desconectada não chegava ao banco.
+        repo.set_status(driver_id, new_status.value)
+        return {"success": True, "driver": repo.snapshot(driver_id)}
     finally:
         db.close()
 
