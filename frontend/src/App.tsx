@@ -22,7 +22,8 @@ import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/pro
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
 import { FinancePage } from '@/features/finance'
 import { ReportsPage, HeatmapPage } from '@/features/reports'
-import { SettingsPage, AISettingsPage } from '@/features/settings'
+import { SettingsPage, AISettingsPage, IntegrationsPage } from '@/features/settings'
+import { WorkflowsPage } from '@/features/automation'
 import { CouponsPage } from '@/features/promotions'
 import { PurchaseNotesPage } from '@/features/purchase'
 import { SegmentsPage, ReorderPage } from '@/features/segments'
@@ -110,6 +111,24 @@ export function App() {
           }
         />
         <Route path="settings" element={<SettingsPage />} />
+
+        {/* Integrações (revendas) — guard integration.read do backend */}
+        <Route
+          path="settings/integrations"
+          element={
+            <PermissionRoute permissions={['integration.read']}>
+              <IntegrationsPage />
+            </PermissionRoute>
+          }
+        />
+
+        {/*
+          Automações (workflows internos e aprovações).
+          É o motor `/automation/*`, separado das regras de WhatsApp
+          (`/whatsapp/automations`, item do menu do WhatsApp). Sem guard porque
+          o backend também não exige permissão nesses endpoints.
+        */}
+        <Route path="automation" element={<WorkflowsPage />} />
 
         {/* Inteligência — config da IA (Item 3) — guard ai.configure */}
         <Route

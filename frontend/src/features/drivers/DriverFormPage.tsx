@@ -1,11 +1,17 @@
 /**
  * Driver Form Page — Create/edit delivery drivers.
- * Uses existing /delivery-drivers/ endpoints.
+ *
+ * Criar: `POST /admin/drivers` — caminho canônico, o único que cria a entidade
+ * **e** a credencial de login, devolvendo a senha temporária (que aparece uma
+ * vez, para o operador repassar ao entregador).
+ *
+ * Editar: `PUT /delivery-drivers/{codigo}` — só os campos editáveis. `codigo` é
+ * imutável: é a identidade gravada em entregas, posições e histórico.
  */
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Save, Truck } from 'lucide-react'
+import { ArrowLeft, KeyRound, Save, Truck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -17,7 +23,12 @@ interface DriverFormData {
   nome: string
   telefone: string
   placa: string
-  vehicle_type: string
+  document: string
+}
+
+interface DriverCredentials {
+  username: string
+  password: string
 }
 
 export function DriverFormPage() {
@@ -29,8 +40,9 @@ export function DriverFormPage() {
     nome: '',
     telefone: '',
     placa: '',
-    vehicle_type: 'MOTORCYCLE',
+    document: '',
   })
+  const [credentials, setCredentials] = useState<DriverCredentials | null>(null)
   const [fetching, setFetching] = useState(isEdit)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -38,13 +50,14 @@ export function DriverFormPage() {
   useEffect(() => {
     if (isEdit && codigo) {
       setFetching(true)
-      apiClient.get(`/delivery-drivers/${codigo}`)
+      apiClient
+        .get(`/delivery-drivers/${codigo}`)
         .then(({ data }) => {
           setFormData({
             nome: data.nome || '',
             telefone: data.telefone || '',
             placa: data.placa || '',
-            vehicle_type: data.vehicle_type || 'MOTORCYCLE',
+            document: data.document || '',
           })
         })
         .catch(() => setError('Motorista não encontrado'))
@@ -64,11 +77,28 @@ export function DriverFormPage() {
 
     try {
       if (isEdit && codigo) {
-        await apiClient.put(`/delivery-drivers/${codigo}`, formData)
+        await apiClient.put(`/delivery-drivers/${codigo}`, {
+          nome: formData.nome.trim(),
+          telefone: formData.telefone.trim(),
+          placa: formData.placa.trim() || null,
+          document: formData.document.trim() || null,
+        })
+        navigate('/drivers')
       } else {
-        await apiClient.post('/delivery-drivers/', formData)
+        // Canônico: cria o cadastro e a credencial na mesma transação.
+        const { data } = await apiClient.post('/admin/drivers', {
+          name: formData.nome.trim(),
+          phone: formData.telefone.trim(),
+          document: formData.document.trim() || null,
+        })
+        // A senha temporária só existe nesta resposta — não navegamos embora
+        // antes de mostrá-la, senão ela se perde.
+        if (data?.temporary_password) {
+          setCredentials({ username: data.username ?? '', password: data.temporary_password })
+        } else {
+          navigate('/drivers')
+        }
       }
-      navigate('/drivers')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(msg || 'Erro ao salvar motorista')
@@ -87,6 +117,51 @@ export function DriverFormPage() {
 
   if (error && isEdit && !formData.nome) {
     return <ErrorState message={error} onRetry={() => navigate('/drivers')} />
+  }
+
+  if (credentials) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">Motorista cadastrado</h1>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Credencial de acesso
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A senha aparece <strong>uma única vez</strong>. Repasse ao entregador: no primeiro acesso o app exige a
+              troca.
+            </p>
+            <div className="space-y-1">
+              <span className="text-sm font-medium text-foreground">Usuário</span>
+              <code
+                data-testid="driver-username"
+                className="block rounded-md bg-muted px-3 py-2 font-mono text-sm text-foreground"
+              >
+                {credentials.username}
+              </code>
+            </div>
+            <div className="space-y-1">
+              <span className="text-sm font-medium text-foreground">Senha temporária</span>
+              <code
+                data-testid="driver-temporary-password"
+                className="block rounded-md bg-muted px-3 py-2 font-mono text-sm text-foreground"
+              >
+                {credentials.password}
+              </code>
+            </div>
+            <div className="flex justify-end">
+              <Button type="button" onClick={() => navigate('/drivers')}>
+                Ir para a lista
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -159,20 +234,15 @@ export function DriverFormPage() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="vehicle_type" className="text-sm font-medium text-foreground">
-                  Tipo de Veículo
+                <label htmlFor="document" className="text-sm font-medium text-foreground">
+                  CNH / Documento
                 </label>
-                <select
-                  id="vehicle_type"
-                  value={formData.vehicle_type}
-                  onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                >
-                  <option value="MOTORCYCLE">Moto</option>
-                  <option value="CAR">Carro</option>
-                  <option value="VAN">Van</option>
-                  <option value="TRUCK">Caminhão</option>
-                </select>
+                <Input
+                  id="document"
+                  value={formData.document}
+                  onChange={(e) => setFormData({ ...formData, document: e.target.value })}
+                  placeholder="000.000.000-00"
+                />
               </div>
             </div>
           </CardContent>

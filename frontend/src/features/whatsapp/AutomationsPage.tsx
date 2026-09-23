@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
 import { apiClient } from '@/lib/api/client';
+import { useToast } from '@/components/ui/Toast';
 import { Zap, Play, Pause, Trash2, Plus, Send, CheckCircle, Clock } from 'lucide-react';
 
 interface AutomationRule {
@@ -100,6 +101,9 @@ export function AutomationsPage() {
   });
   const [previewResult, setPreviewResult] = useState<{ message: string; customer: string } | null>(null);
   const [previewCustomer, setPreviewCustomer] = useState('');
+  // Execução em cancelamento: desabilita só aquele botão (evita duplo clique).
+  const [cancellingExec, setCancellingExec] = useState<number | null>(null);
+  const { success, error: toastError } = useToast();
 
   const fetchData = async () => {
     setLoading(true);
@@ -121,6 +125,41 @@ export function AutomationsPage() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  /**
+   * Cancela uma execução pendente (`POST /automation/whatsapp/executions/{id}/cancel`).
+   *
+   * O endpoint existia sem nenhuma tela que o alcançasse — a aba Execuções
+   * listava os envios e não deixava parar nenhum.
+   */
+  const handleCancelExecution = async (exec: AutomationExecution) => {
+    const confirmed = window.confirm(
+      `Cancelar o envio para ${exec.customer_nome || exec.customer_codigo}?\n\n` +
+      'A mensagem não será enviada. A regra continua ativa para os próximos clientes.',
+    );
+    if (!confirmed) return;
+
+    setCancellingExec(exec.id);
+    try {
+      await apiClient.post(`/automation/whatsapp/executions/${exec.id}/cancel`);
+      success('Envio cancelado', exec.customer_nome || exec.customer_codigo);
+      await fetchData();
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        toastError('Execução não encontrada', 'Pode já ter sido cancelada — a lista foi recarregada.');
+        await fetchData();
+      } else if (status === 409) {
+        toastError('Execução não pode ser cancelada', 'A mensagem já foi enviada — nada foi alterado.');
+      } else if (status === 403) {
+        toastError('Sem permissão', 'Seu usuário não pode cancelar execuções.');
+      } else {
+        toastError('Erro ao cancelar', 'Nada foi alterado. Tente novamente.');
+      }
+    } finally {
+      setCancellingExec(null);
+    }
+  };
 
   const handleCreate = async () => {
     if (!newRule.name || !newRule.message_template) return;
@@ -375,6 +414,7 @@ export function AutomationsPage() {
                         <th className="text-center py-2 px-2 font-medium text-muted-foreground">Status</th>
                         <th className="text-center py-2 px-2 font-medium text-muted-foreground">Trigger</th>
                         <th className="text-center py-2 px-2 font-medium text-muted-foreground">Enviado</th>
+                        <th className="text-right py-2 px-2 font-medium text-muted-foreground">Ação</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -395,6 +435,20 @@ export function AutomationsPage() {
                           </td>
                           <td className="py-2 px-2 text-center text-xs">
                             {exec.sent_at ? new Date(exec.sent_at).toLocaleString('pt-BR') : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right">
+                            {(exec.status === 'PENDING' || exec.status === 'APPROVED') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCancelExecution(exec)}
+                                disabled={cancellingExec === exec.id}
+                                aria-label={`Cancelar envio para ${exec.customer_nome || exec.customer_codigo}`}
+                                className="text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {cancellingExec === exec.id ? 'Cancelando...' : 'Cancelar'}
+                              </Button>
+                            )}
                           </td>
                         </tr>
                       ))}

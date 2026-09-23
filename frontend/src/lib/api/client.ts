@@ -232,14 +232,6 @@ export const api = {
     reconciliation: () => apiClient.get('/inventory/reconciliation/check'),
   },
 
-  // Delivery Drivers
-  drivers: {
-    list: () => apiClient.get('/delivery-drivers/'),
-    get: (codigo: string) => apiClient.get(`/delivery-drivers/${codigo}`),
-    create: (data: unknown) => apiClient.post('/delivery-drivers/', data),
-    disable: (codigo: string) => apiClient.patch(`/delivery-drivers/${codigo}/disable`),
-  },
-
   // Delivery Operations — FASE 14
   deliveryOps: {
     listDeliveries: (params?: { status?: string; driver_id?: string }) =>

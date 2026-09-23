@@ -31,7 +31,7 @@ describe('DriverFormPage', () => {
     expect(screen.getByPlaceholderText('Nome do motorista')).toBeInTheDocument()
   })
 
-  it('creates driver on submit', async () => {
+  it('creates the driver on the canonical endpoint', async () => {
     renderWithProviders(<DriverFormPage />, { route: '/drivers/new' })
     fireEvent.change(screen.getByPlaceholderText('Nome do motorista'), {
       target: { value: 'João Motorista' },
@@ -43,10 +43,31 @@ describe('DriverFormPage', () => {
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledTimes(1)
     })
+    // `/admin/drivers` é o caminho canônico: cria cadastro **e** credencial.
+    // O antigo `/delivery-drivers/` criava entregador sem login.
     expect(postMock).toHaveBeenCalledWith(
-      '/delivery-drivers/',
-      expect.objectContaining({ nome: 'João Motorista', telefone: '11999990000' })
+      '/admin/drivers',
+      expect.objectContaining({ name: 'João Motorista', phone: '11999990000' })
     )
+  })
+
+  it('shows the temporary password once after creating', async () => {
+    postMock.mockResolvedValue({
+      data: { driver_id: '600001', username: 'drv_600001', temporary_password: 'Temp#12345' },
+    })
+    renderWithProviders(<DriverFormPage />, { route: '/drivers/new' })
+    fireEvent.change(screen.getByPlaceholderText('Nome do motorista'), {
+      target: { value: 'João Motorista' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('(00) 00000-0000'), {
+      target: { value: '11999990000' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /salvar/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('driver-temporary-password')).toHaveTextContent('Temp#12345')
+    })
+    expect(screen.getByTestId('driver-username')).toHaveTextContent('drv_600001')
   })
 
   it('shows error when required fields missing', async () => {
@@ -67,21 +88,30 @@ describe('DriverFormPage', () => {
     expect(postMock).not.toHaveBeenCalled()
   })
 
-  it('renders edit form prefilled and updates on submit', async () => {
+  it('renders edit form prefilled and saves with PUT', async () => {
     getMock.mockResolvedValue({
-      data: { nome: 'João Motorista', telefone: '11999990000', placa: 'ABC-1234', vehicle_type: 'CAR' },
+      data: {
+        nome: 'João Motorista',
+        telefone: '11999990000',
+        placa: 'ABC-1234',
+        document: '11122233344',
+      },
     })
     renderWithRoute(<DriverFormPage />, '/drivers/:codigo/edit', '/drivers/M1/edit')
     await waitFor(() => {
       expect(screen.getByText('Editar Motorista')).toBeInTheDocument()
       expect(screen.getByDisplayValue('João Motorista')).toBeInTheDocument()
     })
+    expect(screen.getByDisplayValue('11122233344')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /salvar/i }))
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith(
         '/delivery-drivers/M1',
-        expect.objectContaining({ nome: 'João Motorista' })
+        expect.objectContaining({ nome: 'João Motorista', document: '11122233344' })
       )
     })
+    // `codigo` é imutável — nunca vai no corpo.
+    const enviado = putMock.mock.calls[0]?.[1] ?? {}
+    expect(enviado).not.toHaveProperty('codigo')
   })
 })

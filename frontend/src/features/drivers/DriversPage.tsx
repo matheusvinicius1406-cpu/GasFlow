@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle, Package } from 'lucide-react'
+import { UserCog, RefreshCw, MapPin, Truck, CheckCircle, Pause, XCircle, Package, Trash2, Link2Off } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -14,6 +14,7 @@ import { DriverMap } from '@/components/map/DriverMap'
 import type { DriverMapPoint } from '@/components/map/DriverMap'
 import { useTrackingSocket } from '@/lib/hooks/useTrackingSocket'
 import type { DeliveryDriver } from '@/types'
+import { useToast } from '@/components/ui/Toast'
 import { DriverStockCard } from './DriverStockCard'
 
 interface DriverWithLocation extends DeliveryDriver {
@@ -49,6 +50,9 @@ export function DriversPage() {
   const { pointsByDriver, lastByDriver } = useTrackingSocket()
   // F7: motorista selecionado para ver/gerenciar o estoque carregado
   const [stockDriver, setStockDriver] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState<string | null>(null)
+  const { success, error: toastError } = useToast()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -78,6 +82,84 @@ export function DriversPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  /**
+   * Revogar os links públicos de rastreio do entregador
+   * (`POST /public/tracking/revoke/{driver_id}`).
+   *
+   * O endpoint existe desde a fase de rastreio e não tinha nenhuma tela que o
+   * alcançasse. Incrementa o `tracking_epoch` do entregador: todo link já
+   * emitido passa a responder **410 Gone**. Quem gera o link é o app/desktop, e
+   * é operação deliberada — daí a confirmação citando o nome.
+   */
+  const handleRevokeTracking = useCallback(
+    async (driver: DriverWithLocation) => {
+      const confirmed = window.confirm(
+        `Revogar os links de rastreio de ${driver.nome}?\n\n` +
+        'Todos os links já enviados ao cliente param de funcionar na hora (respondem 410). ' +
+        'Novos links podem ser gerados normalmente depois.',
+      )
+      if (!confirmed) return
+
+      setRevoking(driver.codigo)
+      try {
+        await apiClient.post(`/public/tracking/revoke/${driver.codigo}`)
+        success('Links de rastreio revogados', `${driver.nome} — os links antigos respondem 410.`)
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 404) {
+          toastError('Motorista não encontrado', 'Ele pode ter sido excluído — a lista foi recarregada.')
+          await fetchData()
+        } else if (status === 403) {
+          toastError('Sem permissão', 'Apenas admin pode revogar links de rastreio.')
+        } else {
+          toastError('Erro ao revogar', 'Os links continuam válidos. Tente novamente.')
+        }
+      } finally {
+        setRevoking(null)
+      }
+    },
+    [fetchData, success, toastError],
+  )
+
+  /**
+   * Excluir entregador — soft delete no backend (`DELETE /admin/drivers/{id}`).
+   *
+   * Um endpoint só: desativa o cadastro e o estado operacional, desliga o login,
+   * revoga as sessões e invalida os links públicos de rastreio. O histórico de
+   * entregas e posições fica. Entrega em rota devolve 409 e nada é alterado.
+   */
+  const handleDelete = useCallback(
+    async (driver: DriverWithLocation) => {
+      const confirmed = window.confirm(
+        `Excluir ${driver.nome}?\n\nO acesso ao app é revogado, as sessões são encerradas e os links públicos de rastreio deixam de funcionar. O histórico de entregas é mantido.`,
+      )
+      if (!confirmed) return
+
+      setDeleting(driver.codigo)
+      try {
+        await apiClient.delete(`/admin/drivers/${driver.codigo}`)
+        success(`${driver.nome} foi excluído`, 'Acesso e links de rastreio revogados.')
+        await fetchData()
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 404) {
+          toastError('Motorista não encontrado', 'Pode já ter sido excluído — a lista foi recarregada.')
+          await fetchData()
+        } else if (status === 409) {
+          toastError(
+            'Não dá para excluir agora',
+            'O entregador tem entrega em rota. Conclua ou cancele a entrega antes de excluir.',
+          )
+        } else {
+          toastError('Erro ao excluir motorista')
+        }
+      } finally {
+        setDeleting(null)
+      }
+    },
+    [fetchData, success, toastError],
+  )
 
   if (loading) {
     return (
@@ -209,9 +291,31 @@ export function DriversPage() {
                         <Package className="h-4 w-4 mr-1" />
                         Estoque
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRevokeTracking(driver)}
+                        disabled={revoking === driver.codigo}
+                        aria-label={`Revogar links de rastreio de ${driver.nome}`}
+                        className="focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Link2Off className="h-4 w-4 mr-1" />
+                        {revoking === driver.codigo ? 'Revogando...' : 'Revogar link'}
+                      </Button>
                       <Link to={`/drivers/${driver.codigo}/edit`}>
                         <Button variant="ghost" size="sm">Editar</Button>
                       </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(driver)}
+                        disabled={deleting === driver.codigo}
+                        aria-label={`Excluir ${driver.nome}`}
+                        className="text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        {deleting === driver.codigo ? 'Excluindo...' : 'Excluir'}
+                      </Button>
                     </div>
                   </div>
                 )

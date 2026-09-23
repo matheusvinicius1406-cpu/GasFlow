@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DollarSign, TrendingUp, TrendingDown, Plus, Wallet, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { useReceivables, useCashBalance } from '@/lib/api/hooks';
+import { useToast } from '@/components/ui/Toast';
 import type { Receivable } from '@/types';
 
 interface Payment {
@@ -69,6 +70,10 @@ export function FinancePage() {
   const [activeTab, setActiveTab] = useState<'payments' | 'receivables' | 'expenses' | 'cash'>('payments');
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', category: 'OTHER' });
+  // Um cancelamento por vez: guarda a chave do item em voo (`payment-3`/`expense-7`)
+  // para desabilitar aquele botão e evitar duplo clique.
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const { success, error: toastError } = useToast();
 
   useEffect(() => { fetchData(); }, []);
 
@@ -106,6 +111,70 @@ export function FinancePage() {
       fetchData();
     } catch {
       // error handled silently
+    }
+  }
+
+  /**
+   * Mensagem específica por status, no padrão da `DriversPage`.
+   *
+   * Devolve `true` quando a lista precisa ser recarregada (404 = o item já não
+   * existe, então o que está na tela está velho).
+   */
+  function reportCancelError(err: unknown, what: string): boolean {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      toastError(`${what} não encontrado`, 'Pode já ter sido cancelado — a lista foi recarregada.');
+      return true;
+    }
+    if (status === 409) {
+      toastError(`${what} não pode ser cancelado`, 'Há uma regra de negócio impedindo — nada foi alterado.');
+      return false;
+    }
+    if (status === 403) {
+      toastError('Sem permissão', `Seu usuário não pode cancelar este ${what.toLowerCase()}.`);
+      return false;
+    }
+    toastError('Erro ao cancelar', 'Nada foi alterado. Tente novamente.');
+    return false;
+  }
+
+  /** Cancela um pagamento (`POST /payments/{id}/cancel`). */
+  async function handleCancelPayment(payment: Payment) {
+    const confirmed = window.confirm(
+      `Cancelar o pagamento de ${formatMoney(payment.amount)} do pedido #${payment.order_codigo}?\n\n` +
+      'O valor sai do total recebido e a movimentação de caixa é estornada.',
+    );
+    if (!confirmed) return;
+
+    setCancelling(`payment-${payment.id}`);
+    try {
+      await apiClient.post(`/payments/${payment.id}/cancel`);
+      success('Pagamento cancelado', `Pedido #${payment.order_codigo}`);
+      await fetchData();
+    } catch (err) {
+      if (reportCancelError(err, 'Pagamento')) await fetchData();
+    } finally {
+      setCancelling(null);
+    }
+  }
+
+  /** Cancela uma despesa (`POST /finance/expenses/{id}/cancel`). */
+  async function handleCancelExpense(expense: Expense) {
+    const confirmed = window.confirm(
+      `Cancelar a despesa "${expense.description}" (${formatMoney(expense.amount)})?\n\n` +
+      'Ela sai do total de despesas e do caixa. O registro continua no histórico.',
+    );
+    if (!confirmed) return;
+
+    setCancelling(`expense-${expense.id}`);
+    try {
+      await apiClient.post(`/finance/expenses/${expense.id}/cancel`);
+      success('Despesa cancelada', expense.description);
+      await fetchData();
+    } catch (err) {
+      if (reportCancelError(err, 'Despesa')) await fetchData();
+    } finally {
+      setCancelling(null);
     }
   }
 
@@ -214,6 +283,7 @@ export function FinancePage() {
                     <TableHead>Método</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead>Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -224,6 +294,20 @@ export function FinancePage() {
                       <TableCell>{METHOD_LABELS[p.method] || p.method}</TableCell>
                       <TableCell><Badge className={STATUS_COLORS[p.status] || ''}>{p.status}</Badge></TableCell>
                       <TableCell>{p.paid_at ? new Date(p.paid_at).toLocaleDateString('pt-BR') : '-'}</TableCell>
+                      <TableCell>
+                        {p.status !== 'CANCELLED' && p.status !== 'REFUNDED' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelPayment(p)}
+                            disabled={cancelling === `payment-${p.id}`}
+                            aria-label={`Cancelar pagamento do pedido ${p.order_codigo}`}
+                            className="text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {cancelling === `payment-${p.id}` ? 'Cancelando...' : 'Cancelar'}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -270,6 +354,7 @@ export function FinancePage() {
                     <TableHead>Valor</TableHead>
                     <TableHead>Categoria</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -279,6 +364,20 @@ export function FinancePage() {
                       <TableCell className="font-semibold text-destructive">{formatMoney(e.amount)}</TableCell>
                       <TableCell>{CATEGORY_LABELS[e.category] || e.category}</TableCell>
                       <TableCell><Badge className={STATUS_COLORS[e.status] || ''}>{e.status}</Badge></TableCell>
+                      <TableCell>
+                        {e.status === 'ACTIVE' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelExpense(e)}
+                            disabled={cancelling === `expense-${e.id}`}
+                            aria-label={`Cancelar despesa ${e.description}`}
+                            className="text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {cancelling === `expense-${e.id}` ? 'Cancelando...' : 'Cancelar'}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
