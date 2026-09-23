@@ -1,7 +1,7 @@
 {
   "latest_version": "1.2.0",
   "download_url": "https://github.com/matheusvinicius1406-cpu/GasFlow/releases/latest/download/app-release.apk",
-  "changelog": "Sistema operacional de entregas com rastreamento em tempo real, animacoes de splash, e verificacao de atualizacoes automaticas.",
+  "changelog": "Acoes de entrega no app do entregador (/driver/*, fim do 401), cleartext LAN no release, CRUD de entregadores no painel, cancelamentos, integracoes e automacoes.",
   "min_required": "1.0.0",
-  "release_date": "2026-09-22"
+  "release_date": "2026-09-23"
 }
