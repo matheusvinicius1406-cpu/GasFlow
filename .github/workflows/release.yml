@@ -20,7 +20,9 @@ jobs:
   ci-gate:
     name: CI gate (backend/frontend/whatsapp/agent)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 80 > os 75 min do TIMEOUT_S do ci_gate.py (+ folga para checkout e
+    # consultas de API). Com 45 o runner matava o gate no meio do prazo novo.
+    timeout-minutes: 80
     steps:
       # Sem o checkout o workspace está vazio e `python3 .github/scripts/
       # ci_gate.py` morre com "No such file or directory" (exit 2) antes de

@@ -16,6 +16,10 @@ Notas de projeto:
   enquanto a run não existir, o gate aguarda com timeout de 75 min —
   calendário calibrado para caber o job de teste mais lento (~10 min de
   suíte backend em runner hosted) MAIS um re-run completo em caso de flaky.
+- Run concluída com job vermelho NÃO encerra o gate na primeira leitura:
+  o gate segue consultando até o deadline, dando janela para um re-run
+  manual no Actions (a run volta a in_progress e é reavaliada). Só o
+  prazo esgotado com o vermelho persistente reprova o release.
 - "Não transformar falha real em sucesso": o gate só espera mais; um job
   vermelho após o deadline continua falhando o release.
 """
@@ -62,7 +66,8 @@ def find_run(repo: str, sha: str, token: str) -> int | None:
     return runs[0]["id"] if runs else None
 
 
-def check_jobs(repo: str, run_id: int, token: str) -> None:
+def check_jobs(repo: str, run_id: int, token: str) -> str | None:
+    """None se os 4 jobs de teste passaram; senão, o resumo do problema."""
     data = api_get(f"/repos/{repo}/actions/runs/{run_id}/jobs?per_page=30", token)
     jobs = {j["name"]: j.get("conclusion") for j in data.get("jobs", [])}
 
@@ -73,12 +78,10 @@ def check_jobs(repo: str, run_id: int, token: str) -> None:
         if any(n.startswith(r) for r in REQUIRED_JOBS) and c != "success"
     ]
     if missing:
-        print(f"::error::jobs de teste ausentes na run: {', '.join(missing)}")
-        sys.exit(1)
+        return f"jobs de teste ausentes na run: {', '.join(missing)}"
     if failed:
-        print(f"::error::jobs de teste reprovados: {', '.join(failed)}")
-        sys.exit(1)
-    print("Gate OK: backend/frontend/whatsapp/agent verdes no commit da tag.")
+        return f"jobs de teste reprovados: {', '.join(failed)}"
+    return None
 
 
 def dry_run() -> int:
@@ -123,6 +126,7 @@ def main() -> None:
 
     print(f"Aguardando CI para o commit {sha[:12]} (timeout {TIMEOUT_S // 60} min)...")
     attempt = 0
+    red: str | None = None
     while True:
         attempt += 1
         run_id = find_run(repo, sha, token)
@@ -133,10 +137,21 @@ def main() -> None:
                 f"tentativa {attempt}: run {run_id} status={status} conclusão={conclusion}"
             )
             if status == "completed":
-                print(f"CI concluído: run {run_id} (conclusão geral: {conclusion}).")
-                check_jobs(repo, run_id, token)
-                return
-            print(f"  status={status} — aguardando {POLL_INTERVAL_S}s…")
+                red = check_jobs(repo, run_id, token)
+                if red is None:
+                    print(
+                        "Gate OK: backend/frontend/whatsapp/agent verdes "
+                        "no commit da tag."
+                    )
+                    return
+                remaining = max(0, int(deadline - time.monotonic()))
+                print(
+                    f"  ::warning::{red} — CI vermelho; o gate espera mais "
+                    f"{remaining // 60} min para caber um re-run manual "
+                    "antes de reprovar."
+                )
+            else:
+                print(f"  status={status} — aguardando {POLL_INTERVAL_S}s…")
         else:
             print(
                 f"tentativa {attempt}: run de CI ainda não registrada para {sha[:12]} — "
@@ -144,10 +159,18 @@ def main() -> None:
             )
 
         if time.monotonic() >= deadline:
-            print(
-                "::error::Timeout aguardando CI (75 min). A tag deve apontar para um commit já na main, "
-                "e o CI precisa terminar dentro do prazo — re-run manual se foi flaky."
-            )
+            if red:
+                print(
+                    f"::error::Timeout ({TIMEOUT_S // 60} min) com o CI ainda "
+                    f"vermelho: {red}. Re-run manual no Actions se foi flaky — "
+                    "o release não segue com job reprovado."
+                )
+            else:
+                print(
+                    "::error::Timeout aguardando CI (75 min). A tag deve apontar "
+                    "para um commit já na main, e o CI precisa terminar dentro "
+                    "do prazo — re-run manual se foi flaky."
+                )
             sys.exit(1)
         time.sleep(POLL_INTERVAL_S)
 
