@@ -13,7 +13,11 @@ Notas de projeto:
 - A conclusão GERAL do CI pode ser "failure" por E2E/Trivy; o gate olha
   apenas os jobs de teste, individualmente.
 - A tag deve apontar para um commit já na main (CI roda em push p/ main);
-  enquanto a run não existir, o gate aguarda com timeout de 45 min.
+  enquanto a run não existir, o gate aguarda com timeout de 75 min —
+  calendário calibrado para caber o job de teste mais lento (~10 min de
+  suíte backend em runner hosted) MAIS um re-run completo em caso de flaky.
+- "Não transformar falha real em sucesso": o gate só espera mais; um job
+  vermelho após o deadline continua falhando o release.
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ REQUIRED_JOBS = (
     "Agent (typecheck + build + tests)",
 )
 
-TIMEOUT_S = 45 * 60
+TIMEOUT_S = 75 * 60
 POLL_INTERVAL_S = 60
 
 
@@ -117,27 +121,32 @@ def main() -> None:
     sha = os.environ["SHA"]
     deadline = time.monotonic() + TIMEOUT_S
 
-    print(f"Aguardando CI para o commit {sha[:12]}...")
+    print(f"Aguardando CI para o commit {sha[:12]} (timeout {TIMEOUT_S // 60} min)...")
+    attempt = 0
     while True:
+        attempt += 1
         run_id = find_run(repo, sha, token)
         if run_id is not None:
             run = api_get(f"/repos/{repo}/actions/runs/{run_id}", token)
             status, conclusion = run["status"], run.get("conclusion")
+            print(
+                f"tentativa {attempt}: run {run_id} status={status} conclusão={conclusion}"
+            )
             if status == "completed":
                 print(f"CI concluído: run {run_id} (conclusão geral: {conclusion}).")
                 check_jobs(repo, run_id, token)
                 return
-            print(
-                f"CI em andamento (status: {status}). Aguardando {POLL_INTERVAL_S}s..."
-            )
+            print(f"  status={status} — aguardando {POLL_INTERVAL_S}s…")
         else:
             print(
-                f"Run de CI ainda não registrada para {sha[:12]}. Aguardando {POLL_INTERVAL_S}s..."
+                f"tentativa {attempt}: run de CI ainda não registrada para {sha[:12]} — "
+                f"aguardando {POLL_INTERVAL_S}s…"
             )
 
         if time.monotonic() >= deadline:
             print(
-                "::error::Timeout aguardando CI. A tag deve apontar para um commit já na main."
+                "::error::Timeout aguardando CI (75 min). A tag deve apontar para um commit já na main, "
+                "e o CI precisa terminar dentro do prazo — re-run manual se foi flaky."
             )
             sys.exit(1)
         time.sleep(POLL_INTERVAL_S)

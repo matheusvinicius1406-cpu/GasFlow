@@ -128,7 +128,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERTIFICATE_PASSWORD }}
-        run: npx electron-builder --win --publish always
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        # A duplicação de releases (v1.1.3/v1.1.4/v1.1.6 ficaram com dois IDs
+        # cada) vinha daqui: quando o electron-builder não encontra release
+        # para a tag ele CRIA uma; se o step anterior criou/adicionou algo (ou
+        # um re-run parcial subiu assets), o builder criava OUTRA em vez de
+        # reusar. Pré-criar a release publicada para a tag ANTES do publish
+        # garante que o builder encontre-a e apenas ANEXE os assets.
+        run: |
+          if gh release view "$TAG" --json id --jq '.id' >/dev/null 2>&1; then
+            echo "release $TAG já existe — electron-builder vai anexar assets"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --draft=false
+            echo "release $TAG pré-criada (pública) para o publish anexar"
+          fi
+          npx electron-builder --win --publish always
 
       - name: Upload artifacts (backup)
         uses: actions/upload-artifact@v7
@@ -182,5 +197,14 @@ jobs:
 
           url=$(gh release view "$TAG" --json url --jq '.url')
           echo "::notice::release $TAG publicado com instalador, blockmap e latest.yml — $url"
+
+          # Unicidade: a história já teve releases duplicadas (mesma tag, dois
+          # IDs). Se acontecer de novo, que o workflow aponte — mas não falhe
+          # o release por isso (a mais recente é a que o updater lê).
+          count=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq 'length' 2>/dev/null || echo "?")
+          if [ "$count" != "1" ]; then
+            echo "::warning::release $TAG duplicada (count=$count) — investigar publish concorrente."
+          fi
+
           echo "### Release publicado" >> "$GITHUB_STEP_SUMMARY"
           echo "[$TAG]($url) — instalador, blockmap e latest.yml." >> "$GITHUB_STEP_SUMMARY"
