@@ -11,7 +11,7 @@ Endpoints:
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
-from app.presentation.dependencies import get_tenant_context
+from app.presentation.dependencies import require_permission
 from app.domain.security.models import TenantContext
 from typing import Optional
 from datetime import datetime
@@ -62,7 +62,7 @@ def _get_order_data_for_date(tenant_id: str, date: str):
 @router.get("/deliveries")
 async def get_delivery_report(
     days: int = Query(30, description="Janela em dias (1, 7, 30, 90 ou 180)"),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Agregados de entregas para os gráficos da ReportsPage (F9).
 
@@ -87,7 +87,7 @@ async def get_delivery_report(
 @router.get("/heatmap")
 async def get_delivery_heatmap(
     days: int = Query(30, description="Período em dias (1, 7, 30, 90 ou 180)"),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Mapa de calor — entregas DELIVERED por bairro no período (F8).
 
@@ -112,7 +112,7 @@ async def get_delivery_heatmap(
 @router.get("/daily")
 async def get_daily_report(
     date: Optional[str] = Query(None, description="Report date (YYYY-MM-DD)"),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Get daily report summary as JSON."""
     if not date:
@@ -136,7 +136,7 @@ async def get_daily_report(
 @router.get("/daily.pdf")
 async def get_daily_report_pdf(
     date: Optional[str] = Query(None, description="Report date (YYYY-MM-DD)"),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Download daily report as PDF."""
     if not date:
@@ -171,7 +171,7 @@ async def get_daily_report_pdf(
 
 @router.get("/summary")
 async def get_business_summary(
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Get business summary across all time."""
     try:

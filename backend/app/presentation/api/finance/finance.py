@@ -159,7 +159,7 @@ def list_payments(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     repo = SQLAlchemyPaymentRepository(db, ctx.tenant_id)
 
@@ -303,7 +303,7 @@ def list_receivables(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     repo = SQLAlchemyReceivableRepository(db, ctx.tenant_id)
 
@@ -348,7 +348,7 @@ def list_expenses(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     repo = SQLAlchemyExpenseRepository(db, ctx.tenant_id)
     from app.domain.financial.expense import ExpenseStatus
@@ -462,7 +462,7 @@ def list_cash_movements(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     repo = SQLAlchemyCashMovementRepository(db, ctx.tenant_id)
     from app.domain.financial.cash_movement import CashMovementType
@@ -492,7 +492,7 @@ def list_cash_movements(
 @router.get("/cash/balance", response_model=dict)
 def get_cash_balance(
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     repo = SQLAlchemyCashMovementRepository(db, ctx.tenant_id)
     balance = repo.current_balance()
@@ -506,7 +506,7 @@ def get_cash_balance(
 def daily_report(
     date: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     target_date = datetime.fromisoformat(date) if date else datetime.utcnow()
     result = _reports_use_case(db, ctx).daily_summary(target_date)
@@ -519,7 +519,7 @@ def period_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Relatório do período: totais, série diária e comparação com o anterior."""
     start, end = _resolve_period(days, date_from, date_to)
@@ -545,7 +545,7 @@ def categories_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Despesas ATIVAS por categoria no período (donut da Visão Geral)."""
     start, end = _resolve_period(days, date_from, date_to)
@@ -558,7 +558,7 @@ def methods_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Pagamentos recebidos (PAID/PARTIAL) por forma no período."""
     start, end = _resolve_period(days, date_from, date_to)
@@ -568,7 +568,7 @@ def methods_report(
 @router.get("/receivables/summary", response_model=ReceivablesSummaryResponse)
 def receivables_summary(
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Aging dos recebíveis em aberto: totais + buckets 0-30/31-60/61-90/90+."""
     return ReceivablesSummaryResponse(**_reports_use_case(db, ctx).receivables_summary())
@@ -583,7 +583,7 @@ def dre_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """DRE gerencial: receita − CMV ponderado − despesas, com cmv_coverage."""
     from app.application.reports import finance_reports
@@ -598,7 +598,7 @@ def products_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Margem por produto; sem nota de compra → cost_known=false e margem None."""
     from app.application.reports import finance_reports
@@ -611,7 +611,7 @@ def products_report(
 def projection_report(
     horizon: int = Query(30, ge=1, le=180, description="Horizonte em dias (1–180)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Projeção de caixa: saldo + recebíveis no horizonte − média de despesas (sem ML)."""
     from app.application.reports import finance_reports
@@ -623,7 +623,7 @@ def projection_report(
 def team_report(
     days: int = Query(30, description="Janela em dias (1, 7, 30, 90 ou 180)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Entregas por motorista + folha SALARY do período (sem rateio por entregador)."""
     from app.application.reports import finance_reports
@@ -640,7 +640,7 @@ def hourly_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Pagamentos recebidos por hora do dia (paid_at); despesas ficam de fora."""
     from app.application.reports import finance_reports
@@ -655,7 +655,7 @@ def conciliation_report(
     date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Cruza pagamento ↔ caixa ↔ recebível; divergências são 'a revisar'."""
     from app.application.reports import finance_reports
@@ -672,7 +672,7 @@ def get_budget(
     year: Optional[int] = Query(None, ge=2020, le=2100, description="Ano do orçamento (padrão: atual)"),
     month: Optional[int] = Query(None, ge=1, le=12, description="Mês 1–12 (padrão: atual)"),
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     """Orçamento do mês na tabela finance_budgets; defaults = mês corrente (UTC)."""
     now = datetime.utcnow()
@@ -738,7 +738,7 @@ def put_budget(
 @router.get("/saved-reports", response_model=SavedReportListResponse)
 def list_saved_reports(
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(get_tenant_context),
+    ctx: TenantContext = Depends(require_permission("finance.read")),
 ):
     rows = SQLAlchemySavedReportRepository(db, ctx.tenant_id).list_all()
     return SavedReportListResponse(items=[_saved_report_to_response(r) for r in rows], total=len(rows))
