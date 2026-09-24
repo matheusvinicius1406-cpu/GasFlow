@@ -4,6 +4,10 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+_(sem mudanças ainda)_
+
+## [1.2.0] - 2026-09-23
+
 ### 📲 App do entregador — ações de entrega na auth principal
 
 - **Aceitar/iniciar/concluir/falhar respondiam 401:** o app loga em

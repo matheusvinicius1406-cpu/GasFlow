@@ -79,12 +79,34 @@ Investigação feita em 2026-09-23:
 
 ## 4. Checklist de execução (ordem obrigatória)
 
+> **Estado em 2026-09-24** — a tag `v1.2.0` (anotada, `fe1f9d0` → commit
+> `926677e`) já foi criada e pusheada, e a release está **publicada** (id
+> 394939169, pública) com `.exe`, `.exe.blockmap` e `latest.yml` (1.2.0) —
+> workflow Release `35901091408` verde em ~9 min. A duplicata da v1.1.6 foi
+> removida: a API não lista **nenhuma** release duplicada nem rascunho órfão.
+> Os 4 jobs do gate (Backend/Frontend/WhatsApp/Agent) estão verdes no commit
+> da tag; quem reprova o run de CI é só o job **E2E**, que o gate ignora de
+> propósito — mas a main ficou vermelha por isso (ver nota no fim da §4).
+> Pendentes: **C4** (asset `app-release.apk`), **C5** (body da release) e
+> **D1–D5** (validação pós-release na máquina).
+>
+> Nota de decisão: o retry automático via `gh run rerun` (§3) foi substituído
+> pela estratégia "esperar até o deadline antes de reprovar" (`d3bf3f9`) — o
+> gate não reprova na primeira leitura de um run vermelho, dando a janela do
+> re-run sem precisar de `actions: write`.
+>
+> Nota de regressão: o E2E estava vermelho desde `4c5ffe5` porque
+> `e2e/tests/drivers.spec.ts` continuava na UI antiga do formulário de
+> motorista ("Tipo de Veículo" removido em `735ce2c` e navegação direta para a
+> lista, que virou a tela da credencial temporária). Spec corrigido no mesmo
+> commit que fecha este checklist.
+
 ### Fase A — Correções no código (antes de qualquer tag)
-- [ ] **A1.** Corrigir o flaky do backend (§3). Critério: 3 suítes completas verdes seguidas.
-- [ ] **A2.** Atualizar `mobile_version.json`: campo `changelog` descrevendo a v1.2.0 (migração `/driver/*` no app, cleartext LAN, CRUD de entregadores no painel, cancelamentos, integrações/automações) e `release_date: 2026-09-23`. `latest_version` e `download_url` já estão corretos.
-- [ ] **A3.** Ajustar `release.yml`: timeout do gate 45→75 min (o timeout do **job** `ci-gate` em `timeout-minutes` e o `TIMEOUT_S` do script) + retry do gate (§3). Adicionar `actions: write` ao bloco `permissions` se o retry usar rerun.
-- [ ] **A4.** (Opcional, barato) No step "Confere que o release está publicado e completo", adicionar assert de **unicidade**: `gh release list` não pode ter 2 releases com a mesma tag — alerta no log se houver (não falha, só denuncia).
-- [ ] **A5.** Commitar tudo (padrão conventional, ex.: `fix(ci): ...`, `fix(tests): ...`) e **push na main**. Aguardar CI verde na main (job Backend incluído) — é o mesmo commit que receberá a tag.
+- [x] **A1.** Corrigir o flaky do backend (§3). Critério: 3 suítes completas verdes seguidas.
+- [x] **A2.** Atualizar `mobile_version.json`: campo `changelog` descrevendo a v1.2.0 (migração `/driver/*` no app, cleartext LAN, CRUD de entregadores no painel, cancelamentos, integrações/automações) e `release_date: 2026-09-23`. `latest_version` e `download_url` já estão corretos.
+- [x] **A3.** Ajustar `release.yml`: timeout do gate 45→75 min (o timeout do **job** `ci-gate` em `timeout-minutes` e o `TIMEOUT_S` do script) + retry do gate (§3). Adicionar `actions: write` ao bloco `permissions` se o retry usar rerun.
+- [x] **A4.** (Opcional, barato) No step "Confere que o release está publicado e completo", adicionar assert de **unicidade**: `gh release list` não pode ter 2 releases com a mesma tag — alerta no log se houver (não falha, só denuncia).
+- [x] **A5.** Commitar tudo (padrão conventional, ex.: `fix(ci): ...`, `fix(tests): ...`) e **push na main**. Aguardar CI verde na main (job Backend incluído) — é o mesmo commit que receberá a tag.
 
 ### Fase B — Validações locais (antes da tag)
 - [ ] **B1.** Suítes locais dos 4 projetos (o mesmo que o gate cobra):
@@ -92,30 +114,30 @@ Investigação feita em 2026-09-23:
   - frontend: `npm run typecheck` + `npx vitest run`;
   - whatsapp: typecheck + testes do projeto;
   - agent: typecheck + testes do projeto.
-- [ ] **B2.** Build do instalador local (replica o CI):
+- [x] **B2.** Build do instalador local (replica o CI):
   ```bash
   cd desktop && npm run build:win
   ```
   Conferir em `desktop/release/`: `GasFlow Desktop Setup 1.2.0.exe`, `.blockmap`, `latest.yml` com `version: 1.2.0`.
-- [ ] **B3.** APK release assinado:
+- [x] **B3.** APK release assinado:
   ```bash
   cd mobile/android && ./gradlew assembleRelease
   unzip -l app/build/outputs/apk/release/app-release.apk | grep index.android.bundle
   ```
   Precisa conter `assets/index.android.bundle` (release com bundle embutido — sem Metro).
-- [ ] **B4.** Limpeza do GitHub: **deletar a release v1.1.6 duplicada antiga** (a sem `.blockmap`, id 390033299) — pela UI do GitHub (Settings → Releases) ou `gh release delete v1.1.6 --cleanup-tag=false` apontando o id certo. **Não deletar a tag.** Se houver rascunho órfão da v1.1.7, deletar também.
+- [x] **B4.** Limpeza do GitHub: **deletar a release v1.1.6 duplicada antiga** (a sem `.blockmap`, id 390033299) — pela UI do GitHub (Settings → Releases) ou `gh release delete v1.1.6 --cleanup-tag=false` apontando o id certo. **Não deletar a tag.** Se houver rascunho órfão da v1.1.7, deletar também.
 
 ### Fase C — Tag e release
-- [ ] **C1.** Criar a tag **no commit do HEAD pushado** (o mesmo validado em A5):
+- [x] **C1.** Criar a tag **no commit do HEAD pushado** (o mesmo validado em A5):
   ```bash
   git tag -a v1.2.0 -m "v1.2.0 — auto-update do desktop no ar, CRUD de entregadores, acoes /driver/* no app, integracoes e automacoes"
   git push origin v1.2.0
   ```
-- [ ] **C2.** Acompanhar o workflow Release (Actions → Release): `ci-gate` (agora com retry e 75min) → `build-windows` → publish → **step "Confere" verde**.
-- [ ] **C3.** Conferir no GitHub que a release v1.2.0 existe, **não é rascunho**, e tem: `GasFlow Desktop Setup 1.2.0.exe`, `.exe.blockmap`, `latest.yml` (version 1.2.0).
+- [x] **C2.** Acompanhar o workflow Release (Actions → Release): `ci-gate` (agora com retry e 75min) → `build-windows` → publish → **step "Confere" verde**.
+- [x] **C3.** Conferir no GitHub que a release v1.2.0 existe, **não é rascunho**, e tem: `GasFlow Desktop Setup 1.2.0.exe`, `.exe.blockmap`, `latest.yml` (version 1.2.0).
 - [ ] **C4.** **Anexar o APK** assinado da B3 como asset `app-release.apk` na release (UI: drag & drop nos assets; ou `gh release upload v1.2.0 app-release.apk`). Isso torna o `download_url` do `mobile_version.json` funcional e liga o auto-update do app do entregador.
 - [ ] **C5.** **Body da release:** colar como descrição o conteúdo da seção `[Unreleased]` do CHANGELOG.md (que já documenta: CRUD de entregadores, ações `/driver/*`, debug×release mobile, painel web, diversos). Manter o parágrafo "🤖 Generated with Codebuff" fora — release notes são para usuários.
-- [ ] **C6.** Commit pós-release no CHANGELOG: renomear `[Unreleased]` → `[1.2.0] - 2026-09-23` e abrir `[Unreleased]` vazia em cima. Push.
+- [x] **C6.** Commit pós-release no CHANGELOG: renomear `[Unreleased]` → `[1.2.0] - 2026-09-23` e abrir `[Unreleased]` vazia em cima. Push.
 
 ### Fase D — Validação pós-release (a prova real do auto-update)
 - [ ] **D1.** Na máquina local, **instalar a v1.2.0** baixada da release (não um build local) — simula o cliente.
