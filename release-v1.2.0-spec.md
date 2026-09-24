@@ -136,7 +136,9 @@ Investigação feita em 2026-09-23:
 - [x] **C2.** Acompanhar o workflow Release (Actions → Release): `ci-gate` (agora com retry e 75min) → `build-windows` → publish → **step "Confere" verde**.
 - [x] **C3.** Conferir no GitHub que a release v1.2.0 existe, **não é rascunho**, e tem: `GasFlow Desktop Setup 1.2.0.exe`, `.exe.blockmap`, `latest.yml` (version 1.2.0).
 - [ ] **C4.** **Anexar o APK** assinado da B3 como asset `app-release.apk` na release (UI: drag & drop nos assets; ou `gh release upload v1.2.0 app-release.apk`). Isso torna o `download_url` do `mobile_version.json` funcional e liga o auto-update do app do entregador.
-- [ ] **C5.** **Body da release:** colar como descrição o conteúdo da seção `[Unreleased]` do CHANGELOG.md (que já documenta: CRUD de entregadores, ações `/driver/*`, debug×release mobile, painel web, diversos). Manter o parágrafo "🤖 Generated with Codebuff" fora — release notes são para usuários.
+- [ ] **C5.** **Body da release:** colar como descrição o conteúdo da seção `[Unreleased]` do CHANGELOG.md (que já documenta: CRUD de entregadores, ações `/driver/*`, debug×release mobile, painel web, diversos). Manter o parágrafo "🤖 Generated with Codebuff" fora — release notes são para usuários. O texto já extraído byte a byte da seção
+  `[1.2.0]` (23,9 kB, sem o rodapé do Codebuff) está em
+  `docs/release-notes-v1.2.0.md`, pronto para colar no campo de descrição.
 - [x] **C6.** Commit pós-release no CHANGELOG: renomear `[Unreleased]` → `[1.2.0] - 2026-09-23` e abrir `[Unreleased]` vazia em cima. Push.
 
 ### Fase D — Validação pós-release (a prova real do auto-update)
