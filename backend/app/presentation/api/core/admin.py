@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from app.application.security.permission_policy_loader import get_policy_loader
 from app.domain.security.models import TenantContext
 from app.infrastructure.database.init_db import engine
-from app.infrastructure.repositories.auth_model import AuthRoleModel, AuthUserModel
+from app.infrastructure.repositories.auth_model import AuthMembershipModel, AuthRoleModel, AuthUserModel
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
 from app.presentation.dependencies import require_admin, require_permission
 from app.presentation.schemas.delivery import CreateDriverResponse
@@ -219,6 +219,17 @@ async def create_user(
             must_change_password=True,
             created_by=ctx.user_id,
         )
+        # A membership é obrigatória: `validate_token` resolve o papel lendo
+        # `auth_memberships` (não `auth_users.role_id`) — sem ela o login cai
+        # em OPERATOR sem permissões. Mesma transação que o usuário.
+        db.add(
+            AuthMembershipModel(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                tenant_id=ctx.tenant_id,
+                role_id=role.id,
+            )
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -251,6 +262,29 @@ async def update_user(
             if value is not None:
                 setattr(user, field, value)
         user.updated_at = datetime.utcnow()
+        if body.role_id is not None:
+            # Troca de papel precisa refletir na membership (fonte que
+            # `validate_token` lê) — upsert no tenant do ator.
+            membership = (
+                db.query(AuthMembershipModel)
+                .filter(
+                    AuthMembershipModel.user_id == user_id,
+                    AuthMembershipModel.tenant_id == ctx.tenant_id,
+                )
+                .first()
+            )
+            if membership:
+                membership.role_id = body.role_id
+            else:
+                db.add(
+                    AuthMembershipModel(
+                        id=str(uuid.uuid4()),
+                        user_id=user_id,
+                        tenant_id=ctx.tenant_id,
+                        role_id=body.role_id,
+                    )
+                )
+            get_policy_loader().invalidate_user(user_id)
         db.commit()
         db.refresh(user)
 
