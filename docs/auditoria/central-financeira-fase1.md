@@ -212,7 +212,7 @@ não mentir (donut por categoria, DRE, pagamentos por forma).
 | **R9** | **Presets divergentes**: a UI oferece 1/7/30/90; o brief pede 7/30/90/**180**. O backend aceita (`days: ge=1, le=365` no período; `/reports/*` sem limite) | `finance/finance.py:305`, `finance/reports.py:64,89` |
 | **R10** | **Perda de capacidade se as telas caírem sem levar as funções**: criar despesa, cancelar despesa, cancelar pagamento e "Registrar Pagamento" só existem na `FinancePage` | `FinancePage.tsx` (handlers + `POST /finance/expenses*`, `/payments/{id}/cancel`) |
 | **R11** | **Mapa de Calor** está no grupo que será mexido e não está no escopo (é entregas por bairro). Opções: item próprio, seção da tela nova, ou grupo órfão — decisão sua | `nav.tsx:102` |
-| **R12** | **Permissão**: `finance.read` existe no seed (ADMIN tem `finance.*`; OPERATOR e outro role têm `finance.read`), mas **as rotas `/finance/*` e `/reports/*` não exigem permissão** (só `/payments/*` de mutação exige `require_admin`). Colocar `PermissionRoute` na tela nova **muda o acesso** de quem hoje entra sem a permissão | `rbac_seed.py:42-46,121,151,180`; `finance/*.py` usam `get_tenant_context` |
+| **R12** | **Permissão**: `finance.read` existe no seed (ADMIN tem `finance.*`; MANAGER tem `finance.*`; OPERATOR e VIEWER têm `finance.read`), mas **as rotas `/finance/*` e `/reports/*` não exigem permissão** (só `methods`/`pix` em `/payments/*` usam `require_admin` — cancel/refund de pagamento **não** exigem; verificado em Fase 2, `payments.py:370,380`). Colocar `PermissionRoute` na tela nova **muda o acesso** de quem hoje entra sem a permissão | `rbac_seed.py:42-46,121,151,180`; `finance/*.py` usam `get_tenant_context` |
 | **R13** | **Cores fora do design system** na tela atual (hardcoded) — reaproveitar o markup literal significaria copiar a dívida; a missão manda o design system vencer | §2.5 |
 | **R14** | `Dialog`, `Select`, `Tabs` e `StatCard` existem e são pouco usados (1, 4, 3 e 6 arquivos) — a tela nova pode se apoiar neles sem criar componente novo | contagem de imports |
 
@@ -240,3 +240,8 @@ não mentir (donut por categoria, DRE, pagamentos por forma).
 
 **Nada de código foi escrito.** A Fase 2 (decisões + plano de PRs) espera as
 respostas acima.
+
+> **Correção posterior (Fase 2, commit `…`):** R12 dizia que toda mutação de
+> `/payments/*` exige `require_admin` — falso: só `methods` e `pix` exigem;
+> `POST /payments/{id}/cancel|refund` usam `get_tenant_context`
+> (`payments.py:370,380`). O texto de R12 foi corrigido no lugar.
