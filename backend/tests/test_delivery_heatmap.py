@@ -2,7 +2,7 @@
 
 Cobre o spec §3.8:
 - Agregação: contagens por bairro batem com SQL direto (critério do prompt).
-- Período: só DELIVERED dentro da janela (7/30/90); entrega fora dela não conta.
+- Período: só DELIVERED dentro da janela (1/7/30/90/180); entrega fora dela não conta.
 - Cache: segunda chamada no TTL retorna cached=True; dados idênticos.
 - Tenant: nunca agrega dados de outro tenant.
 - Endpoint: GET /reports/heatmap (RBAC de sessão via TestClient).
@@ -223,6 +223,13 @@ class TestHeatmapEndpoint:
     def test_invalid_period_400(self, client, admin_headers):
         res = client.get("/reports/heatmap", params={"days": 42}, headers=admin_headers)
         assert res.status_code == 400
+
+    def test_new_periods_accepted(self, client, admin_headers):
+        """Preset 'Hoje' (1) e 180 dias passam a ser válidos (V1)."""
+        for days in (1, 180):
+            res = client.get("/reports/heatmap", params={"days": days}, headers=admin_headers)
+            assert res.status_code == 200, res.text
+            assert res.json()["period_days"] == days
 
     def test_requires_auth(self, client):
         res = client.get("/reports/heatmap")

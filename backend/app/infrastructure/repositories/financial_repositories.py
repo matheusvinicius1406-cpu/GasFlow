@@ -10,7 +10,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List, Tuple, Dict
 from sqlalchemy.orm import Session
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
@@ -53,6 +53,55 @@ def _to_decimal(val) -> Decimal:
     if isinstance(val, Decimal):
         return val
     return Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _apply_common_filters(
+    q,
+    model,
+    *,
+    q_text: Optional[str] = None,
+    search_fields: Tuple[str, ...] = (),
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    date_column=None,
+):
+    """Filtros aditivos compartilhados pelas listagens financeiras.
+
+    - `q_text`: LIKE em `search_fields` (colunas do model).
+    - `date_from`/`date_to`: faixa em `date_column`; `date_to` é INCLUSIVO
+      no dia (YYYY-MM-DD vira < dia seguinte 00:00), mesmo ritual do
+      `/finance/reports/period`.
+    """
+    if q_text:
+        pattern = f"%{q_text}%"
+        clauses = [getattr(model, name).ilike(pattern) for name in search_fields]
+        q = q.filter(or_(*clauses))
+    if date_from is not None:
+        q = q.filter(date_column >= date_from)
+    if date_to is not None:
+        q = q.filter(date_column < date_to)
+    return q
+
+
+def _apply_order(
+    q,
+    model,
+    *,
+    order_by: Optional[str],
+    order: Optional[str],
+    allowed: Dict[str, str],
+    default_col: str,
+    default_dir: str,
+):
+    """Ordenação por whitelist. `order_by` inválido levanta ValueError (→ 400)."""
+    col_name = order_by or default_col
+    if col_name not in allowed:
+        raise ValueError(f"order_by inválido: use um de {sorted(allowed)}")
+    direction = (order or default_dir).lower()
+    if direction not in ("asc", "desc"):
+        raise ValueError("order inválido: use 'asc' ou 'desc'")
+    column = getattr(model, allowed[col_name])
+    return q.order_by(column.asc() if direction == "asc" else column.desc())
 
 
 class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
@@ -120,15 +169,68 @@ class SQLAlchemyPaymentRepository(TenantMixin, PaymentRepository):
         return self._to_entity(model) if model else None
 
     def list_all(
-        self, status: Optional[PaymentStatus] = None, page: int = 1, page_size: int = 50
+        self,
+        status: Optional[PaymentStatus] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[Payment], int]:
-        q = self._filter_by_tenant(PaymentModel)
+        query = self._filter_by_tenant(PaymentModel)
         if status:
-            q = q.filter(PaymentModel.status == status.value)
-        total = q.count()
+            query = query.filter(PaymentModel.status == status.value)
+        # Data do lançamento: paid_at quando existe, senão o registro.
+        query = _apply_common_filters(
+            query,
+            PaymentModel,
+            q_text=q,
+            search_fields=("order_codigo", "reference", "notes"),
+            date_from=date_from,
+            date_to=date_to,
+            date_column=func.coalesce(PaymentModel.paid_at, PaymentModel.created_at),
+        )
+        total = query.count()
         offset = (page - 1) * page_size
-        models = q.order_by(PaymentModel.created_at.desc()).offset(offset).limit(page_size).all()
+        query = _apply_order(
+            query,
+            PaymentModel,
+            order_by=order_by,
+            order=order,
+            allowed={
+                "created_at": "created_at",
+                "paid_at": "paid_at",
+                "amount": "amount",
+                "order_codigo": "order_codigo",
+                "status": "status",
+                "method": "method",
+            },
+            default_col="created_at",
+            default_dir="desc",
+        )
+        models = query.offset(offset).limit(page_size).all()
         return [self._to_entity(m) for m in models], total
+
+    def totals_by_method(self, start: datetime, end: datetime) -> Dict[str, Decimal]:
+        """Pagamentos recebidos (PAID/PARTIAL) por forma no período [start, end).
+
+        REFUNDED fica de fora: dinheiro devolvido não conta como recebido.
+        """
+        rows = (
+            self.db.query(PaymentModel.method, func.coalesce(func.sum(PaymentModel.amount), 0))
+            .filter(
+                PaymentModel.tenant_id == self.tenant_id,
+                PaymentModel.status.in_(["PAID", "PARTIAL"]),
+                PaymentModel.paid_at >= start,
+                PaymentModel.paid_at < end,
+            )
+            .group_by(PaymentModel.method)
+            .all()
+        )
+        return {method: _to_decimal(total) for method, total in rows}
 
     def total_paid_for_order(self, order_codigo: str) -> Decimal:
         result = (
@@ -212,19 +314,91 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         )
         return [self._to_entity(m) for m in models]
 
-    def list_open(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]:
-        q = self._filter_by_tenant(ReceivableModel).filter(ReceivableModel.status.in_(["OPEN", "PARTIAL", "OVERDUE"]))
-        total = q.count()
+    def _list_receivables(
+        self,
+        base,
+        page: int,
+        page_size: int,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> Tuple[List[Receivable], int]:
+        base = _apply_common_filters(
+            base,
+            ReceivableModel,
+            q_text=q,
+            search_fields=("customer_codigo", "order_codigo"),
+            date_from=date_from,
+            date_to=date_to,
+            date_column=ReceivableModel.due_date,
+        )
+        total = base.count()
         offset = (page - 1) * page_size
-        models = q.order_by(ReceivableModel.due_date.asc()).offset(offset).limit(page_size).all()
+        base = _apply_order(
+            base,
+            ReceivableModel,
+            order_by=order_by,
+            order=order,
+            allowed={
+                "due_date": "due_date",
+                "created_at": "created_at",
+                "original_amount": "original_amount",
+                "paid_amount": "paid_amount",
+                "status": "status",
+                "customer_codigo": "customer_codigo",
+            },
+            default_col="due_date",
+            default_dir="asc",
+        )
+        models = base.offset(offset).limit(page_size).all()
         return [self._to_entity(m) for m in models], total
 
-    def list_overdue(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]:
-        q = self._filter_by_tenant(ReceivableModel).filter(ReceivableModel.status == "OVERDUE")
-        total = q.count()
-        offset = (page - 1) * page_size
-        models = q.order_by(ReceivableModel.due_date.asc()).offset(offset).limit(page_size).all()
-        return [self._to_entity(m) for m in models], total
+    def list_open(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> Tuple[List[Receivable], int]:
+        base = self._filter_by_tenant(ReceivableModel).filter(
+            ReceivableModel.status.in_(["OPEN", "PARTIAL", "OVERDUE"])
+        )
+        return self._list_receivables(
+            base, page, page_size, q=q, date_from=date_from, date_to=date_to, order_by=order_by, order=order
+        )
+
+    def list_overdue(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> Tuple[List[Receivable], int]:
+        base = self._filter_by_tenant(ReceivableModel).filter(ReceivableModel.status == "OVERDUE")
+        return self._list_receivables(
+            base, page, page_size, q=q, date_from=date_from, date_to=date_to, order_by=order_by, order=order
+        )
+
+    def list_open_all(self) -> List[Receivable]:
+        """Todos os recebíveis em aberto — base do aging (poucas dezenas em uso real)."""
+        models = (
+            self._filter_by_tenant(ReceivableModel)
+            .filter(ReceivableModel.status.in_(["OPEN", "PARTIAL", "OVERDUE"]))
+            .order_by(ReceivableModel.due_date.asc())
+            .all()
+        )
+        return [self._to_entity(m) for m in models]
 
     def total_outstanding_for_customer(self, customer_codigo: str) -> Decimal:
         result = (
@@ -291,14 +465,47 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         return self._to_entity(model) if model else None
 
     def list_all(
-        self, status: Optional[ExpenseStatus] = None, page: int = 1, page_size: int = 50
+        self,
+        status: Optional[ExpenseStatus] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[Expense], int]:
-        q = self._filter_by_tenant(ExpenseModel)
+        query = self._filter_by_tenant(ExpenseModel)
         if status:
-            q = q.filter(ExpenseModel.status == status.value)
-        total = q.count()
+            query = query.filter(ExpenseModel.status == status.value)
+        query = _apply_common_filters(
+            query,
+            ExpenseModel,
+            q_text=q,
+            search_fields=("description", "notes"),
+            date_from=date_from,
+            date_to=date_to,
+            date_column=ExpenseModel.date,
+        )
+        total = query.count()
         offset = (page - 1) * page_size
-        models = q.order_by(ExpenseModel.date.desc()).offset(offset).limit(page_size).all()
+        query = _apply_order(
+            query,
+            ExpenseModel,
+            order_by=order_by,
+            order=order,
+            allowed={
+                "date": "date",
+                "created_at": "created_at",
+                "amount": "amount",
+                "category": "category",
+                "description": "description",
+            },
+            default_col="date",
+            default_dir="desc",
+        )
+        models = query.offset(offset).limit(page_size).all()
         return [self._to_entity(m) for m in models], total
 
     def cancel(self, expense_id: int) -> Optional[Expense]:
@@ -339,6 +546,21 @@ class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
         )
         return {_parse_day(d): _to_decimal(total) for d, total in rows}
 
+    def totals_by_category(self, start: datetime, end: datetime) -> Dict[str, Decimal]:
+        """Despesas ATIVAS por categoria no período [start, end)."""
+        rows = (
+            self.db.query(ExpenseModel.category, func.coalesce(func.sum(ExpenseModel.amount), 0))
+            .filter(
+                ExpenseModel.tenant_id == self.tenant_id,
+                ExpenseModel.date >= start,
+                ExpenseModel.date < end,
+                ExpenseModel.status == "ACTIVE",
+            )
+            .group_by(ExpenseModel.category)
+            .all()
+        )
+        return {category: _to_decimal(total) for category, total in rows}
+
 
 class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
     def __init__(self, db: Session, tenant_id: str = "default"):
@@ -377,14 +599,46 @@ class SQLAlchemyCashMovementRepository(TenantMixin, CashMovementRepository):
         return self._to_entity(model) if model else None
 
     def list_all(
-        self, type_filter: Optional[CashMovementType] = None, page: int = 1, page_size: int = 50
+        self,
+        type_filter: Optional[CashMovementType] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[CashMovement], int]:
-        q = self._filter_by_tenant(CashMovementModel)
+        query = self._filter_by_tenant(CashMovementModel)
         if type_filter:
-            q = q.filter(CashMovementModel.type == type_filter.value)
-        total = q.count()
+            query = query.filter(CashMovementModel.type == type_filter.value)
+        query = _apply_common_filters(
+            query,
+            CashMovementModel,
+            q_text=q,
+            search_fields=("description", "reference_id"),
+            date_from=date_from,
+            date_to=date_to,
+            date_column=CashMovementModel.created_at,
+        )
+        total = query.count()
         offset = (page - 1) * page_size
-        models = q.order_by(CashMovementModel.created_at.desc()).offset(offset).limit(page_size).all()
+        query = _apply_order(
+            query,
+            CashMovementModel,
+            order_by=order_by,
+            order=order,
+            allowed={
+                "created_at": "created_at",
+                "amount": "amount",
+                "type": "type",
+                "balance_after": "balance_after",
+            },
+            default_col="created_at",
+            default_dir="desc",
+        )
+        models = query.offset(offset).limit(page_size).all()
         return [self._to_entity(m) for m in models], total
 
     def current_balance(self) -> Decimal:

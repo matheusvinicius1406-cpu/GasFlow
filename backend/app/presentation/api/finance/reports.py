@@ -61,7 +61,7 @@ def _get_order_data_for_date(tenant_id: str, date: str):
 
 @router.get("/deliveries")
 async def get_delivery_report(
-    days: int = Query(30, description="Janela em dias (7, 30 ou 90)"),
+    days: int = Query(30, description="Janela em dias (1, 7, 30, 90 ou 180)"),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Agregados de entregas para os gráficos da ReportsPage (F9).
@@ -86,7 +86,7 @@ async def get_delivery_report(
 
 @router.get("/heatmap")
 async def get_delivery_heatmap(
-    days: int = Query(30, description="Período em dias (7, 30 ou 90)"),
+    days: int = Query(30, description="Período em dias (1, 7, 30, 90 ou 180)"),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Mapa de calor — entregas DELIVERED por bairro no período (F8).

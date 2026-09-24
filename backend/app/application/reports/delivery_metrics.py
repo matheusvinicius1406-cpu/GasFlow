@@ -5,7 +5,7 @@ Spec (§3.9):
 - Entregas por período (diário), por entregador e por região (bairro)
 - Tempo médio de entrega: atribuição → DELIVERED (minutos)
 - Comparativo de performance entre entregadores
-- Sempre filtrado por tenant; janela de dias parametrizável (7/30/90,
+- Sempre filtrado por tenant; janela de dias parametrizável (1/7/30/90/180,
   default 30) alinhada ao resto do sistema.
 
 Estratégia: agregação em SQL (func.count/func.avg) direto sobre
@@ -25,7 +25,7 @@ from app.infrastructure.repositories.delivery_persistence_model import DeliveryR
 
 logger = setup_logging("INFO")
 
-VALID_DAYS = (7, 30, 90)
+VALID_DAYS = (1, 7, 30, 90, 180)
 
 
 def _since(days: int) -> datetime:

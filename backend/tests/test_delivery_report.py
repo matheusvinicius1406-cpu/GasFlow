@@ -142,7 +142,7 @@ class TestWindowAndTenant:
         assert report["by_day"] == []
 
     def test_valid_days_constant(self):
-        assert VALID_DAYS == (7, 30, 90)
+        assert VALID_DAYS == (1, 7, 30, 90, 180)
 
 
 @pytest.fixture(scope="module")
@@ -170,6 +170,13 @@ class TestEndpoint:
     def test_invalid_window_400(self, client, admin_headers):
         res = client.get("/reports/deliveries", params={"days": 15}, headers=admin_headers)
         assert res.status_code == 400
+
+    def test_new_windows_accepted(self, client, admin_headers):
+        """Preset 'Hoje' (1) e 180 dias passam a ser válidos (V1)."""
+        for days in (1, 180):
+            res = client.get("/reports/deliveries", params={"days": days}, headers=admin_headers)
+            assert res.status_code == 200, res.text
+            assert res.json()["days"] == days
 
     def test_requires_auth(self, client):
         res = client.get("/reports/deliveries")

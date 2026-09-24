@@ -35,8 +35,22 @@ class PaymentRepository(ABC):
 
     @abstractmethod
     def list_all(
-        self, status: Optional[PaymentStatus] = None, page: int = 1, page_size: int = 50
+        self,
+        status: Optional[PaymentStatus] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[Payment], int]: ...
+
+    @abstractmethod
+    def totals_by_method(self, start: datetime, end: datetime) -> Dict[str, Decimal]:
+        """Soma de pagamentos não estornados (PAID/PARTIAL) por forma no
+        período [start, end), filtrado por `paid_at`."""
 
     @abstractmethod
     def total_paid_for_order(self, order_codigo: str) -> Decimal: ...
@@ -62,10 +76,34 @@ class ReceivableRepository(ABC):
     def get_by_customer(self, customer_codigo: str) -> List[Receivable]: ...
 
     @abstractmethod
-    def list_open(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]: ...
+    def list_open(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> Tuple[List[Receivable], int]: ...
 
     @abstractmethod
-    def list_overdue(self, page: int = 1, page_size: int = 50) -> Tuple[List[Receivable], int]: ...
+    def list_overdue(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> Tuple[List[Receivable], int]: ...
+
+    @abstractmethod
+    def list_open_all(self) -> List[Receivable]:
+        """Todos os recebíveis em aberto (sem paginação) — base do aging."""
 
     @abstractmethod
     def total_outstanding_for_customer(self, customer_codigo: str) -> Decimal: ...
@@ -83,7 +121,16 @@ class ExpenseRepository(ABC):
 
     @abstractmethod
     def list_all(
-        self, status: Optional[ExpenseStatus] = None, page: int = 1, page_size: int = 50
+        self,
+        status: Optional[ExpenseStatus] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[Expense], int]: ...
 
     @abstractmethod
@@ -91,6 +138,10 @@ class ExpenseRepository(ABC):
 
     @abstractmethod
     def total_by_period(self, start: datetime, end: datetime) -> Decimal: ...
+
+    @abstractmethod
+    def totals_by_category(self, start: datetime, end: datetime) -> Dict[str, Decimal]:
+        """Despesas ATIVAS por categoria no período [start, end)."""
 
     def totals_by_day(self, start: datetime, end: datetime) -> Dict[date, Decimal]:
         """Despesas ATIVAS por dia no período [start, end).
@@ -118,7 +169,16 @@ class CashMovementRepository(ABC):
 
     @abstractmethod
     def list_all(
-        self, type_filter: Optional[CashMovementType] = None, page: int = 1, page_size: int = 50
+        self,
+        type_filter: Optional[CashMovementType] = None,
+        page: int = 1,
+        page_size: int = 50,
+        *,
+        q: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        order_by: Optional[str] = None,
+        order: Optional[str] = None,
     ) -> Tuple[List[CashMovement], int]: ...
 
     @abstractmethod

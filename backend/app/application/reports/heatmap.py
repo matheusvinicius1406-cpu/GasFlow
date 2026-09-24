@@ -3,7 +3,7 @@ Delivery Heatmap — F8: densidade de entregas por bairro.
 
 Spec (§3.8, decisões E1–E3):
 - Agregação por bairro em SQL (group by address_neighborhood), sem postgis.
-- Período padrão de 30 dias, filtrável (7/30/90).
+- Período padrão de 30 dias, filtrável (1/7/30/90/180).
 - Cache de 5 minutos (TTL simples em memória por tenant/período —
   suficiente para visualização; invalidação por TTL apenas).
 - Só visualização (E3): nada de posicionamento de entregador aqui.
@@ -24,7 +24,7 @@ from app.infrastructure.repositories.delivery_persistence_model import DeliveryR
 
 logger = setup_logging("INFO")
 
-VALID_PERIODS = {7, 30, 90}
+VALID_PERIODS = {1, 7, 30, 90, 180}
 _CACHE: Dict[Tuple[str, int], Tuple[datetime, List[Dict[str, Any]]]] = {}
 CACHE_TTL_SECONDS = 300  # 5 min (spec)
 

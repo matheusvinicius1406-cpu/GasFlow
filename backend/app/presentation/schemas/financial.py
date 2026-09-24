@@ -151,6 +151,53 @@ class PeriodSummaryResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CategoryBreakdownItem(BaseModel):
+    category: str
+    total: Decimal
+    pct: Optional[float] = Field(None, description="% do total do período (None quando total = 0)")
+
+
+class CategoryBreakdownResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    total: Decimal
+    items: List[CategoryBreakdownItem]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MethodBreakdownItem(BaseModel):
+    method: str
+    total: Decimal
+    pct: Optional[float] = Field(None, description="% do total do período (None quando total = 0)")
+
+
+class MethodBreakdownResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    total: Decimal
+    items: List[MethodBreakdownItem]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AgingBucketResponse(BaseModel):
+    bucket: str = Field(description="0-30 | 31-60 | 61-90 | 90+ (dias de atraso; não vencidos contam como 0)")
+    count: int
+    total: Decimal = Field(description="Soma de remaining_amount no bucket")
+
+
+class ReceivablesSummaryResponse(BaseModel):
+    generated_at: datetime
+    open_count: int
+    open_total: Decimal = Field(description="Soma de remaining_amount em aberto")
+    overdue_count: int
+    overdue_total: Decimal
+    buckets: List[AgingBucketResponse]
+
+
 # ── Paginated responses ─────────────────────────────
 
 

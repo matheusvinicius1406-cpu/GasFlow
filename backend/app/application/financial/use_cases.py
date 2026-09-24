@@ -11,7 +11,7 @@ Atomic transactions for all financial operations.
 
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import Dict, Optional
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
@@ -312,6 +312,14 @@ def _pct_change(current: Decimal, previous: Decimal) -> Optional[float]:
     return float(change.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
 
 
+def _pct_share(part: Decimal, total: Decimal) -> Optional[float]:
+    """Parte (%) de `part` em `total` (None quando o total é zero)."""
+    if total == 0:
+        return None
+    share = (part / total) * 100
+    return float(share.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
 class FinancialReportsUseCase:
     """Basic financial reports for a period."""
 
@@ -402,4 +410,101 @@ class FinancialReportsUseCase:
                 "expenses_pct": _pct_change(total_expenses, prev_expenses),
                 "net_pct": _pct_change(net_result, prev_net),
             },
+        }
+
+    def categories_summary(self, start: datetime, end: datetime) -> dict:
+        """Despesas ATIVAS por categoria no período — donut da Visão Geral."""
+        totals = self.expense_repo.totals_by_category(start, end)
+        grand = sum(totals.values(), Decimal("0.00"))
+        items = [
+            {
+                "category": category,
+                "total": total,
+                "pct": _pct_share(total, grand),
+            }
+            for category, total in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+        return {
+            "from": start.date().isoformat(),
+            "to": (end - timedelta(days=1)).date().isoformat(),
+            "days": (end - start).days,
+            "total": grand,
+            "items": items,
+        }
+
+    def methods_summary(self, start: datetime, end: datetime) -> dict:
+        """Pagamentos recebidos por forma no período — donut de Pagamentos."""
+        totals = self.payment_repo.totals_by_method(start, end)
+        grand = sum(totals.values(), Decimal("0.00"))
+        items = [
+            {
+                "method": method,
+                "total": total,
+                "pct": _pct_share(total, grand),
+            }
+            for method, total in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+        return {
+            "from": start.date().isoformat(),
+            "to": (end - timedelta(days=1)).date().isoformat(),
+            "days": (end - start).days,
+            "total": grand,
+            "items": items,
+        }
+
+    def receivables_summary(self, now: Optional[datetime] = None) -> dict:
+        """Aging dos recebíveis em aberto: totais + buckets 0-30/31-60/61-90/90+.
+
+        Dias de atraso = max(0, hoje - due_date); sem vencimento ou não
+        vencido entra em "0-30". `overdue_*` conta só o que já venceu — é o
+        número que a UI mostra como "atrasado".
+        """
+        now = now or datetime.utcnow()
+        today = now.date()
+
+        open_items = self.receivable_repo.list_open_all()
+        buckets: Dict[str, Dict[str, object]] = {
+            "0-30": {"count": 0, "total": Decimal("0.00")},
+            "31-60": {"count": 0, "total": Decimal("0.00")},
+            "61-90": {"count": 0, "total": Decimal("0.00")},
+            "90+": {"count": 0, "total": Decimal("0.00")},
+        }
+        open_count = 0
+        open_total = Decimal("0.00")
+        overdue_count = 0
+        overdue_total = Decimal("0.00")
+
+        for r in open_items:
+            remaining = r.remaining_amount
+            open_count += 1
+            open_total += remaining
+
+            overdue_days = 0
+            if r.due_date is not None:
+                overdue_days = max(0, (today - r.due_date.date()).days)
+            if overdue_days > 0:
+                overdue_count += 1
+                overdue_total += remaining
+
+            if overdue_days <= 30:
+                key = "0-30"
+            elif overdue_days <= 60:
+                key = "31-60"
+            elif overdue_days <= 90:
+                key = "61-90"
+            else:
+                key = "90+"
+            buckets[key]["count"] = int(buckets[key]["count"]) + 1
+            buckets[key]["total"] = Decimal(buckets[key]["total"]) + remaining
+
+        return {
+            "generated_at": now,
+            "open_count": open_count,
+            "open_total": open_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            "overdue_count": overdue_count,
+            "overdue_total": overdue_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            "buckets": [
+                {"bucket": name, "count": int(b["count"]), "total": Decimal(b["total"]).quantize(Decimal("0.01"))}
+                for name, b in buckets.items()
+            ],
         }

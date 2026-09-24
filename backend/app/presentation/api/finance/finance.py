@@ -43,9 +43,75 @@ from app.presentation.schemas.financial import (
     CashMovementListResponse,
     DailySummaryResponse,
     PeriodSummaryResponse,
+    CategoryBreakdownResponse,
+    MethodBreakdownResponse,
+    ReceivablesSummaryResponse,
 )
 
 router = APIRouter(prefix="/finance", tags=["finance"])
+
+
+# ── Helpers de período/filtros ───────────────────────
+
+
+def _resolve_period(
+    days: int,
+    date_from: Optional[str],
+    date_to: Optional[str],
+) -> tuple[datetime, datetime]:
+    """Resolve o período [start, end) dos relatórios financeiros.
+
+    Sem `from`/`to`, usa os últimos `days` dias INCLUINDO hoje (30 → de 29
+    dias atrás até hoje), que é a leitura que o operador espera do filtro.
+    """
+    if date_from or date_to:
+        if not (date_from and date_to):
+            raise HTTPException(400, "Informe 'from' e 'to' juntos (YYYY-MM-DD)")
+        try:
+            start = datetime.strptime(date_from, "%Y-%m-%d")
+            end_day = datetime.strptime(date_to, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(400, "Data inválida: use YYYY-MM-DD") from exc
+        if end_day < start:
+            raise HTTPException(400, "'to' não pode ser anterior a 'from'")
+        end = end_day + timedelta(days=1)
+        if (end - start).days > 366:
+            raise HTTPException(400, "Período máximo: 366 dias")
+        return start, end
+
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    end = today + timedelta(days=1)
+    return end - timedelta(days=days), end
+
+
+def _parse_date_bounds(
+    date_from: Optional[str],
+    date_to: Optional[str],
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Faixa opcional das listagens: YYYY-MM-DD, `to` inclusivo no dia."""
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    if date_from:
+        try:
+            start = datetime.strptime(date_from, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(400, "date_from inválida: use YYYY-MM-DD") from exc
+    if date_to:
+        try:
+            end = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError as exc:
+            raise HTTPException(400, "date_to inválida: use YYYY-MM-DD") from exc
+    if start and end and end <= start:
+        raise HTTPException(400, "date_to não pode ser anterior a date_from")
+    return start, end
+
+
+def _order_or_400(fn, **kwargs):
+    """Roda o repositório traduzindo ValueError de order_by/order em 400."""
+    try:
+        return fn(**kwargs)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 # ── Payments ─────────────────────────────────────────
@@ -55,6 +121,11 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 def list_payments(
     status: Optional[str] = Query(None),
     order_codigo: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Busca em order_codigo, reference ou notes"),
+    date_from: Optional[str] = Query(None, alias="date_from", description="Início YYYY-MM-DD (paid_at/created_at)"),
+    date_to: Optional[str] = Query(None, alias="date_to", description="Fim YYYY-MM-DD inclusivo"),
+    order_by: Optional[str] = Query(None, description="created_at | paid_at | amount | order_codigo | status | method"),
+    order: Optional[str] = Query(None, description="asc | desc (padrão: desc por created_at)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -76,7 +147,18 @@ def list_payments(
     from app.domain.financial.payment import PaymentStatus
 
     s = PaymentStatus(status) if status else None
-    items, total = repo.list_all(status=s, page=page, page_size=page_size)
+    date_start, date_end = _parse_date_bounds(date_from, date_to)
+    items, total = _order_or_400(
+        repo.list_all,
+        status=s,
+        page=page,
+        page_size=page_size,
+        q=q,
+        date_from=date_start,
+        date_to=date_end,
+        order_by=order_by,
+        order=order,
+    )
     return PaymentListResponse(
         items=[PaymentResponse.model_validate(_to_dict(i)) for i in items],
         total=total,
@@ -146,6 +228,13 @@ def refund_payment(
 def list_receivables(
     status: Optional[str] = Query(None),
     order_codigo: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Busca em customer_codigo ou order_codigo"),
+    date_from: Optional[str] = Query(None, description="Vencimento a partir de YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="Vencimento até YYYY-MM-DD (inclusivo)"),
+    order_by: Optional[str] = Query(
+        None, description="due_date | created_at | original_amount | paid_amount | status | customer_codigo"
+    ),
+    order: Optional[str] = Query(None, description="asc | desc (padrão: asc por due_date)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -165,12 +254,12 @@ def list_receivables(
             total_pages=1,
         )
 
+    date_start, date_end = _parse_date_bounds(date_from, date_to)
+    extras = dict(q=q, date_from=date_start, date_to=date_end, order_by=order_by, order=order)
     if status and status == "OVERDUE":
-        items, total = repo.list_overdue(page=page, page_size=page_size)
-    elif status and status in ("OPEN", "PARTIAL"):
-        items, total = repo.list_open(page=page, page_size=page_size)
+        items, total = _order_or_400(repo.list_overdue, page=page, page_size=page_size, **extras)
     else:
-        items, total = repo.list_open(page=page, page_size=page_size)
+        items, total = _order_or_400(repo.list_open, page=page, page_size=page_size, **extras)
     return ReceivableListResponse(
         items=[_receivable_to_response(i) for i in items],
         total=total,
@@ -186,6 +275,11 @@ def list_receivables(
 @router.get("/expenses", response_model=ExpenseListResponse)
 def list_expenses(
     status: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Busca em description ou notes"),
+    date_from: Optional[str] = Query(None, description="Data a partir de YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="Data até YYYY-MM-DD (inclusivo)"),
+    order_by: Optional[str] = Query(None, description="date | created_at | amount | category | description"),
+    order: Optional[str] = Query(None, description="asc | desc (padrão: desc por date)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -195,7 +289,18 @@ def list_expenses(
     from app.domain.financial.expense import ExpenseStatus
 
     s = ExpenseStatus(status) if status else None
-    items, total = repo.list_all(status=s, page=page, page_size=page_size)
+    date_start, date_end = _parse_date_bounds(date_from, date_to)
+    items, total = _order_or_400(
+        repo.list_all,
+        status=s,
+        page=page,
+        page_size=page_size,
+        q=q,
+        date_from=date_start,
+        date_to=date_end,
+        order_by=order_by,
+        order=order,
+    )
     return ExpenseListResponse(
         items=[ExpenseResponse.model_validate(_to_dict(i)) for i in items],
         total=total,
@@ -251,6 +356,11 @@ def cancel_expense(
 @router.get("/cash", response_model=CashMovementListResponse)
 def list_cash_movements(
     type_filter: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Busca em description ou reference_id"),
+    date_from: Optional[str] = Query(None, description="Data a partir de YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="Data até YYYY-MM-DD (inclusivo)"),
+    order_by: Optional[str] = Query(None, description="created_at | amount | type | balance_after"),
+    order: Optional[str] = Query(None, description="asc | desc (padrão: desc por created_at)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -260,7 +370,18 @@ def list_cash_movements(
     from app.domain.financial.cash_movement import CashMovementType
 
     t = CashMovementType(type_filter) if type_filter else None
-    items, total = repo.list_all(type_filter=t, page=page, page_size=page_size)
+    date_start, date_end = _parse_date_bounds(date_from, date_to)
+    items, total = _order_or_400(
+        repo.list_all,
+        type_filter=t,
+        page=page,
+        page_size=page_size,
+        q=q,
+        date_from=date_start,
+        date_to=date_end,
+        order_by=order_by,
+        order=order,
+    )
     return CashMovementListResponse(
         items=[CashMovementResponse.model_validate(_to_dict(i)) for i in items],
         total=total,
@@ -308,28 +429,8 @@ def period_report(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Relatório do período: totais, série diária e comparação com o anterior.
-
-    Sem `from`/`to`, usa os últimos `days` dias INCLUINDO hoje (30 → de 29
-    dias atrás até hoje), que é a leitura que o operador espera do filtro.
-    """
-    if date_from or date_to:
-        if not (date_from and date_to):
-            raise HTTPException(400, "Informe 'from' e 'to' juntos (YYYY-MM-DD)")
-        try:
-            start = datetime.strptime(date_from, "%Y-%m-%d")
-            end_day = datetime.strptime(date_to, "%Y-%m-%d")
-        except ValueError as exc:
-            raise HTTPException(400, "Data inválida: use YYYY-MM-DD") from exc
-        if end_day < start:
-            raise HTTPException(400, "'to' não pode ser anterior a 'from'")
-        end = end_day + timedelta(days=1)
-        if (end - start).days > 366:
-            raise HTTPException(400, "Período máximo: 366 dias")
-    else:
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        end = today + timedelta(days=1)
-        start = end - timedelta(days=days)
+    """Relatório do período: totais, série diária e comparação com o anterior."""
+    start, end = _resolve_period(days, date_from, date_to)
 
     uc = FinancialReportsUseCase(
         payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
@@ -341,6 +442,50 @@ def period_report(
     if not result["daily"]:
         raise HTTPException(400, "Período vazio")
     return PeriodSummaryResponse(**result)
+
+
+def _reports_use_case(db: Session, ctx: TenantContext) -> FinancialReportsUseCase:
+    return FinancialReportsUseCase(
+        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
+        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
+        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
+        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
+    )
+
+
+@router.get("/reports/categories", response_model=CategoryBreakdownResponse)
+def categories_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Despesas ATIVAS por categoria no período (donut da Visão Geral)."""
+    start, end = _resolve_period(days, date_from, date_to)
+    return CategoryBreakdownResponse(**_reports_use_case(db, ctx).categories_summary(start, end))
+
+
+@router.get("/reports/methods", response_model=MethodBreakdownResponse)
+def methods_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Pagamentos recebidos (PAID/PARTIAL) por forma no período."""
+    start, end = _resolve_period(days, date_from, date_to)
+    return MethodBreakdownResponse(**_reports_use_case(db, ctx).methods_summary(start, end))
+
+
+@router.get("/receivables/summary", response_model=ReceivablesSummaryResponse)
+def receivables_summary(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Aging dos recebíveis em aberto: totais + buckets 0-30/31-60/61-90/90+."""
+    return ReceivablesSummaryResponse(**_reports_use_case(db, ctx).receivables_summary())
 
 
 # ── Helpers ──────────────────────────────────────────
