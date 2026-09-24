@@ -20,7 +20,7 @@ import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
-import { FinancePage } from '@/features/finance'
+import { FinancePage, CentralFinanceiraPage } from '@/features/finance'
 import { ReportsPage, HeatmapPage } from '@/features/reports'
 import { SettingsPage, AISettingsPage, IntegrationsPage } from '@/features/settings'
 import { WorkflowsPage } from '@/features/automation'
@@ -94,6 +94,16 @@ export function App() {
         <Route path="drivers/:codigo/edit" element={<DriverFormPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
+        {/* Central Financeira (Fase 3) — rota transitória de construção;
+            a tela velha (/finance) segue no ar até a remoção atômica (P11). */}
+        <Route
+          path="finance/central"
+          element={
+            <PermissionRoute permissions={['finance.read']}>
+              <CentralFinanceiraPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="finance" element={<FinancePage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/heatmap" element={<HeatmapPage />} />

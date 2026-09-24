@@ -18,6 +18,7 @@ import {
   Flame,
   FileText,
   Filter,
+  Landmark,
   LayoutDashboard,
   Megaphone,
   MessageSquare,
@@ -97,6 +98,8 @@ export const NAV_GROUPS: NavEntry[] = [
     label: 'Financeiro & Relatórios',
     icon: DollarSign,
     items: [
+      // Item temporário da Fase 3 — sai junto da rota /finance/central no P11.
+      { label: 'Central Financeira', href: '/finance/central', icon: Landmark },
       { label: 'Financeiro', href: '/finance', icon: DollarSign },
       { label: 'Relatórios', href: '/reports', icon: BarChart3 },
       { label: 'Mapa de Calor', href: '/reports/heatmap', icon: Flame },
