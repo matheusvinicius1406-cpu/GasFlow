@@ -25,7 +25,7 @@
 | V4 | **Modelo de orçamento** | Tabela mensal: `(tenant, ano, mês, categoria, valor)` — comparado ao realizado do período; seção avisa "orçamento = mês corrente" quando o preset ≠ 30 dias | Orçamento por categoria **sem data** (vigente sempre) — mais simples, mas some o "mês" |
 | V5 | **Bloco de Entregas (do Relatórios atual)** | Manter: `DeliveryCharts` vira parte da seção **Equipe** (o backend `/reports/deliveries` já existe e atende) | Cortar: apaga `DeliveryCharts.tsx` + teste no Fase 4 (perde os 4 gráficos de entregas) |
 | V6 | **Régua automática de cobrança** | **Fora de escopo.** Saem aging + lista de cobrança (dados existem); automação de aviso é feature de produto, não de tela | — (se discordar, vira PR de produto separado, depois desta missão) |
-| V7 | **Guard de permissão no backend** (`require_permission("finance.read")` nos GETs de `/finance/*` e `/reports/*`) | Deixar para um PR próprio **depois** de checar `mobile_api_paths` do audit (se o app do entregador chamar esses rotas, o token DRIVER não tem `finance.read` e quebraria) | — |
+| V7 | **Guard de permissão no backend** (`require_permission("finance.read")` nos GETs de `/finance/*` e `/reports/*`) | Deixar para um PR próprio **logo após P3** (risco zerado: `mobile/src` não chama `/finance` nem `/reports` — grep vazio na Fase 2; checar `mobile_api_paths` ainda assim) | — |
 
 ---
 
