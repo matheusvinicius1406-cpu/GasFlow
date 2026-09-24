@@ -87,8 +87,11 @@ Investigação feita em 2026-09-23:
 > Os 4 jobs do gate (Backend/Frontend/WhatsApp/Agent) estão verdes no commit
 > da tag; quem reprova o run de CI é só o job **E2E**, que o gate ignora de
 > propósito — mas a main ficou vermelha por isso (ver nota no fim da §4).
-> Pendentes: **C4** (asset `app-release.apk`), **C5** (body da release) e
-> **D1–D5** (validação pós-release na máquina).
+> **C4/C5 fechados em 2026-09-24**: o asset `app-release.apk` (52.773.002
+> bytes, o APK assinado da B3) foi anexado à release e o body passou a ser o
+> `docs/release-notes-v1.2.0.md` (sha256 do body idêntico ao do arquivo).
+> Conferido por fora: `GET /releases/latest/download/app-release.apk` responde
+> 302 → 200 com `Content-Length: 52773002`. Pendentes: **D1–D5**
 >
 > Nota de decisão: o retry automático via `gh run rerun` (§3) foi substituído
 > pela estratégia "esperar até o deadline antes de reprovar" (`d3bf3f9`) — o
@@ -135,8 +138,8 @@ Investigação feita em 2026-09-23:
   ```
 - [x] **C2.** Acompanhar o workflow Release (Actions → Release): `ci-gate` (agora com retry e 75min) → `build-windows` → publish → **step "Confere" verde**.
 - [x] **C3.** Conferir no GitHub que a release v1.2.0 existe, **não é rascunho**, e tem: `GasFlow Desktop Setup 1.2.0.exe`, `.exe.blockmap`, `latest.yml` (version 1.2.0).
-- [ ] **C4.** **Anexar o APK** assinado da B3 como asset `app-release.apk` na release (UI: drag & drop nos assets; ou `gh release upload v1.2.0 app-release.apk`). Isso torna o `download_url` do `mobile_version.json` funcional e liga o auto-update do app do entregador.
-- [ ] **C5.** **Body da release:** colar como descrição o conteúdo da seção `[Unreleased]` do CHANGELOG.md (que já documenta: CRUD de entregadores, ações `/driver/*`, debug×release mobile, painel web, diversos). Manter o parágrafo "🤖 Generated with Codebuff" fora — release notes são para usuários. O texto já extraído byte a byte da seção
+- [x] **C4.** **Anexar o APK** assinado da B3 como asset `app-release.apk` na release (UI: drag & drop nos assets; ou `gh release upload v1.2.0 app-release.apk`). Isso torna o `download_url` do `mobile_version.json` funcional e liga o auto-update do app do entregador. Feito em 2026-09-24 pela API do GitHub: `app-release.apk`, 52.773.002 bytes — o exe do CI (191.322.791 bytes, com `.blockmap` e `latest.yml` que casam com ele) **não** foi tocado.
+- [x] **C5.** **Body da release:** colar como descrição o conteúdo da seção `[Unreleased]` do CHANGELOG.md (que já documenta: CRUD de entregadores, ações `/driver/*`, debug×release mobile, painel web, diversos). Manter o parágrafo "🤖 Generated with Codebuff" fora — release notes são para usuários. O texto já extraído byte a byte da seção
   `[1.2.0]` (23,9 kB, sem o rodapé do Codebuff) está em
   `docs/release-notes-v1.2.0.md`, pronto para colar no campo de descrição.
 - [x] **C6.** Commit pós-release no CHANGELOG: renomear `[Unreleased]` → `[1.2.0] - 2026-09-23` e abrir `[Unreleased]` vazia em cima. Push.
