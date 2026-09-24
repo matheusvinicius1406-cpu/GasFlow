@@ -85,8 +85,10 @@ Investigação feita em 2026-09-23:
 > workflow Release `35901091408` verde em ~9 min. A duplicata da v1.1.6 foi
 > removida: a API não lista **nenhuma** release duplicada nem rascunho órfão.
 > Os 4 jobs do gate (Backend/Frontend/WhatsApp/Agent) estão verdes no commit
-> da tag; quem reprova o run de CI é só o job **E2E**, que o gate ignora de
-> propósito — mas a main ficou vermelha por isso (ver nota no fim da §4).
+> da tag; quem reprovava o run de CI era só o job **E2E**, que o gate ignora de
+> propósito — a main ficou vermelha por isso (ver nota de regressão abaixo).
+> Corrigido, o commit `5302c09` fechou **CI e E2E verdes** na main: 7/7 jobs,
+> incluindo E2E e Trivy.
 > **C4/C5 fechados em 2026-09-24**: o asset `app-release.apk` (52.773.002
 > bytes, o APK assinado da B3) foi anexado à release e o body passou a ser o
 > `docs/release-notes-v1.2.0.md` (sha256 do body idêntico ao do arquivo).
@@ -101,8 +103,9 @@ Investigação feita em 2026-09-23:
 > Nota de regressão: o E2E estava vermelho desde `4c5ffe5` porque
 > `e2e/tests/drivers.spec.ts` continuava na UI antiga do formulário de
 > motorista ("Tipo de Veículo" removido em `735ce2c` e navegação direta para a
-> lista, que virou a tela da credencial temporária). Spec corrigido no mesmo
-> commit que fecha este checklist.
+> lista, que virou a tela da credencial temporária). Spec corrigido em
+> `4434622`, na main com o resto deste checklist em `5302c09` — o run de CI/E2E
+> desse commit passou inteiro (7/7 jobs), a primeira main verde desde `4c5ffe5`.
 
 ### Fase A — Correções no código (antes de qualquer tag)
 - [x] **A1.** Corrigir o flaky do backend (§3). Critério: 3 suítes completas verdes seguidas.
