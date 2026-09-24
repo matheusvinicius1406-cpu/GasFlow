@@ -46,6 +46,12 @@ from app.presentation.schemas.financial import (
     CategoryBreakdownResponse,
     MethodBreakdownResponse,
     ReceivablesSummaryResponse,
+    DreResponse,
+    ProductsResponse,
+    ProjectionResponse,
+    TeamResponse,
+    HourlyResponse,
+    ConciliationResponse,
 )
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -484,6 +490,96 @@ def receivables_summary(
 ):
     """Aging dos recebíveis em aberto: totais + buckets 0-30/31-60/61-90/90+."""
     return ReceivablesSummaryResponse(**_reports_use_case(db, ctx).receivables_summary())
+
+
+# ── P2 — analytics (dre, products, projection, team, hourly, conciliation) ──
+
+
+@router.get("/reports/dre", response_model=DreResponse)
+def dre_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """DRE gerencial: receita − CMV ponderado − despesas, com cmv_coverage."""
+    from app.application.reports import finance_reports
+
+    start, end = _resolve_period(days, date_from, date_to)
+    return DreResponse(**finance_reports.dre(db, ctx.tenant_id, start, end))
+
+
+@router.get("/reports/products", response_model=ProductsResponse)
+def products_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Margem por produto; sem nota de compra → cost_known=false e margem None."""
+    from app.application.reports import finance_reports
+
+    start, end = _resolve_period(days, date_from, date_to)
+    return ProductsResponse(**finance_reports.products(db, ctx.tenant_id, start, end))
+
+
+@router.get("/reports/projection", response_model=ProjectionResponse)
+def projection_report(
+    horizon: int = Query(30, ge=1, le=180, description="Horizonte em dias (1–180)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Projeção de caixa: saldo + recebíveis no horizonte − média de despesas (sem ML)."""
+    from app.application.reports import finance_reports
+
+    return ProjectionResponse(**finance_reports.projection(db, ctx.tenant_id, horizon))
+
+
+@router.get("/reports/team", response_model=TeamResponse)
+def team_report(
+    days: int = Query(30, description="Janela em dias (1, 7, 30, 90 ou 180)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Entregas por motorista + folha SALARY do período (sem rateio por entregador)."""
+    from app.application.reports import finance_reports
+    from app.application.reports.delivery_metrics import VALID_DAYS
+
+    if days not in VALID_DAYS:
+        raise HTTPException(400, f"Janela inválida: use {list(VALID_DAYS)} dias")
+    return TeamResponse(**finance_reports.team(db, ctx.tenant_id, days))
+
+
+@router.get("/reports/hourly", response_model=HourlyResponse)
+def hourly_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Pagamentos recebidos por hora do dia (paid_at); despesas ficam de fora."""
+    from app.application.reports import finance_reports
+
+    start, end = _resolve_period(days, date_from, date_to)
+    return HourlyResponse(**finance_reports.hourly(db, ctx.tenant_id, start, end))
+
+
+@router.get("/reports/conciliation", response_model=ConciliationResponse)
+def conciliation_report(
+    days: int = Query(30, ge=1, le=365, description="Tamanho do período em dias"),
+    date_from: Optional[str] = Query(None, alias="from", description="Início YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, alias="to", description="Fim YYYY-MM-DD (inclusivo)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Cruza pagamento ↔ caixa ↔ recebível; divergências são 'a revisar'."""
+    from app.application.reports import finance_reports
+
+    start, end = _resolve_period(days, date_from, date_to)
+    return ConciliationResponse(**finance_reports.conciliation(db, ctx.tenant_id, start, end))
 
 
 # ── Helpers ──────────────────────────────────────────

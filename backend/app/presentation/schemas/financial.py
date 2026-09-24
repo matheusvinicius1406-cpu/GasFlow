@@ -198,6 +198,132 @@ class ReceivablesSummaryResponse(BaseModel):
     buckets: List[AgingBucketResponse]
 
 
+# ── P2 — analytics (dre, products, projection, team, hourly, conciliation) ──
+
+
+class DreExpenseItem(BaseModel):
+    category: str
+    total: Decimal
+    pct: Optional[float] = Field(None, description="% da despesa total do período (None quando total = 0)")
+
+
+class DreResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    revenue: Decimal = Field(description="Soma de subtotal dos itens vendidos no período")
+    cmv: Decimal = Field(description="CMV ponderado só dos produtos com nota CONFIRMED")
+    gross_profit: Decimal
+    expenses: Decimal
+    result: Decimal
+    cmv_coverage: Optional[float] = Field(
+        None, description="% da receita com custo conhecido (None quando receita = 0)"
+    )
+    expense_items: List[DreExpenseItem]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ProductMarginItem(BaseModel):
+    product_codigo: str
+    product_nome: str
+    quantity: int
+    revenue: Decimal
+    unit_cost: Optional[Decimal] = Field(None, description="Custo médio ponderado (None sem nota CONFIRMED)")
+    cost_known: bool
+    margin: Optional[Decimal] = Field(None, description="revenue − qty×unit_cost (None quando cost_known=false)")
+    margin_pct: Optional[float]
+
+
+class ProductsResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    revenue: Decimal
+    items: List[ProductMarginItem]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ProjectionDay(BaseModel):
+    date: str
+    inflow: Decimal
+    outflow: Decimal
+    balance: Decimal
+
+
+class ProjectionResponse(BaseModel):
+    generated_at: datetime
+    horizon: int
+    current_balance: Decimal
+    expected_in: Decimal = Field(description="Recebíveis com vencimento até o fim do horizonte")
+    avg_daily_expenses: Decimal
+    expected_out: Decimal
+    projected_balance: Decimal
+    daily: List[ProjectionDay]
+    model: str = Field(description="Rótulo honesto do modelo (sem ML)")
+
+
+class TeamDriverItem(BaseModel):
+    driver_id: str
+    nome: Optional[str] = None
+    assigned: int
+    delivered: int
+    failed: int
+    avg_minutes: Optional[float] = None
+
+
+class TeamResponse(BaseModel):
+    days: int
+    generated_at: datetime
+    by_driver: List[TeamDriverItem]
+    salary_total: Decimal
+    note: str
+
+
+class HourlyBucket(BaseModel):
+    hour: int = Field(ge=0, le=23)
+    count: int
+    total: Decimal
+
+
+class HourlyResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    buckets: List[HourlyBucket] = Field(description="24 buckets (00–23) por hora de paid_at")
+    total: Decimal
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ConciliationItem(BaseModel):
+    payment_id: int
+    order_codigo: str
+    amount: Decimal
+    method: str
+    status: str
+    has_cash_movement: bool
+    receivable_status: Optional[str] = None
+    receivable_delta: Optional[Decimal] = Field(None, description="paid_amount − soma de pagamentos (0 = ok)")
+    issues: List[str] = Field(
+        description="Códigos 'a revisar': sem_movimento_de_caixa | sem_recebivel | recebivel_em_divergencia"
+    )
+
+
+class ConciliationResponse(BaseModel):
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+    days: int
+    checked: int
+    matched: int
+    to_review: int
+    items: List[ConciliationItem] = Field(description="Divergências (teto 200); matched não vem item a item")
+    note: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 # ── Paginated responses ─────────────────────────────
 
 
