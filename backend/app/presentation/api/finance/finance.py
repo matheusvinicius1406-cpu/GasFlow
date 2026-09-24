@@ -114,6 +114,16 @@ def _order_or_400(fn, **kwargs):
         raise HTTPException(400, str(exc)) from exc
 
 
+def _enum_or_400(enum_cls, value: Optional[str], label: str):
+    """Converte query param em enum; valor desconhecido → 400 (não 500)."""
+    if not value:
+        return None
+    try:
+        return enum_cls(value)
+    except ValueError as exc:
+        raise HTTPException(400, f"{label} inválido: {value!r}") from exc
+
+
 # ── Payments ─────────────────────────────────────────
 
 
@@ -146,7 +156,7 @@ def list_payments(
 
     from app.domain.financial.payment import PaymentStatus
 
-    s = PaymentStatus(status) if status else None
+    s = _enum_or_400(PaymentStatus, status, "status")
     date_start, date_end = _parse_date_bounds(date_from, date_to)
     items, total = _order_or_400(
         repo.list_all,
@@ -288,7 +298,7 @@ def list_expenses(
     repo = SQLAlchemyExpenseRepository(db, ctx.tenant_id)
     from app.domain.financial.expense import ExpenseStatus
 
-    s = ExpenseStatus(status) if status else None
+    s = _enum_or_400(ExpenseStatus, status, "status")
     date_start, date_end = _parse_date_bounds(date_from, date_to)
     items, total = _order_or_400(
         repo.list_all,
@@ -369,7 +379,7 @@ def list_cash_movements(
     repo = SQLAlchemyCashMovementRepository(db, ctx.tenant_id)
     from app.domain.financial.cash_movement import CashMovementType
 
-    t = CashMovementType(type_filter) if type_filter else None
+    t = _enum_or_400(CashMovementType, type_filter, "type_filter")
     date_start, date_end = _parse_date_bounds(date_from, date_to)
     items, total = _order_or_400(
         repo.list_all,
@@ -411,13 +421,7 @@ def daily_report(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     target_date = datetime.fromisoformat(date) if date else datetime.utcnow()
-    uc = FinancialReportsUseCase(
-        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
-        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
-        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
-        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
-    )
-    result = uc.daily_summary(target_date)
+    result = _reports_use_case(db, ctx).daily_summary(target_date)
     return DailySummaryResponse(**result)
 
 
@@ -432,13 +436,7 @@ def period_report(
     """Relatório do período: totais, série diária e comparação com o anterior."""
     start, end = _resolve_period(days, date_from, date_to)
 
-    uc = FinancialReportsUseCase(
-        payment_repo=SQLAlchemyPaymentRepository(db, ctx.tenant_id),
-        receivable_repo=SQLAlchemyReceivableRepository(db, ctx.tenant_id),
-        expense_repo=SQLAlchemyExpenseRepository(db, ctx.tenant_id),
-        cash_repo=SQLAlchemyCashMovementRepository(db, ctx.tenant_id),
-    )
-    result = uc.period_summary(start, end)
+    result = _reports_use_case(db, ctx).period_summary(start, end)
     if not result["daily"]:
         raise HTTPException(400, "Período vazio")
     return PeriodSummaryResponse(**result)

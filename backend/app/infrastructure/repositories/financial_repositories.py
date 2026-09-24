@@ -416,7 +416,8 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
         result = self.db.execute(
             text(
                 "UPDATE receivables SET status = 'OVERDUE' "
-                "WHERE status IN ('OPEN', 'PARTIAL') "
+                "WHERE tenant_id = :tenant_id "
+                "AND status IN ('OPEN', 'PARTIAL') "
                 "AND due_date < :now "
                 "AND (original_amount - paid_amount) > 0"
             ),

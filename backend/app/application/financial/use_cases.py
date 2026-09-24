@@ -504,7 +504,11 @@ class FinancialReportsUseCase:
             "overdue_count": overdue_count,
             "overdue_total": overdue_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
             "buckets": [
-                {"bucket": name, "count": int(b["count"]), "total": Decimal(b["total"]).quantize(Decimal("0.01"))}
+                {
+                    "bucket": name,
+                    "count": int(b["count"]),
+                    "total": Decimal(b["total"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                }
                 for name, b in buckets.items()
             ],
         }

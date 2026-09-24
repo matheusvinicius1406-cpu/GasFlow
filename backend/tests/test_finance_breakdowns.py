@@ -345,6 +345,57 @@ class TestListaParamsAditivos:
         res = client.get("/finance/payments", params={"date_from": "01/07/2026"}, headers=_auth(admin_token))
         assert res.status_code == 400
 
+    @pytest.mark.parametrize(
+        "path,param",
+        [
+            ("/finance/payments", "status"),
+            ("/finance/expenses", "status"),
+            ("/finance/cash", "type_filter"),
+        ],
+    )
+    def test_enum_invalido_retorna_400_nao_500(self, client, admin_token, path, param):
+        """Enum de query inválido é erro do cliente (400), nunca ValueError cru (500)."""
+        res = client.get(path, params={param: "NAO_EXISTE"}, headers=_auth(admin_token))
+        assert res.status_code == 400, res.text
+        assert param in res.json()["detail"]
+
+    def test_update_overdue_status_respeita_tenant(self):
+        """O UPDATE de vencimento não pode alcançar recebíveis de outro tenant."""
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from app.infrastructure.repositories.financial_repositories import (
+            SQLAlchemyReceivableRepository,
+        )
+
+        hoje = datetime.utcnow()
+        outro_id = _insert(
+            ReceivableModel,
+            tenant_id="outro-tenant",
+            customer_codigo="ODUE-1",
+            order_codigo="ODUE-O-1",
+            original_amount=Decimal("77.00"),
+            paid_amount=Decimal("0.00"),
+            due_date=hoje - timedelta(days=5),
+            status="OPEN",
+        )
+        try:
+            db = Session(bind=engine)
+            try:
+                count = SQLAlchemyReceivableRepository(db, "default").update_overdue_status(hoje)
+                assert count >= 0
+                row = db.execute(select(ReceivableModel).where(ReceivableModel.id == outro_id)).scalar_one()
+                assert row.status == "OPEN", "update_overdue_status vazou para outro tenant"
+            finally:
+                db.close()
+        finally:
+            db = Session(bind=engine)
+            try:
+                db.query(ReceivableModel).filter(ReceivableModel.id == outro_id).delete()
+                db.commit()
+            finally:
+                db.close()
+
     def test_defaults_preservam_comportamento(self, client, admin_token):
         """Sem params novos, as listagens continuam 200 com a forma antiga."""
         for path in ("/finance/payments", "/finance/expenses", "/finance/receivables", "/finance/cash"):
