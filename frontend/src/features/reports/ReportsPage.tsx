@@ -33,7 +33,7 @@ import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Pa
 import { apiClient } from '@/lib/api/client'
 import { exportCurrentViewPdf } from '@/lib/exportPdf'
 import { formatCurrency, formatPercent } from '@/lib/utils'
-import { downloadPeriodCsv, toCsvDate, type PeriodReportCsvInput } from './periodCsv'
+import { downloadPeriodCsv, toCsvDate, type PeriodReportCsvInput } from '@/features/finance/exportPeriodCsv'
 import { DeliveryCharts } from './DeliveryCharts'
 
 /**

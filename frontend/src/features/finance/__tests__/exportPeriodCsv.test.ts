@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPeriodCsv, periodCsvFilename, toCsvDate, toCsvMoney } from './periodCsv'
+import { buildPeriodCsv, periodCsvFilename, toCsvDate, toCsvMoney } from '../exportPeriodCsv'
 
 const relatorio = {
   from: '2026-09-04',

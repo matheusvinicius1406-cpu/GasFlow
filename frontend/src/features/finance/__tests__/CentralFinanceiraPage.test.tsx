@@ -1,9 +1,57 @@
 import { fireEvent, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 import { CentralFinanceiraPage } from '../CentralFinanceiraPage'
 import { SectionShell } from '../SectionShell'
 import { SECTIONS } from '../usePeriodFilter'
+
+/**
+ * P5: o shell busca os dados da Visão Geral e injeta na seção. Por padrão o
+ * mock de GET fica pendurado (nunca resolve) — assim os testes de estrutura
+ * não dependem do fetch; quem precisa de conteúdo resolve os fixtures no teste.
+ */
+const h = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  hasPermission: (permission: string): boolean => permission.startsWith('finance.'),
+}))
+
+vi.mock('@/lib/api/client', () => ({
+  apiClient: { get: h.get, post: h.post },
+}))
+
+vi.mock('@/features/auth', () => ({
+  useAuth: () => ({ hasPermission: h.hasPermission, isLoading: false }),
+  PermissionRoute: ({ children }: { children: React.ReactNode }) => children as React.ReactElement,
+  ProtectedRoute: ({ children }: { children: React.ReactNode }) => children as React.ReactElement,
+}))
+
+const periodo = {
+  from: '2026-09-01',
+  to: '2026-09-24',
+  days: 30,
+  total_receipts: 1500,
+  total_expenses: 400,
+  net_result: 1100,
+  daily: [
+    { date: '2026-09-23', receipts: 500, expenses: 100, net_result: 400 },
+    { date: '2026-09-24', receipts: 1000, expenses: 300, net_result: 700 },
+  ],
+  previous: { total_receipts: 1300, total_expenses: 450, net_result: 850 },
+  comparison: { receipts_pct: 15.4, expenses_pct: -11.1, net_pct: 29.4 },
+}
+
+function fixtureFor(url: string): unknown {
+  if (url === '/finance/reports/period') return periodo
+  if (url === '/finance/cash/balance') return { balance: 1200 }
+  if (url === '/finance/budget') return { year: 2026, month: 9, items: [], total: 0 }
+  if (url === '/finance/reports/categories') return { from: '2026-08-26', to: '2026-09-24', days: 30, total: 0, items: [] }
+  if (url === '/finance/receivables/summary') {
+    return { generated_at: '2026-09-24T12:00:00', open_count: 0, open_total: 0, overdue_count: 0, overdue_total: 0, buckets: [] }
+  }
+  if (url === '/dashboard') return { financial: { today_received: 0 } }
+  return { items: [], total: 0, page: 1, page_size: 20, total_pages: 1 }
+}
 
 function abaGroup() {
   return screen.getByRole('group', { name: 'Seções da Central Financeira' })
@@ -13,7 +61,14 @@ function presetGroup() {
   return screen.getByRole('group', { name: 'Período da Central Financeira' })
 }
 
-describe('CentralFinanceiraPage (P4 — shell)', () => {
+describe('CentralFinanceiraPage (P4/P5 — shell)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    h.hasPermission = () => true
+    h.get.mockImplementation(() => new Promise(() => undefined))
+    h.post.mockResolvedValue({ data: {} })
+  })
+
   it('renderiza título e as 15 abas das seções', () => {
     renderWithProviders(<CentralFinanceiraPage />)
     expect(screen.getByRole('heading', { name: 'Central Financeira' })).toBeInTheDocument()
@@ -38,10 +93,13 @@ describe('CentralFinanceiraPage (P4 — shell)', () => {
     expect(within(presetGroup()).getByRole('button', { name: '30 dias' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('aba padrão é Visão Geral (placeholder do P5) e trocar de aba muda a seção', () => {
+  it('aba padrão é a Visão Geral real (P5) e trocar de aba muda a seção', async () => {
+    h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
     renderWithProviders(<CentralFinanceiraPage />)
-    expect(screen.getByRole('heading', { name: 'Visão Geral — em construção' })).toBeInTheDocument()
-    expect(screen.getByText(/PR P5 da Central Financeira/)).toBeInTheDocument()
+
+    expect(await screen.findByText('A receber')).toBeInTheDocument()
+    expect(screen.getByText('Saldo em Caixa')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument()
 
     fireEvent.click(within(abaGroup()).getByRole('button', { name: 'DRE' }))
     expect(screen.getByRole('heading', { name: 'DRE — em construção' })).toBeInTheDocument()
@@ -55,8 +113,12 @@ describe('CentralFinanceiraPage (P4 — shell)', () => {
   })
 
   it('seção desconhecida na URL cai na padrão (visao-geral)', () => {
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=inexistente' })
-    expect(screen.getByRole('heading', { name: 'Visão Geral — em construção' })).toBeInTheDocument()
+    const { container } = renderWithProviders(<CentralFinanceiraPage />, {
+      route: '/finance/central?secao=inexistente',
+    })
+    expect(within(abaGroup()).getByRole('button', { name: 'Visão Geral' })).toHaveAttribute('aria-pressed', 'true')
+    // Dados pendurados → a seção real fica no loading do SectionShell.
+    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
 })
 
