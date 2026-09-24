@@ -5,7 +5,7 @@ Decimal (NUMERIC) for all monetary values.
 Constraints: amount > 0, remaining >= 0, FK relationships.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, Index, JSON, UniqueConstraint
 from datetime import datetime
 from decimal import Decimal
 from app.infrastructure.database.base import Base
@@ -112,4 +112,43 @@ class FinancialLedgerModel(Base):
         Index("ix_ledger_event_type", "event_type"),
         Index("ix_ledger_created", "created_at"),
         Index("ix_ledger_reference", "reference_type", "reference_id"),
+    )
+
+
+class FinanceBudgetModel(Base):
+    """Orçamento mensal por categoria — V4 (tenant, ano, mês, categoria)."""
+
+    __tablename__ = "finance_budgets"
+
+    tenant_id = Column(String, default="default", index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)  # 1–12
+    category = Column(String, nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "year", "month", "category", name="uq_finance_budgets_period"),
+        Index("ix_finance_budgets_period", "year", "month"),
+    )
+
+
+class FinanceSavedReportModel(Base):
+    """Relatório salvo pelo usuário (Central Financeira)."""
+
+    __tablename__ = "finance_saved_reports"
+
+    tenant_id = Column(String, default="default", index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    report_type = Column(String, nullable=False)
+    params = Column(JSON, nullable=True)
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_finance_saved_reports_name"),
+        Index("ix_finance_saved_reports_created", "created_at"),
     )

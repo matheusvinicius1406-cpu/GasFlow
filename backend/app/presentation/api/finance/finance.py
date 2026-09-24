@@ -6,6 +6,7 @@ All derived values calculated by backend.
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from math import ceil
 from typing import Optional
 
@@ -13,17 +14,22 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database.dependencies import get_db
-from app.presentation.dependencies import get_tenant_context
+from app.presentation.dependencies import get_tenant_context, require_permission
 from app.domain.security.models import TenantContext
 
+from app.infrastructure.repositories.auth_model import AuthAuditModel
+from app.infrastructure.repositories.financial_models import FinanceBudgetModel, FinanceSavedReportModel
 from app.infrastructure.repositories.financial_repositories import (
     SQLAlchemyPaymentRepository,
     SQLAlchemyReceivableRepository,
     SQLAlchemyExpenseRepository,
     SQLAlchemyCashMovementRepository,
     SQLAlchemyFinancialLedgerRepository,
+    SQLAlchemyFinanceBudgetRepository,
+    SQLAlchemySavedReportRepository,
 )
 from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
+from app.application.financial.audit import log_finance_audit
 from app.application.financial.use_cases import (
     RegisterPaymentUseCase,
     RegisterExpenseUseCase,
@@ -52,6 +58,14 @@ from app.presentation.schemas.financial import (
     TeamResponse,
     HourlyResponse,
     ConciliationResponse,
+    BudgetItem,
+    BudgetResponse,
+    BudgetUpsertRequest,
+    SavedReportCreate,
+    SavedReportListResponse,
+    SavedReportResponse,
+    FinanceAuditItem,
+    FinanceAuditResponse,
 )
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -209,12 +223,28 @@ def register_payment(
                 "notes": data.notes,
             }
         )
-        return {
-            "status": result["status"],
-            "payment": PaymentResponse.model_validate(_to_dict(result["payment"])),
-        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    payment = result["payment"]
+    if result["status"] == "created":
+        log_finance_audit(
+            db,
+            tenant_id=ctx.tenant_id,
+            actor_id=ctx.user_id,
+            action="payment.registered",
+            resource="payment",
+            resource_id=str(payment.id),
+            after={
+                "order_codigo": payment.order_codigo,
+                "amount": payment.amount,
+                "method": payment.method,
+                "status": payment.status,
+            },
+        )
+    return {
+        "status": result["status"],
+        "payment": PaymentResponse.model_validate(_to_dict(payment)),
+    }
 
 
 @router.post("/payments/{payment_id}/refund", response_model=dict)
@@ -232,9 +262,28 @@ def refund_payment(
     )
     try:
         result = uc.execute(payment_id, reason)
-        return {"status": result["status"], "message": "Refund processed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    payment = result["payment"]
+    # Use case devolve "status" só no atalho already_refunded; no caminho de
+    # sucesso o status real é o do payment. (Antes result["status"] KeyError.)
+    status = result.get("status") or "refunded"
+    if status != "already_refunded":
+        log_finance_audit(
+            db,
+            tenant_id=ctx.tenant_id,
+            actor_id=ctx.user_id,
+            action="payment.refunded",
+            resource="payment",
+            resource_id=str(payment.id),
+            after={
+                "order_codigo": payment.order_codigo,
+                "amount": payment.amount,
+                "status": payment.status,
+                "reason": reason or "",
+            },
+        )
+    return {"status": status, "message": "Refund processed"}
 
 
 # ── Receivables ──────────────────────────────────────
@@ -348,9 +397,25 @@ def register_expense(
                 "notes": data.notes,
             }
         )
-        return {"status": "created", "expense": ExpenseResponse.model_validate(_to_dict(result["expense"]))}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    expense = result["expense"]
+    log_finance_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="expense.created",
+        resource="expense",
+        resource_id=str(expense.id),
+        after={
+            "description": expense.description,
+            "amount": expense.amount,
+            "category": expense.category,
+            "date": expense.date,
+            "status": expense.status,
+        },
+    )
+    return {"status": "created", "expense": ExpenseResponse.model_validate(_to_dict(expense))}
 
 
 @router.post("/expenses/{expense_id}/cancel", response_model=dict)
@@ -360,9 +425,26 @@ def cancel_expense(
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     repo = SQLAlchemyExpenseRepository(db, ctx.tenant_id)
+    existing = repo.get_by_id(expense_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Expense not found")
     expense = repo.cancel(expense_id)
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
+    log_finance_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="expense.cancelled",
+        resource="expense",
+        resource_id=str(expense_id),
+        before={
+            "status": existing.status,
+            "amount": existing.amount,
+            "description": existing.description,
+        },
+        after={"status": expense.status},
+    )
     return {"status": "cancelled", "expense": ExpenseResponse.model_validate(_to_dict(expense))}
 
 
@@ -582,7 +664,195 @@ def conciliation_report(
     return ConciliationResponse(**finance_reports.conciliation(db, ctx.tenant_id, start, end))
 
 
+# ── P3 — orçamento mensal (V4: tenant, ano, mês, categoria) ──
+
+
+@router.get("/budget", response_model=BudgetResponse)
+def get_budget(
+    year: Optional[int] = Query(None, ge=2020, le=2100, description="Ano do orçamento (padrão: atual)"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Mês 1–12 (padrão: atual)"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Orçamento do mês na tabela finance_budgets; defaults = mês corrente (UTC)."""
+    now = datetime.utcnow()
+    target_year = year if year is not None else now.year
+    target_month = month if month is not None else now.month
+    rows = SQLAlchemyFinanceBudgetRepository(db, ctx.tenant_id).list_month(target_year, target_month)
+    items = _budget_items(rows)
+    return BudgetResponse(
+        year=target_year,
+        month=target_month,
+        items=items,
+        total=sum((item.amount for item in items), Decimal("0.00")),
+    )
+
+
+@router.put("/budget", response_model=BudgetResponse)
+def put_budget(
+    data: BudgetUpsertRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Substitui TODOS os itens do mês (replace-all) e audita antes/depois."""
+    entries: list[tuple[str, Decimal]] = []
+    seen: set[str] = set()
+    for item in data.items:
+        category = item.category.strip()
+        if not category:
+            raise HTTPException(400, "Categoria não pode ser vazia")
+        if len(category) > 100:
+            raise HTTPException(400, "Categoria muito longa (máx. 100 caracteres)")
+        key = category.casefold()
+        if key in seen:
+            raise HTTPException(400, f"Categoria duplicada: {category}")
+        seen.add(key)
+        entries.append((category, item.amount))
+
+    repo = SQLAlchemyFinanceBudgetRepository(db, ctx.tenant_id)
+    before = _budget_snapshot(repo.list_month(data.year, data.month))
+    rows = repo.replace_month(data.year, data.month, entries)
+    after = _budget_snapshot(rows)
+    log_finance_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="budget.upserted",
+        resource="budget",
+        resource_id=f"{data.year}-{data.month:02d}",
+        before=before,
+        after=after,
+    )
+    items = _budget_items(rows)
+    return BudgetResponse(
+        year=data.year,
+        month=data.month,
+        items=items,
+        total=sum((item.amount for item in items), Decimal("0.00")),
+    )
+
+
+# ── P3 — relatórios salvos ────────────────────────────
+
+
+@router.get("/saved-reports", response_model=SavedReportListResponse)
+def list_saved_reports(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    rows = SQLAlchemySavedReportRepository(db, ctx.tenant_id).list_all()
+    return SavedReportListResponse(items=[_saved_report_to_response(r) for r in rows], total=len(rows))
+
+
+@router.post("/saved-reports", response_model=SavedReportResponse)
+def create_saved_report(
+    data: SavedReportCreate,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    name = data.name.strip()
+    report_type = data.report_type.strip()
+    if not name:
+        raise HTTPException(400, "Nome não pode ser vazio")
+    if not report_type:
+        raise HTTPException(400, "report_type não pode ser vazio")
+
+    repo = SQLAlchemySavedReportRepository(db, ctx.tenant_id)
+    if repo.count() >= 100:
+        raise HTTPException(400, "Limite de relatórios salvos atingido (100)")
+    if repo.name_exists(name):
+        raise HTTPException(400, f"Já existe um relatório salvo chamado {name!r}")
+
+    row = repo.create(
+        name=name,
+        report_type=report_type,
+        params=data.params,
+        created_by=ctx.user_id,
+    )
+    log_finance_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="saved_report.created",
+        resource="saved_report",
+        resource_id=str(row.id),
+        after={"name": row.name, "report_type": row.report_type},
+    )
+    return _saved_report_to_response(row)
+
+
+@router.delete("/saved-reports/{report_id}", response_model=dict)
+def delete_saved_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    repo = SQLAlchemySavedReportRepository(db, ctx.tenant_id)
+    row = repo.get_by_id(report_id)
+    if row is None:
+        raise HTTPException(404, "Relatório salvo não encontrado")
+    repo.delete(report_id)
+    log_finance_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="saved_report.deleted",
+        resource="saved_report",
+        resource_id=str(report_id),
+        before={"name": row.name, "report_type": row.report_type},
+    )
+    return {"status": "deleted", "id": report_id}
+
+
+# ── P3 — auditoria financeira ─────────────────────────
+
+FINANCE_AUDIT_RESOURCES = (
+    "payment",
+    "expense",
+    "budget",
+    "saved_report",
+    "cash_movement",
+    "receivable",
+)
+
+
+@router.get("/audit", response_model=FinanceAuditResponse)
+def finance_audit(
+    days: int = Query(30, ge=1, le=365, description="Janela em dias até agora"),
+    limit: int = Query(100, ge=1, le=500, description="Máximo de itens retornados"),
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("audit.view")),
+):
+    """Trilha de auditoria financeira (só eventos a partir do deploy — sem backfill)."""
+    since = datetime.utcnow() - timedelta(days=days)
+    rows = (
+        db.query(AuthAuditModel)
+        .filter(
+            AuthAuditModel.tenant_id == ctx.tenant_id,
+            AuthAuditModel.resource.in_(FINANCE_AUDIT_RESOURCES),
+            AuthAuditModel.timestamp >= since,
+        )
+        .order_by(AuthAuditModel.timestamp.desc(), AuthAuditModel.id)
+        .limit(limit)
+        .all()
+    )
+    return FinanceAuditResponse(days=days, total=len(rows), items=[FinanceAuditItem.model_validate(r) for r in rows])
+
+
 # ── Helpers ──────────────────────────────────────────
+
+
+def _budget_items(rows: list[FinanceBudgetModel]) -> list[BudgetItem]:
+    return [BudgetItem(category=str(row.category), amount=Decimal(str(row.amount))) for row in rows]
+
+
+def _budget_snapshot(rows: list[FinanceBudgetModel]) -> dict:
+    """Snapshot antes/depois do PUT (Decimal serializado pelo audit helper)."""
+    return {"items": [{"category": row.category, "amount": row.amount} for row in rows]}
+
+
+def _saved_report_to_response(row: FinanceSavedReportModel) -> SavedReportResponse:
+    return SavedReportResponse.model_validate(row)
 
 
 def _to_dict(entity) -> dict:

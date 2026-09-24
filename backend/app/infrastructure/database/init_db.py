@@ -37,6 +37,8 @@ from app.infrastructure.repositories.financial_models import (  # noqa: F401
     ExpenseModel,
     CashMovementModel,
     FinancialLedgerModel,
+    FinanceBudgetModel,
+    FinanceSavedReportModel,
 )
 from app.infrastructure.ai.models import (  # noqa: F401
     ConversationModel,

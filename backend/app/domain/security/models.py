@@ -258,6 +258,7 @@ DEFAULT_PERMISSIONS = [
     ("finance", "read"),
     ("finance", "receive"),
     ("finance", "refund"),
+    ("finance", "write"),
     # WhatsApp
     ("whatsapp", "read"),
     ("whatsapp", "send"),
@@ -323,6 +324,7 @@ ROLE_PERMISSIONS = {
         "product.read",
         "inventory.read",
         "finance.read",
+        "finance.write",
         "whatsapp.read",
         "whatsapp.send",
         "whatsapp.takeover",

@@ -30,6 +30,8 @@ from app.infrastructure.repositories.financial_models import (
     ExpenseModel,
     CashMovementModel,
     FinancialLedgerModel,
+    FinanceBudgetModel,
+    FinanceSavedReportModel,
 )
 
 
@@ -730,3 +732,89 @@ class SQLAlchemyFinancialLedgerRepository(TenantMixin, FinancialLedgerRepository
             .count()
             > 0
         )
+
+
+# ── P3 — orçamento mensal + relatórios salvos ────────
+
+
+class SQLAlchemyFinanceBudgetRepository(TenantMixin):
+    """finance_budgets — orçamento mensal por categoria (V4)."""
+
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
+
+    def list_month(self, year: int, month: int) -> List[FinanceBudgetModel]:
+        return (
+            self._filter_by_tenant(FinanceBudgetModel)
+            .filter(FinanceBudgetModel.year == year, FinanceBudgetModel.month == month)
+            .order_by(FinanceBudgetModel.category)
+            .all()
+        )
+
+    def replace_month(self, year: int, month: int, items: List[Tuple[str, Decimal]]) -> List[FinanceBudgetModel]:
+        """Substitui todos os itens do mês (delete + insert) numa transação."""
+        (
+            self._filter_by_tenant(FinanceBudgetModel)
+            .filter(FinanceBudgetModel.year == year, FinanceBudgetModel.month == month)
+            .delete(synchronize_session=False)
+        )
+        rows = [
+            FinanceBudgetModel(
+                tenant_id=self.tenant_id,
+                year=year,
+                month=month,
+                category=category,
+                amount=amount,
+            )
+            for category, amount in items
+        ]
+        for row in rows:
+            self.db.add(row)
+        self.db.commit()
+        return rows
+
+
+class SQLAlchemySavedReportRepository(TenantMixin):
+    """finance_saved_reports — relatórios filtrados salvos pelo usuário."""
+
+    def __init__(self, db: Session, tenant_id: str = "default"):
+        super().__init__(db, tenant_id)
+
+    def list_all(self) -> List[FinanceSavedReportModel]:
+        return (
+            self._filter_by_tenant(FinanceSavedReportModel)
+            .order_by(FinanceSavedReportModel.created_at.desc(), FinanceSavedReportModel.id.desc())
+            .all()
+        )
+
+    def count(self) -> int:
+        return self._filter_by_tenant(FinanceSavedReportModel).count()
+
+    def name_exists(self, name: str) -> bool:
+        return self._filter_by_tenant(FinanceSavedReportModel).filter(FinanceSavedReportModel.name == name).count() > 0
+
+    def get_by_id(self, report_id: int) -> Optional[FinanceSavedReportModel]:
+        return self._filter_by_tenant(FinanceSavedReportModel).filter(FinanceSavedReportModel.id == report_id).first()
+
+    def create(
+        self, name: str, report_type: str, params: Optional[Dict], created_by: Optional[str]
+    ) -> FinanceSavedReportModel:
+        model = FinanceSavedReportModel(
+            tenant_id=self.tenant_id,
+            name=name,
+            report_type=report_type,
+            params=params,
+            created_by=created_by,
+        )
+        self.db.add(model)
+        self.db.commit()
+        self.db.refresh(model)
+        return model
+
+    def delete(self, report_id: int) -> bool:
+        model = self.get_by_id(report_id)
+        if model is None:
+            return False
+        self.db.delete(model)
+        self.db.commit()
+        return True

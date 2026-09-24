@@ -357,3 +357,69 @@ class CashMovementListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# ── P3 — orçamento, relatórios salvos e auditoria ─────
+
+
+class BudgetItem(BaseModel):
+    category: str = Field(..., min_length=1, max_length=100)
+    amount: Decimal = Field(..., ge=0, description="Meta do mês (>= 0)")
+
+
+class BudgetUpsertRequest(BaseModel):
+    """Substitui TODOS os itens do mês (replace-all por tenant+ano+mês)."""
+
+    year: int = Field(..., ge=2020, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    items: List[BudgetItem] = Field(..., max_length=50)
+
+
+class BudgetResponse(BaseModel):
+    year: int
+    month: int
+    items: List[BudgetItem]
+    total: Decimal
+
+
+class SavedReportCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    report_type: str = Field(..., min_length=1, max_length=50)
+    params: Optional[dict] = None
+
+
+class SavedReportResponse(BaseModel):
+    id: int
+    name: str
+    report_type: str
+    params: Optional[dict] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SavedReportListResponse(BaseModel):
+    items: List[SavedReportResponse]
+    total: int
+
+
+class FinanceAuditItem(BaseModel):
+    id: str
+    actor_id: str
+    action: str
+    resource: str
+    resource_id: str
+    result: str
+    timestamp: datetime
+    before_json: Optional[dict] = None
+    after_json: Optional[dict] = None
+    details: Optional[dict] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinanceAuditResponse(BaseModel):
+    days: int
+    total: int = Field(description="Itens retornados (limitado pelo parâmetro limit)")
+    items: List[FinanceAuditItem]

@@ -38,6 +38,35 @@ from app.infrastructure.payment.psp_gateway import verify_webhook_signature
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
+# ── Audit (P3 — best-effort, padrão purchase_service) ─
+
+
+def _audit_payment(ctx: TenantContext, action: str, payment) -> None:
+    """Grava a mutação do PSP em auth_audit_log (nunca derruba o negócio)."""
+    from sqlalchemy.orm import Session as DBSession
+
+    from app.application.financial.audit import log_finance_audit
+    from app.infrastructure.database.init_db import engine
+
+    db = DBSession(bind=engine)
+    try:
+        log_finance_audit(
+            db,
+            tenant_id=ctx.tenant_id,
+            actor_id=ctx.user_id,
+            action=action,
+            resource="payment",
+            resource_id=str(payment.id),
+            after={
+                "status": payment.status,
+                "amount": payment.amount,
+                "method": payment.method_code,
+            },
+        )
+    finally:
+        db.close()
+
+
 # ── Request/Response Schemas ─────────────────────────
 
 
@@ -364,6 +393,7 @@ async def confirm_payment(
     payment = service.confirm_payment(payment_id, ctx.tenant_id, confirmed_by=ctx.user_id, notes=req.notes)
     if not payment:
         raise HTTPException(404, "Payment not found or cannot be confirmed")
+    _audit_payment(ctx, "payment.confirmed", payment)
     return {"success": True, "payment": payment.to_dict()}
 
 
@@ -374,6 +404,7 @@ async def cancel_payment(payment_id: str, ctx: TenantContext = Depends(get_tenan
     payment = service.cancel_payment(payment_id, ctx.tenant_id)
     if not payment:
         raise HTTPException(404, "Payment not found or cannot be cancelled")
+    _audit_payment(ctx, "payment.cancelled", payment)
     return {"success": True, "payment": payment.to_dict()}
 
 
@@ -384,6 +415,7 @@ async def refund_payment(payment_id: str, ctx: TenantContext = Depends(get_tenan
     payment = service.refund_payment(payment_id, ctx.tenant_id)
     if not payment:
         raise HTTPException(404, "Payment not found or cannot be refunded")
+    _audit_payment(ctx, "payment.refunded", payment)
     return {"success": True, "payment": payment.to_dict()}
 
 
