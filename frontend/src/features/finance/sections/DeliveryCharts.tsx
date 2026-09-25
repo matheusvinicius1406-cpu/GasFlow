@@ -10,6 +10,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { apiClient } from '@/lib/api/client'
 import { exportCurrentViewPdf } from '@/lib/exportPdf'
+import { chartVar } from '../chartTokens'
 
 interface DayPoint { day: string; created: number; delivered: number; failed: number }
 interface DriverPoint { driver_id: string; assigned: number; delivered: number; failed: number; avg_minutes: number | null }
@@ -43,6 +44,11 @@ function useExportPdf() {
   return { exportPdf, exporting, sectionRef }
 }
 
+/**
+ * Gráficos de entregas (movido de `features/reports` no P8 / V5): buscador
+ * próprio com recorte 7/30/90 e exportação em PDF. Renderizado dentro da
+ * seção Equipe.
+ */
 export function DeliveryCharts() {
   const [days, setDays] = useState<number>(30)
   const [data, setData] = useState<DeliveryReport | null>(null)
@@ -119,9 +125,9 @@ export function DeliveryCharts() {
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="created" name="Criadas" stroke="#64748b" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="delivered" name="Entregues" stroke="#16a34a" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="failed" name="Falhas" stroke="#dc2626" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="created" name="Criadas" stroke={chartVar('--muted-foreground')} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="delivered" name="Entregues" stroke={chartVar('--success')} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="failed" name="Falhas" stroke={chartVar('--destructive')} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -144,8 +150,8 @@ export function DeliveryCharts() {
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="delivered" name="Entregues" fill="#16a34a" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="failed" name="Falhas" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="delivered" name="Entregues" fill={chartVar('--success')} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="failed" name="Falhas" fill={chartVar('--destructive')} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -167,7 +173,7 @@ export function DeliveryCharts() {
                     <XAxis dataKey="driver_id" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="avg_minutes" name="Minutos (atribuição → entrega)" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="avg_minutes" name="Minutos (atribuição → entrega)" fill={chartVar('--info')} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -189,7 +195,7 @@ export function DeliveryCharts() {
                     <XAxis dataKey="neighborhood" tick={{ fontSize: 10 }} interval={0} angle={-20} height={50} textAnchor="end" />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="count" name="Entregas" fill="#eab308" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="count" name="Entregas" fill={chartVar('--warning')} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

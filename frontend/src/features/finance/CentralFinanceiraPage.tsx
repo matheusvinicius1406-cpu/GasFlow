@@ -6,8 +6,10 @@ import {
   CalendarDays,
   CreditCard,
   FileDown,
+  History,
   Landmark,
   LineChart,
+  Link2,
   Target,
   Users,
   Wallet,
@@ -17,25 +19,34 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/features/auth'
 import { toCsvDate } from './exportPeriodCsv'
 import { SectionShell } from './SectionShell'
+import { AuditoriaSection } from './sections/AuditoriaSection'
 import { CalendarioSection } from './sections/CalendarioSection'
 import { ClientesSection } from './sections/ClientesSection'
+import { ConciliacaoSection } from './sections/ConciliacaoSection'
 import { DreSection } from './sections/DreSection'
+import { EquipeSection } from './sections/EquipeSection'
+import { MapaCalorSection } from './sections/MapaCalorSection'
 import { OrcamentoSection } from './sections/OrcamentoSection'
 import { PagamentosSection } from './sections/PagamentosSection'
 import { ProdutosSection } from './sections/ProdutosSection'
 import { ProjecaoSection } from './sections/ProjecaoSection'
+import { SalvosSection } from './sections/SalvosSection'
 import { SimuladorSection } from './sections/SimuladorSection'
 import { TendenciaSection } from './sections/TendenciaSection'
 import { VisaoGeralSection } from './sections/VisaoGeralSection'
 import { SECTIONS, findSection, usePeriodFilter } from './usePeriodFilter'
 import {
+  useAuditoriaData,
   useCalendarioData,
   useClientesData,
+  useConciliacaoData,
   useDreData,
+  useEquipeData,
   useMethodsData,
   useOrcamentoData,
   useProductsData,
   useProjectionData,
+  useSalvosData,
   useSimuladorData,
   useTendenciaData,
 } from './useAnalyticsData'
@@ -47,19 +58,28 @@ function sectionState(state: { data: unknown; error: boolean }) {
 }
 
 /**
- * Shell da Central Financeira (P4–P7): Page/PageHeader + filtros globais
+ * Shell da Central Financeira (P4–P8): Page/PageHeader + filtros globais
  * (presets V1) + abas das 15 seções com deep-link `?secao=`.
  *
- * Reais até aqui: Visão Geral (P5), analíticas I (P6: DRE, Produtos,
- * Orçamento, Projeção) e analíticas II (P7: Clientes, Pagamentos,
- * Calendário, Tendência, Simulador). As demais seguem placeholder até P8.
- * O shell busca os dados e injeta na seção (§2.2) — os hooks só disparam o
- * GET da seção ativa.
+ * Todas as 15 seções estão reais: Visão Geral (P5), analíticas I (P6:
+ * DRE, Produtos, Orçamento, Projeção), II (P7: Clientes, Pagamentos,
+ * Calendário, Tendência, Simulador) e III (P8: Conciliação, Auditoria,
+ * Relatórios Salvos, Equipe, Mapa de Calor). O shell busca os dados e
+ * injeta na seção (§2.2) — os hooks só disparam o GET da seção ativa.
  */
 export function CentralFinanceiraPage() {
   const { days, setDays, presets, secao, setSecao } = usePeriodFilter()
   const atual = findSection(secao)
   const { hasPermission } = useAuth()
+  const can = useMemo(
+    () => ({
+      write: hasPermission('finance.write'),
+      receive: hasPermission('finance.receive'),
+      audit: hasPermission('audit.view'),
+    }),
+    [hasPermission]
+  )
+
   const vg = useVisaoGeralData(days)
   const dre = useDreData(days, secao === 'dre')
   const produtos = useProductsData(days, secao === 'produtos')
@@ -70,13 +90,13 @@ export function CentralFinanceiraPage() {
   const calendario = useCalendarioData(days, secao === 'calendario')
   const tendencia = useTendenciaData(days, secao === 'tendencia')
   const simulador = useSimuladorData(days, secao === 'simulador')
-  const can = useMemo(
-    () => ({
-      write: hasPermission('finance.write'),
-      receive: hasPermission('finance.receive'),
-    }),
-    [hasPermission]
-  )
+  const conciliacao = useConciliacaoData(days, secao === 'conciliacao')
+  const auditoria = useAuditoriaData(days, secao === 'auditoria' && can.audit)
+  const salvos = useSalvosData(secao === 'salvos')
+  const equipe = useEquipeData(days, secao === 'equipe')
+
+  // A seção de Auditoria fica oculta sem `audit.view` (o backend também exige).
+  const secoes = can.audit ? SECTIONS : SECTIONS.filter((s) => s.slug !== 'auditoria')
 
   function sectionContent(): ReactNode {
     switch (secao) {
@@ -103,9 +123,7 @@ export function CentralFinanceiraPage() {
             {...sectionState(dre)}
             onRetry={() => void dre.reload()}
             empty={
-              dre.data !== null &&
-              money(dre.data.revenue) === 0 &&
-              money(dre.data.expenses) === 0
+              dre.data !== null && money(dre.data.revenue) === 0 && money(dre.data.expenses) === 0
             }
             emptyIcon={BarChart3}
             emptyTitle="Sem movimentações no período"
@@ -255,6 +273,80 @@ export function CentralFinanceiraPage() {
           </SectionShell>
         )
 
+      case 'conciliacao':
+        return (
+          <SectionShell
+            title="Conciliação"
+            {...sectionState(conciliacao)}
+            onRetry={() => void conciliacao.reload()}
+            empty={
+              conciliacao.data !== null &&
+              conciliacao.data.checked === 0 &&
+              conciliacao.data.items.length === 0
+            }
+            emptyIcon={Link2}
+            emptyTitle="Nada a conciliar no período"
+            emptyDescription="Não há pagamentos registrados no período escolhido."
+          >
+            {conciliacao.data ? <ConciliacaoSection data={conciliacao.data} /> : null}
+          </SectionShell>
+        )
+
+      case 'auditoria':
+        if (!can.audit) {
+          return (
+            <SectionShell
+              title="Auditoria"
+              empty
+              emptyIcon={Landmark}
+              emptyTitle="Sem permissão"
+              emptyDescription="Você precisa da permissão audit.view para ver a trilha de auditoria."
+            />
+          )
+        }
+        return (
+          <SectionShell
+            title="Auditoria"
+            {...sectionState(auditoria)}
+            onRetry={() => void auditoria.reload()}
+            empty={auditoria.data !== null && auditoria.data.items.length === 0}
+            emptyIcon={History}
+            emptyTitle="Nenhum evento no período"
+            emptyDescription="A trilha registra só eventos a partir do deploy da Central Financeira."
+          >
+            {auditoria.data ? <AuditoriaSection data={auditoria.data} /> : null}
+          </SectionShell>
+        )
+
+      case 'salvos':
+        return (
+          <SectionShell title="Relatórios Salvos" {...sectionState(salvos)} onRetry={() => void salvos.reload()}>
+            {salvos.data ? (
+              <SalvosSection
+                data={salvos.data}
+                canWrite={can.write}
+                saving={salvos.saving}
+                onCreate={salvos.create}
+                onDelete={(report) => salvos.remove(report.id)}
+              />
+            ) : null}
+          </SectionShell>
+        )
+
+      case 'equipe':
+        return (
+          <SectionShell title="Equipe" {...sectionState(equipe)} onRetry={() => void equipe.reload()}>
+            {equipe.data ? <EquipeSection data={equipe.data} /> : null}
+          </SectionShell>
+        )
+
+      case 'mapa-de-calor':
+        return (
+          <SectionShell title="Mapa de Calor">
+            <MapaCalorSection />
+          </SectionShell>
+        )
+
       default:
         return (
           <SectionShell
@@ -316,7 +408,7 @@ export function CentralFinanceiraPage() {
         role="group"
         aria-label="Seções da Central Financeira"
       >
-        {SECTIONS.map((s) => (
+        {secoes.map((s) => (
           <Button
             key={s.slug}
             size="sm"

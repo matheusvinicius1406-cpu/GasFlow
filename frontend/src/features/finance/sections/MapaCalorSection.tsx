@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
 import { DeliveryHeatmap, type HeatCell } from '@/components/map/DeliveryHeatmap'
 import { apiClient } from '@/lib/api/client'
 
@@ -18,8 +17,13 @@ interface HeatmapResponse {
 
 const PERIODS = [7, 30, 90] as const
 
-export function HeatmapPage() {
-  const [days, setDays] = useState<number>(30) // default 30 (E1)
+/**
+ * Mapa de Calor (movido de `HeatmapPage` no P8 / D4) — densidade de entregas
+ * concluídas por bairro. Mantém o recorte próprio (7/30/90) porque o
+ * endpoint `/reports/heatmap` só aceita esses dias; a API não mudou.
+ */
+export function MapaCalorSection() {
+  const [days, setDays] = useState<number>(30)
   const [data, setData] = useState<HeatmapResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -44,28 +48,25 @@ export function HeatmapPage() {
   const maxCount = Math.max(1, ...(data?.neighborhoods ?? []).map((n) => n.count))
 
   return (
-    <Page>
-      <PageHeader>
-        <PageTitle subtitle="Densidade de entregas concluídas por bairro">Mapa de Calor</PageTitle>
-        <PageActions>
-          {/* Filtro de período (E1): 7/30/90 dias, default 30 */}
-          <div className="flex items-center gap-1" role="group" aria-label="Período do mapa de calor">
-            {PERIODS.map((p) => (
-              <Button
-                key={p}
-                size="sm"
-                variant={days === p ? 'default' : 'outline'}
-                onClick={() => setDays(p)}
-              >
-                {p} dias
-              </Button>
-            ))}
-          </div>
-          <Button variant="outline" onClick={fetchData}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </PageActions>
-      </PageHeader>
+    <div className="space-y-4" data-testid="mapa-calor-section">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1" role="group" aria-label="Período do mapa de calor">
+          {PERIODS.map((p) => (
+            <Button
+              key={p}
+              size="sm"
+              variant={days === p ? 'default' : 'outline'}
+              aria-pressed={days === p}
+              onClick={() => setDays(p)}
+            >
+              {p} dias
+            </Button>
+          ))}
+        </div>
+        <Button variant="outline" onClick={fetchData}>
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -78,7 +79,7 @@ export function HeatmapPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Flame className="h-4 w-4 text-orange-500" />
+                <Flame className="h-4 w-4 text-warning" />
                 Densidade por bairro — {data.total} entrega(s) em {data.period_days} dias
                 {data.cached && <span className="text-xs font-normal text-muted-foreground">(cache 5min)</span>}
               </CardTitle>
@@ -114,6 +115,6 @@ export function HeatmapPage() {
           )}
         </>
       ) : null}
-    </Page>
+    </div>
   )
 }

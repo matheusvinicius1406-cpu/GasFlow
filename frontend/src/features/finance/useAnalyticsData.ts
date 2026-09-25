@@ -468,3 +468,187 @@ export function useSimuladorData(
     reload: pair.reload,
   }
 }
+
+// ── P8 — analíticas III (conciliação, auditoria, relatórios salvos, equipe) ──
+
+export interface ConciliationItem {
+  payment_id: number
+  order_codigo: string
+  amount: number | string
+  method: string
+  status: string
+  has_cash_movement: boolean
+  receivable_status: string | null
+  receivable_delta: number | string | null
+  /** Códigos 'a revisar': sem_movimento_de_caixa | sem_recebivel | recebivel_em_divergencia. */
+  issues: string[]
+}
+
+export interface ConciliationData {
+  from: string
+  to: string
+  days: number
+  checked: number
+  matched: number
+  to_review: number
+  items: ConciliationItem[]
+  note: string
+}
+
+export interface TeamDriverItem {
+  driver_id: string
+  nome: string | null
+  assigned: number
+  delivered: number
+  failed: number
+  avg_minutes: number | null
+}
+
+export interface TeamData {
+  days: number
+  generated_at: string
+  by_driver: TeamDriverItem[]
+  salary_total: number | string
+  note: string
+}
+
+export interface AuditItem {
+  id: string
+  actor_id: string
+  action: string
+  resource: string
+  resource_id: string
+  result: string
+  timestamp: string
+  before_json: Record<string, unknown> | null
+  after_json: Record<string, unknown> | null
+  details: Record<string, unknown> | null
+}
+
+export interface AuditData {
+  days: number
+  total: number
+  items: AuditItem[]
+}
+
+export interface SavedReport {
+  id: number
+  name: string
+  report_type: string
+  params: Record<string, unknown> | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface SalvosState {
+  data: SavedReport[] | null
+  loading: boolean
+  error: boolean
+  saving: boolean
+  reload: () => Promise<void>
+  create: (name: string, reportType: string) => Promise<boolean>
+  remove: (id: number) => Promise<boolean>
+}
+
+/** GET /finance/reports/conciliation — cruza pagamento ↔ caixa ↔ recebível. */
+export function useConciliacaoData(
+  days: number,
+  enabled: boolean
+): ReportState<ConciliationData> {
+  return useReport<ConciliationData>(
+    enabled ? '/finance/reports/conciliation' : null,
+    enabled ? { days } : null
+  )
+}
+
+/** GET /finance/audit — trilha de auditoria (exige `audit.view` no backend). */
+export function useAuditoriaData(days: number, enabled: boolean): ReportState<AuditData> {
+  return useReport<AuditData>(enabled ? '/finance/audit' : null, enabled ? { days } : null)
+}
+
+/** GET /finance/reports/team — entregas por motorista + folha SALARY do período. */
+export function useEquipeData(days: number, enabled: boolean): ReportState<TeamData> {
+  return useReport<TeamData>(
+    enabled ? '/finance/reports/team' : null,
+    enabled ? { days } : null
+  )
+}
+
+/**
+ * Relatórios salvos (P8): lista, cria (POST) e remove (DELETE) sobre
+ * `/finance/saved-reports`. A escrita é gated por `finance.write` no
+ * componente.
+ */
+export function useSalvosData(enabled: boolean): SalvosState {
+  const { success, error: toastError } = useToast()
+  const [data, setData] = useState<SavedReport[] | null>(null)
+  const [loading, setLoading] = useState(enabled)
+  const [error, setError] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const requestIdRef = useRef(0)
+
+  const reload = useCallback(async () => {
+    const requestId = ++requestIdRef.current
+    setLoading(true)
+    setError(false)
+    try {
+      const res = await apiClient.get<{ items: SavedReport[] }>('/finance/saved-reports')
+      if (requestId !== requestIdRef.current) return
+      setData(res.data.items ?? [])
+    } catch {
+      if (requestId !== requestIdRef.current) return
+      setError(true)
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!enabled) {
+      requestIdRef.current += 1
+      setData(null)
+      setError(false)
+      setLoading(false)
+      return
+    }
+    void reload()
+  }, [enabled, reload])
+
+  const create = useCallback(
+    async (name: string, reportType: string): Promise<boolean> => {
+      setSaving(true)
+      try {
+        await apiClient.post('/finance/saved-reports', { name, report_type: reportType })
+        success('Relatório salvo', name)
+        await reload()
+        return true
+      } catch (err) {
+        toastError('Erro ao salvar relatório', apiMessage(err))
+        return false
+      } finally {
+        setSaving(false)
+      }
+    },
+    [reload, success, toastError]
+  )
+
+  const remove = useCallback(
+    async (id: number): Promise<boolean> => {
+      setSaving(true)
+      try {
+        await apiClient.delete(`/finance/saved-reports/${id}`)
+        success('Relatório removido')
+        await reload()
+        return true
+      } catch (err) {
+        toastError('Erro ao remover relatório', apiMessage(err))
+        return false
+      } finally {
+        setSaving(false)
+      }
+    },
+    [reload, success, toastError]
+  )
+
+  return { data, loading, error, saving, reload, create, remove }
+}

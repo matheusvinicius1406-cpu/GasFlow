@@ -1,6 +1,6 @@
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { DeliveryCharts } from './DeliveryCharts'
+import { DeliveryCharts } from '../sections/DeliveryCharts'
 
 vi.mock('@/lib/api/client', () => ({
   apiClient: {
@@ -32,7 +32,7 @@ const report = {
   ],
 }
 
-describe('DeliveryCharts (F9)', () => {
+describe('DeliveryCharts (movido para o Financeiro no P8)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(apiClient.get).mockResolvedValue({ data: report })
@@ -123,7 +123,5 @@ describe('DeliveryCharts (F9)', () => {
       expect(screen.getByText('Não foi possível carregar os gráficos')).toBeInTheDocument()
     })
     fireEvent.click(screen.getByRole('button', { name: /tentar novamente/i }))
-    // Após o retry bem-sucedido os gráficos aparecem
-    // (mock volta ao default no próximo teste; aqui basta não ter lançado)
   })
 })

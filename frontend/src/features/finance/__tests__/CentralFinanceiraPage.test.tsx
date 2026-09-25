@@ -6,18 +6,20 @@ import { SectionShell } from '../SectionShell'
 import { SECTIONS } from '../usePeriodFilter'
 
 /**
- * P5: o shell busca os dados da Visão Geral e injeta na seção. Por padrão o
- * mock de GET fica pendurado (nunca resolve) — assim os testes de estrutura
- * não dependem do fetch; quem precisa de conteúdo resolve os fixtures no teste.
+ * P4–P8: o shell busca os dados da seção ativa e injeta. Por padrão o mock
+ * de GET fica pendurado (nunca resolve) — assim os testes de estrutura não
+ * dependem do fetch; quem precisa de conteúdo resolve os fixtures no teste.
+ * Depois do P8 todas as 15 seções são reais.
  */
 const h = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
-  hasPermission: (permission: string): boolean => permission.startsWith('finance.'),
+  delete: vi.fn(),
+  hasPermission: (() => true) as (permission: string) => boolean,
 }))
 
 vi.mock('@/lib/api/client', () => ({
-  apiClient: { get: h.get, post: h.post },
+  apiClient: { get: h.get, post: h.post, delete: h.delete },
 }))
 
 vi.mock('@/features/auth', () => ({
@@ -37,12 +39,34 @@ const periodo = {
     { date: '2026-09-23', receipts: 500, expenses: 100, net_result: 400 },
     { date: '2026-09-24', receipts: 1000, expenses: 300, net_result: 700 },
   ],
-  previous: { total_receipts: 1300, total_expenses: 450, net_result: 850 },
+  previous: { from: '2026-08-01', to: '2026-08-31', total_receipts: 1300, total_expenses: 450, net_result: 850 },
   comparison: { receipts_pct: 15.4, expenses_pct: -11.1, net_pct: 29.4 },
+}
+
+const dre = {
+  from: '2026-09-01',
+  to: '2026-09-24',
+  days: 30,
+  revenue: 1000,
+  cmv: 400,
+  gross_profit: 600,
+  expenses: 200,
+  result: 400,
+  cmv_coverage: 100,
+  expense_items: [],
+}
+
+const heatmap = {
+  period_days: 30,
+  generated_at: '2026-09-24T12:00:00',
+  cached: false,
+  total: 5,
+  neighborhoods: [{ neighborhood: 'Centro', count: 5, center: { lat: -30.03, lng: -51.22 } }],
 }
 
 function fixtureFor(url: string): unknown {
   if (url === '/finance/reports/period') return periodo
+  if (url === '/finance/reports/dre') return dre
   if (url === '/finance/cash/balance') return { balance: 1200 }
   if (url === '/finance/budget') return { year: 2026, month: 9, items: [], total: 0 }
   if (url === '/finance/reports/categories') return { from: '2026-08-26', to: '2026-09-24', days: 30, total: 0, items: [] }
@@ -50,6 +74,7 @@ function fixtureFor(url: string): unknown {
     return { generated_at: '2026-09-24T12:00:00', open_count: 0, open_total: 0, overdue_count: 0, overdue_total: 0, buckets: [] }
   }
   if (url === '/dashboard') return { financial: { today_received: 0 } }
+  if (url === '/reports/heatmap') return heatmap
   return { items: [], total: 0, page: 1, page_size: 20, total_pages: 1 }
 }
 
@@ -61,7 +86,7 @@ function presetGroup() {
   return screen.getByRole('group', { name: 'Período da Central Financeira' })
 }
 
-describe('CentralFinanceiraPage (P4/P5 — shell)', () => {
+describe('CentralFinanceiraPage (P4–P8 — shell)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     h.hasPermission = () => true
@@ -101,15 +126,17 @@ describe('CentralFinanceiraPage (P4/P5 — shell)', () => {
     expect(screen.getByText('Saldo em Caixa')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument()
 
-    // DRE/Clientes viraram seções reais (P6/P7); a still-placeholder é a de P8.
-    fireEvent.click(within(abaGroup()).getByRole('button', { name: 'Conciliação' }))
-    expect(screen.getByRole('heading', { name: 'Conciliação — em construção' })).toBeInTheDocument()
-    expect(screen.getByText(/PR P8 da Central Financeira/)).toBeInTheDocument()
+    // Depois do P8 todas as seções são reais — a aba DRE rende a seção de verdade.
+    fireEvent.click(within(abaGroup()).getByRole('button', { name: 'DRE' }))
+    expect(await screen.findByTestId('dre-receita')).toBeInTheDocument()
+    expect(screen.queryByText(/em construção/)).toBeNull()
   })
 
-  it('respeita o deep-link ?secao=', () => {
+  it('respeita o deep-link ?secao=', async () => {
+    h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
     renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=mapa-de-calor' })
-    expect(screen.getByRole('heading', { name: 'Mapa de Calor — em construção' })).toBeInTheDocument()
+
+    expect(await screen.findByText(/5 entrega\(s\) em 30 dias/)).toBeInTheDocument()
     expect(within(abaGroup()).getByRole('button', { name: 'Mapa de Calor' })).toHaveAttribute('aria-pressed', 'true')
   })
 

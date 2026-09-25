@@ -13,7 +13,7 @@ vi.mock('@/lib/api/client', () => ({
 }))
 
 import { apiClient } from '@/lib/api/client'
-import { HeatmapPage } from './HeatmapPage'
+import { MapaCalorSection } from '../sections/MapaCalorSection'
 
 const heatmapData = {
   period_days: 30,
@@ -26,7 +26,7 @@ const heatmapData = {
   ],
 }
 
-describe('HeatmapPage', () => {
+describe('MapaCalorSection (movido de HeatmapPage — P8)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -34,7 +34,7 @@ describe('HeatmapPage', () => {
   it('renderiza o mapa e o ranking com os dados do período', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: heatmapData })
 
-    renderWithProviders(<HeatmapPage />)
+    renderWithProviders(<MapaCalorSection />)
 
     await waitFor(() => {
       expect(screen.getByText(/5 entrega\(s\) em 30 dias/)).toBeInTheDocument()
@@ -47,7 +47,7 @@ describe('HeatmapPage', () => {
   it('troca o filtro de período e refaz a chamada', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { ...heatmapData, period_days: 7, total: 2 } })
 
-    renderWithProviders(<HeatmapPage />)
+    renderWithProviders(<MapaCalorSection />)
     await waitFor(() => screen.getByText(/30 dias/))
 
     fireEvent.click(screen.getByRole('button', { name: '7 dias' }))
@@ -55,8 +55,6 @@ describe('HeatmapPage', () => {
     await waitFor(() => {
       expect(apiClient.get).toHaveBeenCalledWith('/reports/heatmap', { params: { days: 7 } })
     })
-    // O card reflete o novo período (o botão "7 dias" também casa o texto,
-    // então usamos findAll e verificamos que há mais de um match: botão + card)
     await waitFor(() => {
       expect(screen.getAllByText(/7 dias/).length).toBeGreaterThanOrEqual(2)
     })
@@ -67,7 +65,7 @@ describe('HeatmapPage', () => {
       data: { period_days: 7, generated_at: 'x', cached: false, total: 0, neighborhoods: [] },
     })
 
-    renderWithProviders(<HeatmapPage />)
+    renderWithProviders(<MapaCalorSection />)
 
     await waitFor(() => {
       expect(screen.getByText('Sem entregas no período.')).toBeInTheDocument()
@@ -77,7 +75,7 @@ describe('HeatmapPage', () => {
   it('mostra erro com retry quando a API falha', async () => {
     vi.mocked(apiClient.get).mockRejectedValueOnce(new Error('boom'))
 
-    renderWithProviders(<HeatmapPage />)
+    renderWithProviders(<MapaCalorSection />)
 
     await waitFor(() => {
       expect(screen.getByText('Não foi possível carregar o mapa de calor.')).toBeInTheDocument()
