@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient } from '@/lib/api/client'
 import { useToast } from '@/components/ui/Toast'
-import { apiMessage } from './useVisaoGeralData'
+import type { Receivable } from '@/types'
+import { apiMessage, type PeriodData } from './useVisaoGeralData'
 
 /**
  * Dados das seções de analíticas (P6) — o shell busca e injeta (§2.2 do
@@ -262,4 +263,208 @@ export function useOrcamentoData(days: number, enabled: boolean): OrcamentoState
   )
 
   return { data, loading, error, saving, reload, save }
+}
+
+// ── P7 — analíticas II (clientes/aging, formas, calendário, tendência, simulador) ──
+
+/** Bucket de aging: "0-30" | "31-60" | "61-90" | "90+" (dias de atraso). */
+export interface AgingBucket {
+  bucket: string
+  count: number
+  total: number | string
+}
+
+export interface ReceivablesSummaryData {
+  generated_at: string
+  open_count: number
+  open_total: number | string
+  overdue_count: number
+  overdue_total: number | string
+  buckets: AgingBucket[]
+}
+
+export interface ClientesData {
+  summary: ReceivablesSummaryData
+  /** Recebíveis vencidos, do mais antigo para o mais novo (lista de cobrança). */
+  overdue: Receivable[]
+}
+
+export interface ClientesState {
+  data: ClientesData | null
+  loading: boolean
+  error: boolean
+  reload: () => Promise<void>
+}
+
+export interface MethodBreakdownData {
+  from: string
+  to: string
+  days: number
+  total: number | string
+  items: { method: string; total: number | string; pct: number | null }[]
+}
+
+export interface HourlyBucket {
+  hour: number
+  count: number
+  total: number | string
+}
+
+export interface HourlyData {
+  from: string
+  to: string
+  days: number
+  buckets: HourlyBucket[]
+  total: number | string
+}
+
+export interface CalendarioData {
+  period: PeriodData
+  hourly: HourlyData
+}
+
+export interface SimuladorData {
+  period: PeriodData
+  receivables: Receivable[]
+}
+
+interface Endpoint {
+  path: string
+  params: Record<string, number | string>
+}
+
+export interface PairState<A, B> {
+  data: { a: A; b: B } | null
+  loading: boolean
+  error: boolean
+  reload: () => Promise<void>
+}
+
+/**
+ * Dois GETs combinados (tudo ou nada): usado pelas seções que cruzam dois
+ * relatórios. `null` desliga a busca quando a seção não está ativa.
+ */
+function usePair<A, B>(first: Endpoint | null, second: Endpoint | null): PairState<A, B> {
+  const enabled = first !== null && second !== null
+  const firstPath = first?.path ?? null
+  const secondPath = second?.path ?? null
+  const firstKey = first === null ? null : JSON.stringify(first.params)
+  const secondKey = second === null ? null : JSON.stringify(second.params)
+  const key =
+    firstPath !== null && secondPath !== null && firstKey !== null && secondKey !== null
+      ? `${firstPath}|${firstKey}|${secondPath}|${secondKey}`
+      : null
+
+  const [data, setData] = useState<{ a: A; b: B } | null>(null)
+  const [loading, setLoading] = useState(enabled)
+  const [error, setError] = useState(false)
+  const requestIdRef = useRef(0)
+
+  const reload = useCallback(async () => {
+    if (
+      firstPath === null ||
+      secondPath === null ||
+      firstKey === null ||
+      secondKey === null
+    )
+      return
+    const requestId = ++requestIdRef.current
+    setLoading(true)
+    setError(false)
+    try {
+      const [firstRes, secondRes] = await Promise.all([
+        apiClient.get<A>(firstPath, {
+          params: JSON.parse(firstKey) as Record<string, number | string>,
+        }),
+        apiClient.get<B>(secondPath, {
+          params: JSON.parse(secondKey) as Record<string, number | string>,
+        }),
+      ])
+      if (requestId !== requestIdRef.current) return
+      setData({ a: firstRes.data, b: secondRes.data })
+    } catch {
+      if (requestId !== requestIdRef.current) return
+      setError(true)
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false)
+    }
+  }, [firstPath, secondPath, firstKey, secondKey])
+
+  useEffect(() => {
+    if (key === null) {
+      requestIdRef.current += 1
+      setData(null)
+      setError(false)
+      setLoading(false)
+      return
+    }
+    void reload()
+  }, [key, reload])
+
+  return { data, loading, error, reload }
+}
+
+/** GET /finance/reports/methods — recebido por forma de pagamento. */
+export function useMethodsData(days: number, enabled: boolean): ReportState<MethodBreakdownData> {
+  return useReport<MethodBreakdownData>(
+    enabled ? '/finance/reports/methods' : null,
+    enabled ? { days } : null
+  )
+}
+
+/**
+ * Clientes (P7): aging dos recebíveis (`/finance/receivables/summary`) +
+ * a lista de cobrança (vencidos, do mais antigo ao mais novo).
+ */
+export function useClientesData(enabled: boolean, pageSize = 50): ClientesState {
+  const pair = usePair<ReceivablesSummaryData, { items: Receivable[] }>(
+    enabled ? { path: '/finance/receivables/summary', params: {} } : null,
+    enabled
+      ? {
+          path: '/finance/receivables',
+          params: { status: 'OVERDUE', order_by: 'due_date', order: 'asc', page_size: pageSize },
+        }
+      : null
+  )
+  return {
+    data: pair.data ? { summary: pair.data.a, overdue: pair.data.b.items ?? [] } : null,
+    loading: pair.loading,
+    error: pair.error,
+    reload: pair.reload,
+  }
+}
+
+/** Calendário (P7): fluxo diário do período + recebimentos por hora do dia. */
+export function useCalendarioData(days: number, enabled: boolean): PairState<PeriodData, HourlyData> {
+  return usePair<PeriodData, HourlyData>(
+    enabled ? { path: '/finance/reports/period', params: { days } } : null,
+    enabled ? { path: '/finance/reports/hourly', params: { days } } : null
+  )
+}
+
+/** Tendência (P7): só o fluxo diário — média móvel e regressão no cliente. */
+export function useTendenciaData(days: number, enabled: boolean): ReportState<PeriodData> {
+  return useReport<PeriodData>(
+    enabled ? '/finance/reports/period' : null,
+    enabled ? { days } : null
+  )
+}
+
+/** Simulador (P7): fluxo do período + recebíveis em aberto — cálculo no cliente. */
+export function useSimuladorData(
+  days: number,
+  enabled: boolean
+): PairState<PeriodData, Receivable[]> {
+  const pair = usePair<PeriodData, { items: Receivable[] }>(
+    enabled ? { path: '/finance/reports/period', params: { days } } : null,
+    enabled
+      ? { path: '/finance/receivables', params: { order_by: 'due_date', order: 'asc', page_size: 100 } }
+      : null
+  )
+  return {
+    data: pair.data ? { a: pair.data.a, b: pair.data.b.items ?? [] } : null,
+    loading: pair.loading,
+    error: pair.error,
+    reload: pair.reload,
+  }
 }

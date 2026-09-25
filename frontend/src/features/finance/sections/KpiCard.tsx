@@ -27,7 +27,7 @@ function Delta({ pct, invert = false }: { pct: number | null | undefined; invert
 
 interface KpiCardProps {
   title: string
-  value: string
+  value: string | number
   icon: typeof TrendingUp
   delta?: number | null
   invertDelta?: boolean
