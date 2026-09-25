@@ -453,3 +453,78 @@ body {
 .gf-anim-drift-slow {
   animation: gf-drift 22s var(--easing-default) infinite reverse;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   IMPRESSÃO (P9 / R4) — imprime só a seção atual, em paleta clara
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Cabeçalho, rodapé e assinaturas de impressão: só no papel. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* Força a paleta clara mesmo com o tema escuro na tela — sem isso o
+     texto claro sairia branco no branco. */
+  :root,
+  .dark,
+  .light {
+    --background: #ffffff;
+    --background-secondary: #ffffff;
+    --card: #ffffff;
+    --card-foreground: #09090b;
+    --surface: #f4f4f5;
+    --popover: #ffffff;
+    --popover-foreground: #09090b;
+    --foreground: #09090b;
+    --muted: #f4f4f5;
+    --muted-foreground: #52525b;
+    --accent: #f4f4f5;
+    --accent-foreground: #09090b;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #09090b;
+    --border: #d4d4d8;
+    --input: #d4d4d8;
+  }
+
+  /* Casca do app (sidebar, header, copilot, ações, abas) sai do papel. */
+  [data-no-print] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* O shell usa h-screen + overflow-hidden; no papel o conteúdo precisa fluir. */
+  div.h-screen,
+  div.h-screen > div,
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  /* Gráficos e cores de status preservados no PDF. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Não corta cartão/linha no meio da página. */
+  .avoid-break,
+  table,
+  tr {
+    break-inside: avoid;
+  }
+}

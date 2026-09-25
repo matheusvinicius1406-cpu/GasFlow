@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   BarChart3,
   Boxes,
@@ -10,13 +10,18 @@ import {
   Landmark,
   LineChart,
   Link2,
+  Loader2,
+  Printer,
   Target,
   Users,
   Wallet,
 } from 'lucide-react'
 import { Page, PageActions, PageHeader, PageTitle } from '@/components/layout/Page'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/features/auth'
+import { exportCurrentViewPdf } from '@/lib/exportPdf'
+import { useTheme } from '@/lib/theme'
 import { toCsvDate } from './exportPeriodCsv'
 import { SectionShell } from './SectionShell'
 import { AuditoriaSection } from './sections/AuditoriaSection'
@@ -71,6 +76,9 @@ export function CentralFinanceiraPage() {
   const { days, setDays, presets, secao, setSecao } = usePeriodFilter()
   const atual = findSection(secao)
   const { hasPermission } = useAuth()
+  const { branding } = useTheme()
+  const { info: toastInfo, error: toastError } = useToast()
+  const [printing, setPrinting] = useState(false)
   const can = useMemo(
     () => ({
       write: hasPermission('finance.write'),
@@ -97,6 +105,31 @@ export function CentralFinanceiraPage() {
 
   // A seção de Auditoria fica oculta sem `audit.view` (o backend também exige).
   const secoes = can.audit ? SECTIONS : SECTIONS.filter((s) => s.slug !== 'auditoria')
+
+  const periodoLabel = vg.period
+    ? `${toCsvDate(vg.period.from)} a ${toCsvDate(vg.period.to)}`
+    : '—'
+  const geradoEm = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date()
+  )
+
+  /**
+   * Imprime a seção atual: no Electron usa o `printToPDF` do conteúdo já
+   * renderizado; fora dele cai no diálogo do sistema (P9).
+   */
+  async function printView() {
+    setPrinting(true)
+    try {
+      const mode = await exportCurrentViewPdf()
+      if (mode === 'print') {
+        toastInfo('Abrindo a impressão do sistema', 'Escolha "Salvar como PDF" para guardar a seção.')
+      }
+    } catch (e) {
+      toastError('Falha ao gerar o PDF', e instanceof Error ? e.message : 'Erro inesperado.')
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   function sectionContent(): ReactNode {
     switch (secao) {
@@ -375,6 +408,16 @@ export function CentralFinanceiraPage() {
           Central Financeira
         </PageTitle>
         <PageActions>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void printView()}
+            disabled={printing}
+          >
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            Imprimir
+          </Button>
           {secao === 'visao-geral' && (
             <Button
               type="button"
@@ -403,7 +446,19 @@ export function CentralFinanceiraPage() {
         </PageActions>
       </PageHeader>
 
+      {/* Cabeçalho só no papel: marca + seção + período + gerado em (P9). */}
+      <div className="print-only" data-testid="print-header">
+        <div className="flex items-baseline justify-between border-b border-border pb-2">
+          <span className="text-base font-bold text-foreground">{branding.companyName}</span>
+          <span className="text-sm text-foreground">Central Financeira · {atual.label}</span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Período: {periodoLabel} · Gerado em {geradoEm}
+        </p>
+      </div>
+
       <div
+        data-no-print
         className="flex gap-2 overflow-x-auto border-b pb-2"
         role="group"
         aria-label="Seções da Central Financeira"
@@ -422,6 +477,20 @@ export function CentralFinanceiraPage() {
       </div>
 
       {sectionContent()}
+
+      {/* Rodapé só no papel: 3 linhas de assinatura (P9). */}
+      <div className="print-only" data-testid="print-footer">
+        <div className="mt-12 grid grid-cols-3 gap-8">
+          {['Responsável financeiro', 'Gerente', 'Proprietário'].map((label) => (
+            <div
+              key={label}
+              className="border-t border-border pt-1 text-center text-xs text-muted-foreground"
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+      </div>
     </Page>
   )
 }

@@ -47,7 +47,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   }, [isOpen, onClose])
 
   return (
-    <div className={`md:hidden ${isOpen ? '' : 'hidden'}`} aria-hidden={!isOpen}>
+    <div data-no-print className={`md:hidden ${isOpen ? '' : 'hidden'}`} aria-hidden={!isOpen}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/50"

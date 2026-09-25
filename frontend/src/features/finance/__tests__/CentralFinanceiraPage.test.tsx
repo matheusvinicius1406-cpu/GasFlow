@@ -1,5 +1,5 @@
-import { fireEvent, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 import { CentralFinanceiraPage } from '../CentralFinanceiraPage'
 import { SectionShell } from '../SectionShell'
@@ -147,6 +147,55 @@ describe('CentralFinanceiraPage (P4–P8 — shell)', () => {
     expect(within(abaGroup()).getByRole('button', { name: 'Visão Geral' })).toHaveAttribute('aria-pressed', 'true')
     // Dados pendurados → a seção real fica no loading do SectionShell.
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+  })
+})
+
+describe('Central Financeira — impressão (P9)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    h.hasPermission = () => true
+    h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
+    h.post.mockResolvedValue({ data: {} })
+  })
+
+  afterEach(() => {
+    ;(window as { gasflow?: unknown }).gasflow = undefined
+  })
+
+  it('marca a casca com data-no-print e traz cabeçalho/rodapé só no papel', async () => {
+    renderWithProviders(<CentralFinanceiraPage />)
+    await screen.findByText('A receber')
+
+    const cabecalho = screen.getByTestId('print-header')
+    expect(within(cabecalho).getByText('GasFlow')).toBeInTheDocument()
+    expect(within(cabecalho).getByText('Central Financeira · Visão Geral')).toBeInTheDocument()
+    expect(within(cabecalho).getByText(/01\/09\/2026 a 24\/09\/2026/)).toBeInTheDocument()
+    expect(screen.getByTestId('print-footer')).toHaveTextContent('Responsável financeiro')
+
+    // Casca fora do papel: abas e ações carregam data-no-print.
+    expect(screen.getByRole('group', { name: 'Seções da Central Financeira' })).toHaveAttribute('data-no-print')
+    expect(screen.getByRole('button', { name: 'Imprimir' }).closest('[data-no-print]')).not.toBeNull()
+  })
+
+  it('imprime pela ponte do Electron (sem abrir o diálogo do navegador)', async () => {
+    const exportCurrentViewPdf = vi.fn().mockResolvedValue({ ok: true })
+    ;(window as { gasflow?: unknown }).gasflow = { exportCurrentViewPdf }
+    vi.spyOn(window, 'print').mockImplementation(() => undefined)
+
+    renderWithProviders(<CentralFinanceiraPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimir' }))
+
+    await waitFor(() => expect(exportCurrentViewPdf).toHaveBeenCalledTimes(1))
+    expect(window.print).not.toHaveBeenCalled()
+  })
+
+  it('fora do Electron cai no diálogo do sistema', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined)
+
+    renderWithProviders(<CentralFinanceiraPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimir' }))
+
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
   })
 })
 

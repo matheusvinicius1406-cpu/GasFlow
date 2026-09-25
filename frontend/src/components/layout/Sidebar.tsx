@@ -7,7 +7,7 @@ import { BrandMark } from '@/components/brand/BrandLogo'
  */
 export function Sidebar() {
   return (
-    <aside className="hidden w-64 border-r border-border bg-card md:flex md:flex-col">
+    <aside data-no-print className="hidden w-64 border-r border-border bg-card md:flex md:flex-col">
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-6">
         <BrandMark />
       </div>

@@ -58,8 +58,9 @@ interface PageActionsProps {
 }
 
 export function PageActions({ children, className }: PageActionsProps) {
+  // `data-no-print`: botões de ação não saem no papel (P9).
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div data-no-print className={cn('flex items-center gap-2', className)}>
       {children}
     </div>
   )

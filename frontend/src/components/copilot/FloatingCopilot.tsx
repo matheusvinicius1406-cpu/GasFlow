@@ -61,6 +61,7 @@ export function FloatingCopilot() {
           Escape/X/backdrop. */}
       <button
         type="button"
+        data-no-print
         aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
         aria-expanded={open}
         tabIndex={open ? -1 : 0}
@@ -78,6 +79,7 @@ export function FloatingCopilot() {
       {/* Slide-over */}
       <div
         ref={panelRef}
+        data-no-print
         role="dialog"
         aria-label="Assistente IA"
         aria-modal="true"

@@ -159,7 +159,8 @@ describe('Visão Geral (P5)', () => {
     expect(screen.getByText('#PED123')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument()
     expect(within(grupoTipos()).getByRole('button', { name: 'Pagamentos' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText(/01\/09\/2026 a 24\/09\/2026/)).toBeInTheDocument()
+    // O período aparece no subtítulo e no cabeçalho de impressão (P9).
+    expect(screen.getAllByText(/01\/09\/2026 a 24\/09\/2026/).length).toBeGreaterThan(0)
   })
 
   it('erro no período mostra o retry do SectionShell', async () => {
