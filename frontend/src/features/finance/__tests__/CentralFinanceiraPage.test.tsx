@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 import { CentralFinanceiraPage } from '../CentralFinanceiraPage'
@@ -196,6 +196,51 @@ describe('Central Financeira — impressão (P9)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir' }))
 
     await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('Central Financeira — modo TV (P10)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    h.hasPermission = () => true
+    h.get.mockImplementation(() => new Promise(() => undefined))
+    h.post.mockResolvedValue({ data: {} })
+    window.localStorage.setItem('gasflow_theme', 'light')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    window.localStorage.removeItem('gasflow_theme')
+  })
+
+  it('liga o modo TV, força o tema escuro e sai no ESC restaurando o tema', () => {
+    renderWithProviders(<CentralFinanceiraPage />)
+
+    expect(screen.getByRole('button', { name: 'Modo TV' })).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Modo TV' }))
+    expect(screen.getByRole('button', { name: 'Modo TV' })).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(screen.getByText(/Modo TV · Visão Geral · ESC para sair/)).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Modo TV' })).toHaveAttribute('aria-pressed', 'false')
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+  })
+
+  it('rotaciona a seção a cada 15 segundos', () => {
+    vi.useFakeTimers()
+    renderWithProviders(<CentralFinanceiraPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Modo TV' }))
+    const abas = screen.getByRole('group', { name: 'Seções da Central Financeira' })
+    expect(within(abas).getByRole('button', { name: 'Visão Geral' })).toHaveAttribute('aria-pressed', 'true')
+
+    act(() => {
+      vi.advanceTimersByTime(15_000)
+    })
+
+    expect(within(abas).getByRole('button', { name: 'DRE' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
 

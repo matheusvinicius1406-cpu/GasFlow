@@ -13,6 +13,7 @@ import {
   Loader2,
   Printer,
   Target,
+  Tv,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -39,6 +40,7 @@ import { SalvosSection } from './sections/SalvosSection'
 import { SimuladorSection } from './sections/SimuladorSection'
 import { TendenciaSection } from './sections/TendenciaSection'
 import { VisaoGeralSection } from './sections/VisaoGeralSection'
+import { useTvMode } from './tv/TvMode'
 import { SECTIONS, findSection, usePeriodFilter } from './usePeriodFilter'
 import {
   useAuditoriaData,
@@ -105,6 +107,13 @@ export function CentralFinanceiraPage() {
 
   // A seção de Auditoria fica oculta sem `audit.view` (o backend também exige).
   const secoes = can.audit ? SECTIONS : SECTIONS.filter((s) => s.slug !== 'auditoria')
+
+  // Modo TV (P10): fullscreen + rotação das seções visíveis + tema escuro.
+  const tv = useTvMode({
+    sections: secoes.map((s) => s.slug),
+    currentSlug: secao,
+    onSelectSection: setSecao,
+  })
 
   const periodoLabel = vg.period
     ? `${toCsvDate(vg.period.from)} a ${toCsvDate(vg.period.to)}`
@@ -394,7 +403,15 @@ export function CentralFinanceiraPage() {
   }
 
   return (
-    <Page>
+    <Page containerRef={tv.containerRef} className="bg-background">
+      {tv.active && (
+        <div
+          data-no-print
+          className="fixed right-4 top-4 z-50 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-lg"
+        >
+          Modo TV · {atual.label} · ESC para sair
+        </div>
+      )}
       <PageHeader>
         <PageTitle
           subtitle={
@@ -417,6 +434,16 @@ export function CentralFinanceiraPage() {
           >
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Imprimir
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={tv.active ? 'default' : 'outline'}
+            aria-pressed={tv.active}
+            onClick={tv.toggle}
+          >
+            <Tv className="h-4 w-4" />
+            Modo TV
           </Button>
           {secao === 'visao-geral' && (
             <Button

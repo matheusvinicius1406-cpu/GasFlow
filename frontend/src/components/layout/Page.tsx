@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, type Ref } from 'react'
 import { cn } from '@/lib/utils'
 
 // ── Page ───────────────────────────────────────────────────
@@ -6,11 +6,13 @@ import { cn } from '@/lib/utils'
 interface PageProps {
   children: ReactNode
   className?: string
+  /** Ref opcional no container raiz (Modo TV usa para o fullscreen — P10). */
+  containerRef?: Ref<HTMLDivElement>
 }
 
-export function Page({ children, className }: PageProps) {
+export function Page({ children, className, containerRef }: PageProps) {
   return (
-    <div className={cn('space-y-6', className)}>
+    <div ref={containerRef} className={cn('space-y-6', className)}>
       {children}
     </div>
   )
