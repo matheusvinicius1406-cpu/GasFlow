@@ -112,7 +112,7 @@ function isoDay(offset: number): string {
   return `${y}-${m}-${day}`
 }
 
-function apiMessage(err: unknown): string {
+export function apiMessage(err: unknown): string {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
   if (typeof detail === 'string' && detail.trim()) return detail
   return 'Nada foi alterado. Tente novamente.'

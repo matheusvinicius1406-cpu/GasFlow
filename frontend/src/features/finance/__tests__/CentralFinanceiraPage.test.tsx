@@ -101,9 +101,10 @@ describe('CentralFinanceiraPage (P4/P5 — shell)', () => {
     expect(screen.getByText('Saldo em Caixa')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument()
 
-    fireEvent.click(within(abaGroup()).getByRole('button', { name: 'DRE' }))
-    expect(screen.getByRole('heading', { name: 'DRE — em construção' })).toBeInTheDocument()
-    expect(screen.getByText(/PR P6 da Central Financeira/)).toBeInTheDocument()
+    // DRE virou seção real no P6; a still-placeholder é a de P7.
+    fireEvent.click(within(abaGroup()).getByRole('button', { name: 'Clientes' }))
+    expect(screen.getByRole('heading', { name: 'Clientes — em construção' })).toBeInTheDocument()
+    expect(screen.getByText(/PR P7 da Central Financeira/)).toBeInTheDocument()
   })
 
   it('respeita o deep-link ?secao=', () => {

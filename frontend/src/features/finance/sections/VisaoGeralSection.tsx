@@ -50,7 +50,10 @@ import {
 } from '@/components/ui/Table'
 import { cn, formatCurrency, formatPercent } from '@/lib/utils'
 import type { CashMovement, FinanceExpense, FinancePayment, Receivable } from '@/types'
+import { chartToken, chartVar } from '../chartTokens'
 import { toCsvDate } from '../exportPeriodCsv'
+import { CATEGORY_LABELS, METHOD_LABELS } from '../financeLabels'
+import { KpiCard } from './KpiCard'
 import { money, type VisaoGeralData, type VisaoTab } from '../useVisaoGeralData'
 
 /**
@@ -72,24 +75,6 @@ const TABS: { key: VisaoTab; label: string }[] = [
   { key: 'expenses', label: 'Despesas' },
   { key: 'cash', label: 'Caixa' },
 ]
-
-const METHOD_LABELS: Record<string, string> = {
-  CASH: 'Dinheiro',
-  PIX: 'PIX',
-  CARD: 'Cartão',
-  TRANSFER: 'Transferência',
-  OTHER: 'Outro',
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  FUEL: 'Combustível',
-  MAINTENANCE: 'Manutenção',
-  SUPPLIES: 'Suprimentos',
-  UTILITIES: 'Utilidades',
-  SALARY: 'Salário',
-  TAX: 'Imposto',
-  OTHER: 'Outro',
-}
 
 type StatusMap = Record<string, { label: string; variant: BadgeProps['variant'] }>
 
@@ -120,84 +105,9 @@ const CASH_TYPE: StatusMap = {
   REFUND: { label: 'Estorno', variant: 'warning' },
 }
 
-/**
- * Paleta dos gráficos lida dos tokens do tema em tempo de execução —
- * nenhum hex literal no componente (R13).
- */
-const CHART_TOKENS = ['--success', '--destructive', '--info', '--warning', '--muted-foreground', '--primary']
-
-function chartVar(name: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  return value || 'currentColor'
-}
-
-function chartToken(index: number): string {
-  const token = CHART_TOKENS[index % CHART_TOKENS.length] ?? '--muted-foreground'
-  return chartVar(token)
-}
-
 function statusBadge(map: StatusMap, status: string) {
   const cfg = map[status]
   return <Badge variant={cfg?.variant ?? 'secondary'}>{cfg?.label ?? status}</Badge>
-}
-
-function Delta({ pct, invert = false }: { pct: number | null | undefined; invert?: boolean }) {
-  if (pct === null || pct === undefined) return null
-  const up = pct >= 0
-  const bom = invert ? !up : up
-  const Icon = up ? TrendingUp : TrendingDown
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 text-xs font-medium',
-        bom ? 'text-success' : 'text-destructive'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {formatPercent(Math.abs(pct))}
-      <span className="font-normal text-muted-foreground">vs. período anterior</span>
-    </span>
-  )
-}
-
-function KpiCard({
-  title,
-  value,
-  icon: Icon,
-  delta,
-  invertDelta,
-  emphasis,
-}: {
-  title: string
-  value: string
-  icon: typeof TrendingUp
-  delta?: number | null
-  invertDelta?: boolean
-  emphasis?: 'positive' | 'negative'
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-2 p-5">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <p
-          className={cn(
-            'text-2xl font-bold',
-            emphasis === 'positive'
-              ? 'text-success'
-              : emphasis === 'negative'
-                ? 'text-destructive'
-                : 'text-foreground'
-          )}
-        >
-          {value}
-        </p>
-        <Delta pct={delta} invert={invertDelta} />
-      </CardContent>
-    </Card>
-  )
 }
 
 function InsightCard({
