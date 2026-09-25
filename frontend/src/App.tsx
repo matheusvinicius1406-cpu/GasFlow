@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { UpdateScreen } from '@/components/UpdateScreen'
 import { UpdateNotifier } from '@/components/UpdateNotifier'
@@ -20,9 +20,7 @@ import { DeliveriesPage } from '@/features/deliveries'
 import { DriversPage, DriverFormPage } from '@/features/drivers'
 import { ProductsPage, ProductDetailPage, ProductFormPage } from '@/features/products'
 import { InventoryPage, InventoryDetailPage } from '@/features/inventory'
-import { FinancePage, CentralFinanceiraPage } from '@/features/finance'
-import { ReportsPage } from '@/features/reports'
-import { MapaCalorSection } from '@/features/finance/sections/MapaCalorSection'
+import { CentralFinanceiraPage } from '@/features/finance'
 import { SettingsPage, AISettingsPage, IntegrationsPage } from '@/features/settings'
 import { WorkflowsPage } from '@/features/automation'
 import { CouponsPage } from '@/features/promotions'
@@ -95,21 +93,18 @@ export function App() {
         <Route path="drivers/:codigo/edit" element={<DriverFormPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="inventory/:productCodigo" element={<InventoryDetailPage />} />
-        {/* Central Financeira (Fase 3) — rota transitória de construção;
-            a tela velha (/finance) segue no ar até a remoção atômica (P11). */}
+        {/* Central Financeira — rota final /finance (P11), com guard finance.read. */}
         <Route
-          path="finance/central"
+          path="finance"
           element={
             <PermissionRoute permissions={['finance.read']}>
               <CentralFinanceiraPage />
             </PermissionRoute>
           }
         />
-        <Route path="finance" element={<FinancePage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        {/* Mapa de Calor migrou para a seção da Central Financeira (P8/D4);
-            a URL antiga segue no ar até o redirect da remoção atômica (P11). */}
-        <Route path="reports/heatmap" element={<MapaCalorSection />} />
+        {/* URLs antigas viram redirect: relatórios e mapa de calor agora vivem na Central. */}
+        <Route path="reports" element={<Navigate to="/finance" replace />} />
+        <Route path="reports/heatmap" element={<Navigate to="/finance?secao=mapa-de-calor" replace />} />
         <Route path="segments" element={<SegmentsPage />} />
         <Route path="reorder" element={<ReorderPage />} />
         <Route path="promotions" element={<CouponsPage />} />

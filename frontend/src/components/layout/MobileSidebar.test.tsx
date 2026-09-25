@@ -24,19 +24,19 @@ describe('MobileSidebar', () => {
     expect(screen.queryByRole('dialog', { hidden: false })).not.toBeInTheDocument()
   })
 
-  it('renders as a modal dialog with all 7 nav groups', () => {
+  it('renders as a modal dialog with the nav tree', () => {
     renderDrawer(true)
 
     const dialog = screen.getByRole('dialog', { name: 'Menu de navegação' })
     expect(dialog).toHaveAttribute('aria-modal', 'true')
 
-    // 7 grupos da árvore v2 (Dashboard direto + 6 colapsáveis)
+    // V2 + P11: 2 itens diretos (Dashboard, Financeiro) + 5 grupos colapsáveis
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Financeiro')).toBeInTheDocument()
     expect(screen.getByText('WhatsApp')).toBeInTheDocument()
     expect(screen.getByText('Pedidos & Entregas')).toBeInTheDocument()
     expect(screen.getByText('Clientes')).toBeInTheDocument()
     expect(screen.getByText('Produtos & Estoque')).toBeInTheDocument()
-    expect(screen.getByText('Financeiro & Relatórios')).toBeInTheDocument()
     expect(screen.getByText('Configurações')).toBeInTheDocument()
   })
 

@@ -81,7 +81,7 @@ describe('DreSection (P6 — estados do shell)', () => {
   it('mostra loading enquanto o relatório não chega', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=dre',
+      route: '/finance?secao=dre',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -92,7 +92,7 @@ describe('DreSection (P6 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=dre' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=dre' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
     expect(screen.getByText('Não foi possível carregar os dados.')).toBeInTheDocument()
@@ -107,7 +107,7 @@ describe('DreSection (P6 — estados do shell)', () => {
             : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=dre' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=dre' })
 
     expect(
       await screen.findByRole('heading', { name: 'Sem movimentações no período' })

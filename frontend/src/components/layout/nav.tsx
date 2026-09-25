@@ -10,15 +10,12 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  BarChart3,
   Brain,
   ChevronDown,
   Contact,
   DollarSign,
-  Flame,
   FileText,
   Filter,
-  Landmark,
   LayoutDashboard,
   Megaphone,
   MessageSquare,
@@ -94,17 +91,9 @@ export const NAV_GROUPS: NavEntry[] = [
       { label: 'Notas de Compra', href: '/purchase-notes', icon: FileText },
     ],
   },
-  {
-    label: 'Financeiro & Relatórios',
-    icon: DollarSign,
-    items: [
-      // Item temporário da Fase 3 — sai junto da rota /finance/central no P11.
-      { label: 'Central Financeira', href: '/finance/central', icon: Landmark },
-      { label: 'Financeiro', href: '/finance', icon: DollarSign },
-      { label: 'Relatórios', href: '/reports', icon: BarChart3 },
-      { label: 'Mapa de Calor', href: '/reports/heatmap', icon: Flame },
-    ],
-  },
+  // Financeiro virou item único no P11: a Central reúne relatórios, mapa de
+  // calor, orçamento e auditoria (as URLs antigas viram redirect).
+  { label: 'Financeiro', icon: DollarSign, href: '/finance' },
   {
     label: 'Configurações',
     icon: Settings,

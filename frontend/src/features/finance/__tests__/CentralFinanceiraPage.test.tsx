@@ -134,7 +134,7 @@ describe('CentralFinanceiraPage (P4–P8 — shell)', () => {
 
   it('respeita o deep-link ?secao=', async () => {
     h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=mapa-de-calor' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=mapa-de-calor' })
 
     expect(await screen.findByText(/5 entrega\(s\) em 30 dias/)).toBeInTheDocument()
     expect(within(abaGroup()).getByRole('button', { name: 'Mapa de Calor' })).toHaveAttribute('aria-pressed', 'true')
@@ -142,7 +142,7 @@ describe('CentralFinanceiraPage (P4–P8 — shell)', () => {
 
   it('seção desconhecida na URL cai na padrão (visao-geral)', () => {
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=inexistente',
+      route: '/finance?secao=inexistente',
     })
     expect(within(abaGroup()).getByRole('button', { name: 'Visão Geral' })).toHaveAttribute('aria-pressed', 'true')
     // Dados pendurados → a seção real fica no loading do SectionShell.

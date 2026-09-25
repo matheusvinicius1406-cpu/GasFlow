@@ -66,7 +66,7 @@ describe('PagamentosSection (P7 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=pagamentos',
+      route: '/finance?secao=pagamentos',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -77,7 +77,7 @@ describe('PagamentosSection (P7 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=pagamentos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=pagamentos' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -88,7 +88,7 @@ describe('PagamentosSection (P7 — estados do shell)', () => {
         data: url === '/finance/reports/methods' ? { ...pagamentos, total: 0, items: [] } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=pagamentos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=pagamentos' })
 
     expect(await screen.findByRole('heading', { name: 'Nenhum pagamento no período' })).toBeInTheDocument()
   })

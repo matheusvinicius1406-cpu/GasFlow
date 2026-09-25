@@ -119,7 +119,7 @@ export function apiMessage(err: unknown): string {
 }
 
 /**
- * Mensagem específica por status no padrão da FinancePage. Devolve `true`
+ * Mensagem específica por status no padrão das escritas do Financeiro. Devolve `true`
  * quando a lista precisa ser recarregada (404 = o item já não existe).
  */
 function reportCancelError(

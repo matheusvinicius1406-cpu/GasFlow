@@ -76,7 +76,7 @@ describe('ProjecaoSection (P6 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=projecao',
+      route: '/finance?secao=projecao',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -87,7 +87,7 @@ describe('ProjecaoSection (P6 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=projecao' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=projecao' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -98,7 +98,7 @@ describe('ProjecaoSection (P6 — estados do shell)', () => {
         data: url === '/finance/reports/projection' ? { ...projecao, daily: [] } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=projecao' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=projecao' })
 
     expect(await screen.findByRole('heading', { name: 'Projeção indisponível' })).toBeInTheDocument()
   })

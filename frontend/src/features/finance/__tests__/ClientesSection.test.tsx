@@ -89,7 +89,7 @@ describe('ClientesSection (P7 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=clientes',
+      route: '/finance?secao=clientes',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -100,7 +100,7 @@ describe('ClientesSection (P7 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=clientes' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=clientes' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -116,7 +116,7 @@ describe('ClientesSection (P7 — estados do shell)', () => {
               : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=clientes' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=clientes' })
 
     expect(await screen.findByRole('heading', { name: 'Nenhum recebível em aberto' })).toBeInTheDocument()
   })

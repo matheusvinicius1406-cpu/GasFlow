@@ -59,7 +59,7 @@ describe('TendenciaSection (P7 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=tendencia',
+      route: '/finance?secao=tendencia',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -70,7 +70,7 @@ describe('TendenciaSection (P7 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=tendencia' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=tendencia' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -81,7 +81,7 @@ describe('TendenciaSection (P7 — estados do shell)', () => {
         data: url === '/finance/reports/period' ? { ...periodo, daily: [] } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=tendencia' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=tendencia' })
 
     expect(await screen.findByRole('heading', { name: 'Sem série para analisar' })).toBeInTheDocument()
   })

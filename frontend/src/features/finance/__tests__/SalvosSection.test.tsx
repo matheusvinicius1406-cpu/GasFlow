@@ -119,7 +119,7 @@ describe('SalvosSection (P8 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=salvos',
+      route: '/finance?secao=salvos',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -130,7 +130,7 @@ describe('SalvosSection (P8 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=salvos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=salvos' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -141,7 +141,7 @@ describe('SalvosSection (P8 — estados do shell)', () => {
         data: url === '/finance/saved-reports' ? { items: [], total: 0 } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=salvos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=salvos' })
 
     expect(await screen.findByRole('heading', { name: 'Nenhum relatório salvo' })).toBeInTheDocument()
   })

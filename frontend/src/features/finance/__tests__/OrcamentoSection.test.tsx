@@ -160,7 +160,7 @@ describe('OrcamentoSection (P6 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=orcamento',
+      route: '/finance?secao=orcamento',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -171,7 +171,7 @@ describe('OrcamentoSection (P6 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=orcamento' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=orcamento' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -187,7 +187,7 @@ describe('OrcamentoSection (P6 — estados do shell)', () => {
               : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=orcamento' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=orcamento' })
 
     expect(
       await screen.findByRole('heading', { name: 'Sem orçamento nem despesas' })

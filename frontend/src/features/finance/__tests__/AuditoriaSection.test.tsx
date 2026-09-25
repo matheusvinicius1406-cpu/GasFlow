@@ -78,7 +78,7 @@ describe('AuditoriaSection (P8 — gate audit.view)', () => {
 
   it('com audit.view a seção carrega a trilha', async () => {
     h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=auditoria' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=auditoria' })
 
     expect(await screen.findByText('budget.upserted')).toBeInTheDocument()
   })
@@ -87,7 +87,7 @@ describe('AuditoriaSection (P8 — gate audit.view)', () => {
     h.hasPermission = (permission: string) => permission !== 'audit.view'
     h.get.mockImplementation((url: string) => Promise.resolve({ data: fixtureFor(url) }))
 
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=auditoria' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=auditoria' })
 
     const abas = screen.getByRole('group', { name: 'Seções da Central Financeira' })
     expect(within(abas).queryByRole('button', { name: 'Auditoria' })).toBeNull()

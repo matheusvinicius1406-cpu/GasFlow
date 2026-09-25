@@ -93,7 +93,7 @@ describe('ProdutosSection (P6 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=produtos',
+      route: '/finance?secao=produtos',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -104,7 +104,7 @@ describe('ProdutosSection (P6 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=produtos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=produtos' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -115,7 +115,7 @@ describe('ProdutosSection (P6 — estados do shell)', () => {
         data: url === '/finance/reports/products' ? { ...produtos, items: [], revenue: 0 } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=produtos' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=produtos' })
 
     expect(await screen.findByRole('heading', { name: 'Nenhum produto vendido' })).toBeInTheDocument()
   })

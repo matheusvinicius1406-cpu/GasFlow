@@ -70,7 +70,7 @@ describe('CalendarioSection (P7 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=calendario',
+      route: '/finance?secao=calendario',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -81,7 +81,7 @@ describe('CalendarioSection (P7 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=calendario' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=calendario' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -95,7 +95,7 @@ describe('CalendarioSection (P7 — estados do shell)', () => {
             : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=calendario' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=calendario' })
 
     expect(await screen.findByRole('heading', { name: 'Sem dias no período' })).toBeInTheDocument()
   })

@@ -78,7 +78,7 @@ describe('EquipeSection (P8 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=equipe',
+      route: '/finance?secao=equipe',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -89,7 +89,7 @@ describe('EquipeSection (P8 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=equipe' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=equipe' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })

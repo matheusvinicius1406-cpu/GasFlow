@@ -93,7 +93,7 @@ describe('SimuladorSection (P7 — estados do shell)', () => {
   it('mostra loading', () => {
     h.get.mockImplementation(() => new Promise(() => undefined))
     const { container } = renderWithProviders(<CentralFinanceiraPage />, {
-      route: '/finance/central?secao=simulador',
+      route: '/finance?secao=simulador',
     })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
@@ -104,7 +104,7 @@ describe('SimuladorSection (P7 — estados do shell)', () => {
         ? Promise.reject(new Error('boom'))
         : Promise.resolve({ data: fixtureFor(url) })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=simulador' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=simulador' })
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeInTheDocument()
   })
@@ -115,7 +115,7 @@ describe('SimuladorSection (P7 — estados do shell)', () => {
         data: url === '/finance/reports/period' ? { ...simulador.period, daily: [] } : fixtureFor(url),
       })
     )
-    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance/central?secao=simulador' })
+    renderWithProviders(<CentralFinanceiraPage />, { route: '/finance?secao=simulador' })
 
     expect(await screen.findByRole('heading', { name: 'Sem dados para simular' })).toBeInTheDocument()
   })
