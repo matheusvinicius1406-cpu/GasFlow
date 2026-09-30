@@ -165,6 +165,76 @@ class Settings(BaseModel):
     # (não usa capacidade de estoque aqui — isso já é gate de elegibilidade).
     dispatch_load_full_deliveries: float = float(os.getenv("DISPATCH_LOAD_FULL_DELIVERIES", "4"))
 
+    # ── Geocoding de contatos (.vcf) — Fase 2 §7 / ADR-0004 ───────
+    # Liga/desliga o renomeador inteiro (D13). Desligado, os endpoints
+    # respondem 409 em vez de silenciar: quem pediu algo desligado precisa
+    # saber que está desligado (mesma regra do smart routing, Fase 8).
+    contact_renamer_enabled: bool = os.getenv("CONTACT_RENAMER_ENABLED", "false").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    geocoding_enabled: bool = os.getenv("GEOCODING_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+    # nominatim (default, público e sem chave) | photon (self-host) | mock.
+    geocoding_provider: str = os.getenv("GEOCODING_PROVIDER", "nominatim").strip().lower()
+    geocoding_base_url: str = os.getenv("GEOCODING_BASE_URL", "https://nominatim.openstreetmap.org").strip()
+    geocoding_timeout_s: float = float(os.getenv("GEOCODING_TIMEOUT_S", "10"))
+    # O Nominatim público EXIGE User-Agent identificando a aplicação (política
+    # de uso); sem ele a própria instância bloqueia as requisições.
+    geocoding_user_agent: str = os.getenv("GEOCODING_USER_AGENT", "GasFlow/1.1.7 (contatos .vcf)")
+    # Teto da política do Nominatim público: 1 requisição por segundo.
+    geocoding_rate_limit_s: float = float(os.getenv("GEOCODING_RATE_LIMIT_S", "1.0"))
+    geocoding_max_attempts: int = int(os.getenv("GEOCODING_MAX_ATTEMPTS", "3"))
+    # Circuit breaker: MESMA classe do OSRM (infrastructure/routing/circuit_breaker.py)
+    # — provedor público fora do ar não pode fazer cada rua pagar o timeout
+    # inteiro de novo. Defaults espelham os do OSRM de propósito.
+    geocoding_breaker_failures: int = int(os.getenv("GEOCODING_BREAKER_FAILURES", "3"))
+    geocoding_breaker_cooldown_s: int = int(os.getenv("GEOCODING_BREAKER_COOLDOWN_S", "60"))
+    # ViaCEP só como fallback de CEP, e só quando houver cidade/uf (é indexado
+    # por CEP, não por endereço).
+    # (busca por endereço → CEP; abre a cadeia do fallback de CEP abaixo)
+    viacep_enabled: bool = os.getenv("VIACEP_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+    viacep_base_url: str = os.getenv("VIACEP_BASE_URL", "https://viacep.com.br").strip()
+    # ── Fallback de CEP → endereço/coordenada (etapa 9) ────────────
+    # Segundo elo do geocode (D2): quando o provedor NÃO conhece o logradouro,
+    # o CEP ainda resolve endereço e coordenada. Cadeia fixa, testada no
+    # endereço de aceite (CEP 66811-120): BrasilAPI (MIT, keyless, devolve
+    # `location.coordinates`) → PontoFato (keyless, lat/lon do CNEFE/IBGE).
+    # Sem chave comercial e sem Overpass.
+    cep_fallback_enabled: bool = os.getenv("CEP_FALLBACK_ENABLED", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    brasilapi_enabled: bool = os.getenv("BRASILAPI_ENABLED", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    brasilapi_base_url: str = os.getenv("BRASILAPI_BASE_URL", "https://brasilapi.com.br").strip()
+    pontofato_enabled: bool = os.getenv("PONTOFATO_ENABLED", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    pontofato_base_url: str = os.getenv("PONTOFATO_BASE_URL", "https://pontofato.com").strip()
+    # Raio (metros) da busca das vias que cruzam o logradouro (etapa 6/Overpass).
+    entre_ruas_radius_m: int = int(os.getenv("ENTRE_RUAS_RADIUS_M", "150"))
+    # ── Overpass — passe próprio (D14: FORA do geocode frio) ───────
+    # NÃO é o mesmo host do Nominatim nem o mesmo orçamento: cada rua paga um
+    # passe a parte (etapa 8), com contagem e retomada próprias.
+    overpass_base_url: str = os.getenv("OVERPASS_BASE_URL", "https://overpass-api.de/api/interpreter").strip()
+    overpass_enabled: bool = os.getenv("OVERPASS_ENABLED", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    overpass_timeout_s: float = float(os.getenv("OVERPASS_TIMEOUT_S", "30"))
+    # O Overpass público devolve 504/429 em rajada (medido no spike §8.0): o
+    # retry importa mais aqui do que o número de ruas.
+    overpass_max_attempts: int = int(os.getenv("OVERPASS_MAX_ATTEMPTS", "3"))
+    overpass_rate_limit_s: float = float(os.getenv("OVERPASS_RATE_LIMIT_S", "1.0"))
+
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

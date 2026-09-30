@@ -18,17 +18,19 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from app.application.contacts.service import ContactService
+from app.application.contacts.vcf import parse_vcf
 from app.domain.security.models import TenantContext
 from app.infrastructure.database.dependencies import get_db
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 from app.presentation.dependencies import (
     get_tenant_context,
     require_permission,
+    require_renamer_enabled,
     require_whatsapp_service,
 )
 
@@ -127,60 +129,69 @@ async def import_vcf(
     o formato é textual e os campos relevantes são simples.
     """
     raw = (await file.read()).decode("utf-8", errors="replace")
-    contacts = _parse_vcf(raw)
+    contacts = parse_vcf(raw)
     if not contacts:
         raise HTTPException(status_code=400, detail="Nenhum contato com telefone encontrado no .vcf.")
     svc = _svc(db, ctx)
     results = svc.sync_batch(contacts)
     created = sum(1 for r in results if r.get("action") == "created")
     updated = sum(1 for r in results if r.get("action") in ("updated", "unchanged"))
-    return {"imported": len(results), "created": created, "updated": updated, "results": results}
-
-
-def _parse_vcf(raw: str) -> List[dict]:
-    """Extrai (nome, telefone) de um vCard 3.0/4.0 simples.
-
-    Suporta múltiplos TELs por card (todos viram contatos com o mesmo nome).
-    """
-    contacts: List[dict] = []
-    fn: Optional[str] = None
-    tels: List[str] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.upper().startswith("BEGIN:VCARD"):
-            fn, tels = None, []
-        elif line.upper().startswith("FN"):
-            fn = line.split(":", 1)[1].strip() or None
-        elif line.upper().startswith("TEL"):
-            tel = line.split(":", 1)[1].strip()
-            if tel:
-                tels.append(tel)
-        elif line.upper().startswith("END:VCARD"):
-            for tel in tels:
-                contacts.append({"telefone": tel, "nome": fn, "is_whatsapp": None})
-            fn, tels = None, []
-    return contacts
+    # TELs além do principal/secundário do card: contados, nunca descartados
+    # em silêncio (§8.4).
+    ignorados = sum(int(c.get("telefones_ignorados") or 0) for c in contacts)
+    # §9 etapa 8: o import não devolve mais uma linha por contato no JSON
+    # (10k contatos = payload gigante). Só os contadores — o detalhe por
+    # contato vive no CRM, e o audit grava o before/after onde importa.
+    return {
+        "imported": len(results),
+        "created": created,
+        "updated": updated,
+        "telefones_ignorados": ignorados,
+    }
 
 
 @router.get("/export-vcf")
 def export_vcf(
+    formatar_rota: bool = False,
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Exporta os clientes do tenant como arquivo .vcf."""
+    """Exporta os clientes do tenant como arquivo .vcf.
+
+    `formatar_rota=true` grava o nome de rota (etapa 7 / D5) no lugar do nome
+    atual — o operador confere o resultado do renomeador SEM aplicar nada no
+    CRM (fecha a lacuna G7 da auditoria: “só export do CRM cru”).
+    """
+    from app.application.contacts.formatter import formatar_nome_rota
+
     repo = _repo(db, ctx)
     clients = repo.listar_todos()
 
     lines: List[str] = []
     for c in clients:
         display = c.nome or f"Contato {c.telefone}"
+        if formatar_rota:
+            display = formatar_nome_rota(c)
         lines.append("BEGIN:VCARD")
         lines.append("VERSION:3.0")
         lines.append(f"FN:{_vcf_escape(display)}")
         lines.append(f"N:{_vcf_escape(display)};;;;")
         lines.append(f"TEL;TYPE=CELL:+{c.telefone}")
         if c.rua and c.rua != "A definir":
-            adr = ";".join(["", "", _vcf_escape(c.rua or ""), _vcf_escape(c.complemento or ""), "", "", ""])
+            # Ordem do spec vCard: pobox;ext;rua;cidade;região;CEP;país — é o que
+            # o parser estendido lê de volta (o formato antigo punha complemento
+            # no slot da cidade e descartava bairro/CEP).
+            adr = ";".join(
+                [
+                    "",
+                    _vcf_escape(c.complemento or ""),
+                    _vcf_escape(c.rua or ""),
+                    _vcf_escape(c.bairro or ""),
+                    "",
+                    _vcf_escape(c.cep or ""),
+                    "",
+                ]
+            )
             lines.append(f"ADR;TYPE=HOME:{adr}")
         lines.append("END:VCARD")
 
@@ -243,11 +254,32 @@ class RenameRule(BaseModel):
     prefixes: Optional[List[str]] = None
     case: Optional[str] = None  # "title" | "upper" | "lower" | None
     pattern_bairro: bool = False  # "Nome — Bairro"
+    pattern_endereco: bool = False  # padrão de rota (etapa 7 / D5)
+
+
+class RenameFilter(BaseModel):
+    """Filtro da seleção do renomeador (preview/apply desacoplados — §6.4)."""
+
+    search: Optional[str] = None
+    bairro: Optional[str] = None
+    status: Optional[str] = None  # OK | NAO_ENCONTRADO | PENDENTE | SEM_ENDERECO
 
 
 class RenameApplyRequest(BaseModel):
     rule: RenameRule
     codes: List[str] = []
+    filtro: Optional[RenameFilter] = None
+    all_matching: bool = False
+    # Nome visto no preview por código → trava anti-corrida (skipped_stale).
+    expected: Optional[Dict[str, str]] = None
+
+
+class ContactJobRequest(BaseModel):
+    """Criação de job bounded-batch do renomeador (Fase 2 §5, etapa 8)."""
+
+    tipo: str  # GEOCODE | OVERPASS | APPLY
+    filtro: Optional[RenameFilter] = None
+    regra: Optional[RenameRule] = None
 
 
 def _organizer(db: Session, ctx: TenantContext):
@@ -260,13 +292,21 @@ def _organizer(db: Session, ctx: TenantContext):
 def organizer_rename_preview(
     rule: RenameRule,
     search: Optional[str] = None,
+    bairro: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = 1,
+    # Default = 200 para paridade exata com o preview antigo: a UI legada ainda
+    # envia `codes` a partir desta página, então mudar o default seria uma
+    # quebra silenciosa. A UI paginada (Fase 2 §13) passa `page_size` explícito.
+    page_size: int = 200,
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permission("customer.update")),
 ):
-    """Preview do renomeador em lote — calcula mudanças SEM gravar (I3).
+    """Preview PAGINADO do renomeador — calcula mudanças SEM gravar (I3).
 
-    Contatos em conflito ("Revisar") são excluídos do preview: nada
-    automático sobre contato conflitante.
+    Sem teto: varre toda a base que casa com `search`/`bairro`/`status` e
+    devolve só a página pedida + `total`. Contatos em conflito ("Revisar")
+    ficam fora do preview: nada automático sobre contato conflitante.
     """
     from app.application.contacts.organizer import build_rename_rule
 
@@ -277,10 +317,17 @@ def organizer_rename_preview(
             prefixes=rule.prefixes,
             case=rule.case,
             pattern_bairro=rule.pattern_bairro,
+            pattern_endereco=rule.pattern_endereco,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    return _organizer(db, ctx).preview_rename(validated, search=search or "")
+    return _organizer(db, ctx).preview_rename(
+        validated,
+        search=search or "",
+        filtro={"bairro": bairro, "status": status},
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/organizer/rename-apply")
@@ -289,9 +336,11 @@ def organizer_rename_apply(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(require_permission("customer.update")),
 ):
-    """Aplica renomeações confirmadas (apenas códigos vindos do preview).
+    """Aplica renomeações confirmadas (preview/apply desacoplados — §6.4).
 
-    Grava audit `contact.rename` (before/after) por contato alterado.
+    Aceita três formas de seleção (§6.4), nunca “aplicar a todos” implícito:
+    `codes` (contrato legado), `filtro` ou `all_matching=True`. Grava audit
+    `contact.rename` (before/after) por contato alterado.
     """
     from app.application.contacts.organizer import build_rename_rule
 
@@ -302,10 +351,23 @@ def organizer_rename_apply(
             prefixes=payload.rule.prefixes,
             case=payload.rule.case,
             pattern_bairro=payload.rule.pattern_bairro,
+            pattern_endereco=payload.rule.pattern_endereco,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    return _organizer(db, ctx).apply_rename(validated, codes=payload.codes, actor_id=ctx.user_id)
+    filtro = payload.filtro
+    try:
+        return _organizer(db, ctx).apply_rename(
+            validated,
+            codes=payload.codes or None,
+            actor_id=ctx.user_id,
+            filtro={"bairro": filtro.bairro, "status": filtro.status} if filtro else None,
+            all_matching=payload.all_matching,
+            expected=payload.expected,
+            search=(filtro.search if filtro else None) or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 @router.post("/organizer/backfill-codes")
@@ -330,6 +392,98 @@ def organizer_conflicts(
     Apenas sinaliza (I3) — correção é sempre manual, contato por contato.
     """
     return _organizer(db, ctx).list_conflicts()
+
+
+@router.get("/organizer/geocode-origem")
+def organizer_geocode_origem(
+    limite: int = 100,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """Origem do geocode: OSM × fallback de CEP (etapa 9 / ADR-0007).
+
+    A triagem do renomeador mostra de onde cada endereço veio — o ponto do
+    fallback de CEP é de *trecho*, não tem a qualidade do logradouro do OSM, e
+    quem aplica o lote precisa saber em qual dos dois está pisando.
+    """
+    return _organizer(db, ctx).geocode_origem(limite=limite)
+
+
+# ═══════════════════════════════════════════════════════════
+# Jobs bounded-batch (Fase 2 §5, etapa 8)
+# ═══════════════════════════════════════════════════════════
+
+
+def _job_service(db: Session, ctx: TenantContext):
+    from app.application.contacts.jobs import ContactJobService
+
+    return ContactJobService(db, _repo(db, ctx), ctx.tenant_id)
+
+
+def _validar_regra(rule: RenameRule) -> Dict:
+    from app.application.contacts.organizer import build_rename_rule
+
+    try:
+        return build_rename_rule(
+            trim=rule.trim,
+            strip_prefixes=rule.strip_prefixes,
+            prefixes=rule.prefixes,
+            case=rule.case,
+            pattern_bairro=rule.pattern_bairro,
+            pattern_endereco=rule.pattern_endereco,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.post("/jobs", dependencies=[Depends(require_renamer_enabled)])
+def contact_job_create(
+    payload: ContactJobRequest,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Cria um job do renomeador (GEOCODE | OVERPASS | APPLY).
+
+    Gated por `CONTACT_RENAMER_ENABLED` (409 quando desligado). O job é
+    retomável pelo cursor; o avanço acontece em `/jobs/{id}/process`.
+    """
+    filtro = payload.filtro.model_dump() if payload.filtro else None
+    regra = _validar_regra(payload.regra) if payload.regra is not None else None
+    try:
+        return _job_service(db, ctx).criar_job(payload.tipo, filtro=filtro, regra=regra)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.post("/jobs/{job_id}/process", dependencies=[Depends(require_renamer_enabled)])
+def contact_job_process(
+    job_id: str,
+    limite: Optional[int] = None,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Processa a PRÓXIMA faixa do job (bounded-batch) e devolve o progresso.
+
+    Chamar de novo continua de onde parou. Quando a faixa vem incompleta, o
+    job passa a `CONCLUIDO`.
+    """
+    try:
+        return _job_service(db, ctx).processar_proximo_lote(job_id, limite=limite)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.get("/jobs/{job_id}", dependencies=[Depends(require_renamer_enabled)])
+def contact_job_status(
+    job_id: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.update")),
+):
+    """Status/progresso do job (inclui a métrica do passe Overpass)."""
+    try:
+        return _job_service(db, ctx).status(job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("")

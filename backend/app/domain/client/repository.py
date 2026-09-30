@@ -6,8 +6,8 @@ de implementação específica (SQLAlchemy, MongoDB, etc).
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Tuple
-from app.domain.client.entity import Client
+from typing import Dict, Optional, List, Tuple
+from app.domain.client.entity import Client, normalize_phone
 
 
 class ClientRepository(ABC):
@@ -32,6 +32,32 @@ class ClientRepository(ABC):
     def buscar_por_telefone(self, telefone: str) -> Optional[Client]:
         """Busca um cliente pelo telefone."""
         ...
+
+    def buscar_por_telefones(self, telefones: List[str]) -> Dict[str, Client]:
+        """Busca vários clientes em UMA consulta, indexados por telefone normalizado.
+
+        Otimização de importação em lote (§18 etapa 4): sem ela, importar N
+        contatos custa N SELECTs. Implementações que não souberem fazer isso
+        em uma consulta herdam o fallback linha a linha abaixo — o resultado
+        é o mesmo, só mais lento.
+        """
+        found: Dict[str, Client] = {}
+        for telefone in telefones:
+            client = self.buscar_por_telefone(telefone)
+            if client:
+                found[normalize_phone(telefone)] = client
+        return found
+
+    def salvar_lote(self, criar: List[Client], atualizar: List[Client]) -> None:
+        """Grava criações e atualizações em UMA transação.
+
+        Fallback linha a linha para implementações sem bulk real: cada
+        criação/atualização commita por conta própria, como antes.
+        """
+        for client in criar:
+            self.criar(client)
+        for client in atualizar:
+            self.atualizar(client)
 
     @abstractmethod
     def listar_todos(self) -> List[Client]:

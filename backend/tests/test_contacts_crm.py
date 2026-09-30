@@ -23,11 +23,15 @@ class FakeClientRepo:
     def __init__(self):
         self.clients = []
         self._next = 1
+        # Nº de transações: o lote tem de agrupar por bloco (etapa 4), não
+        # commitar 1x por contato.
+        self.commits = 0
 
     def proximo_codigo(self) -> str:
-        code = f"{self._next:06d}"
-        self._next += 1
-        return code
+        # Espelha o repo real: sequência derivada do maior código existente.
+        existing = [int(c.codigo) for c in self.clients if c.codigo and c.codigo.isdigit()]
+        next_id = max(existing) + 1 if existing else 1
+        return f"{next_id:06d}"
 
     def criar(self, client: Client) -> Client:
         client.id = self._next
@@ -37,6 +41,22 @@ class FakeClientRepo:
 
     def atualizar(self, client: Client) -> Client:
         return client
+
+    def buscar_por_telefones(self, telefones):
+        found = {}
+        for telefone in telefones:
+            c = self.buscar_por_telefone(telefone)
+            if c:
+                found[normalize_phone(telefone)] = c
+        return found
+
+    def salvar_lote(self, criar, atualizar) -> None:
+        """Uma transação só para o bloco inteiro."""
+        self.commits += 1
+        for client in criar:
+            self.criar(client)
+        for client in atualizar:
+            self.atualizar(client)
 
     def buscar_por_telefone(self, telefone: str):
         normalized = normalize_phone(telefone)
@@ -125,6 +145,30 @@ class TestUpsertContact:
         assert client.codigo != "999999"
         assert client.id != 123
 
+    def test_create_persists_geocoding_fields(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+        client, action = svc.upsert_contact(
+            {"telefone": "1199999999", "nome": "Maria", "cep": "00000-000", "entre_ruas": "Rua A e Rua B"}
+        )
+        assert action == "created"
+        assert client.cep == "00000-000"
+        assert client.entre_ruas == "Rua A e Rua B"
+
+    def test_reimport_fills_missing_cep_and_never_overwrites(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+        client, _ = svc.upsert_contact({"telefone": "1199999999", "nome": "Maria"})
+        assert client.cep is None
+
+        updated, action = svc.upsert_contact({"telefone": "1199999999", "cep": "00000-000"})
+        assert action == "updated"
+        assert updated.cep == "00000-000"
+
+        # CEP já preenchido não é sobrescrito por reimportação.
+        again, _ = svc.upsert_contact({"telefone": "1199999999", "cep": "11111-111"})
+        assert again.cep == "00000-000"
+
     def test_invalid_phone_rejected(self):
         svc = ContactService(FakeClientRepo())
         with pytest.raises(ValueError):
@@ -142,6 +186,105 @@ class TestUpsertContact:
         assert len(results) == 2
         assert results[0]["action"] == "created"
         assert results[1]["action"] == "error"
+
+
+# ═══════════════════════════════════════════════════════════
+# Importação em lote (§18 etapa 4)
+# ═══════════════════════════════════════════════════════════
+
+
+def _lote(n: int):
+    return [{"telefone": f"1190000{i:04d}"} for i in range(n)]
+
+
+class _FakeRepoQueFalhaNoLote(FakeClientRepo):
+    """salvar_lote sempre estoura — força o fallback linha a linha."""
+
+    def salvar_lote(self, criar, atualizar) -> None:
+        self.commits += 1
+        raise RuntimeError("lote indisponível")
+
+
+class TestSyncBatchEmLote:
+    def test_agrupa_criacoes_em_transacoes_de_500(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(_lote(1200))
+
+        assert len(results) == 1200
+        assert all(r["action"] == "created" for r in results)
+        assert repo.commits == 3  # 500 + 500 + 200
+        assert len(repo.clients) == 1200
+
+    def test_chunk_size_configuravel(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(_lote(5), chunk_size=2)
+
+        assert len(results) == 5
+        assert repo.commits == 3  # 2 + 2 + 1
+
+    def test_codigos_sequenciais_atravessando_blocos(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(_lote(5), chunk_size=2)
+
+        assert [r["codigo"] for r in results] == ["000001", "000002", "000003", "000004", "000005"]
+
+    def test_telefone_repetido_no_mesmo_bloco_cria_uma_vez(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(
+            [
+                {"telefone": "11999999999", "nome": "Maria"},
+                {"telefone": "(11) 99999-9999", "nome": "Maria Silva"},
+            ]
+        )
+
+        # O 2º card é o MESMO telefone: enriquece em memória, não duplica insert
+        # (seria UNIQUE violation e derrubaria o bloco inteiro).
+        assert len(repo.clients) == 1
+        assert results[0]["action"] == "created"
+        assert results[1]["action"] == "unchanged"  # nome real não é sobrescrito
+
+    def test_item_invalido_no_meio_nao_aborta_o_bloco(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(
+            [
+                {"telefone": "1199999999"},
+                {"telefone": "1"},  # inválido, no meio
+                {"telefone": "1188888888"},
+            ]
+        )
+
+        assert [r["action"] for r in results] == ["created", "error", "created"]
+        assert len(repo.clients) == 2
+
+    def test_bloco_que_falha_cai_para_linha_a_linha_sem_perder_contato(self):
+        repo = _FakeRepoQueFalhaNoLote()
+        svc = ContactService(repo)
+
+        results = svc.sync_batch(_lote(3), chunk_size=10)
+
+        assert [r["action"] for r in results] == ["created", "created", "created"]
+        assert len(repo.clients) == 3
+
+    def test_reimportacao_do_mesmo_lote_e_idempotente(self):
+        repo = FakeClientRepo()
+        svc = ContactService(repo)
+        contacts = [{"telefone": f"1190000{i:04d}", "nome": f"Cliente {i}"} for i in range(3)]
+
+        svc.sync_batch(contacts, chunk_size=2)
+        results = svc.sync_batch(contacts, chunk_size=2)
+
+        assert all(r["action"] == "unchanged" for r in results)
+        assert len(repo.clients) == 3
 
 
 # ═══════════════════════════════════════════════════════════

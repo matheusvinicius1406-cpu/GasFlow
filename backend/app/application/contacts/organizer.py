@@ -19,14 +19,40 @@ Design do spec (§3.7 + decisões I1–I3):
 import re
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
+
+from app.application.contacts.formatter import formatar_nome_rota
 from app.core.logging import setup_logging
+from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
+from app.infrastructure.repositories.geocode_cache_model import GeocodeCacheModel
 
 logger = setup_logging("INFO")
 
 # Prefixos comuns de lixo de agenda do WhatsApp (case-insensitive).
 # Cada entrada é removida com o espaço/traço seguinte quando o nome começa com ela.
 DEFAULT_STRIP_PREFIXES = ["WA-", "WA ", "WPP-", "WPP ", "+", "*"]
+
+# Paginação da varredura interna (não é o tamanho da página devolvida ao
+# preview): o repositório é lido em blocos para não carregar a base inteira.
+_SCAN_PAGE = 500
+DEFAULT_PREVIEW_PAGE_SIZE = 100
+MAX_PREVIEW_PAGE_SIZE = 500
+
+# Provedores do fallback de CEP (etapa 9 / ADR-0007). Qualquer outro valor em
+# `geocode_cache.provider` é o provedor de OSM (nominatim/photon/mock).
+PROVIDERS_CEP = ("brasilapi", "pontofato")
+
+
+def _sem_endereco(rua: Optional[str]) -> bool:
+    """Mesmo critério do filtro `SEM_ENDERECO` do job (§jobs)."""
+    return (rua or "").strip().lower() in ("", "a definir")
+
+
+def _bucket_status(status: Optional[str]) -> str:
+    """Bucket do `geocode_status` para a triagem (D3). `None`/`""` = pendente."""
+    valor = (status or "").strip().upper()
+    return valor if valor in ("OK", "NAO_ENCONTRADO") else "PENDENTE"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -70,6 +96,7 @@ def build_rename_rule(
     prefixes: Optional[List[str]] = None,
     case: Optional[str] = None,  # "title" | "upper" | "lower" | None
     pattern_bairro: bool = False,  # "Nome — Bairro"
+    pattern_endereco: bool = False,  # padrão de rota (etapa 7 / D5)
 ) -> Dict[str, Any]:
     """Monta o dict de regra (serializável) validando os valores."""
     if case not in (None, "title", "upper", "lower"):
@@ -80,6 +107,7 @@ def build_rename_rule(
         "prefixes": [p for p in (prefixes if prefixes is not None else DEFAULT_STRIP_PREFIXES)],
         "case": case,
         "pattern_bairro": bool(pattern_bairro),
+        "pattern_endereco": bool(pattern_endereco),
     }
 
 
@@ -110,6 +138,23 @@ def apply_rename_rule(nome: str, bairro: str, rule: Dict[str, Any]) -> str:
     return result
 
 
+def build_new_name(client: Any, rule: Dict[str, Any]) -> str:
+    """Nome resultante da regra para UM contato (pura, sem banco).
+
+    Dois modos:
+    - `pattern_endereco` (etapa 7): formatador de nome de rota — depende do
+      contato inteiro (rua/numero/cep/entre_ruas), não só do nome/bairro;
+    - demais regras: `apply_rename_rule` (trim/case/padrão com bairro).
+
+    O modo endereço tem precedência quando os dois padrões vêm ligados — o
+    nome de rota já carrega o bairro no endereço, então o sufixo “— Bairro”
+    seria redundante.
+    """
+    if rule.get("pattern_endereco"):
+        return formatar_nome_rota(client)
+    return apply_rename_rule(client.nome, client.bairro, rule)
+
+
 # ═══════════════════════════════════════════════════════════
 # Conflitos (lista "Revisar") — detecção, nunca correção
 # ═══════════════════════════════════════════════════════════
@@ -137,22 +182,89 @@ class ContactOrganizer:
 
     # ── Preview / Apply ───────────────────────────────────
 
-    def preview_rename(self, rule: Dict[str, Any], search: str = "") -> Dict[str, Any]:
-        """Calcula renomeações sem gravar. Retorna lista de mudanças + contagem.
+    # ── Seleção por filtro (preview/apply desacoplados) ──
 
-        Contatos com nome vazio são ignorados (nada a melhorar); contatos
-        em conflito são contabilizados em `conflicts_skipped` e NÃO entram
-        no preview (I3: nada automático sobre conflito).
+    def _match_filter(self, client: Any, filtro: Optional[Dict[str, Any]]) -> bool:
+        """Critérios derivados (bairro/status) aplicados sobre o candidato.
+
+        `search` continua sendo resolvido pelo repositório; aqui ficam só os
+        filtros que o `buscar()` não conhece.
         """
+        if not filtro:
+            return True
+        bairro = (filtro.get("bairro") or "").strip()
+        if bairro and (client.bairro or "").strip().lower() != bairro.lower():
+            return False
+        status = (filtro.get("status") or "").strip().upper()
+        if status:
+            if status == "SEM_ENDERECO":
+                # Mesmo critério da triagem e do job (`_sem_endereco`): comparar
+                # por igualdade crua deixaria "a definir" fora do filtro que a
+                # própria tela diz que ele pertence.
+                ok = _sem_endereco(client.rua)
+            else:
+                ok = (client.geocode_status or "").upper() == status
+            if not ok:
+                return False
+        return True
+
+    def _iter_candidates(self, search: str = "", filtro: Optional[Dict[str, Any]] = None):
+        """Itera TODOS os candidatos que casam, paginando o repositório.
+
+        O preview antigo lia `page_size=200` fixo e truncava a seleção em
+        silêncio (renomeação parcial). Aqui não há teto: a leitura é lazy,
+        bloco a bloco, para não carregar a base inteira de uma vez.
+        """
+        page = 1
+        while True:
+            clients, total = self.repo.buscar(query=search or "", page=page, page_size=_SCAN_PAGE)
+            if not clients:
+                return
+            for client in clients:
+                if self._match_filter(client, filtro):
+                    yield client
+            if page * _SCAN_PAGE >= total:
+                return
+            page += 1
+
+    def _select_codes(
+        self, rule: Dict[str, Any], search: str = "", filtro: Optional[Dict[str, Any]] = None
+    ) -> List[str]:
+        """Códigos que a regra REALMENTE mudaria (a mesma seleção do preview)."""
         conflicts = self._conflict_map()
-        clients, _total = self.repo.buscar(query=search or "", page=1, page_size=200)
+        codes: List[str] = []
+        for client in self._iter_candidates(search, filtro):
+            if not client.nome or not client.nome.strip() or client.codigo in conflicts:
+                continue
+            new_name = build_new_name(client, rule)
+            if new_name and new_name != client.nome:
+                codes.append(client.codigo)
+        return codes
+
+    def preview_rename(
+        self,
+        rule: Dict[str, Any],
+        search: str = "",
+        filtro: Optional[Dict[str, Any]] = None,
+        page: int = 1,
+        page_size: int = DEFAULT_PREVIEW_PAGE_SIZE,
+    ) -> Dict[str, Any]:
+        """Preview paginado — calcula mudanças SEM gravar (I3).
+
+        Varre toda a base que casa com `search`/`filtro` (sem teto) e devolve
+        só a página pedida, mais o `total` real. Contatos em conflito
+        ("Revisar") ficam fora do preview: nada automático sobre conflito.
+        """
+        page = max(1, int(page or 1))
+        page_size = min(max(1, int(page_size or DEFAULT_PREVIEW_PAGE_SIZE)), MAX_PREVIEW_PAGE_SIZE)
+        conflicts = self._conflict_map()
         changes: List[Dict[str, Any]] = []
-        for c in clients:
+        for c in self._iter_candidates(search, filtro):
             if not c.nome or not c.nome.strip():
                 continue
             if c.codigo in conflicts:
                 continue
-            new_name = apply_rename_rule(c.nome, c.bairro, rule)
+            new_name = build_new_name(c, rule)
             if new_name and new_name != c.nome:
                 changes.append(
                     {
@@ -163,20 +275,43 @@ class ContactOrganizer:
                         "bairro": c.bairro,
                     }
                 )
-        return {"changes": changes, "total": len(changes)}
+        total = len(changes)
+        offset = (page - 1) * page_size
+        return {
+            "changes": changes[offset : offset + page_size],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, -(-total // page_size)),
+        }
 
     def apply_rename(
         self,
         rule: Dict[str, Any],
         codes: Optional[List[str]] = None,
         actor_id: str = "",
+        filtro: Optional[Dict[str, Any]] = None,
+        all_matching: bool = False,
+        expected: Optional[Dict[str, str]] = None,
+        search: str = "",
     ) -> Dict[str, Any]:
-        """Aplica renomeações confirmadas (apenas nos `codes` enviados pelo preview).
+        """Aplica renomeações confirmadas.
 
-        Segurança dupla (I3): só grava se o nome atual no banco ainda é o
-        `before` que o operador viu (sem corrida com sync do WhatsApp).
-        Cada mudança grava audit `contact.rename` com before/after.
+        Seleção (uma delas é obrigatória — nada de "aplicar a todos" implícito):
+        - `codes`: lista explícita (contrato legado, ainda usado pela UI);
+        - `filtro` (+ `search`): tudo que casa com o critério;
+        - `all_matching=True`: toda a base que a regra mudaria (confirmação explícita).
+
+        Segurança dupla (I3): quando `expected` traz o nome visto no preview, o
+        contato é pulado se o nome atual divergir (`skipped_stale`) — sem
+        corrida com o sync do WhatsApp. Cada mudança grava audit
+        `contact.rename` com before/after.
         """
+        if codes is None:
+            if not filtro and not all_matching:
+                raise ValueError("apply exige uma seleção: codes, filtro ou all_matching=True")
+            codes = self._select_codes(rule, search=search, filtro=filtro)
+
         renamed = skipped_missing = skipped_stale = conflicts_skipped = 0
         conflicts = self._conflict_map()
         results: List[Dict[str, Any]] = []
@@ -191,13 +326,23 @@ class ContactOrganizer:
                 conflicts_skipped += 1
                 results.append({"codigo": codigo, "status": "conflict"})
                 continue
-            new_name = apply_rename_rule(client.nome, client.bairro, rule)
+            seen = (expected or {}).get(codigo)
+            if seen is not None and client.nome != seen:
+                skipped_stale += 1
+                results.append({"codigo": codigo, "status": "stale", "before": seen, "actual": client.nome})
+                continue
+            new_name = build_new_name(client, rule)
             if not new_name or new_name == client.nome:
                 results.append({"codigo": codigo, "status": "unchanged"})
                 continue
             before = client.nome
             client.nome = new_name
-            client.has_name = True
+            # O padrão de endereço não promove o nome a “nome de pessoa”: o
+            # sufixo ({nome}) já saiu (ou foi omitido) no preview/apply. Forçar
+            # has_name aqui faria o segundo apply incluir o placeholder que o
+            # primeiro omitiu — quebraria a idempotência.
+            if not rule.get("pattern_endereco"):
+                client.has_name = True
             self.repo.atualizar(client)
             _audit(
                 self.db,
@@ -292,6 +437,69 @@ class ContactOrganizer:
         """Mapa codigo → issues dos contatos em conflito (exclusão do rename em lote)."""
         result = self.list_conflicts()
         return {i["codigo"]: i["issues"] for i in result["items"]}
+
+    # ── Origem do geocode (etapa 9) ────────────────────────
+
+    def geocode_origem(self, limite: int = 100) -> Dict[str, Any]:
+        """Resumo da ORIGEM do geocode: OSM × fallback de CEP (ADR-0007).
+
+        A triagem precisa saber **de onde veio** cada endereço: o OSM responde
+        pelo logradouro inteiro; o fallback de CEP (BrasilAPI/PontoFato) responde
+        por *trecho* — e a coordenada dele não tem a mesma qualidade. Ler
+        `geocode_cache.provider` é o que separa os dois, e a lista das ruas
+        vindas de CEP é o que o operador confere antes de aplicar.
+
+        `limite` corta só a LISTA (o resumo é sempre completo) — a triagem não
+        pode devolver 10 mil linhas para a tela.
+        """
+        limite = max(1, min(int(limite or 100), 500))
+
+        por_status: Dict[str, int] = {"OK": 0, "NAO_ENCONTRADO": 0, "PENDENTE": 0, "SEM_ENDERECO": 0}
+        contatos = (
+            self.db.query(ClientModel.rua, ClientModel.geocode_status)
+            .filter(ClientModel.tenant_id == self.tenant_id, ClientModel.ativo.is_(True))
+            .all()
+        )
+        for rua, status in contatos:
+            if _sem_endereco(rua):
+                por_status["SEM_ENDERECO"] += 1
+            else:
+                por_status[_bucket_status(status)] += 1
+
+        por_origem = {"osm": 0, "cep": 0}
+        por_provider: Dict[str, int] = {}
+        for provider, total in (
+            self.db.query(GeocodeCacheModel.provider, func.count(GeocodeCacheModel.id))
+            .group_by(GeocodeCacheModel.provider)
+            .all()
+        ):
+            nome = (provider or "desconhecido").strip().lower()
+            quantidade = int(total or 0)
+            por_provider[nome] = quantidade
+            por_origem["cep" if nome in PROVIDERS_CEP else "osm"] += quantidade
+
+        consulta_cep = self.db.query(GeocodeCacheModel).filter(GeocodeCacheModel.provider.in_(PROVIDERS_CEP))
+        total_ruas_cep = int(consulta_cep.count() or 0)
+        ruas_cep = [
+            {
+                "rua": linha.rua or "",
+                "bairro": linha.bairro or "",
+                "cidade": linha.cidade or "",
+                "uf": linha.uf or "",
+                "cep": linha.cep or "",
+                "provider": (linha.provider or "").strip().lower(),
+            }
+            for linha in consulta_cep.order_by(GeocodeCacheModel.id).limit(limite).all()
+        ]
+
+        return {
+            "por_status": por_status,
+            "por_origem": por_origem,
+            "por_provider": por_provider,
+            "total_ruas_cache": sum(por_provider.values()),
+            "total_ruas_cep": total_ruas_cep,
+            "ruas_cep": ruas_cep,
+        }
 
 
 # ═══════════════════════════════════════════════════════════

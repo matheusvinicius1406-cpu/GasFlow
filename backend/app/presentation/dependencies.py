@@ -168,6 +168,26 @@ def require_permission(permission: str):
     return _check
 
 
+# ── Feature flag: renomeador de contatos (D13) ──────────
+
+
+def require_renamer_enabled() -> None:
+    """Bloqueia com 409 quando o renomeador de contatos está desligado (D13).
+
+    A flag existia declarada e inerte no settings — nenhum endpoint a
+    consultava ("flag declarada não é flag em vigor", ADR-0004). Desligado
+    responde 409 (conflito com o estado do servidor), nunca 200 silencioso:
+    quem chamou algo desabilitado precisa saber que está desabilitado.
+    """
+    from app.core.config import settings
+
+    if not settings.contact_renamer_enabled:
+        raise HTTPException(
+            status_code=409,
+            detail=("Renomeador de contatos desabilitado " "(CONTACT_RENAMER_ENABLED=false)"),
+        )
+
+
 # ── Public endpoint marker (no auth needed) ─────────────
 
 # Endpoints that DON'T use get_tenant_context are implicitly public.

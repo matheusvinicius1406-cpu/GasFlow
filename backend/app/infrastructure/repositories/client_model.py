@@ -4,7 +4,7 @@ Client SQLAlchemy Model — Modelo de persistência do Cliente.
 Mapeia a entidade de domínio Client para tabela no banco de dados.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Index, UniqueConstraint
 from datetime import datetime
 from app.infrastructure.database.base import Base
 
@@ -37,6 +37,18 @@ class ClientModel(Base):
     last_sync_at = Column(DateTime, nullable=True)
     marketing_status = Column(String(20), nullable=True)  # OPTED_IN, OPTED_OUT, BLOCKED (espelho do serviço)
 
+    # ── Geocoding do renomeador de contatos (.vcf — ADR-0001 / Fase 2 §7) ──
+    cidade = Column(String, nullable=True)  # ViaCEP/geocoding exige município
+    uf = Column(String, nullable=True)
+    # Nome bruto da importação (com o código legado) — rastreabilidade. `nome`
+    # passa a ser só nome de pessoa.
+    nome_importado = Column(String, nullable=True)
+    cep = Column(String(9), nullable=True)  # 00000-000
+    entre_ruas = Column(String, nullable=True)  # "Rua A e Rua B" (best-effort)
+    geocode_status = Column(String(20), nullable=True)  # OK, NAO_ENCONTRADO, PENDENTE
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -49,4 +61,5 @@ class ClientModel(Base):
         Index("ix_clients_email", "email"),
         Index("ix_clients_last_interaction", "last_interaction_at"),
         Index("ix_clients_marketing_status", "marketing_status"),
+        Index("ix_clients_geocode_status", "geocode_status"),
     )

@@ -61,6 +61,18 @@ class Client:
     # marketing_status: espelho do consentimento (fonte de verdade: serviço WA)
     marketing_status: Optional[str] = None
 
+    # ── Geocoding do renomeador de contatos (.vcf — ADR-0001 / Fase 2 §7) ──
+    # cep/entre_ruas/lat/lng são best-effort; geocode_status diz se resolveu.
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    # Nome bruto da importação (com o código legado) — `nome` é só pessoa.
+    nome_importado: Optional[str] = None
+    cep: Optional[str] = None
+    entre_ruas: Optional[str] = None
+    geocode_status: Optional[str] = None  # OK | NAO_ENCONTRADO | PENDENTE
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

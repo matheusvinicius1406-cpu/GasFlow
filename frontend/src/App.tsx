@@ -9,6 +9,7 @@ import { CustomersPage, CustomerDetailPage, CustomerFormPage } from '@/features/
 import {
   ContactsCrmPage,
   ContactsOrganizerPage,
+  ContactsRenamerPage,
   CampaignWizardPage,
   CampaignResultsPage,
   CampaignHistoryPage,
@@ -75,6 +76,8 @@ export function App() {
         <Route path="whatsapp" element={<WhatsAppModulePage />} />
         <Route path="whatsapp/contacts" element={<ContactsCrmPage />} />
         <Route path="whatsapp/contacts/organizer" element={<ContactsOrganizerPage />} />
+        {/* Renomeador .vcf (Fase 2 §9): prévia paginada + job + triagem + export. */}
+        <Route path="whatsapp/contacts/renomeador" element={<ContactsRenamerPage />} />
         <Route path="whatsapp/campaigns" element={<CampaignHistoryPage />} />
         <Route path="whatsapp/campaigns/new" element={<CampaignWizardPage />} />
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />

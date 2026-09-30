@@ -96,6 +96,8 @@ from app.infrastructure.repositories.purchase_note_model import (  # noqa: F401
     PurchaseNoteItemModel,
 )
 from app.infrastructure.repositories.print_job_model import PrintJobModel  # noqa: F401 — F10.7
+from app.infrastructure.repositories.geocode_cache_model import GeocodeCacheModel  # noqa: F401 — v7
+from app.infrastructure.repositories.contact_job_model import ContactJobModel  # noqa: F401 — v8
 
 
 def _ensure_sqlite_columns() -> None:
@@ -131,7 +133,14 @@ def _ensure_sqlite_columns() -> None:
 
 
 SCHEMA_VERSION = (
-    4  # v4: Reorganização estrutural (docs/reorg-plan.md) — limpeza TOTAL do
+    8  # v8: contact_jobs — job persistido do renomeador em lote (Fase 2 §9 etapa 8).
+    # Retomável por cursor keyset (codigo/id); consumido por application/contacts/jobs.py.
+    # v7: geocode_cache — cache de geocoding por RUA (Fase 2 §6/§7, ADR-0004).
+    # v6: geocoding de contatos (.vcf) — clients.cidade/uf/nome_importado
+    # (Fase 2 §7). geocode_cache/contact_jobs entram com os consumidores.
+    # v5: colunas de geocoding do renomeador de contatos (.vcf — ADR-0001):
+    # clients.cep, entre_ruas, geocode_status, lat, lng (aditivas, nullable).
+    # v4: Reorganização estrutural (docs/reorg-plan.md) — limpeza TOTAL do
     # banco (clients, whatsapp_conversations/messages, ai_conversations/messages)
     # + catálogo real (2 produtos: Água R$10, Gás P13 R$120 com cartão 1x/2x).
     # v3: Decisão B3(a) — débito de estoque movido do pedido CONFIRMED

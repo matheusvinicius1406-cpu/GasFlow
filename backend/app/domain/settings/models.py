@@ -70,6 +70,25 @@ DEFAULT_SETTINGS = [
         2,
         "Tolerância de divergência na reconciliação de estoque do entregador",
     ),
+    # ── Geocoding de contatos (.vcf) — D11 ──────────────────
+    # Cidade/UF default do renomeador: os .vcf do cliente raramente trazem o
+    # município, e sem ele nem o ViaCEP nem a chave do cache de rua fecham.
+    # São fato do negócio (uma revenda atende uma cidade), por isso vivem no
+    # quadro de configurações e não em env.
+    # Valor do seed = cidade do cliente (REV. 7 §17.1 do prompt da Fase 2);
+    # editável no quadro de configurações se o atendimento mudar de cidade.
+    (
+        "contacts.default_city",
+        "operations",
+        "Belém",
+        "Cidade padrão dos contatos importados (.vcf) — usada no geocoding",
+    ),
+    (
+        "contacts.default_uf",
+        "operations",
+        "PA",
+        "UF padrão dos contatos importados (.vcf) — ex.: PA",
+    ),
     ("dark_mode", "appearance", False, "Tema escuro no frontend"),
     ("brand_color", "appearance", "#E30613", "Cor primária do GasFlow"),
     # ── Impressão em tempo real (F3) ────────────────────────
