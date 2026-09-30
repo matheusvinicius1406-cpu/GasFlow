@@ -234,7 +234,7 @@ class OverpassProvider(RateLimitedHttp):
 
     def _logradouros_proximos(self, ponto: Tuple[float, float]) -> Optional[List[dict]]:
         """1) vias nomeadas num círculo em volta do ponto cacheado."""
-        query = "[out:json][timeout:%d];" 'way(around:%d,%.7f,%.7f)["highway"]["name"];out geom;' % (
+        query = '[out:json][timeout:%d];way(around:%d,%.7f,%.7f)["highway"]["name"];out geom;' % (
             int(self._timeout),
             _RAIO_ACHAR_RUA_M,
             ponto[0],
@@ -332,4 +332,4 @@ def _bbox(pontos: Sequence[Tuple[float, float]], margem_m: float) -> str:
     lat_medio = sum(lats) / len(lats)
     dlat = margem_m / _METROS_POR_GRAU_LAT
     dlng = margem_m / max(1.0, _METROS_POR_GRAU_LNG * math.cos(math.radians(lat_medio)))
-    return f"{min(lats) - dlat:.7f},{min(lngs) - dlng:.7f}," f"{max(lats) + dlat:.7f},{max(lngs) + dlng:.7f}"
+    return f"{min(lats) - dlat:.7f},{min(lngs) - dlng:.7f},{max(lats) + dlat:.7f},{max(lngs) + dlng:.7f}"

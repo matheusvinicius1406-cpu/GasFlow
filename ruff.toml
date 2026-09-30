@@ -1,0 +1,26 @@
+# Ruff — política de LINT do repositório.
+#
+# Vive na RAIZ porque o ruff resolve a configuração pelo arquivo mais próximo,
+# subindo a árvore. Antes existia só `backend/ruff.toml`: `relay/`, `scripts/`,
+# `.github/scripts/` e `agent/` caíam no DEFAULT IMPLÍCITO do ruff — que era
+# ["E4", "E7", "E9", "F"] no 0.6.9 e virou um conjunto largo (BLE001, S110,
+# B017, SIM, UP…) no 0.16. Subir a versão do hook, então, mudava a política de
+# lint desses diretórios em silêncio e o `ruff --fix` reescrevia tipagem
+# (`Dict` → `dict`, `Optional[X]` → `X | None`) em código que ninguém pediu
+# para mexer. Aqui a política é EXPLÍCITA e independente da versão do ruff.
+#
+# Escopo: este arquivo define as REGRAS (lint). `line-length` e `target-version`
+# ficam em `backend/ruff.toml`, que estende este — são opções de formatação e
+# valem só onde já valiam (o resto do repo segue o default do ruff, como antes).
+#
+# Select: E4 (imports), E7 (statements), E9 (runtime), F (pyflakes), B904.
+[lint]
+select = ["E4", "E7", "E9", "F", "B904"]
+# Ignorados com justificativa:
+# - E402: imports tardios intencionais para evitar import circular (ex.: realtime em main.py)
+# - E702: múltiplos statements na mesma linha em código legado/testes
+# - E712: `col == True/False` em filtros SQLAlchemy é o padrão correto (coluna não é bool Python;
+#         `col:` trataria NULL como False, mudando semântica de queries)
+# - F841: variáveis "atribuídas e não usadas" — muitas preservam chamadas com efeito;
+#         autofix unsafe removeria calls com side effects
+ignore = ["E402", "E702", "E712", "F841"]

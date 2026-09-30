@@ -269,12 +269,7 @@ class TestVCardRobustness:
 
     def test_quoted_printable_with_charset(self):
         # "João" em QP/latin-1 → J=6F=E3o (NÃO usar J=6F aqui: '=' = 3D).
-        raw = (
-            "BEGIN:VCARD\n"
-            "FN;CHARSET=ISO-8859-1;ENCODING=QUOTED-PRINTABLE:Jo=E3o\n"
-            "TEL:+5511999990006\n"
-            "END:VCARD\n"
-        )
+        raw = "BEGIN:VCARD\nFN;CHARSET=ISO-8859-1;ENCODING=QUOTED-PRINTABLE:Jo=E3o\nTEL:+5511999990006\nEND:VCARD\n"
         assert parse_vcf(raw)[0]["nome"] == "João"
 
     def test_escaped_semicolon_in_adr_does_not_split(self):
@@ -290,7 +285,7 @@ class TestVCardRobustness:
         assert contact["cep"] == "00000-000"
 
     def test_person_name_survives_the_legacy_address_pattern(self):
-        raw = "BEGIN:VCARD\n" "FN:1443= berredos 145 (João)\n" "TEL:+5511999990008\n" "END:VCARD\n"
+        raw = "BEGIN:VCARD\nFN:1443= berredos 145 (João)\nTEL:+5511999990008\nEND:VCARD\n"
         contact = parse_vcf(raw)[0]
         assert contact["nome"] == "João"
         assert contact["rua"] == "berredos"

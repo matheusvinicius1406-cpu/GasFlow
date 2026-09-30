@@ -605,7 +605,7 @@ class TestImportVcfAPI:
 
     def test_import_vcf_persists_the_literal_example_structured(self, client, admin_headers):
         telefone = f"1197{uuid.uuid4().int % 10_000_000:07d}"[:11]
-        raw = "BEGIN:VCARD\nVERSION:3.0\n" "FN:1443= berredos 145\n" f"TEL;TYPE=CELL:{telefone}\n" "END:VCARD\n"
+        raw = f"BEGIN:VCARD\nVERSION:3.0\nFN:1443= berredos 145\nTEL;TYPE=CELL:{telefone}\nEND:VCARD\n"
         res = client.post(
             "/whatsapp/contacts/import-vcf",
             files={"file": ("contatos.vcf", raw.encode("utf-8"), "text/vcard")},
@@ -666,7 +666,7 @@ class TestExportVcfFormatado:
             headers=admin_headers,
         )
         assert res.status_code == 200, res.text
-        assert (f"{int(codigo)}= Travessa São Roque Nº 145 entre Rua A e Rua B " f"- CEP 66811-120 (Maria)") in res.text
+        assert (f"{int(codigo)}= Travessa São Roque Nº 145 entre Rua A e Rua B - CEP 66811-120 (Maria)") in res.text
 
 
 class TestImportacaoEmLoteNoRepositorioReal:

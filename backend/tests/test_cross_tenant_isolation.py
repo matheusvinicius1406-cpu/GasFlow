@@ -243,9 +243,9 @@ class TestClientIsolation:
         # When tenant_a reads 000001, it gets "IDOR Test A", NOT "IDOR Test B"
         resp_b_read = client.get(f"/clients/{codigo_a}", headers=setup_tenants["tenant_b"]["headers"])
         assert resp_b_read.status_code == 200
-        assert (
-            resp_b_read.json()["nome"] == "IDOR Test B"
-        ), "Tenant B should get its own client when reading codigo=000001, not Tenant A's"
+        assert resp_b_read.json()["nome"] == "IDOR Test B", (
+            "Tenant B should get its own client when reading codigo=000001, not Tenant A's"
+        )
 
     def test_idor_disable_client_by_codigo(self, client, setup_tenants):
         """Tenant A cannot disable Tenant B's client (by trying to disable a non-existent-in-A codigo)."""

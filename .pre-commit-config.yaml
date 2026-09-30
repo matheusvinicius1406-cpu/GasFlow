@@ -29,10 +29,23 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    # Pinado na MESMA linha do ruff do projeto (backend/requirements-dev.txt =
+    # `ruff>=0.16.8`). Estava em v0.6.9: o hook formatava com uma versao de
+    # 2024 enquanto o desenvolvedor roda a 0.16 — o formatter do hook desfazia
+    # o do projeto e o commit virava ruido em ~20 arquivos (o inverso da
+    # intencao de ter um hook).
+    rev: v0.16.8
     hooks:
+      # `types_or: [python, pyi]` em ambos os hooks: a partir da 0.16 o ruff
+      # tambem le/formata blocos de codigo dentro de markdown, e sem a
+      # restricao o hook passaria a reescrever e a linicar as fences de Python
+      # dos dezenas de .md do repo — mudanca de comportamento que nao foi
+      # pedida e que faria o `--all-files` acusar documentacao. Restringir
+      # preserva o que o hook fazia antes do bump.
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
         exclude: *artefato_de_build
       - id: ruff-format
+        types_or: [python, pyi]
         exclude: *artefato_de_build

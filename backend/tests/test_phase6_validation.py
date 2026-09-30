@@ -845,9 +845,9 @@ def test_crm_no_whatsapp_imports():
             if f.endswith(".py"):
                 with open(os.path.join(full_path, f)) as fh:
                     for lineno, line in enumerate(fh, 1):
-                        assert not import_re.match(
-                            line
-                        ), f"CRM file {f}:{lineno} imports WhatsApp module: {line.strip()}"
+                        assert not import_re.match(line), (
+                            f"CRM file {f}:{lineno} imports WhatsApp module: {line.strip()}"
+                        )
 
 
 def test_frontend_no_secrets():

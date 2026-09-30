@@ -184,7 +184,7 @@ def require_renamer_enabled() -> None:
     if not settings.contact_renamer_enabled:
         raise HTTPException(
             status_code=409,
-            detail=("Renomeador de contatos desabilitado " "(CONTACT_RENAMER_ENABLED=false)"),
+            detail=("Renomeador de contatos desabilitado (CONTACT_RENAMER_ENABLED=false)"),
         )
 
 

@@ -1,15 +1,13 @@
-# Ruff — linter do backend GasFlow (gate de CI).
-# Select padrão do ruff: E4 (imports), E7 (statements), E9 (runtime), F (pyflakes).
+# Ruff do backend GasFlow (gate de CI).
+#
+# Era o ÚNICO config do repositório, e por isso os outros diretórios (relay,
+# scripts, .github/scripts, agent) ficavam com o default implícito da versão do
+# ruff instalada — que mudou entre a 0.6.9 e a 0.16. As REGRAS passaram para
+# `../ruff.toml` (raiz do repositório), que este arquivo estende: uma fonte de
+# verdade, e o mesmo conjunto de regras vale para todo o repo.
+#
+# `line-length`/`target-version` continuam aqui: são opções de formatação do
+# backend e não devem ser impostas aos outros diretórios.
+extend = "../ruff.toml"
 line-length = 120
 target-version = "py312"
-
-[lint]
-select = ["E4", "E7", "E9", "F", "B904"]
-# Ignorados com justificativa:
-# - E402: imports tardios intencionais para evitar import circular (ex.: realtime em main.py)
-# - E702: múltiplos statements na mesma linha em código legado/testes
-# - E712: `col == True/False` em filtros SQLAlchemy é o padrão correto (coluna não é bool Python;
-#         `col:` trataria NULL como False, mudando semântica de queries)
-# - F841: variáveis "atribuídas e não usadas" — muitas preservam chamadas com efeito;
-#         autofix unsafe removeria calls com side effects
-ignore = ["E402", "E702", "E712", "F841"]
