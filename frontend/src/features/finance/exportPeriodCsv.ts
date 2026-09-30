@@ -3,7 +3,7 @@
  *
  * Separador `;` e vírgula decimal: é o que o Excel em português abre certo ao
  * dar duplo clique (com `,` ele joga tudo numa coluna só). O BOM (\ufeff) é o
- * que faz o Excel reconhecer o UTF-8 sem "Ã§" nos acentos.
+ * que faz o Excel reconhecer o UTF-8 sem "ç" nos acentos.
  *
  * Função pura de propósito: o conteúdo exportado é conferível em teste, sem
  * tocar em DOM/arquivo.
