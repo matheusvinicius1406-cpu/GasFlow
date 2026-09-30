@@ -169,7 +169,9 @@ def juntar_segmentos(
     desconectadas e inventar o trecho faria posição de uma via virar posição de
     outra (D2 — nunca completar com palpite).
     """
-    pecas = [list(map(tuple, c)) for c in caminhos if c and len(c) >= 2]
+    pecas: List[List[Tuple[float, float]]] = [
+        [(float(p[0]), float(p[1])) for p in c] for c in caminhos if c and len(c) >= 2
+    ]
     if not pecas:
         return []
     pecas.sort(key=len, reverse=True)

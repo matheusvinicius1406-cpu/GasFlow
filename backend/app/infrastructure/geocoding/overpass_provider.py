@@ -163,7 +163,10 @@ class OverpassProvider(RateLimitedHttp):
             numero = _inteiro((no.get("tags") or {}).get("addr:housenumber"))
             if numero is None:
                 continue
-            projetado = projetar_no_eixo(eixo, (no.get("lat"), no.get("lon")))
+            ponto_no = _ponto(no)
+            if ponto_no is None:
+                continue
+            projetado = projetar_no_eixo(eixo, ponto_no)
             if projetado is None:
                 continue
             posicao, perpendicular = projetado
@@ -195,7 +198,9 @@ class OverpassProvider(RateLimitedHttp):
             geom = via.get("geometry") or []
             # Compartilha NÓ com o logradouro ⇒ é cruzamento de verdade.
             # Só "estar por perto" não conta: rua paralela entraria na lista.
-            compartilhados = [(g.get("lat"), g.get("lon")) for g in geom if (g.get("lat"), g.get("lon")) in pontos_rua]
+            # `_ponto` valida a coordenada antes de comparar: nó sem lat/lon não
+            # compartilha nó nenhum (e não pode virar cruzamento).
+            compartilhados = [ponto for ponto in (_ponto(g) for g in geom) if ponto is not None and ponto in pontos_rua]
             if not compartilhados:
                 continue
             for ponto_cruz in compartilhados:
@@ -291,7 +296,10 @@ class OverpassProvider(RateLimitedHttp):
                 exato = 0  # "berredos" dentro de "travessa dos berredos"
             else:
                 continue
-            candidatos.append((exato, len(nome_via), nome_via, int(via.get("id")), caminho))
+            via_id = via.get("id")
+            if via_id is None:
+                continue  # way sem id não dá para escolher nem deduplicar
+            candidatos.append((exato, len(nome_via), nome_via, int(via_id), caminho))
 
         if not candidatos:
             return None, set()
@@ -310,6 +318,21 @@ class OverpassProvider(RateLimitedHttp):
 
 
 # ── Utilitários puros ────────────────────────────────────
+
+
+def _ponto(elemento: Any) -> Optional[Tuple[float, float]]:
+    """`(lat, lon)` de um elemento OSM; sem coordenada numérica → `None`.
+
+    Existe para o que vem do Overpass ser validado UMA vez, na entrada: sem
+    isso um nó sem `lat`/`lon` chega cru em quem projeta e no comparador de nós
+    compartilhados.
+    """
+    lat, lon = elemento.get("lat"), elemento.get("lon")
+    if isinstance(lat, bool) or isinstance(lon, bool):
+        return None
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return None
+    return (float(lat), float(lon))
 
 
 def _inteiro(valor: Any) -> Optional[int]:

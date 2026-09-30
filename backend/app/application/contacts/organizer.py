@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func
 
 from app.application.contacts.formatter import formatar_nome_rota
+from app.application.contacts.geocoding import GeocodingService, ResolverEntreRuas
 from app.core.logging import setup_logging
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
@@ -138,8 +139,12 @@ def apply_rename_rule(nome: str, bairro: str, rule: Dict[str, Any]) -> str:
     return result
 
 
-def build_new_name(client: Any, rule: Dict[str, Any]) -> str:
+def build_new_name(client: Any, rule: Dict[str, Any], entre_ruas: Optional[str] = None) -> str:
     """Nome resultante da regra para UM contato (pura, sem banco).
+
+    `entre_ruas` é o par **derivado** do cache por número (D12) — quem varre a
+    base passa o valor do resolvedor. Quando ele vem, vence a coluna do contato
+    (que guarda o que o `.vcf` trouxe); sem ele, o formatador cai na coluna.
 
     Dois modos:
     - `pattern_endereco` (etapa 7): formatador de nome de rota — depende do
@@ -151,8 +156,13 @@ def build_new_name(client: Any, rule: Dict[str, Any]) -> str:
     seria redundante.
     """
     if rule.get("pattern_endereco"):
-        return formatar_nome_rota(client)
+        return formatar_nome_rota(client, entre_ruas=entre_ruas)
     return apply_rename_rule(client.nome, client.bairro, rule)
+
+
+def _entre_ruas(resolver: Optional[ResolverEntreRuas], client: Any) -> Optional[str]:
+    """Par derivado do contato; `None` quando a regra não é de endereço (D12)."""
+    return resolver.do_contato(client) if resolver is not None else None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -175,10 +185,39 @@ class ContactOrganizer:
     apenas para gravar audit na mesma transação (padrão ReactivationService).
     """
 
-    def __init__(self, db, client_repo: SQLAlchemyClientRepository, tenant_id: str = "default"):
+    def __init__(
+        self,
+        db,
+        client_repo: SQLAlchemyClientRepository,
+        tenant_id: str = "default",
+        geocoding: Optional[GeocodingService] = None,
+    ):
         self.db = db
         self.repo = client_repo
         self.tenant_id = tenant_id
+        self._geocoding = geocoding
+        self._entre_ruas: Optional[ResolverEntreRuas] = None
+
+    # ── Entre ruas derivado (D12) ───────────────
+
+    def _geocoder(self) -> GeocodingService:
+        """Geocoding injetado (testes) ou resolvido do banco na 1ª consulta."""
+        if self._geocoding is None:
+            self._geocoding = GeocodingService(self.db)
+        return self._geocoding
+
+    def _resolver_entre_ruas(self, rule: Dict[str, Any]) -> Optional[ResolverEntreRuas]:
+        """Resolvedor do "entre A e B" (D12) — só no padrão de endereço.
+
+        Memoizado na instância: `_select_codes` e o laço do apply do mesmo
+        request compartilham as leituras, e uma regra que não é de endereço não
+        paga consulta nenhuma.
+        """
+        if not rule.get("pattern_endereco"):
+            return None
+        if self._entre_ruas is None:
+            self._entre_ruas = self._geocoder().resolvedor_entre_ruas()
+        return self._entre_ruas
 
     # ── Preview / Apply ───────────────────────────────────
 
@@ -232,11 +271,12 @@ class ContactOrganizer:
     ) -> List[str]:
         """Códigos que a regra REALMENTE mudaria (a mesma seleção do preview)."""
         conflicts = self._conflict_map()
+        resolver = self._resolver_entre_ruas(rule)
         codes: List[str] = []
         for client in self._iter_candidates(search, filtro):
             if not client.nome or not client.nome.strip() or client.codigo in conflicts:
                 continue
-            new_name = build_new_name(client, rule)
+            new_name = build_new_name(client, rule, entre_ruas=_entre_ruas(resolver, client))
             if new_name and new_name != client.nome:
                 codes.append(client.codigo)
         return codes
@@ -258,13 +298,14 @@ class ContactOrganizer:
         page = max(1, int(page or 1))
         page_size = min(max(1, int(page_size or DEFAULT_PREVIEW_PAGE_SIZE)), MAX_PREVIEW_PAGE_SIZE)
         conflicts = self._conflict_map()
+        resolver = self._resolver_entre_ruas(rule)
         changes: List[Dict[str, Any]] = []
         for c in self._iter_candidates(search, filtro):
             if not c.nome or not c.nome.strip():
                 continue
             if c.codigo in conflicts:
                 continue
-            new_name = build_new_name(c, rule)
+            new_name = build_new_name(c, rule, entre_ruas=_entre_ruas(resolver, c))
             if new_name and new_name != c.nome:
                 changes.append(
                     {
@@ -314,6 +355,9 @@ class ContactOrganizer:
 
         renamed = skipped_missing = skipped_stale = conflicts_skipped = 0
         conflicts = self._conflict_map()
+        # Mesmo resolvedor de `_select_codes` (memo é da instância): seleção e
+        # gravação do mesmo request enxergam exatamente o mesmo par (D12).
+        resolver = self._resolver_entre_ruas(rule)
         results: List[Dict[str, Any]] = []
 
         for codigo in codes or []:
@@ -331,7 +375,7 @@ class ContactOrganizer:
                 skipped_stale += 1
                 results.append({"codigo": codigo, "status": "stale", "before": seen, "actual": client.nome})
                 continue
-            new_name = build_new_name(client, rule)
+            new_name = build_new_name(client, rule, entre_ruas=_entre_ruas(resolver, client))
             if not new_name or new_name == client.nome:
                 results.append({"codigo": codigo, "status": "unchanged"})
                 continue

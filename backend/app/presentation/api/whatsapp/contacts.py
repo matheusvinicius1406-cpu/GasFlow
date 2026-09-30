@@ -161,17 +161,23 @@ def export_vcf(
     `formatar_rota=true` grava o nome de rota (etapa 7 / D5) no lugar do nome
     atual — o operador confere o resultado do renomeador SEM aplicar nada no
     CRM (fecha a lacuna G7 da auditoria: “só export do CRM cru”).
+
+    O `entre A e B` sai derivado do cache, pelo MESMO caminho do apply (D12):
+    se o export omitisse o par que a renomeação escreve, ele deixaria de ser
+    prévia do apply.
     """
     from app.application.contacts.formatter import formatar_nome_rota
+    from app.application.contacts.geocoding import GeocodingService
 
     repo = _repo(db, ctx)
     clients = repo.listar_todos()
+    resolvedor = GeocodingService(db).resolvedor_entre_ruas() if formatar_rota else None
 
     lines: List[str] = []
     for c in clients:
         display = c.nome or f"Contato {c.telefone}"
-        if formatar_rota:
-            display = formatar_nome_rota(c)
+        if formatar_rota and resolvedor is not None:
+            display = formatar_nome_rota(c, entre_ruas=resolvedor.do_contato(c))
         lines.append("BEGIN:VCARD")
         lines.append("VERSION:3.0")
         lines.append(f"FN:{_vcf_escape(display)}")

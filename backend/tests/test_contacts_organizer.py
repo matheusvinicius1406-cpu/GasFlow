@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.application.contacts.geocoding import chave_rua
 from app.application.contacts.organizer import (
     ContactOrganizer,
     apply_rename_rule,
@@ -368,6 +369,132 @@ class TestRenamePatternEndereco:
 # ═══════════════════════════════════════════════════════════
 
 
+class TestEntreRuasDerivadoDoCache:
+    """O par "entre A e B" derivado do cache (D12) chega ao nome.
+
+    Fecha o elo que faltava: o passe Overpass (etapa 6) preenchia
+    `geocode_cache.intersecoes` e nada as levava ao nome — `escolher_entre_ruas`
+    só tinha chamador em teste. O par entra nos três lugares que formatam
+    contato: preview, apply e export.
+    """
+
+    PAR = "entre Rua A e Rua B"
+
+    @staticmethod
+    def _cache(db, rua="Travessa São Roque", bairro="Centro", intersecoes=None):
+        db.add(
+            GeocodeCacheModel(
+                chave=chave_rua(rua, bairro, "Belém", "PA"),
+                lat=-1.3,
+                lng=-48.47,
+                rua=rua,
+                bairro=bairro,
+                cidade="Belém",
+                uf="PA",
+                intersecoes=(
+                    intersecoes
+                    if intersecoes is not None
+                    else [{"nome": "Rua A", "numero": 100}, {"nome": "Rua B", "numero": 200}]
+                ),
+            )
+        )
+        db.commit()
+
+    @staticmethod
+    def _defaults(db):
+        """Cidade/UF default (D11) — sem eles a chave do cache não fecha."""
+        from app.application.settings.settings_service import SettingsService
+
+        SettingsService(db).seed_defaults()
+
+    def test_preview_traz_o_par_derivado(self, organizer_env):
+        db, org, repo = organizer_env
+        self._defaults(db)
+        self._cache(db)
+        _endereco(repo, has_name=True, cep="66811-120")
+
+        result = org.preview_rename(build_rename_rule(pattern_endereco=True))
+
+        assert result["total"] == 1
+        assert result["changes"][0]["after"] == (
+            "1= Travessa São Roque Nº 145 entre Rua A e Rua B - CEP 66811-120 (Maria)"
+        )
+
+    def test_apply_grava_o_par_e_a_segunda_passada_e_unchanged(self, organizer_env):
+        db, org, repo = organizer_env
+        self._defaults(db)
+        self._cache(db)
+        c = _endereco(repo, has_name=True, cep="66811-120")
+        rule = build_rename_rule(pattern_endereco=True)
+
+        first = org.apply_rename(rule, codes=["000001"])
+        assert first["renamed"] == 1
+        assert c.nome == "1= Travessa São Roque Nº 145 entre Rua A e Rua B - CEP 66811-120 (Maria)"
+
+        second = org.apply_rename(rule, codes=["000001"])
+        assert second["renamed"] == 0
+        assert second["results"][0]["status"] == "unchanged"
+
+    def test_par_derivado_vence_a_coluna_do_vcf(self, organizer_env):
+        """.vcf traz um par antigo; o cache calcula o par do número (D12)."""
+        db, org, repo = organizer_env
+        self._defaults(db)
+        self._cache(db)
+        _endereco(repo, has_name=True, entre_ruas="Rua Z e Rua W")
+
+        after = org.preview_rename(build_rename_rule(pattern_endereco=True))["changes"][0]["after"]
+
+        assert self.PAR in after
+        assert "Rua Z" not in after
+
+    def test_sem_cache_a_coluna_do_vcf_continua_valendo(self, organizer_env):
+        """Regressão: quem não tem cache não perde o par que veio no arquivo."""
+        db, org, repo = organizer_env
+        self._defaults(db)
+        _endereco(repo, has_name=True, entre_ruas="Rua Z e Rua W")
+
+        after = org.preview_rename(build_rename_rule(pattern_endereco=True))["changes"][0]["after"]
+
+        assert "entre Rua Z e Rua W" in after
+
+    def test_numero_fora_da_faixa_do_cache_cai_na_coluna(self, organizer_env):
+        """Sem par que cerque o número, nada é inventado (D2)."""
+        db, org, repo = organizer_env
+        self._defaults(db)
+        self._cache(db)
+        _endereco(repo, has_name=True, numero="999", entre_ruas="Rua Z e Rua W")
+
+        after = org.preview_rename(build_rename_rule(pattern_endereco=True))["changes"][0]["after"]
+
+        assert "entre Rua Z e Rua W" in after
+
+    def test_all_matching_pega_contato_que_so_muda_pelo_par(self, organizer_env):
+        """O par derivado conta na SELEÇÃO, não só na formatação.
+
+        Sem derivar em `_select_codes`, este contato (nome já formatado, sem o
+        "entre") seria pulado como `unchanged` e o lote não o pegaria.
+        """
+        db, org, repo = organizer_env
+        self._defaults(db)
+        self._cache(db)
+        c = _endereco(repo, has_name=True, cep="66811-120")
+        c.nome = "1= Travessa São Roque Nº 145 - CEP 66811-120 (Maria)"
+
+        result = org.apply_rename(build_rename_rule(pattern_endereco=True), all_matching=True)
+
+        assert result["renamed"] == 1
+        assert self.PAR in c.nome
+
+    def test_regra_sem_padrao_de_endereco_nem_le_o_cache(self, organizer_env):
+        db, org, repo = organizer_env
+        self._cache(db)
+        _endereco(repo, nome="WA-maria")
+
+        org.preview_rename(build_rename_rule())
+
+        assert org._entre_ruas is None
+
+
 class TestBackfillCodes:
     @staticmethod
     def _no_code(repo, nome, telefone):
@@ -667,6 +794,58 @@ class TestExportVcfFormatado:
         )
         assert res.status_code == 200, res.text
         assert (f"{int(codigo)}= Travessa São Roque Nº 145 entre Rua A e Rua B - CEP 66811-120 (Maria)") in res.text
+
+    def test_export_deriva_o_par_do_cache_como_o_apply(self, client, admin_headers):
+        """O export é a prévia do apply: o par derivado (D12) tem de sair aqui."""
+        from app.application.settings.settings_service import SettingsService
+        from app.infrastructure.repositories.client_model import ClientModel
+
+        rua = f"Travessa Teste {uuid.uuid4().hex[:6]}"
+        codigo = f"{int(uuid.uuid4().hex[:4], 16) % 800000 + 100000:06d}"
+        telefone = f"1198{uuid.uuid4().int % 10_000_000:07d}"[:13]
+        db = _request_db()
+        try:
+            SettingsService(db).seed_defaults()
+            db.add(
+                ClientModel(
+                    tenant_id="default",
+                    codigo=codigo,
+                    nome="Maria",
+                    telefone=telefone,
+                    rua=rua,
+                    numero="145",
+                    bairro="Centro",
+                    has_name=True,
+                    cep="66811-120",
+                    # Par antigo do .vcf: o derivado do cache vence (D12).
+                    entre_ruas="Rua Z e Rua W",
+                )
+            )
+            db.add(
+                GeocodeCacheModel(
+                    chave=chave_rua(rua, "Centro", "Belém", "PA"),
+                    lat=-1.3,
+                    lng=-48.47,
+                    rua=rua,
+                    bairro="Centro",
+                    cidade="Belém",
+                    uf="PA",
+                    intersecoes=[{"nome": "Rua A", "numero": 100}, {"nome": "Rua B", "numero": 200}],
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        res = client.get(
+            "/whatsapp/contacts/export-vcf",
+            params={"formatar_rota": True},
+            headers=admin_headers,
+        )
+
+        assert res.status_code == 200, res.text
+        assert f"{int(codigo)}= {rua} Nº 145 entre Rua A e Rua B - CEP 66811-120 (Maria)" in res.text
+        assert "Rua Z e Rua W" not in res.text
 
 
 class TestImportacaoEmLoteNoRepositorioReal:

@@ -87,6 +87,28 @@ def chave_rua(rua: str, bairro: str = "", cidade: str = "", uf: str = "") -> str
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
+def chave_do_contato(cliente: Any, cidade: str = "", uf: str = "") -> Optional[str]:
+    """Chave do cache (D12) do logradouro do contato — `None` se não há rua.
+
+    `cidade`/`uf` são os DEFAULTS (D11): entram só quando o contato não traz os
+    próprios. É o que faz o contato sem município cair na MESMA chave do
+    logradouro já cacheado com a cidade padrão — sem isso o cache nunca acerta
+    para esses contatos.
+
+    Placeholder de logradouro ("A definir") devolve `None`: não há rua para
+    casar, e inventar chave só criaria um miss garantido.
+    """
+    rua = (getattr(cliente, "rua", "") or "").strip()
+    if normalize_endereco(rua) in _RUA_VAZIA:
+        return None
+    return chave_rua(
+        rua,
+        getattr(cliente, "bairro", "") or "",
+        (getattr(cliente, "cidade", "") or "").strip() or cidade,
+        (getattr(cliente, "uf", "") or "").strip() or uf,
+    )
+
+
 def _somente_digitos(valor: Any) -> Optional[int]:
     """Número de casa → int. `"145"`, `"145-A"`, `145` → 145; resto → None."""
     if valor is None or isinstance(valor, bool):
@@ -233,15 +255,18 @@ class GeocodingService:
         # editada na mão, dado de uma versão futura), `list(dict)` viraria uma
         # lista de chaves e a derivação compararia nomes de campo como se
         # fossem interseções — erro silencioso.
-        intersecoes = linha.intersecoes if isinstance(linha.intersecoes, list) else []
+        intersecoes: List[Dict[str, Any]] = linha.intersecoes if isinstance(linha.intersecoes, list) else []
+        # `str(...)` explícito: a coluna é `Column(String)` (SQLAlchemy 1.x
+        # style), então o mypy a tipa como `Column[str] | str` — o valor
+        # concreto é sempre str.
         return GeocodeResult(
             lat=float(linha.lat or 0.0),
             lng=float(linha.lng or 0.0),
-            rua=linha.rua or "",
-            bairro=linha.bairro or "",
-            cidade=linha.cidade or "",
-            uf=linha.uf or "",
-            cep=linha.cep or "",
+            rua=str(linha.rua or ""),
+            bairro=str(linha.bairro or ""),
+            cidade=str(linha.cidade or ""),
+            uf=str(linha.uf or ""),
+            cep=str(linha.cep or ""),
             intersecoes=intersecoes,
         )
 
@@ -307,10 +332,12 @@ class GeocodingService:
         endereco = self.buscar_endereco_por_cep(cep)
         if endereco is None or not endereco.tem_coordenada:
             return None, None
+        # `tem_coordenada` já garantiu as duas acima; o `or 0.0` é só o que o
+        # mypy entende (o tipo do campo é `Optional[float]`).
         return (
             GeocodeResult(
-                lat=float(endereco.lat),
-                lng=float(endereco.lng),
+                lat=float(endereco.lat or 0.0),
+                lng=float(endereco.lng or 0.0),
                 rua=endereco.rua or rua,
                 bairro=endereco.bairro or bairro,
                 cidade=endereco.cidade or cidade,
@@ -405,22 +432,41 @@ class GeocodingService:
                 cliente.uf = resultado.uf
         return status
 
+    def intersecoes_da_chave(self, chave: str) -> List[Dict[str, Any]]:
+        """Interseções cacheadas de uma chave de rua (D12). Sem linha → `[]`.
+
+        `[]` **não é erro**: rua ainda não geocodificada, cache negativo e passe
+        Overpass que não achou âncora terminam todos aqui — e é assim de
+        propósito (D2: vazio é triagem, nunca chute).
+
+        `isinstance(..., list)` e não `list(...)`: se o JSON voltar como dict
+        (coluna editada à mão, dado de versão futura), `list(dict)` viraria uma
+        lista de chaves e a derivação compararia nome de campo como se fosse
+        interseção — o mesmo erro silencioso que `_do_model` evita.
+        """
+        linha = self._buscar_cache(chave)
+        if linha is None or not isinstance(linha.intersecoes, list):
+            return []
+        return list(linha.intersecoes)
+
     def entre_ruas_do_contato(self, cliente) -> Optional[str]:
         """Deriva "entre A e B" do cache da rua + número do contato (D12).
 
         Zero requisição: o par sai das interseções já cacheadas. `None` quando
         não há cache (ou ele não trouxe interseções) — vazio é triagem, não
         chute.
+
+        Para varredura em lote use `resolvedor_entre_ruas()`: este caminho lê o
+        cache e os defaults de cidade/UF a cada chamada.
         """
-        rua = (cliente.rua or "").strip()
-        if normalize_endereco(rua) in _RUA_VAZIA:
+        chave = chave_do_contato(cliente, self.default_city(), self.default_uf())
+        if chave is None:
             return None
-        cidade = (cliente.cidade or "").strip() or self.default_city()
-        uf = (cliente.uf or "").strip() or self.default_uf()
-        linha = self._buscar_cache(chave_rua(rua, cliente.bairro or "", cidade, uf))
-        if linha is None:
-            return None
-        return escolher_entre_ruas(list(linha.intersecoes or []), cliente.numero)
+        return escolher_entre_ruas(self.intersecoes_da_chave(chave), cliente.numero)
+
+    def resolvedor_entre_ruas(self) -> "ResolverEntreRuas":
+        """Resolvedor memoizado do par por número (D12) — para varreduras."""
+        return ResolverEntreRuas(self)
 
     # ── Cidade/UF default (D11) ──────────────────────────
 
@@ -438,3 +484,36 @@ class GeocodingService:
             return str(SettingsService(self.db).get_value(chave, "") or "")
         except Exception:
             return ""
+
+
+class ResolverEntreRuas:
+    """Deriva "entre A e B" numa varredura, com memo por RUA (D12).
+
+    O par depende da rua (interseções) E do número de cada contato: uma
+    varredura de 10.000 contatos resolveria o mesmo logradouro milhares de
+    vezes. Aqui as interseções são lidas **uma vez por chave de rua** e os
+    defaults de cidade/UF (D11) uma vez por varredura — `escolher_entre_ruas`
+    continua puro e por contato, que é onde o "por número" acontece.
+
+    O par **não** é persistido: a fonte é o cache, então um passe Overpass que
+    melhore as interseções se reflete no próximo preview/apply/export sem
+    reescrever contato nenhum.
+    """
+
+    def __init__(self, geocoding: GeocodingService):
+        self._geocoding = geocoding
+        self._cidade = geocoding.default_city()
+        self._uf = geocoding.default_uf()
+        self._por_chave: Dict[str, List[Dict[str, Any]]] = {}
+        # Quantas leituras do cache a varredura custou (1 por rua, não por
+        # contato) — é o que o teste de memo prova.
+        self.leituras = 0
+
+    def do_contato(self, cliente: Any) -> Optional[str]:
+        chave = chave_do_contato(cliente, self._cidade, self._uf)
+        if chave is None:
+            return None
+        if chave not in self._por_chave:
+            self.leituras += 1
+            self._por_chave[chave] = self._geocoding.intersecoes_da_chave(chave)
+        return escolher_entre_ruas(self._por_chave[chave], cliente.numero)

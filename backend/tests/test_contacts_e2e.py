@@ -35,7 +35,7 @@ from app.application.contacts.jobs import ContactJobService
 from app.application.contacts.organizer import ContactOrganizer, build_rename_rule
 from app.application.contacts.service import ContactService
 from app.application.contacts.vcf import parse_vcf
-from app.domain.delivery.routing import MockGeocodingProvider
+from app.domain.delivery.routing import GeocodeResult, MockGeocodingProvider
 from app.infrastructure.database.base import Base
 from app.infrastructure.repositories.client_repository import SQLAlchemyClientRepository
 
@@ -47,8 +47,10 @@ N_CONTATOS = 10_000
 N_RUAS = 200
 POR_RUA = N_CONTATOS // N_RUAS  # 50 contatos por rua
 
-# Formato D5: `{codigo}= {rua} Nº {numero} [- CEP {cep}] ({nome})`.
-_NOME_ROTA = re.compile(r"^\d+= Rua Teste \d{3} Nº \d+( entre .+ e .+)? - CEP \d{5}-\d{3} \(Cliente \d{5}\)$")
+# Formato D5: `{codigo}= {rua} Nº {numero} entre {A} e {B} - CEP {cep} ({nome})`.
+# O "entre" é OBRIGATÓRIO aqui: o provedor do teste traz interseções para toda
+# rua, então o par derivado (D12) tem de aparecer em TODOS os nomes.
+_NOME_ROTA = re.compile(r"^\d+= Rua Teste \d{3} Nº \d+ entre .+ e .+ - CEP \d{5}-\d{3} \(Cliente \d{5}\)$")
 
 
 @pytest.fixture()
@@ -127,7 +129,16 @@ class TestRenomeadorE2E10k:
         assert sum(1 for r in resultados if r.get("action") == "created") == N_CONTATOS
         assert len(repo.listar_todos()) == N_CONTATOS  # nenhum contato perdido
 
-        provider = MockGeocodingProvider()
+        # Interseções para TODA rua: é o dado que a etapa 6 busca no OSM (e o
+        # OSM-BR quase não tem). Os números do .vcf vão de 100 a 590, então
+        # [50, 700] cerca qualquer um deles.
+        provider = MockGeocodingProvider(
+            GeocodeResult(
+                lat=-1.3,
+                lng=-48.47,
+                intersecoes=[{"nome": "Rua Alpha", "numero": 50}, {"nome": "Rua Beta", "numero": 700}],
+            )
+        )
         geocoder = GeocodingService(db, provider=provider)
         jobs = ContactJobService(db, repo, geocoding=geocoder)
 
@@ -178,9 +189,16 @@ class TestRenomeadorE2E10k:
         assert segundo["renamed"] == 0
 
         # ── 7. Export: o nome de rota sai montado do contato ───
+        # Mesmo caminho do export `?formatar_rota=true`: o par derivado entra
+        # pela mesma porta, então o export é igual ao que o apply gravou.
+        resolvedor = GeocodingService(db).resolvedor_entre_ruas()
         amostra = repo.listar_todos()[:20]
         for cliente in amostra:
-            assert _NOME_ROTA.match(formatar_nome_rota(cliente)), cliente.nome
+            esperado = formatar_nome_rota(cliente, entre_ruas=resolvedor.do_contato(cliente))
+            assert _NOME_ROTA.match(esperado), esperado
+            assert esperado == cliente.nome  # export == apply
+        # 200 ruas, 20 contatos da amostra: o memo evita reler a mesma rua.
+        assert resolvedor.leituras <= len(amostra)
 
         # Relatório em ASCII de propósito: o console do Windows (cp1252)
         # derruba o teste com UnicodeEncodeError em box-drawing/setas.

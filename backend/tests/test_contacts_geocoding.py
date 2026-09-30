@@ -18,6 +18,7 @@ from app.application.contacts.geocoding import (
     STATUS_OK,
     STATUS_PENDENTE,
     GeocodingService,
+    chave_do_contato,
     chave_rua,
     escolher_entre_ruas,
     normalize_endereco,
@@ -574,3 +575,121 @@ class TestNominatimProvider:
         provider.geocode_street("das flores")
 
         assert dormidas == [pytest.approx(0.75)]
+
+
+# ══════════════════════════════════════════════════════
+# 8. Resolvedor do "entre" em lote — o par que chega ao nome (D12)
+# ══════════════════════════════════════════════════════
+
+
+def _cache(db, rua="berredos", bairro="Centro", cidade="Osasco", uf="SP", intersecoes=None, lat=-23.5):
+    """Linha do cache para a rua pedida (por padrão, com duas interseções)."""
+    db.add(
+        GeocodeCacheModel(
+            chave=chave_rua(rua, bairro, cidade, uf),
+            lat=lat,
+            lng=-46.6,
+            rua=rua,
+            bairro=bairro,
+            cidade=cidade,
+            uf=uf,
+            intersecoes=intersecoes if intersecoes is not None else _intersecoes(),
+        )
+    )
+    db.commit()
+
+
+def _intersecoes():
+    return [{"nome": "Rua A", "numero": 100}, {"nome": "Rua B", "numero": 200}]
+
+
+class TestChaveDoContato:
+    """A chave (D12) usada para achar o cache do logradouro do contato."""
+
+    def test_defaults_entram_quando_o_contato_nao_traz_cidade_uf(self):
+        assert chave_do_contato(_cliente(), "Belém", "PA") == chave_rua("berredos", "Centro", "Belém", "PA")
+
+    def test_cidade_propria_do_contato_vence_o_default(self):
+        cliente = _cliente(cidade="Osasco", uf="SP")
+        assert chave_do_contato(cliente, "Belém", "PA") == chave_rua("berredos", "Centro", "Osasco", "SP")
+
+    @pytest.mark.parametrize("rua", ["", "   ", "A definir", "a definir"])
+    def test_placeholder_de_logradouro_nao_tem_chave(self, rua):
+        assert chave_do_contato(_cliente(rua=rua)) is None
+
+
+class TestIntersecoesDaChave:
+    def test_sem_linha_no_cache_devolve_vazio(self, db):
+        assert GeocodingService(db).intersecoes_da_chave("chave-que-nao-existe") == []
+
+    def test_coluna_com_dict_nao_vira_lista_de_chaves(self, db):
+        """JSON como dict (coluna editada à mão) não pode virar interseção."""
+        chave = chave_rua("berredos", "Centro", "Osasco", "SP")
+        db.add(GeocodeCacheModel(chave=chave, lat=-23.5, lng=-46.6, rua="berredos", intersecoes={"nome": "Rua A"}))
+        db.commit()
+
+        assert GeocodingService(db).intersecoes_da_chave(chave) == []
+
+
+class TestResolverEntreRuas:
+    """Varredura em lote: 1 leitura por RUA e par por número do contato (D12)."""
+
+    def test_memoiza_uma_leitura_por_rua(self, db):
+        _cache(db, rua="berredos")
+        _cache(db, rua="das flores", intersecoes=[{"nome": "Rua C", "numero": 10}, {"nome": "Rua D", "numero": 90}])
+        resolver = GeocodingService(db).resolvedor_entre_ruas()
+
+        for numero in ("110", "145", "190"):
+            assert resolver.do_contato(_cliente(numero=numero, cidade="Osasco", uf="SP")) == "Rua A e Rua B"
+        resolver.do_contato(_cliente(rua="das flores", numero="50", cidade="Osasco", uf="SP"))
+
+        # 4 contatos, 2 ruas → 2 leituras de cache (não 4).
+        assert resolver.leituras == 2
+
+    def test_par_muda_com_o_numero_do_mesmo_logradouro(self, db):
+        _cache(
+            db,
+            intersecoes=[
+                {"nome": "Rua A", "numero": 100},
+                {"nome": "Rua B", "numero": 200},
+                {"nome": "Rua C", "numero": 300},
+            ],
+        )
+        resolver = GeocodingService(db).resolvedor_entre_ruas()
+
+        assert resolver.do_contato(_cliente(numero="150", cidade="Osasco", uf="SP")) == "Rua A e Rua B"
+        assert resolver.do_contato(_cliente(numero="250", cidade="Osasco", uf="SP")) == "Rua B e Rua C"
+        assert resolver.leituras == 1  # mesma rua, um cache
+
+    @pytest.mark.parametrize("numero", ["50", "S/N", None, ""])
+    def test_numero_sem_par_que_o_cerque_devolve_none(self, db, numero):
+        _cache(db)
+        resolver = GeocodingService(db).resolvedor_entre_ruas()
+
+        assert resolver.do_contato(_cliente(numero=numero, cidade="Osasco", uf="SP")) is None
+
+    def test_rua_sem_cache_nao_chama_o_provedor(self, db):
+        provider = MockGeocodingProvider()
+        resolver = GeocodingService(db, provider=provider).resolvedor_entre_ruas()
+
+        assert resolver.do_contato(_cliente(cidade="Osasco", uf="SP")) is None
+        assert provider.chamadas == 0  # derivar é ler cache, nunca consultar
+
+    def test_placeholder_de_logradouro_nem_le_o_cache(self, db):
+        resolver = GeocodingService(db).resolvedor_entre_ruas()
+
+        assert resolver.do_contato(_cliente(rua="A definir")) is None
+        assert resolver.leituras == 0
+
+    def test_defaults_de_cidade_uf_valem_na_varredura(self, db):
+        """Contato sem cidade/UF só acha o cache porque o default entra na chave."""
+        from app.application.settings.settings_service import SettingsService
+
+        settings_svc = SettingsService(db)
+        settings_svc.seed_defaults()
+        settings_svc.update("contacts.default_city", "Osasco")
+        settings_svc.update("contacts.default_uf", "SP")
+        _cache(db, cidade="Osasco", uf="SP")
+
+        resolver = GeocodingService(db).resolvedor_entre_ruas()
+        assert resolver.do_contato(_cliente(numero="145")) == "Rua A e Rua B"
