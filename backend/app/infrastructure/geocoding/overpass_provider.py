@@ -19,6 +19,13 @@ como código, não como comentário:
 3. **Cruzamento é quem compartilha coordenada com o logradouro**, não quem está
    simplesmente por perto: rua paralela a 40 m não é cruzamento e entraria na
    lista com um número inventado por projeção.
+4. **Âncora precisa SER da rua.** A tolerância de 40 m sozinha não basta: em
+   Belém a casa da paralela cai dentro da caixa e tem número de OUTRA escala.
+   Medido na amostra do gate D20: nas 9 âncoras aceitas de "Passagem Samuel
+   Soares", todas declaravam `addr:street` de "Rua dos Caripunas"/"Rua dos
+   Pariquis" (2023-2371 numa rua que vai de 3 a 51). Nó que declara outra via
+   sai; nó sem `addr:street` continua entrando pela tolerância (não há como
+   provar que é de outra rua).
 """
 
 from __future__ import annotations
@@ -143,7 +150,7 @@ class OverpassProvider(RateLimitedHttp):
             res.motivo = "overpass_indisponivel"
             return res
 
-        return self._conta(eixo, ids_rua, vias, nos, res)
+        return self._conta(nome, eixo, ids_rua, vias, nos, res)
 
     @staticmethod
     def _raio_cruzamentos() -> float:
@@ -151,6 +158,7 @@ class OverpassProvider(RateLimitedHttp):
 
     def _conta(
         self,
+        nome: str,
         eixo: List[Tuple[float, float]],
         ids_rua: set,
         vias: List[dict],
@@ -160,11 +168,18 @@ class OverpassProvider(RateLimitedHttp):
         # ── âncoras ───────────────────────────────────────
         ancoras: List[Tuple[float, int]] = []
         for no in nos:
-            numero = _inteiro((no.get("tags") or {}).get("addr:housenumber"))
+            tags = no.get("tags") or {}
+            numero = _inteiro(tags.get("addr:housenumber"))
             if numero is None:
                 continue
             ponto_no = _ponto(no)
             if ponto_no is None:
+                continue
+            # `addr:street` que nomeia OUTRA via derruba a âncora antes da
+            # projeção (docstring, decisão 4): a tolerância de 40 m mede
+            # distância, não pertencimento.
+            declarada = normalizar(tags.get("addr:street") or "")
+            if declarada and not _mesma_via(declarada, nome):
                 continue
             projetado = projetar_no_eixo(eixo, ponto_no)
             if projetado is None:
@@ -290,12 +305,9 @@ class OverpassProvider(RateLimitedHttp):
             caminho = [(g["lat"], g["lon"]) for g in (via.get("geometry") or []) if "lat" in g and "lon" in g]
             if len(caminho) < 2:
                 continue
-            if nome_via == nome:
-                exato = 1
-            elif nome in nome_via or nome_via in nome:
-                exato = 0  # "berredos" dentro de "travessa dos berredos"
-            else:
-                continue
+            if not _mesma_via(nome_via, nome):
+                continue  # "berredos" dentro de "travessa dos berredos"
+            exato = 1 if nome_via == nome else 0
             via_id = via.get("id")
             if via_id is None:
                 continue  # way sem id não dá para escolher nem deduplicar
@@ -318,6 +330,18 @@ class OverpassProvider(RateLimitedHttp):
 
 
 # ── Utilitários puros ────────────────────────────────────
+
+
+def _mesma_via(a: str, b: str) -> bool:
+    """Dois nomes de via já normalizados se referem à mesma rua?
+
+    Exata vence contenção, e entre iguais o nome mais longo vence — é a mesma
+    régua de `_montar_eixo` (evita que "rua" case com qualquer logradouro) e a
+    mesma que decide se um `addr:street` é daqui ou de outra via.
+    """
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a
 
 
 def _ponto(elemento: Any) -> Optional[Tuple[float, float]]:

@@ -34,4 +34,9 @@ class GeocodeCacheModel(Base):
     # `intersecoes IS NULL` como "rua ainda não processada" — nunca casaria.
     # Com a flag, `None` vira SQL NULL de verdade e a coluna é o marcador.
     intersecoes = Column(JSON(none_as_null=True), nullable=True)
+    # Quem preencheu `intersecoes` (D23/Fase 3): `ibge` | `overpass` | NULL.
+    # `provider` acima é o provedor do GEOCODE (lat/lng) e nunca muda por
+    # causa do passe — são duas origens diferentes e a triagem separa as duas.
+    # Gravado junto de `intersecoes` no mesmo UPDATE (§8.4 revisado).
+    intersecoes_provider = Column(String(20), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)

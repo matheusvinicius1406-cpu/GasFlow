@@ -406,11 +406,18 @@ def organizer_geocode_origem(
     db: Session = Depends(get_db),
     ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """Origem do geocode: OSM × fallback de CEP (etapa 9 / ADR-0007).
+    """Origem do geocode e da lista "entre ruas" (ADR-0007 / ADR-0008).
 
-    A triagem do renomeador mostra de onde cada endereço veio — o ponto do
-    fallback de CEP é de *trecho*, não tem a qualidade do logradouro do OSM, e
-    quem aplica o lote precisa saber em qual dos dois está pisando.
+    Três respostas diferentes, porque são três perguntas diferentes:
+
+    - `por_origem` — de onde veio a **coordenada**: OSM, fallback de CEP
+      (BrasilAPI/PontoFato, ADR-0007) ou dado oficial do **IBGE** (D21);
+    - `por_intersecoes_provider` — quem preencheu a lista **entre ruas**
+      (D23): `ibge`, `overpass` ou `pendente` (ainda não passou);
+    - `por_status` — em que pé está a rua (pendente/não encontrada/ok).
+
+    O ponto do fallback de CEP é de *trecho*, não da casa; quem aplica o lote
+    precisa saber em qual dos três está pisando antes de gravar.
     """
     return _organizer(db, ctx).geocode_origem(limite=limite)
 

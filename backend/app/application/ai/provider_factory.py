@@ -15,6 +15,7 @@ import time
 
 from app.core.config import settings
 from app.domain.ai.provider import LLMProvider
+from app.infrastructure.ai.huggingface_provider import HuggingFaceProvider
 from app.infrastructure.ai.mock_provider import MockLLMProvider
 from app.infrastructure.ai.null_provider import NullProvider
 from app.infrastructure.ai.ollama_provider import OllamaProvider
@@ -93,6 +94,17 @@ def get_llm_provider() -> LLMProvider:
             temperature=settings.ai_temperature,
         )
 
+    if provider == "hf":
+        # Hugging Face (Inference Providers): depende do token HF_TOKEN.
+        return HuggingFaceProvider(
+            api_token=settings.hf_api_token,
+            model=settings.hf_model,
+            base_url=settings.hf_base_url,
+            timeout=settings.hf_timeout,
+            max_tokens=settings.ai_max_tokens,
+            temperature=settings.ai_temperature,
+        )
+
     if provider == "ollama" and is_ollama_healthy():
         return OllamaProvider(
             base_url=settings.ollama_base_url,
@@ -110,3 +122,47 @@ def get_llm_provider() -> LLMProvider:
     # Cenário B: sem fallback externo — degradação graciosa com log.
     logger.warning("ai_provider_unavailable provider=%s — IA desabilitada até o Ollama responder", provider)
     return NullProvider()
+
+
+def get_renamer_provider() -> LLMProvider | None:
+    """Provider da camada de IA do renomeador; ``None`` = IA desligada.
+
+    Independente do ``AI_PROVIDER`` global: o renomeador decide pelo próprio
+    env (``RENOMEADOR_IA_PROVIDER``), então dá para ter a IA do app desligada e
+    o renomeador rodando (ou vice-versa).
+
+    O default é o Ollama local — nada sai do PC. Só o operador que setar
+    ``RENOMEADOR_IA_PROVIDER=hf`` permite que nomes/endereços viajem para a
+    Hugging Face; sem token, a chamada é recusada e o renomeador segue só com
+    o parser determinístico (degradação graciosa, nunca exceção).
+    """
+    if not getattr(settings, "renomeador_ia", False):
+        return None
+
+    escolha = getattr(settings, "renomeador_ia_provider", "ollama")
+
+    if escolha == "hf":
+        if not getattr(settings, "hf_api_token", ""):
+            logger.warning("renomeador_ia: RENOMEADOR_IA_PROVIDER=hf sem HF_TOKEN — IA ignorada")
+            return None
+        return HuggingFaceProvider(
+            api_token=settings.hf_api_token,
+            model=settings.hf_model,
+            base_url=settings.hf_base_url,
+            timeout=settings.hf_timeout,
+            max_tokens=900,
+            temperature=0.1,
+        )
+
+    provider = OllamaProvider(
+        base_url=settings.ollama_base_url,
+        model=getattr(settings, "renomeador_ia_model", "qwen3:1.7b"),
+        timeout=getattr(settings, "renomeador_ia_timeout", 60),
+        max_tokens=900,
+        temperature=0.1,
+        think=False,
+    )
+    if not provider.health_check():
+        logger.warning("renomeador_ia: Ollama indisponível — renomeando apenas com o parser determinístico")
+        return None
+    return provider

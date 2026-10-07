@@ -6,6 +6,7 @@ Cobre o que §8.6 pede para a etapa 6, com o Overpass falso por
 - `intersecoes` no **contrato congelado**, ordenado, só com âncora real;
 - `<2 âncoras ⇒ []` · `<2 interseções ⇒ []` · fora da faixa ⇒ fora;
 - nó que projeta **fora do eixo** descartado (§8.3.1);
+- nó cujo `addr:street` nomeia **outra via** descartado (D2, medido no D20);
 - cruzamento que só **passa por perto** não entra (§8.8.2);
 - dedup por nome (§8.8.3);
 - **3 queries separadas** e bbox em vez de círculo (§8.8.1);
@@ -115,6 +116,25 @@ NO_FORA_EIXO = {
 }
 # Não é número de casa.
 NO_SEM_NUMERO = {"type": "node", "id": 4, "lat": -1.001, "lon": -48.000, "tags": {"addr:housenumber": "s/n"}}
+# ~33 m do eixo (dentro da tolerância) mas declarando OUTRA rua no
+# `addr:street`: casa da via vizinha. Medido no gate D20 (ADR-0008) — as 9
+# âncoras aceitas de "Passagem Samuel Soares" declaravam todas
+# "Rua dos Caripunas"/"Rua dos Pariquis": 2023..2371 numa rua que vai de 3 a 51.
+NO_DE_OUTRA_RUA = {
+    "type": "node",
+    "id": 5,
+    "lat": -1.0015,
+    "lon": -48.0003,
+    "tags": {"addr:housenumber": "9999", "addr:street": "Rua Distantíssima"},
+}
+# Declarando a NOSSA rua: continua entrando (a tolerância sozinha não basta).
+NO_DA_RUA = {
+    "type": "node",
+    "id": 6,
+    "lat": -1.0025,
+    "lon": -48.000,
+    "tags": {"addr:housenumber": "110", "addr:street": "Passagem Ivan Leao"},
+}
 
 _LOGRADOUROS = [WAY_RUA_1, WAY_RUA_2, WAY_OUTRA]
 _VIAS = [WAY_RUA_1, WAY_RUA_2, WAY_A, WAY_A_2, WAY_B, WAY_FORA, WAY_PERTO]
@@ -163,6 +183,24 @@ def _queries(handler=_resposta):
         return handler(request)
 
     return _provider(wrapped), vistas
+
+
+def _resposta_com_nos(extras):
+    """O mundo falso com nós extras na query de `addr:housenumber`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = _extrair_query(request)
+        if 'node["addr:housenumber"](' in corpo:
+            return httpx.Response(
+                200,
+                json={
+                    "osm3s": {"timestamp_osm_base": "2026-09-25T00:00:00Z"},
+                    "elements": _NOS + list(extras),
+                },
+            )
+        return _resposta(request)
+
+    return handler
 
 
 # ═════════════════════════════════════════════════════════
@@ -219,6 +257,27 @@ class TestContratoDoPasse:
         res = _provider().buscar_intersecoes("Passagem Ivan Leao", -1.002, -48.000)
 
         assert res.ancoras == 2  # "s/n" não conta
+
+    def test_no_de_outra_rua_nao_vira_ancora(self):
+        """`addr:street` de outra via derruba a âncora mesmo dentro de 40 m."""
+        res = _provider(_resposta_com_nos([NO_DE_OUTRA_RUA])).buscar_intersecoes("Passagem Ivan Leao", -1.002, -48.000)
+
+        assert res.ancoras == 2  # o nó da paralela (9999) não entrou
+        assert res.inversoes_numero == 0  # sem ele não há inversão na faixa
+        assert res.intersecoes == [
+            {"nome": "Rua A", "numero": 30},
+            {"nome": "Rua B", "numero": 70},
+        ]
+
+    def test_no_com_addr_street_da_propria_rua_entra(self):
+        """O filtro é por PERTENCIMENTO, não por suspeita: nó daqui continua."""
+        res = _provider(_resposta_com_nos([NO_DA_RUA])).buscar_intersecoes("Passagem Ivan Leao", -1.002, -48.000)
+
+        assert res.ancoras == 3
+        assert res.intersecoes == [
+            {"nome": "Rua A", "numero": 30},
+            {"nome": "Rua B", "numero": 70},
+        ]
 
     def test_cobertura_e_inversoes_sao_reportadas(self):
         res = _provider().buscar_intersecoes("Passagem Ivan Leao", -1.002, -48.000)

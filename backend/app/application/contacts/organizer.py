@@ -40,9 +40,11 @@ _SCAN_PAGE = 500
 DEFAULT_PREVIEW_PAGE_SIZE = 100
 MAX_PREVIEW_PAGE_SIZE = 500
 
-# Provedores do fallback de CEP (etapa 9 / ADR-0007). Qualquer outro valor em
-# `geocode_cache.provider` é o provedor de OSM (nominatim/photon/mock).
+# Provedores do fallback de CEP (etapa 9 / ADR-0007) e do dado oficial do IBGE
+# (Fase 3, D21). Qualquer outro valor em `geocode_cache.provider` é o provedor
+# de OSM (nominatim/photon/mock).
 PROVIDERS_CEP = ("brasilapi", "pontofato")
+PROVIDERS_IBGE = ("ibge",)
 
 
 def _sem_endereco(rua: Optional[str]) -> bool:
@@ -493,6 +495,11 @@ class ContactOrganizer:
         `geocode_cache.provider` é o que separa os dois, e a lista das ruas
         vindas de CEP é o que o operador confere antes de aplicar.
 
+        A Fase 3 acrescenta a terceira origem autorizada por D21: `ibge` (o
+        dado oficial do IBGE), e — por serem coisas diferentes — a origem da
+        lista **entre ruas**, em `por_intersecoes_provider` (D23), que é onde
+        `ibge`/`overpass` aparecem de fato neste piloto.
+
         `limite` corta só a LISTA (o resumo é sempre completo) — a triagem não
         pode devolver 10 mil linhas para a tela.
         """
@@ -510,7 +517,7 @@ class ContactOrganizer:
             else:
                 por_status[_bucket_status(status)] += 1
 
-        por_origem = {"osm": 0, "cep": 0}
+        por_origem = {"osm": 0, "cep": 0, "ibge": 0}
         por_provider: Dict[str, int] = {}
         for provider, total in (
             self.db.query(GeocodeCacheModel.provider, func.count(GeocodeCacheModel.id))
@@ -520,7 +527,24 @@ class ContactOrganizer:
             nome = (provider or "desconhecido").strip().lower()
             quantidade = int(total or 0)
             por_provider[nome] = quantidade
-            por_origem["cep" if nome in PROVIDERS_CEP else "osm"] += quantidade
+            if nome in PROVIDERS_CEP:
+                por_origem["cep"] += quantidade
+            elif nome in PROVIDERS_IBGE:
+                por_origem["ibge"] += quantidade
+            else:
+                por_origem["osm"] += quantidade
+
+        # D23 — origem da lista ENTRE RUAS, separada da origem da coordenada.
+        # `pendente` é a rua que o passe ainda não visitou; `overpass`/`ibge` é
+        # quem respondeu, inclusive quando respondeu `[]` (triagem, D2).
+        por_intersecoes: Dict[str, int] = {"ibge": 0, "overpass": 0, "pendente": 0}
+        for provider, total in (
+            self.db.query(GeocodeCacheModel.intersecoes_provider, func.count(GeocodeCacheModel.id))
+            .group_by(GeocodeCacheModel.intersecoes_provider)
+            .all()
+        ):
+            nome = (provider or "pendente").strip().lower() or "pendente"
+            por_intersecoes[nome] = por_intersecoes.get(nome, 0) + int(total or 0)
 
         consulta_cep = self.db.query(GeocodeCacheModel).filter(GeocodeCacheModel.provider.in_(PROVIDERS_CEP))
         total_ruas_cep = int(consulta_cep.count() or 0)
@@ -540,6 +564,7 @@ class ContactOrganizer:
             "por_status": por_status,
             "por_origem": por_origem,
             "por_provider": por_provider,
+            "por_intersecoes_provider": por_intersecoes,
             "total_ruas_cache": sum(por_provider.values()),
             "total_ruas_cep": total_ruas_cep,
             "ruas_cep": ruas_cep,

@@ -47,7 +47,11 @@ class FakeGeocoding:
 
 
 class FakeOverpass:
-    def __init__(self, intersecoes=None):
+    # Mesmo atributo de `OverpassProvider`/`IbgeEntreRuasProvider`: é ele que o
+    # passe grava em `intersecoes_provider` (D23).
+    name = "overpass"
+
+    def __init__(self, intersecoes=None, cobertura=0.5, motivo="ok", ancoras=3, cruzamentos=3):
         # `[]` é resultado legítimo (D2): distinguir de "usar o default".
         self.intersecoes = (
             intersecoes
@@ -57,6 +61,10 @@ class FakeOverpass:
                 {"nome": "Rua B", "numero": 70},
             ]
         )
+        self.cobertura = cobertura
+        self.motivo = motivo
+        self.ancoras = ancoras
+        self.cruzamentos = cruzamentos
         self.chamadas = 0
 
     def buscar_intersecoes(self, rua, lat, lng):
@@ -66,10 +74,11 @@ class FakeOverpass:
         return PasseIntersecoes(
             intersecoes=[dict(i) for i in self.intersecoes],
             encontrou_rua=True,
-            ancoras=3,
-            cruzamentos=3,
+            ancoras=self.ancoras,
+            cruzamentos=self.cruzamentos,
+            cobertura_eixo=self.cobertura,
             inversoes_numero=1,
-            motivo="ok",
+            motivo=self.motivo,
         )
 
 
@@ -202,6 +211,128 @@ class TestJobOverpass:
 
         db.refresh(linha)
         assert linha.intersecoes == []
+        assert svc.status(job["id"])["metrica"]["ruas_com_intersecoes"] == 0
+
+    def test_grava_a_origem_da_lista(self, env):
+        """D23: `intersecoes_provider` audita quem preencheu a coluna."""
+        db, repo = env
+        linha = self._cache(db, "Rua Qualquer", -1.3, -48.4)
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass())
+
+        job = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(job["id"])
+
+        db.refresh(linha)
+        assert linha.intersecoes_provider == "overpass"
+
+    def test_metrica_de_cobertura_do_eixo_e_persistida(self, env):
+        """§8.8.5/§10: % do eixo coberto é contado, não deduzido."""
+        db, repo = env
+        self._cache(db, "Rua Coberta", -1.3, -48.4)
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass(cobertura=0.75))
+
+        job = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(job["id"])
+
+        metrica = svc.status(job["id"])["metrica"]
+        assert metrica["cobertura_eixo_soma"] == 0.75
+        assert metrica["cobertura_eixo_ruas"] == 1
+        assert metrica["ruas"] == 1
+
+    def test_metrica_guarda_o_motivo_da_triagem(self, env):
+        """D2: o porquê do vazio é métrica, nunca vira `intersecoes` no cache."""
+        db, repo = env
+        linha = self._cache(db, "Rua Sem Face", -1.3, -48.4)
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass(intersecoes=[], motivo="sem_face"))
+
+        job = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(job["id"])
+
+        metrica = svc.status(job["id"])["metrica"]
+        assert metrica["por_motivo"] == {"sem_face": 1}
+        db.refresh(linha)
+        assert linha.intersecoes == []
+
+    def test_metrica_guarda_o_provedor_que_respondeu(self, env):
+        db, repo = env
+        self._cache(db, "Rua Qualquer", -1.3, -48.4)
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass())
+
+        job = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(job["id"])
+
+        assert svc.status(job["id"])["metrica"]["por_intersecoes_provider"] == {"overpass": 1}
+
+    def test_sub_dicts_da_metrica_nao_vazam_entre_jobs(self, env):
+        """`dict(x)` é rasa: o literal compartilhado contaminaria o próximo job."""
+        from app.application.contacts.jobs import _METRICA_ZERO
+
+        db, repo = env
+        self._cache(db, "Rua Primeira", -1.3, -48.4)
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass(intersecoes=[], motivo="sem_face"))
+        primeiro = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(primeiro["id"])
+
+        assert svc.status(primeiro["id"])["metrica"]["por_motivo"] == {"sem_face": 1}
+        assert _METRICA_ZERO["por_motivo"] == {}
+        assert _METRICA_ZERO["por_intersecoes_provider"] == {}
+
+
+# ═══════════════════════════════════════════════════════════
+# 2b. FASE 3 — passe por dados oficiais do IBGE (D23/ADR-0008)
+# ═══════════════════════════════════════════════════════════
+
+
+class TestEscolhaDoProvedor:
+    def test_default_continua_sendo_overpass(self, env):
+        """O gate D20 é quem decide quando o `ibge` vira default."""
+        from app.core.config import settings
+
+        assert settings.entre_ruas_provider in ("overpass", "ibge")
+
+    def test_ibge_e_escolhido_quando_configurado(self, env, monkeypatch):
+        from app.core.config import settings
+        from app.infrastructure.geocoding.ibge_provider import IbgeEntreRuasProvider
+
+        monkeypatch.setattr(settings, "entre_ruas_provider", "ibge")
+        db, repo = env
+        svc = ContactJobService(db, repo, "default")
+        assert isinstance(svc._overpasser(), IbgeEntreRuasProvider)
+
+    def test_overpass_continua_escolhido_por_padrao(self, env, monkeypatch):
+        from app.core.config import settings
+        from app.infrastructure.geocoding.overpass_provider import OverpassProvider
+
+        monkeypatch.setattr(settings, "entre_ruas_provider", "overpass")
+        db, repo = env
+        svc = ContactJobService(db, repo, "default")
+        assert isinstance(svc._overpasser(), OverpassProvider)
+
+    def test_provedor_injetado_vence_a_configuracao(self, env, monkeypatch):
+        """Dependência injetada nos testes não pode ser contornada por env."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "entre_ruas_provider", "ibge")
+        db, repo = env
+        svc = ContactJobService(db, repo, "default", overpass=FakeOverpass())
+        assert isinstance(svc._overpasser(), FakeOverpass)
+
+    def test_ibge_sem_dado_triagem_e_marca_origem(self, env, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "entre_ruas_provider", "ibge")
+        db, repo = env
+        linha = GeocodeCacheModel(chave=uuid.uuid4().hex, rua="Rua Sem Nada Ingerido", lat=-1.3, lng=-48.4)
+        db.add(linha)
+        db.commit()
+
+        svc = ContactJobService(db, repo, "default")
+        job = svc.criar_job("OVERPASS")
+        svc.processar_proximo_lote(job["id"])
+
+        db.refresh(linha)
+        assert linha.intersecoes == []
+        assert linha.intersecoes_provider == "ibge"
         assert svc.status(job["id"])["metrica"]["ruas_com_intersecoes"] == 0
 
 

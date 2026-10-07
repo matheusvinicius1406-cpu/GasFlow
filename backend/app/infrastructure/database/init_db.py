@@ -98,6 +98,11 @@ from app.infrastructure.repositories.purchase_note_model import (  # noqa: F401
 from app.infrastructure.repositories.print_job_model import PrintJobModel  # noqa: F401 — F10.7
 from app.infrastructure.repositories.geocode_cache_model import GeocodeCacheModel  # noqa: F401 — v7
 from app.infrastructure.repositories.contact_job_model import ContactJobModel  # noqa: F401 — v8
+from app.infrastructure.repositories.ibge_model import (  # noqa: F401 — v9
+    CnefeEnderecoModel,
+    LogradouroFaceModel,
+    LogradouroNoModel,
+)
 
 
 def _ensure_sqlite_columns() -> None:
@@ -133,7 +138,11 @@ def _ensure_sqlite_columns() -> None:
 
 
 SCHEMA_VERSION = (
-    8  # v8: contact_jobs — job persistido do renomeador em lote (Fase 2 §9 etapa 8).
+    9  # v9: IBGE — cnefe_endereco/logradouro_face/logradouro_no +
+    # geocode_cache.intersecoes_provider (Fase 3, ADR-0008): "entre ruas" por
+    # dado oficial do Censo 2022 em vez do Overpass público.
+    # Consumido por infrastructure/geocoding/ibge_provider.py.
+    # v8: contact_jobs — job persistido do renomeador em lote (Fase 2 §9 etapa 8).
     # Retomável por cursor keyset (codigo/id); consumido por application/contacts/jobs.py.
     # v7: geocode_cache — cache de geocoding por RUA (Fase 2 §6/§7, ADR-0004).
     # v6: geocoding de contatos (.vcf) — clients.cidade/uf/nome_importado

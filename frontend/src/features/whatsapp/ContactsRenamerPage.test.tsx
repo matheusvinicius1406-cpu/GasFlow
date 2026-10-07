@@ -145,14 +145,16 @@ describe('ContactsRenamerPage', () => {
     expect(screen.getByText('Nome duplicado')).toBeInTheDocument()
   })
 
-  it('mostra a origem do geocode (OSM × fallback de CEP)', async () => {
+  it('mostra a origem do geocode e a origem do "entre ruas" (Fase 3)', async () => {
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url.includes('geocode-origem')) {
         return {
           data: {
-            por_status: { OK: 4, NAO_ENCONTRADO: 0, PENDENTE: 1, SEM_ENDERECO: 0 },
-            por_origem: { osm: 3, cep: 1 },
-            total_ruas_cache: 4,
+            por_status: { OK: 6, NAO_ENCONTRADO: 0, PENDENTE: 1, SEM_ENDERECO: 0 },
+            por_origem: { osm: 3, cep: 1, ibge: 2 },
+            // D23: origem da lista ENTRE RUAS, separada da coordenada.
+            por_intersecoes_provider: { ibge: 2, overpass: 1, pendente: 3 },
+            total_ruas_cache: 6,
             total_ruas_cep: 1,
             ruas_cep: [
               {
@@ -177,8 +179,68 @@ describe('ContactsRenamerPage', () => {
     })
     expect(screen.getByTestId('origem-osm')).toHaveTextContent('OSM: 3 rua(s)')
     expect(screen.getByTestId('origem-cep')).toHaveTextContent('CEP (fallback): 1 rua(s)')
+    expect(screen.getByTestId('origem-ibge')).toHaveTextContent('IBGE (Censo 2022): 2 rua(s)')
+    expect(screen.getByTestId('entre-ruas-ibge')).toHaveTextContent('Entre ruas IBGE: 2 rua(s)')
+    expect(screen.getByTestId('entre-ruas-overpass')).toHaveTextContent('Entre ruas Overpass: 1 rua(s)')
+    expect(screen.getByTestId('entre-ruas-pendente')).toHaveTextContent('Entre ruas pendente: 3 rua(s)')
     expect(screen.getByText('Passagem Ivan Leão — Agulha')).toBeInTheDocument()
     expect(screen.getByText('BrasilAPI')).toBeInTheDocument()
+  })
+
+  it('sem origem IBGE o badge não aparece (nada de "0 ruas" sem motivo)', async () => {
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url.includes('geocode-origem')) return { data: origemVazia }
+      return { data: conflicts }
+    })
+
+    renderWithProviders(<ContactsRenamerPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('origem-osm')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('origem-ibge')).not.toBeInTheDocument()
+  })
+
+  it('mostra a métrica §8.5 do passe, inclusive a cobertura do eixo', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: conflicts })
+    vi.mocked(apiClient.post).mockImplementation(async (url: string) => {
+      if (url === '/whatsapp/contacts/jobs') {
+        return {
+          data: { id: 'j1', tipo: 'OVERPASS', status: 'PENDENTE', total: 4, processados: 0, alterados: 0, metrica: {} },
+        }
+      }
+      if (url.includes('/jobs/j1/process')) {
+        return {
+          data: {
+            id: 'j1',
+            tipo: 'OVERPASS',
+            status: 'CONCLUIDO',
+            total: 4,
+            processados: 4,
+            alterados: 3,
+            metrica: {
+              ruas: 4,
+              ruas_com_2_ancoras: 4,
+              ruas_com_2_cruzamentos: 3,
+              ruas_com_intersecoes: 3,
+              cobertura_eixo_soma: 2.4,
+              cobertura_eixo_ruas: 4,
+            },
+          },
+        }
+      }
+      return { data: {} }
+    })
+
+    renderWithProviders(<ContactsRenamerPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /entre ruas/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('overpass-metrica')).toBeInTheDocument()
+    })
+    // 2.4 / 4 = 0.6 → 60%: o backend guarda soma+contador, o % é derivado aqui.
+    expect(screen.getByTestId('overpass-metrica')).toHaveTextContent('eixo coberto: 60%')
   })
 
   it('exporta o .vcf no formato de rota', async () => {

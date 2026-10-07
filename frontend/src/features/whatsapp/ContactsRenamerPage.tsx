@@ -73,10 +73,17 @@ interface RuasCepItem {
   provider: string
 }
 
-/** Origem do geocode (etapa 9): OSM × fallback de CEP (BrasilAPI/PontoFato). */
+/**
+ * Origem do endereço (etapa 9/ADR-0007) e da lista "entre ruas" (Fase 3/ADR-0008).
+ *
+ * São duas origens diferentes: `por_origem` é de onde veio a COORDENADA
+ * (OSM × fallback de CEP × dado oficial do IBGE) e `por_intersecoes_provider`
+ * é quem preencheu a lista entre ruas (`ibge` | `overpass` | `pendente`).
+ */
 interface GeocodeOrigemResponse {
   por_status: Record<string, number>
-  por_origem: { osm: number; cep: number }
+  por_origem: { osm: number; cep: number; ibge?: number }
+  por_intersecoes_provider?: Record<string, number>
   total_ruas_cache: number
   total_ruas_cep: number
   ruas_cep: RuasCepItem[]
@@ -112,8 +119,29 @@ const PROVIDER_LABELS: Record<string, string> = {
   pontofato: 'PontoFato',
 }
 
+// Quem preencheu a lista "entre ruas" (D23/Fase 3). `pendente` é a rua que o
+// passe ainda não visitou — não é provedor, é fila.
+const ENTRE_RUAS_LABELS: Record<string, string> = {
+  ibge: 'Entre ruas IBGE',
+  overpass: 'Entre ruas Overpass',
+  pendente: 'Entre ruas pendente',
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * §8.8.5 — % do eixo coberto pelas âncoras (média ponderada por rua).
+ *
+ * O backend guarda soma + contador (o % nunca é gravado pronto): sem ruas com
+ * cobertura > 0 o denominador é zero e o certo é `0`, não `NaN`.
+ */
+function coberturaEixo(metrica: Record<string, number>): number {
+  const soma = metrica.cobertura_eixo_soma ?? 0
+  const ruas = metrica.cobertura_eixo_ruas ?? 0
+  if (!ruas) return 0
+  return Math.round((100 * soma) / ruas)
 }
 
 function errorDetail(err: unknown, fallback: string): string {
@@ -407,7 +435,10 @@ export function ContactsRenamerPage() {
                 {job.tipo === 'OVERPASS' && job.metrica && (
                   <p className="text-xs text-muted-foreground" data-testid="overpass-metrica">
                     ruas: {job.metrica.ruas ?? 0} · com 2+ âncoras:{' '}
-                    {job.metrica.ruas_com_2_ancoras ?? 0} · com "entre": {job.metrica.ruas_com_intersecoes ?? 0}
+                    {job.metrica.ruas_com_2_ancoras ?? 0} · com 2+ cruzamentos:{' '}
+                    {job.metrica.ruas_com_2_cruzamentos ?? 0} · com "entre":{' '}
+                    {job.metrica.ruas_com_intersecoes ?? 0} · eixo coberto:{' '}
+                    {coberturaEixo(job.metrica)}%
                   </p>
                 )}
               </div>
@@ -473,6 +504,11 @@ export function ContactsRenamerPage() {
               >
                 CEP (fallback): {origem.por_origem.cep} rua(s)
               </Badge>
+              {(origem.por_origem.ibge ?? 0) > 0 && (
+                <Badge variant="default" data-testid="origem-ibge">
+                  IBGE (Censo 2022): {origem.por_origem.ibge} rua(s)
+                </Badge>
+              )}
               {typeof origem.por_status?.PENDENTE === 'number' && (
                 <Badge variant="outline">Pendentes: {origem.por_status.PENDENTE}</Badge>
               )}
@@ -480,6 +516,25 @@ export function ContactsRenamerPage() {
                 <Badge variant="outline">Não encontrados: {origem.por_status.NAO_ENCONTRADO}</Badge>
               )}
             </div>
+            {/* Fase 3 (D23): quem preencheu o "entre A e B" — separado da
+                origem da coordenada, porque são respostas diferentes. */}
+            {origem.por_intersecoes_provider && (
+              <div
+                className="flex flex-wrap gap-2"
+                data-testid="origem-entre-ruas"
+                aria-label="Origem da lista entre ruas"
+              >
+                {(['ibge', 'overpass', 'pendente'] as const).map((chave) => (
+                  <Badge
+                    key={chave}
+                    variant={chave === 'pendente' ? 'outline' : 'secondary'}
+                    data-testid={`entre-ruas-${chave}`}
+                  >
+                    {ENTRE_RUAS_LABELS[chave] ?? chave}: {origem.por_intersecoes_provider?.[chave] ?? 0} rua(s)
+                  </Badge>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               O CEP é coordenada de trecho, não da casa: confira as ruas resolvidas pelo fallback antes de
               aplicar.

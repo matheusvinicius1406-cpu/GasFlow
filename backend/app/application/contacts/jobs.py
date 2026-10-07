@@ -34,6 +34,7 @@ from app.application.contacts.geocoding import (
 )
 from app.application.contacts.geocoding import GeocodingService
 from app.application.contacts.organizer import ContactOrganizer
+from app.core.config import settings
 from app.core.logging import setup_logging
 from app.infrastructure.repositories.client_model import ClientModel
 from app.infrastructure.repositories.contact_job_model import (
@@ -58,13 +59,33 @@ _TIPOS = (TIPO_GEOCODE, TIPO_OVERPASS, TIPO_APPLY)
 _LOTE_PADRAO = {TIPO_GEOCODE: 20, TIPO_OVERPASS: 15, TIPO_APPLY: 500}
 _LOTE_MAX = {TIPO_GEOCODE: 100, TIPO_OVERPASS: 100, TIPO_APPLY: 2000}
 
-_METRICA_ZERO: Dict[str, int] = {
+# Contadores brutos; os percentuais do §10 saem do leitor, nunca de um chute
+# gravado. `por_motivo` e `por_intersecoes_provider` são sub-dicts e por isso o
+# reset é uma fábrica, não um literal compartilhado.
+_METRICA_ZERO: Dict[str, Any] = {
     "ruas": 0,
     "ruas_com_2_ancoras": 0,
     "ruas_com_2_cruzamentos": 0,
     "ruas_com_intersecoes": 0,
     "inversoes_numero": 0,
+    # §8.8.5: "% do eixo coberto" = soma/ruas, ponderado em quem reportou >0.
+    "cobertura_eixo_soma": 0.0,
+    "cobertura_eixo_ruas": 0,
+    # D2: por que a rua terminou vazia (triagem, nunca gravado no cache).
+    "por_motivo": {},
+    # D23: de qual provedor veio a lista gravada.
+    "por_intersecoes_provider": {},
 }
+
+
+def _metrica_fresca(bruta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Cópia própria: `dict(x)` é rasa e os sub-dicts vazariam entre jobs."""
+    metrica = dict(bruta or _METRICA_ZERO)
+    for chave, valor in _METRICA_ZERO.items():
+        metrica.setdefault(chave, valor)
+    metrica["por_motivo"] = dict(metrica.get("por_motivo") or {})
+    metrica["por_intersecoes_provider"] = dict(metrica.get("por_intersecoes_provider") or {})
+    return metrica
 
 
 class ContactJobService:
@@ -104,7 +125,7 @@ class ContactJobService:
             total=self._contar(tipo, filtro_limpo or None),
             processados=0,
             alterados=0,
-            metrica=dict(_METRICA_ZERO) if tipo == TIPO_OVERPASS else None,
+            metrica=_metrica_fresca(None) if tipo == TIPO_OVERPASS else None,
         )
         self.db.add(job)
         self.db.commit()
@@ -170,13 +191,15 @@ class ContactJobService:
     def _lote_overpass(self, job: ContactJobModel, limite: int) -> bool:
         linhas = self._cache_sem_intersecoes(job.cursor, limite)
         servico = self._overpasser()
-        metrica = dict(job.metrica or _METRICA_ZERO)
+        metrica = _metrica_fresca(job.metrica)
         for linha in linhas:
             passe = servico.buscar_intersecoes(linha.rua or "", linha.lat, linha.lng)
             # UPDATE SÓ de `intersecoes` (§8.4): a linha já existe (é o próprio
             # SELECT), então não se cria nada e lat/lng/cep/geocode_status ficam
             # intactos. `[]` também é resultado válido (triagem, D2).
             linha.intersecoes = list(passe.intersecoes or [])
+            # D23: de onde veio a lista, auditável como o `provider` do ADR-0007.
+            linha.intersecoes_provider = servico.name
             metrica["ruas"] += 1
             if passe.ancoras >= 2:
                 metrica["ruas_com_2_ancoras"] += 1
@@ -185,6 +208,17 @@ class ContactJobService:
             if len(passe.intersecoes or []) >= 2:
                 metrica["ruas_com_intersecoes"] += 1
             metrica["inversoes_numero"] += int(passe.inversoes_numero or 0)
+            # §10: % do eixo coberto. Soma + contador, o % é derivado no leitor.
+            cobertura = float(getattr(passe, "cobertura_eixo", 0.0) or 0.0)
+            metrica["cobertura_eixo_soma"] = round(metrica["cobertura_eixo_soma"] + cobertura, 6)
+            if cobertura > 0:
+                metrica["cobertura_eixo_ruas"] += 1
+            # D2: o motivo da triagem entra na métrica, não no cache (§6/§10).
+            motivo = str(getattr(passe, "motivo", "") or "").strip() or "ok"
+            metrica["por_motivo"][motivo] = metrica["por_motivo"].get(motivo, 0) + 1
+            metrica["por_intersecoes_provider"][servico.name] = (
+                metrica["por_intersecoes_provider"].get(servico.name, 0) + 1
+            )
             job.alterados += 1 if passe.intersecoes else 0
             job.cursor = str(linha.id)
             job.processados += 1
@@ -276,10 +310,18 @@ class ContactJobService:
         return self._geocoding
 
     def _overpasser(self):
+        # `ENTRE_RUAS_PROVIDER=ibge` troca o passe por dados oficiais (Fase 3,
+        # ADR-0008) sem mudar a interface: mesmo `buscar_intersecoes`, mesmo
+        # UPDATE só de `intersecoes`. Injetado em teste continua vencendo.
         if self._overpass is None:
-            from app.infrastructure.geocoding.overpass_provider import OverpassProvider
+            if settings.entre_ruas_provider == "ibge":
+                from app.infrastructure.geocoding.ibge_provider import IbgeEntreRuasProvider
 
-            self._overpass = OverpassProvider()
+                self._overpass = IbgeEntreRuasProvider(self.db)
+            else:
+                from app.infrastructure.geocoding.overpass_provider import OverpassProvider
+
+                self._overpass = OverpassProvider()
         return self._overpass
 
     def _buscar(self, job_id: str) -> Optional[ContactJobModel]:

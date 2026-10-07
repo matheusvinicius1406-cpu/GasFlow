@@ -125,6 +125,24 @@ class Settings(BaseModel):
     ai_max_tokens: int = int(os.getenv("AI_MAX_TOKENS", "2048"))
     ai_temperature: float = float(os.getenv("AI_TEMPERATURE", "0.3"))
 
+    # ── Renomeador de contatos com IA (híbrido) ─────────────
+    # Camada OPCIONAL sobre o parser determinístico (que continua obrigatório
+    # e é a fonte primária). Default off: sem IA o renomeador funciona igual.
+    renomeador_ia: bool = os.getenv("RENOMEADOR_IA", "false").strip().lower() in ("1", "true", "yes", "on")
+    # ollama (local, padrão — nada sai do PC) | hf (Hugging Face, opt-in).
+    # A troca é só de env: a mesma função é usada nos dois casos.
+    renomeador_ia_provider: str = os.getenv("RENOMEADOR_IA_PROVIDER", "ollama").strip().lower()
+    # 1.7b é o melhor custo-benefício medido neste hardware (o 0.6b não segue
+    # o contrato de saída); 1,7b roda ~8s/contato — por isso é lote em background.
+    renomeador_ia_model: str = os.getenv("RENOMEADOR_IA_MODEL", "qwen3:1.7b")
+    renomeador_ia_timeout: int = int(os.getenv("RENOMEADOR_IA_TIMEOUT", "60"))
+    renomeador_ia_lote: int = int(os.getenv("RENOMEADOR_IA_LOTE", "8"))
+    # Hugging Face (opt-in). O token vem do env HF_TOKEN e NUNCA é logado.
+    hf_api_token: str = os.getenv("HF_TOKEN", "").strip()
+    hf_model: str = os.getenv("HF_MODEL", "Qwen/Qwen3-8B")
+    hf_base_url: str = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1").rstrip("/")
+    hf_timeout: int = int(os.getenv("HF_TIMEOUT", "30"))
+
     # ── Speech-to-Text / Text-to-Speech ─────────────────────
     # STT: mock | whisper (CLI). TTS: mock | piper (CLI).
     stt_provider: str = os.getenv("STT_PROVIDER", "mock")
@@ -289,6 +307,15 @@ class Settings(BaseModel):
     # retry importa mais aqui do que o número de ruas.
     overpass_max_attempts: int = int(os.getenv("OVERPASS_MAX_ATTEMPTS", "3"))
     overpass_rate_limit_s: float = float(os.getenv("OVERPASS_RATE_LIMIT_S", "1.0"))
+
+    # ── IBGE — "entre ruas" por dados oficiais (Fase 3, ADR-0008) ──
+    # Qual provedor preenche `geocode_cache.intersecoes` no passe da etapa 8.
+    # `overpass` continua sendo o default DURANTE a Fase 3: o gate D20 (concordância
+    # CNEFE x Overpass) é quem decide se `ibge` vira default — trocar antes de
+    # medir seria mudar o comportamento sem prova.
+    entre_ruas_provider: str = os.getenv("ENTRE_RUAS_PROVIDER", "overpass").strip().lower()
+    # Município coberto pela ingestão (D18): carga offline, por município.
+    ibge_cod_municipio: str = os.getenv("IBGE_COD_MUNICIPIO", "1501402").strip()
 
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

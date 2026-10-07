@@ -625,7 +625,7 @@ class TestOrganizerAPI:
 
         assert res.status_code == 200, res.text
         body = res.json()
-        assert set(body["por_origem"]) == {"osm", "cep"}
+        assert set(body["por_origem"]) == {"osm", "cep", "ibge"}
         assert set(body["por_status"]) == {"OK", "NAO_ENCONTRADO", "PENDENTE", "SEM_ENDERECO"}
         assert isinstance(body["ruas_cep"], list)
 
@@ -936,7 +936,7 @@ class TestGeocodeOrigem:
         db = sessionmaker(bind=engine)()
         return db, ContactOrganizer(db, SQLAlchemyClientRepository(db, "default"))
 
-    def _cache(self, db, rua, provider, cep=None, lat=-1.3, lng=-48.47):
+    def _cache(self, db, rua, provider, cep=None, lat=-1.3, lng=-48.47, entre_ruas=None, origem_passe=None):
         from app.application.contacts.geocoding import chave_rua
 
         db.add(
@@ -950,6 +950,8 @@ class TestGeocodeOrigem:
                 provider=provider,
                 lat=lat,
                 lng=lng,
+                intersecoes=entre_ruas,
+                intersecoes_provider=origem_passe,
             )
         )
         db.commit()
@@ -962,7 +964,7 @@ class TestGeocodeOrigem:
 
         resumo = org.geocode_origem()
 
-        assert resumo["por_origem"] == {"osm": 1, "cep": 2}
+        assert resumo["por_origem"] == {"osm": 1, "cep": 2, "ibge": 0}
         assert resumo["total_ruas_cache"] == 3
         assert resumo["total_ruas_cep"] == 2
         # A lista é só do fallback — é o que o operador confere antes de aplicar.
@@ -976,7 +978,7 @@ class TestGeocodeOrigem:
 
         resumo = org.geocode_origem()
 
-        assert resumo["por_origem"] == {"osm": 1, "cep": 0}
+        assert resumo["por_origem"] == {"osm": 1, "cep": 0, "ibge": 0}
 
     def test_provider_desconhecido_conta_como_osm(self, env):
         db, org = env
@@ -985,8 +987,31 @@ class TestGeocodeOrigem:
 
         resumo = org.geocode_origem()
 
-        assert resumo["por_origem"] == {"osm": 2, "cep": 0}
+        assert resumo["por_origem"] == {"osm": 2, "cep": 0, "ibge": 0}
         assert resumo["por_provider"] == {"photon": 1, "desconhecido": 1}
+
+    def test_ibge_e_uma_origem_propria_do_geocode(self, env):
+        """D21: `geocode_cache.provider='ibge'` não é OSM nem CEP."""
+        db, org = env
+        self._cache(db, "Rua Oficial", "ibge")
+
+        resumo = org.geocode_origem()
+
+        assert resumo["por_origem"] == {"osm": 0, "cep": 0, "ibge": 1}
+        assert resumo["por_provider"] == {"ibge": 1}
+
+    def test_origem_da_lista_entre_ruas_e_contada_a_parte(self, env):
+        """D23: de onde veio `intersecoes` é outra pergunta da triagem (Fase 3)."""
+        db, org = env
+        self._cache(db, "Rua A", "photon", entre_ruas=[{"nome": "Rua B", "numero": 30}], origem_passe="ibge")
+        self._cache(db, "Rua B", "photon", entre_ruas=[], origem_passe="overpass")
+        self._cache(db, "Rua C", "photon")  # passe ainda não rodou
+
+        resumo = org.geocode_origem()
+
+        assert resumo["por_intersecoes_provider"] == {"ibge": 1, "overpass": 1, "pendente": 1}
+        # A origem da lista não muda a origem da coordenada.
+        assert resumo["por_origem"] == {"osm": 3, "cep": 0, "ibge": 0}
 
     def test_por_status_conta_buckets_e_sem_endereco(self, env):
         _, org = env
@@ -1013,14 +1038,14 @@ class TestGeocodeOrigem:
 
         assert len(resumo["ruas_cep"]) == 2
         assert resumo["total_ruas_cep"] == 5
-        assert resumo["por_origem"] == {"osm": 0, "cep": 5}
+        assert resumo["por_origem"] == {"osm": 0, "cep": 5, "ibge": 0}
 
     def test_sem_cache_fica_tudo_zerado(self, env):
         _, org = env
 
         resumo = org.geocode_origem()
 
-        assert resumo["por_origem"] == {"osm": 0, "cep": 0}
+        assert resumo["por_origem"] == {"osm": 0, "cep": 0, "ibge": 0}
         assert resumo["total_ruas_cache"] == 0
         assert resumo["total_ruas_cep"] == 0
         assert resumo["ruas_cep"] == []
