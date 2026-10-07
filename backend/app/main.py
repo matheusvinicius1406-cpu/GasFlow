@@ -210,6 +210,11 @@ app = FastAPI(
     version=settings.app_version,
     description="Sistema operacional para depósitos de gás e água — API + WhatsApp Automation",
     lifespan=lifespan,
+    # Swagger/ReDoc/OpenAPI públicos vazam o mapa completo da API:
+    # fora em produção (settings.docs_enabled; DOCS_ENABLED=1 reabre).
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
 
 # Security headers (applied first = outermost)
@@ -263,8 +268,8 @@ def root():
         "services": {
             "api": "http://localhost:8000",
             "whatsapp": "http://localhost:3001",
-            "docs": "http://localhost:8000/docs",
             "whatsapp_connect": "http://localhost:3001/connect",
+            **({"docs": "http://localhost:8000/docs"} if settings.docs_enabled else {}),
         },
     }
 

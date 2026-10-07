@@ -16,6 +16,7 @@ Categories:
 - PUBLIC: 120 requests / minute (health, root)
 """
 
+import hashlib
 import logging
 import time
 import threading
@@ -122,6 +123,28 @@ def _get_policy(path: str) -> Tuple[int, int]:
     return RATE_LIMIT_POLICIES["read"]
 
 
+def _client_id(request: Request) -> str:
+    """Identidade do cliente para o bucket de rate limit.
+
+    - Bearer token → hash (SHA-256 truncado), nunca o token cru: a chave vira
+      chave de Redis e pode aparecer em log/exceção; prefixo de credencial
+      vazando é vazamento. Hash preserva a propriedade desejada (mesmo token
+      = mesmo bucket, tokens diferentes = buckets diferentes).
+    - Sem token → IP. ``X-Forwarded-For`` só é lido se
+      ``RATE_LIMIT_TRUST_PROXY=1`` (atrás de proxy confiável): fora disso o
+      cliente escreveria o header e escolheria o próprio bucket.
+    """
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[7:].strip().encode()
+        return "tok:" + hashlib.sha256(token).hexdigest()[:24]
+    if settings.rate_limit_trust_proxy:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return "xff:" + forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware for rate limiting."""
 
@@ -131,11 +154,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path.startswith("/docs") or path.startswith("/openapi") or path == "/":
             return await call_next(request)
 
-        # Get client identifier (IP or token)
-        client_id = request.client.host if request.client else "unknown"
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            client_id = auth[7:27]  # Use first 20 chars of token as identifier
+        # Get client identifier (IP or hashed token)
+        client_id = _client_id(request)
 
         # Get policy
         max_requests, window = _get_policy(path)

@@ -6,8 +6,54 @@ Defaults are safe for development. Production must override via env vars.
 """
 
 import os
+from pathlib import Path
 from pydantic import BaseModel
 from typing import List
+
+
+def _carregar_env() -> None:
+    """Carrega os ``.env`` do projeto ANTES de qualquer ``os.getenv``.
+
+    Dois arquivos, nesta ordem de precedência:
+
+    1. ``backend/.env`` — o mais perto deste arquivo (é o que o
+       ``load_dotenv()`` de ``infrastructure/database/connection.py`` já acha);
+    2. ``<raiz do projeto>/.env`` — onde o ``.env.example`` da raiz e o
+       ``start-dev.sh`` mandam: é lá que vivem ``ADMIN_PASSWORD``,
+       ``WHATSAPP_SERVICE_URL`` e ``MARCOS_GAS_API_KEY``.
+
+    Sem o passo 2 o backend **não sobe fora do start-dev.sh**: o
+    ``ADMIN_PASSWORD`` é obrigatório (``Settings.from_env``) e o
+    ``backend/.env`` é só o exemplo de 4 chaves — quem roda
+    ``uvicorn app.main:app`` ou um script de ``scripts/`` batia em
+    ``ValueError`` na importação.
+
+    ``override=False`` nos dois: o que já está no ambiente (docker, CI,
+    ``export``, start-dev.sh) sempre vence, então a produção continua sem
+    depender de arquivo nenhum.
+
+    A chamada é no TOPO do módulo, antes do ``class Settings``: os defaults dos
+    campos (``admin_password``, ``viacep_enabled``, ``entre_ruas_provider``…)
+    são avaliados na execução do corpo da classe, e carregar o arquivo depois
+    deixaria metade das configurações sem enxergar o ``.env``.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv()  # backend/.env (mais perto vence)
+    raiz = Path(__file__).resolve().parents[3] / ".env"
+    if raiz.is_file():
+        load_dotenv(dotenv_path=raiz, override=False)
+
+
+_carregar_env()
+
+
+def env_flag(name: str, default: bool) -> bool:
+    """Lê uma env booleana: ausente/vazia → ``default``; senão on/off."""
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on")
 
 
 class Settings(BaseModel):
@@ -17,6 +63,10 @@ class Settings(BaseModel):
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")
     debug: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+    # Swagger/ReDoc/OpenAPI públicos expõem o mapa completo da API.
+    # Ligados fora de produção (desenvolvimento/local); em produção ficam
+    # FORA por padrão e DOCS_ENABLED=1 força reabrir.
+    docs_enabled: bool = env_flag("DOCS_ENABLED", os.getenv("ENVIRONMENT", "development") != "production")
 
     # Database
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./gasflow.db")
@@ -101,6 +151,11 @@ class Settings(BaseModel):
     # redis (compartilhado entre workers/instâncias — produção).
     rate_limit_mode: str = os.getenv("RATE_LIMIT_MODE", "memory")
     rate_limit_redis_url: str = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/0")
+    # Confiar em X-Forwarded-For como identidade do cliente. Default OFF:
+    # sem proxy reverso na frente, qualquer cliente poderia se passar por
+    # outro IP e fugir do rate limit. Só ligue atrás de proxy confiável
+    # (que SOBRESCREVE o header — senão o atacante ainda escolhe o IP).
+    rate_limit_trust_proxy: bool = env_flag("RATE_LIMIT_TRUST_PROXY", False)
 
     # ── Approval queue (automações de alto risco) ───────────
     # backend da fila de aprovações: memory (default, single worker) |
