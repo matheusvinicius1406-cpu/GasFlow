@@ -166,16 +166,20 @@ Docs: Fase 2 = este arquivo (1 commit); Fase 5 = relatório (1 commit). Nada de 
 
 ## 5. Fase 4 — remoção atômica (P11, tudo num commit)
 
-- [ ] `App.tsx`: `path="finance"` → `element={<CentralFinanceiraPage />}`; apagar rota `finance/central`; acrescentar `<Navigate to="/finance" replace />` em `reports` e `<Navigate to="/finance?secao=mapa-de-calor" replace />` em `reports/heatmap`; apagar imports de `FinancePage`, `ReportsPage`, `HeatmapPage`.
-- [ ] `nav.tsx`: grupo `'Financeiro & Relatórios'` → item único `{ label: 'Financeiro', href: '/finance', icon: DollarSign }`; limpar `BarChart3`/`Flame` se ficarem órfãos.
-- [ ] Apagar `FinancePage.tsx` + `__tests__/FinancePage.test.tsx`; apagar `ReportsPage.tsx`, `HeatmapPage.tsx` + os 4 testes deles; apagar `features/reports/` inteiro (`DeliveryCharts` e `periodCsv` **já movidos** em P8/P5).
-- [ ] Barrles: `features/finance/index.ts` só com o que sobrevive; `features/reports/index.ts` deixa de existir.
-- [ ] `MobileSidebar.test.tsx:39`: assert do label novo (hoje assere `'Financeiro & Relatórios'`).
-- [ ] Rodar: `npm run lint`, `npm test`, `npx tsc -b`, `pytest`, `python -m tests.integrity_audit` (espera **19 findings / 0 pendentes**, allowlist intacta).
+> **OK (2026-10-05):** todos os itens abaixo verificados no código (commit
+> `b5b6c7c` + estado atual) e gates re-executados: `tsc -b` ✔ · eslint ✔ ·
+> vitest **441/441** ✔ · pytest **2169/30** ✔ · integridade **19/0** ✔.
+
+- [x] `App.tsx`: `path="finance"` → `element={<CentralFinanceiraPage />}`; apagar rota `finance/central`; acrescentar `<Navigate to="/finance" replace />` em `reports` e `<Navigate to="/finance?secao=mapa-de-calor" replace />` em `reports/heatmap`; apagar imports de `FinancePage`, `ReportsPage`, `HeatmapPage`.
+- [x] `nav.tsx`: grupo `'Financeiro & Relatórios'` → item único `{ label: 'Financeiro', href: '/finance', icon: DollarSign }`; limpar `BarChart3`/`Flame` se ficarem órfãos.
+- [x] Apagar `FinancePage.tsx` + `__tests__/FinancePage.test.tsx`; apagar `ReportsPage.tsx`, `HeatmapPage.tsx` + os 4 testes deles; apagar `features/reports/` inteiro (`DeliveryCharts` e `periodCsv` **já movidos** em P8/P5).
+- [x] Barrles: `features/finance/index.ts` só com o que sobrevive; `features/reports/index.ts` deixa de existir.
+- [x] `MobileSidebar.test.tsx:39`: assert do label novo (hoje assere `'Financeiro & Relatórios'`).
+- [x] Rodar: `npm run lint`, `npm test`, `npx tsc -b`, `pytest`, `python -m tests.integrity_audit` (espera **19 findings / 0 pendentes**, allowlist intacta).
 
 ## 6. Fase 5 — validação (P12)
 
-- [ ] E2E novo: login → menu tem **uma** entrada → `/finance` abre → presets (inclusive 180) → abas/seções → criar despesa → redirects `/reports` e `/reports/heatmap` não dão 404 → botão Imprimir chama o fallback → modo TV entra/sai.
+- [x] E2E novo: login → menu tem **uma** entrada → `/finance` abre → presets (inclusive 180) → abas/seções → criar despesa → redirects `/reports` e `/reports/heatmap` não dão 404 → botão Imprimir chama o fallback → modo TV entra/sai. *(Spec `e2e/tests/central-financeira.spec.ts` entregue, listada (7 testes) e tipada; **execução** contra o stack `docker-compose.e2e.yml` pendente de ambiente — ver `central-financeira-fase5.md` §4.)*
 - [ ] Manual por seção (15): loading, error, empty, dado real, gate de permissão (com VIEWER e sem `audit.view`).
 - [ ] Impressão de cada seção principal (PDF do Electron e `window.print` do browser).
 - [ ] Screenshots + evidências no `docs/auditoria/central-financeira-fase5.md`.

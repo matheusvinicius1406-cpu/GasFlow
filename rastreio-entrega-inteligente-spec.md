@@ -83,7 +83,7 @@ Tudo abaixo foi conferido no código. Onde o enunciado supõe algo que não exis
 - `delivery_drivers.tracking_epoch` (Integer, not null, server_default `"0"`).
 - Tabela `tracking_alert_state` (`id`, `tenant_id`, `driver_id`, `kind`, `last_sent_at`) com `UniqueConstraint uq_tracking_alert_state` sobre tenant+driver+kind.
 - ORM `TrackingAlertStateRecord` em `delivery_persistence_model.py`.
-- **Pendente:** aplicar e reverter a migration (up/down) — SQLite é o alvo dos testes do repo.
+- **OK (2026-10-05):** up/down/up verificado em banco descartável — `alembic upgrade head` → `alembic downgrade e7b1c3d5f9a2` (remove `f3a9c1e7d204`) → `alembic upgrade head` → `alembic_version = 9f4b7e2a6c31`.
 
 ### 4.2 Fix 1 + 2 — `TrackingAlertsService` com cooldown e gate
 - Cooldown `(tenant_id, driver_id, kind)` de 15 min (`ALERT_COOLDOWN_MINUTES`); reset quando o entregador volta a andar (> 200 m, `STALLED_RESET_MOVE_M`).
@@ -101,7 +101,7 @@ Tudo abaixo foi conferido no código. Onde o enunciado supõe algo que não exis
 ### 4.4 Fix 5 + 6 — `DriverMap`: origem da linha e rótulo honesto
 - Origem da linha tracejada = **última** posição da janela (`valid[valid.length - 1]`), não a primeira.
 - `MapDestination` propaga `speed_source`; quando `"default"`, o rótulo ganha `~` (ex.: `~12 min`).
-- **Pendente:** varredura final para garantir que nenhum outro ponto usa `valid[0]`.
+- **OK (2026-10-05):** varredura final por `valid[0]` em todo o repo → **zero ocorrências em código** (a única é esta linha da spec).
 
 ---
 

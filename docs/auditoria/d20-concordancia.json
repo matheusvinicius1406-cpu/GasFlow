@@ -1,0 +1,125 @@
+{
+  "amostra": 100,
+  "cobertura_ibge": 67.0,
+  "motivos_ibge": {
+    "ok": 67,
+    "menos_de_duas_intersecoes": 17,
+    "sem_face": 11,
+    "sem_ancora_util": 5
+  },
+  "cobertura_overpass": 7.0,
+  "motivos_overpass": {
+    "rua_sem_geometry_no_osm": 60,
+    "poucas_ancoras": 23,
+    "menos_de_duas_intersecoes": 7,
+    "ok": 7,
+    "poucos_cruzamentos": 3
+  },
+  "overpass_respondidas": 100,
+  "cobertura_overpass_respondidas": 7.0,
+  "interseccional": 6,
+  "cruzamentos_overpass": 38,
+  "cruzamentos_ibge": 111,
+  "cruzamentos_comuns": 29,
+  "concordancia_cruzamentos": 76.3,
+  "concordancia_cruzamentos_cru": 0.0,
+  "concordancia_cruzamentos_inversa": 26.1,
+  "divergencias_cruzamentos": [
+    {
+      "rua": "RUA MARIO ANDREAZA",
+      "so_overpass": [
+        "Rua Quatro de Setembro"
+      ],
+      "cruzamentos_overpass": 4,
+      "cruzamentos_ibge": 12,
+      "cruzamentos_comuns": 3
+    },
+    {
+      "rua": "RUA CONEGO JERONIMO PIMENTEL",
+      "so_overpass": [
+        "Vila Paulina",
+        "Vila São Vicente de Paula"
+      ],
+      "cruzamentos_overpass": 7,
+      "cruzamentos_ibge": 11,
+      "cruzamentos_comuns": 5
+    },
+    {
+      "rua": "TRAVESSA PEREBEBUI",
+      "so_overpass": [
+        "Alameda 1",
+        "Alameda 2"
+      ],
+      "cruzamentos_overpass": 5,
+      "cruzamentos_ibge": 23,
+      "cruzamentos_comuns": 3
+    },
+    {
+      "rua": "RUA OLIVEIRA BELO",
+      "so_overpass": [
+        "Rua Oliveira Belo",
+        "Travessa 14 de Março"
+      ],
+      "cruzamentos_overpass": 6,
+      "cruzamentos_ibge": 9,
+      "cruzamentos_comuns": 4
+    },
+    {
+      "rua": "AVENIDA ALCINDO CACELA",
+      "so_overpass": [
+        "Alameda Cheden Bitar",
+        "Avenida Alcindo Cacela"
+      ],
+      "cruzamentos_overpass": 11,
+      "cruzamentos_ibge": 49,
+      "cruzamentos_comuns": 9
+    }
+  ],
+  "pontos_comparaveis": 21,
+  "pontos_abstidos": 9,
+  "ruas_com_par": 6,
+  "concordancia_pontos": 0.0,
+  "concordancia_pontos_normalizada": 0.0,
+  "concordancia_ruas": 0.0,
+  "divergencias_exemplo": [
+    {
+      "rua": "RUA SANHACO",
+      "numero": 1,
+      "ibge": "AVENIDA DAS ANDORINHAS e RUA JACAMIUNA",
+      "overpass": null
+    },
+    {
+      "rua": "RUA MARIO ANDREAZA",
+      "numero": 1,
+      "ibge": "RUA DAS FLORES e RUA DIONISIO BARBOSA",
+      "overpass": null
+    },
+    {
+      "rua": "RUA CONEGO JERONIMO PIMENTEL",
+      "numero": 75,
+      "ibge": "AVENIDA VISCONDE DE SOUZA FRANCO e PASSAGEM PAULINA",
+      "overpass": null
+    },
+    {
+      "rua": "TRAVESSA PEREBEBUI",
+      "numero": 25,
+      "ibge": "PASSAGEM B e ALAMEDA PRIMAVERA",
+      "overpass": null
+    },
+    {
+      "rua": "RUA OLIVEIRA BELO",
+      "numero": 25,
+      "ibge": "RUA DAS PALMEIRAS e AVENIDA GENERALISSIMO DEODORO",
+      "overpass": null
+    },
+    {
+      "rua": "AVENIDA ALCINDO CACELA",
+      "numero": 25,
+      "ibge": "PASSAGEM INDEPENDENCIA e RUA FERREIRA PENA",
+      "overpass": null
+    }
+  ],
+  "veredito": "APROVADO: cobertura 67.0% vs 7.0% (razao 9.57x, +60.0pp) | concordancia de cruzamentos 76.3% (29/38 do OSM confirmados pelo CNEFE) em 6 ruas em comum | diagnostico par na grade 0.0%",
+  "cache_overpass": "C:\\Users\\mathe\\AppData\\Local\\Temp\\d20-overpass-cache.json",
+  "cache_ruas": 100
+}

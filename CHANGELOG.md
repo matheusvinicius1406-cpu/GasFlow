@@ -4,7 +4,110 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
-_(sem mudanças ainda)_
+### 📍 Renomeador de contatos — Fase 3: "entre ruas" com dado oficial do IBGE
+
+- **Provedor IBGE/CNEFE:** `app/infrastructure/geocoding/ibge_provider.py`
+  preenche `geocode_cache.intersecoes` a partir do Censo 2022, com as tabelas
+  `cnefe_endereco`, `logradouro_face` e `logradouro_no` (migration
+  `9f4b7e2a6c31`, `init_db` `SCHEMA_VERSION` 9). Segue o contrato congelado da
+  Fase 2 (`[{"nome", "numero"}]`) e a mesma regra D2: sem dado, `[]` +
+  triagem por motivo. Fica atrás de `ENTRE_RUAS_PROVIDER`, cujo default
+  continua `overpass` — trocar de default é decisão do gate, não do commit.
+- **Ingestão offline:** `scripts/import_ibge_cnefe.py` e
+  `scripts/import_ibge_faces.py` consomem o zip estadual do IBGE por município,
+  sem chave nem dependência nova, idempotentes (re-ingerir não duplica).
+- **Gate D20 medido e aprovado:** `scripts/metrica_concordancia_entre_ruas.py`
+  rodou até saturar a amostra (100/100 ruas, seed 42) —
+  **cobertura 67,0% × 7,0% (9,57×, +60,0 pp)** e **concordância de cruzamentos
+  76,3%** (29 de 38 cruzamentos do OSM também no CNEFE, 6 ruas em comum;
+  exigido ≥70%). Relatório em `docs/auditoria/d20-concordancia.json`,
+  análise e justificativa da régua no `docs/adr/ADR-0008-entre-ruas-por-dados-ibge.md`.
+- **A régua do D20 mudou porque foi provada inservível:** comparar o par
+  "entre ruas" na grade 1/25/50/75/99 dava 0,0% mesmo com os dois provedores
+  certos onde ambos respondiam — **19 dos 31 pontos eram de um só lado** (a
+  faixa de âncoras do OSM não cobre os números baixos do CNEFE), logo o teto
+  do critério antigo era **38,7%**, abaixo do próprio corte de 70%. A régua
+  passou a ser a fração dos cruzamentos do OSM que o CNEFE também traz; a
+  grade ficou como diagnóstico e ganhou piso de 10 cruzamentos. Os 9 testes de
+  `tests/test_gate_d20_metrica.py` travam a nova régua e o motivo da troca.
+- **Bug de âncora no Overpass:** a tolerância de 40 m mede distância, não
+  pertencimento — a caixa de `addr:housenumber` puxava a casa da via paralela
+  (em `PASSAGEM SAMUEL SOARES` as 9 âncoras aceitas declaravam todas
+  `addr:street` de outra rua). Agora nó com `addr:street` de outra via é
+  rejeitado; nó sem esse campo continua entrando pela tolerância. Efeito
+  medido: cobertura Overpass 11,0% → 7,0% e calibragem dos números bem
+  melhor (`Rua Sanhaço` de `1,1,1,2,12,26` para `5,13,20,25,35` × CNEFE
+  `1,7,15,20,31,33,40`). Travado em
+  `test_no_de_outra_rua_nao_vira_ancora`.
+- **Métricas e origem na tela:** o job de "entre ruas" agora carrega
+  `por_motivo` (D2 — por que a rua ficou vazia), `por_intersecoes_provider`
+  (D23 — quem gravou a lista) e cobertura de eixo ponderada por rua
+  (§8.8.5, nunca `NaN`); a `ContactsRenamerPage` ganhou os badges IBGE
+  (Censo 2022), "entre ruas IBGE/Overpass/pendente" e a linha de
+  "2+ cruzamentos / eixo coberto".
+- **Spec da fase:** `docs/prompts/renomeador-contatos-fase3.md` (decisões
+  D18–D23, §9 gates com output de 2026-10-07, §10 métricas, §11 DoD) e o
+  spike em `docs/spike/fase3/` (cobertura CNEFE e Faces).
+
+### 🤖 Renomeador — camada de IA opcional (híbrida)
+
+- **`app/application/contacts/renamer_ai.py`:** camada opcional sobre o parser
+  determinístico — a IA só é consultada para o que o parser não separou
+  (`precisa_ia`), e `validar` aplica "nada é inventado": todo dígito citado
+  precisa existir no nome bruto, senão devolve `None` e vale o resultado
+  determinístico. `anonimizar` tira telefone/jid do payload **antes** de
+  qualquer chamada externa. Default `RENOMEADOR_IA=false` (parser offline
+  continua obrigatório); camada padrão Ollama local.
+- **Hugging Face como opt-in:** `app/infrastructure/ai/huggingface_provider.py`
+  (endpoint compatível com OpenAI, sem dependência nova) ligado em
+  `get_renamer_provider()`; o token vive só na instância, `__repr__` mascarado
+  e erro devolve só o código HTTP. Env novas: `RENOMEADOR_IA_PROVIDER`,
+  `RENOMEADOR_IA_MODEL`, `RENOMEADOR_IA_TIMEOUT`, `RENOMEADOR_IA_LOTE`,
+  `HF_TOKEN`, `HF_MODEL`, `HF_BASE_URL`, `HF_TIMEOUT`.
+
+### 🛡️ Backend — hardening de config, documentação e rate limit
+
+- **`.env` da raiz passa a ser lido:** `app/core/config.py` carrega
+  `backend/.env` e `<raiz>/.env` (`override=False`, ambiente vence) antes de
+  qualquer default — o backend fora do `start-dev.sh` batia em
+  `ValueError: ADMIN_PASSWORD obrigatório` na importação.
+- **Swagger/ReDoc/OpenAPI fora em produção:** `DOCS_ENABLED` (default =
+  `ENVIRONMENT != production`); com docs desligados o `/` também deixa de
+  anunciar a URL.
+- **Rate limit não usa mais o token cru como chave:** bucket identificado por
+  SHA-256 truncado do Bearer (`tok:` + 24 hex) — a chave deixa de poder vazar
+  por log/exceção de Redis. `X-Forwarded-For` só é honrado com
+  `RATE_LIMIT_TRUST_PROXY=1` (default **off**, senão o cliente escolhia o
+  próprio bucket). `tests/test_rate_limit_hardening.py` cobre as regras.
+
+### 💬 WhatsApp — dedupe sem perder cliente e fila de broadcast
+
+- **Deduplicar não derruba mais o customer:** `migrateContactData()` move
+  customer, preferência de marketing (consentimento mais restritivo vence),
+  `list_members`, `list_contacts` e histórico de campanha para o contato
+  mantido **antes** do `DELETE` que cascateava. Linha `@lid` com customer e
+  sem herdeiro é **mantida** (`lidKept`) em vez de apagada; o relatório e o
+  log passam a expor `lidMigrated`/`lidKept`.
+- **Fila de broadcast:** ciclo de elegibilidade vira loop (destinatário
+  inelegível vira `CANCELLED` sem consumir gate anti-ban), `processNext`
+  exportado para teste, `stopWorker` no shutdown e `started_at` com
+  `COALESCE` (pausar/retomar não zera o cronômetro da campanha).
+- **API:** `POST /customers/:id/promote` valida `status` (400 com a lista
+  válida), rotas de campanha param de chamar `listCampaigns()`/
+  `getCampaignRecipients()` duas vezes, `/api` desconhecida responde JSON 404
+  e o error handler (registrado por último) devolve **400** para JSON
+  malformado em vez do 500 genérico.
+- **Testes:** `whatsapp/tests/broadcast-queue.test.ts` e
+  `whatsapp/tests/dedupe-customers.test.ts` — suíte em 106 pass / 0 fail.
+
+### 📄 Docs e specs
+
+- `docs/auditoria/central-financeira-fase2.md`: checklist da Fase 4 marcado
+  com a evidência de 2026-10-05 (gates re-executados) e o E2E da Fase 5
+  entregue e tipado (execução pendente de ambiente).
+- `rastreio-entrega-inteligente-spec.md`: migration up/down/up verificado e
+  varredura de `valid[0]` zerada — dois "pendentes" viraram "OK".
+- `release-v1.2.0-spec.md`: B1 conferido com os números das 4 suítes.
 
 ## [1.2.0] - 2026-09-23
 

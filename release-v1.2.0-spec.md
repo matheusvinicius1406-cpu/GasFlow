@@ -115,11 +115,16 @@ Investigação feita em 2026-09-23:
 - [x] **A5.** Commitar tudo (padrão conventional, ex.: `fix(ci): ...`, `fix(tests): ...`) e **push na main**. Aguardar CI verde na main (job Backend incluído) — é o mesmo commit que receberá a tag.
 
 ### Fase B — Validações locais (antes da tag)
-- [ ] **B1.** Suítes locais dos 4 projetos (o mesmo que o gate cobra):
+- [x] **B1.** Suítes locais dos 4 projetos (o mesmo que o gate cobra):
   - backend: `python -m pytest tests/` (3x seguidas);
   - frontend: `npm run typecheck` + `npx vitest run`;
   - whatsapp: typecheck + testes do projeto;
   - agent: typecheck + testes do projeto.
+  > Conferido em **2026-10-05**: backend **3× seguidas com 2169 passed /
+  > 30 skipped** (inclui os testes novos da Fase 3); frontend `tsc -b` +
+  > `eslint` + vitest **441/441**; whatsapp `tsc --noEmit` + testes **fail 0**;
+  > agent `tsc --noEmit` + testes **fail 0**; mobile (extra) `tsc -p` +
+  > `node --test` **64/64**.
 - [x] **B2.** Build do instalador local (replica o CI):
   ```bash
   cd desktop && npm run build:win
