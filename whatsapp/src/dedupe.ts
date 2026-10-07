@@ -10,25 +10,29 @@ import { logger } from './log.js';
  * Gera relatório em export/duplicados-excluidos-*.json para auditoria manual.
  */
 export function runDedupe(): DedupeResult & { reportFile: string | null } {
-  const lidRemoved = deleteLidContacts();
+  const { removed: lidRemoved, migrated: lidMigrated, kept: lidKept } = deleteLidContacts();
   const { result: nameMergedGroups, removed } = dedupeByName();
   cleanOrphanMemberships();
 
   let reportFile: string | null = null;
-  if (lidRemoved > 0 || removed.length > 0) {
+  if (lidRemoved > 0 || lidKept > 0 || removed.length > 0) {
     try {
       fs.mkdirSync('export', { recursive: true });
       reportFile = `export/duplicados-excluidos-${Date.now()}.json`;
       fs.writeFileSync(
         reportFile,
-        JSON.stringify({ generatedAt: new Date().toISOString(), lidRemoved, mergedByName: removed }, null, 2),
+        JSON.stringify(
+          { generatedAt: new Date().toISOString(), lidRemoved, lidMigrated, lidKept, mergedByName: removed },
+          null,
+          2,
+        ),
       );
     } catch {
       reportFile = null; // falha ao gravar relatório não deve bloquear a deduplicação
     }
   }
 
-  logger.info('dedupe.completed', { lidRemoved, nameMergedGroups, nameRemoved: removed.length });
+  logger.info('dedupe.completed', { lidRemoved, lidMigrated, lidKept, nameMergedGroups, nameRemoved: removed.length });
 
-  return { lidRemoved, nameMergedGroups, nameRemoved: removed.length, reportFile };
+  return { lidRemoved, lidMigrated, lidKept, nameMergedGroups, nameRemoved: removed.length, reportFile };
 }

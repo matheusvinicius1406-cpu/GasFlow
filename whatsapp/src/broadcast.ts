@@ -14,7 +14,8 @@
  * cooldown por destinatário, quiet hours e pacing gaussiano.
  */
 
-import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db.js';
+import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientCancelled, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db.js';
+import { jidUser, normalizePhone } from './normalize.js';
 import { providerManager } from './provider/provider-manager.js';
 import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban/index.js';
 import { logger } from './log.js';
@@ -86,7 +87,8 @@ function pauseWorkerUntil(untilMs: number, reason: string): void {
   logger.info('broadcast.paused', { until: new Date(capped).toISOString(), reason });
 }
 
-async function processNext(): Promise<void> {
+/** Exportado para testes: executa um ciclo da fila (drain de inelegíveis + 1 envio). */
+export async function processNext(): Promise<void> {
   // Find the first RUNNING campaign
   const campaigns = db
     .prepare("SELECT id FROM campaigns WHERE status = 'RUNNING'")
@@ -99,91 +101,109 @@ async function processNext(): Promise<void> {
     const campaign = getCampaignById(campaignId);
     if (!campaign || campaign.status !== 'RUNNING') continue;
 
-    // Check if provider is connected
-    if (!providerManager.getAccount("primary")?.isConnected()) {
-      logger.warn('broadcast.account_not_connected');
-      return;
-    }
+    // Claim + cadeia de elegibilidade em loop: destinatários não elegíveis
+    // viram CANCELLED sem passar pelos gates anti-ban (não enviam mensagem).
+    for (;;) {
+      const recipient = claimNextRecipient(campaignId);
+      if (!recipient) {
+        // No more pending recipients — campaign complete
+        logger.info('broadcast.campaign_completed', { campaignId });
+        updateCampaignStatus(campaignId, 'COMPLETED');
+        break;
+      }
 
-    // ── Anti-ban gates (nível conta) ──
-    if (isQuietHour()) {
-      pauseWorkerUntil(nextAllowedTime(), 'quiet hours');
-      return;
-    }
-    if (!hasDailyBudget('primary', DAILY_CAP)) {
-      // Reavalia à meia-noite UTC (teto de 10 min mantém o loop responsivo).
-      pauseWorkerUntil(Date.now() + 10 * 60_000, 'daily cap atingido (warmup/cap)');
-      return;
-    }
+      // Campanha pode ter sido pausada/cancelada enquanto drenávamos.
+      if (getCampaignById(campaignId)?.status !== 'RUNNING') break;
 
-    // Claim next pending recipient
-    const recipient = claimNextRecipient(campaignId);
-    if (!recipient) {
-      // No more pending recipients — campaign complete
-      logger.info('broadcast.campaign_completed', { campaignId });
-      updateCampaignStatus(campaignId, 'COMPLETED');
-      continue;
-    }
-
-    // === Eligibility chain ===
-    // 1. Customer exists?
-    const customer = getCustomerWithContact(recipient.customer_id);
-    if (!customer) {
-      markRecipientFailed(campaignId, recipient.customer_id, 'Customer not found');
-      continue;
-    }
-
-    // 2. Contact exists?
-    if (!customer.contact) {
-      markRecipientFailed(campaignId, recipient.customer_id, 'Contact not found for customer');
-      continue;
-    }
-
-    // 3. Phone valid?
-    const phone = customer.contact.phone ?? customer.contact.jid?.split('@')[0] ?? null;
-    if (!phone || phone.length < 8) {
-      markRecipientFailed(campaignId, recipient.customer_id, 'No valid phone number');
-      continue;
-    }
-
-    // 4. OPTED_OUT / SUPPRESSED / BLOCKED?
-    const pref = getPreference(recipient.customer_id);
-    if (pref) {
-      if (pref.marketing_status === 'OPTED_OUT' || pref.marketing_status === 'SUPPRESSED' || pref.marketing_status === 'BLOCKED') {
-        markRecipientFailed(campaignId, recipient.customer_id, `Excluded: ${pref.marketing_status}`);
+      // === Eligibility chain ===
+      // 1. Customer exists?
+      const customer = getCustomerWithContact(recipient.customer_id);
+      if (!customer) {
+        markRecipientCancelled(campaignId, recipient.customer_id, 'Excluded: Customer not found');
         continue;
       }
-    }
 
-    // 5. Already processed? (atomic claim already ensures PENDING only)
-    // The claimNextRecipient only returns PENDING jobs, so this is guaranteed.
+      // 2. Contact exists?
+      if (!customer.contact) {
+        markRecipientCancelled(campaignId, recipient.customer_id, 'Excluded: Contact not found for customer');
+        continue;
+      }
 
-    // 6. Rate limits (minuto/hora) + cooldown por destinatário.
-    const rate = checkRate('primary', phone);
-    if (!rate.allowed) {
-      // Devolve o job para a fila e pausa o worker até o limite abrir.
-      unclaimRecipient(campaignId, recipient.customer_id);
-      pauseWorkerUntil(rate.retryAtMs ?? Date.now() + 60_000, `rate limit: ${rate.reason}`);
-      return;
-    }
+      // 3. Phone valid? (só dígitos, 8+ — nunca enviar para fragmento de jid)
+      const phone = normalizePhone(customer.contact.phone ?? jidUser(customer.contact.jid ?? ''));
+      if (!phone) {
+        markRecipientCancelled(campaignId, recipient.customer_id, 'Excluded: No valid phone number');
+        continue;
+      }
 
-    // Send message via provider
-    try {
-      logger.info('broadcast.message_sending', { phone, campaignId, customerId: recipient.customer_id });
+      // 4. OPTED_OUT / SUPPRESSED / BLOCKED?
+      const pref = getPreference(recipient.customer_id);
+      if (pref) {
+        if (pref.marketing_status === 'OPTED_OUT' || pref.marketing_status === 'SUPPRESSED' || pref.marketing_status === 'BLOCKED') {
+          markRecipientCancelled(campaignId, recipient.customer_id, `Excluded: ${pref.marketing_status}`);
+          continue;
+        }
+      }
 
-      const result = await providerManager.getAccount("primary")?.sendMessage(phone, { text: campaign.message }) || { success: false, error: "Primary account not found" };
+      // ── Daqui em diante só envio: gates anti-ban devolvem o claim ──
 
-      if (result.success) {
-        markRecipientSent(campaignId, recipient.customer_id, result.messageId ?? 'unknown');
-        // Registra nas janelas de rate limit (minuto/hora/cooldown) e no contador de warmup.
-        recordSend('primary', phone, result.messageId);
-        recordSent('primary');
-        logger.info('broadcast.message_sent', { phone, campaignId, customerId: recipient.customer_id });
-      } else {
-        markRecipientFailed(campaignId, recipient.customer_id, result.error ?? 'Unknown error');
-        logger.warn('broadcast.message_failed', { phone, campaignId, error: result.error });
+      // Conta conectada?
+      const account = providerManager.getAccount('primary');
+      if (!account?.isConnected()) {
+        unclaimRecipient(campaignId, recipient.customer_id);
+        logger.warn('broadcast.account_not_connected', { campaignId });
+        break;
+      }
 
-        // Check protection mode
+      // ── Anti-ban gates (nível conta) ──
+      if (isQuietHour()) {
+        unclaimRecipient(campaignId, recipient.customer_id);
+        pauseWorkerUntil(nextAllowedTime(), 'quiet hours');
+        return;
+      }
+      if (!hasDailyBudget('primary', DAILY_CAP)) {
+        unclaimRecipient(campaignId, recipient.customer_id);
+        pauseWorkerUntil(Date.now() + 10 * 60_000, 'daily cap atingido (warmup/cap)');
+        return;
+      }
+
+      // 6. Rate limits (minuto/hora) + cooldown por destinatário.
+      const rate = checkRate('primary', phone);
+      if (!rate.allowed) {
+        unclaimRecipient(campaignId, recipient.customer_id);
+        pauseWorkerUntil(rate.retryAtMs ?? Date.now() + 60_000, `rate limit: ${rate.reason}`);
+        return;
+      }
+
+      // Send message via provider
+      try {
+        logger.info('broadcast.message_sending', { phone, campaignId, customerId: recipient.customer_id });
+
+        const result = await account.sendMessage(phone, { text: campaign.message });
+
+        if (result.success) {
+          markRecipientSent(campaignId, recipient.customer_id, result.messageId ?? 'unknown');
+          // Registra nas janelas de rate limit (minuto/hora/cooldown) e no contador de warmup.
+          recordSend('primary', phone, result.messageId);
+          recordSent('primary');
+          logger.info('broadcast.message_sent', { phone, campaignId, customerId: recipient.customer_id });
+        } else {
+          markRecipientFailed(campaignId, recipient.customer_id, result.error ?? 'Unknown error');
+          logger.warn('broadcast.message_failed', { phone, campaignId, error: result.error });
+
+          // Check protection mode
+          if (shouldActivateProtection(campaignId)) {
+            logger.error('broadcast.protection_mode', { campaignId });
+            setCampaignProtection(campaignId, 'Too many consecutive failures');
+            updateCampaignStatus(campaignId, 'FAILED');
+            return;
+          }
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        markRecipientFailed(campaignId, recipient.customer_id, errorMsg);
+        logger.error('broadcast.message_error', { phone, campaignId, error: errorMsg });
+
         if (shouldActivateProtection(campaignId)) {
           logger.error('broadcast.protection_mode', { campaignId });
           setCampaignProtection(campaignId, 'Too many consecutive failures');
@@ -191,45 +211,41 @@ async function processNext(): Promise<void> {
           return;
         }
       }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      markRecipientFailed(campaignId, recipient.customer_id, errorMsg);
-      logger.error('broadcast.message_error', { phone, campaignId, error: errorMsg });
 
-      if (shouldActivateProtection(campaignId)) {
-        logger.error('broadcast.protection_mode', { campaignId });
-        setCampaignProtection(campaignId, 'Too many consecutive failures');
-        updateCampaignStatus(campaignId, 'FAILED');
-        return;
-      }
+      // Only process one message per cycle to respect cooldown
+      return;
     }
-
-    // Only process one message per cycle to respect cooldown
-    return;
   }
 }
 
-/** Devolve um job PROCESSING para PENDING (usado quando o rate limit bloqueia o envio). */
+/**
+ * Devolve um job PROCESSING para PENDING sem queimar retry (usado quando o
+ * envio foi adiado: conta offline, quiet hours, daily cap ou rate limit).
+ */
 function unclaimRecipient(campaignId: number, customerId: number): void {
   db.prepare(
     `UPDATE campaign_recipients
-     SET status = 'PENDING', lease_until = NULL, started_at = NULL
-     WHERE campaign_id = ? AND customer_id = ?`,
+     SET status = 'PENDING', lease_until = NULL, started_at = NULL, attempts = MAX(attempts - 1, 0)
+     WHERE campaign_id = ? AND customer_id = ? AND status = 'PROCESSING'`,
   ).run(campaignId, customerId);
 }
 
-function shouldActivateProtection(campaignId: number): boolean {
+/** Exportado para testes: avalia a política de proteção da campanha. */
+export function shouldActivateProtection(campaignId: number): boolean {
+  // Apenas tentativas reais de envio contam: SENT/FAILED.
+  // CANCELLED (não elegível) e PENDING/PROCESSING não devem distorcer a taxa.
   const results = db
     .prepare(
       `SELECT
          COUNT(*) AS total,
          SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed,
          SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) AS sent
-       FROM campaign_recipients WHERE campaign_id = ?`,
+       FROM campaign_recipients
+       WHERE campaign_id = ? AND status IN ('SENT', 'FAILED')`,
     )
     .get(campaignId) as { total: number; failed: number; sent: number } | undefined;
 
-  if (!results || results.total === 0) return false;
+  if (!results || Number(results.total ?? 0) === 0) return false;
 
   const failedCount = Number(results.failed ?? 0);
   const totalCount = Number(results.total ?? 0);
@@ -241,7 +257,7 @@ function shouldActivateProtection(campaignId: number): boolean {
         `SELECT COUNT(*) AS cnt FROM (
            SELECT status FROM campaign_recipients
            WHERE campaign_id = ? AND status IN ('FAILED', 'SENT')
-           ORDER BY created_at DESC LIMIT ?
+           ORDER BY COALESCE(completed_at, created_at) DESC LIMIT ?
          ) WHERE status = 'FAILED'`,
       )
       .get(campaignId, PROTECTION_FAILURE_THRESHOLD) as { cnt: number } | undefined;

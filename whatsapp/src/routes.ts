@@ -539,6 +539,10 @@ router.post('/customers/:contactId/promote', requireAuth, (req: Request, res: Re
   const contact = getContactById(contactId);
   if (!contact) { res.status(404).json({ error: 'Contato não encontrado.' }); return; }
   const status = typeof req.body?.status === 'string' ? req.body.status : 'UNKNOWN';
+  if (!['CUSTOMER', 'PROSPECT', 'UNKNOWN'].includes(status)) {
+    res.status(400).json({ error: 'Status inválido. Use: CUSTOMER, PROSPECT, UNKNOWN.' });
+    return;
+  }
   const id = promoteContactToCustomer(contactId, status);
   res.status(201).json(getCustomerById(id));
 });
@@ -715,7 +719,8 @@ router.post('/lists/:id/sync', requireAuth, async (req: Request, res: Response) 
 // ═══════════════════════════════════════════════════════════
 
 router.get('/campaigns', requireAuth, (_req: Request, res: Response) => {
-  res.json({ total: listCampaigns().length, campaigns: listCampaigns() });
+  const campaigns = listCampaigns();
+  res.json({ total: campaigns.length, campaigns });
 });
 
 router.post('/campaigns', requireAuth, (req: Request, res: Response) => {
@@ -772,7 +777,8 @@ router.post('/campaigns/:id/cancel', requireAuth, (req: Request, res: Response) 
 router.get('/campaigns/:id/recipients', (req: Request, res: Response) => {
   const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
-  res.json({ total: getCampaignRecipients(campaign.id).length, recipients: getCampaignRecipients(campaign.id) });
+  const recipients = getCampaignRecipients(campaign.id);
+  res.json({ total: recipients.length, recipients });
 });
 
 router.get('/campaigns/:id/results', (req: Request, res: Response) => {

@@ -375,6 +375,10 @@ export function cleanOrphanMemberships(): void {
 export interface DedupeResult {
   /** Linhas @lid removidas (identificador interno do WhatsApp, sem nome/telefone útil). */
   lidRemoved: number;
+  /** Customers de linhas @lid migrados para o contato equivalente antes do DELETE. */
+  lidMigrated: number;
+  /** Linhas @lid mantidas por terem customer sem contato equivalente (sem perda de dados). */
+  lidKept: number;
   /** Grupos de mesmo nome consolidados. */
   nameMergedGroups: number;
   /** Linhas removidas na consolidação por nome. */
@@ -389,12 +393,112 @@ export interface RemovedDuplicate {
   keptId: number;
 }
 
+export interface LidCleanupResult {
+  removed: number;
+  migrated: number;
+  kept: number;
+}
+
+/**
+ * Move os dados dependentes de `fromContactId` para `toContactId` ANTES de um
+ * DELETE que acionaria o cascade: customer (re-apontado ou fundido), preferência
+ * de marketing (consentimento mais restritivo prevalece), memberships de lista e
+ * histórico de campanha. Chamado por dedupeByName e deleteLidContacts.
+ */
+export function migrateContactData(fromContactId: number, toContactId: number): void {
+  if (fromContactId === toContactId) return;
+
+  const moveListContacts = () => {
+    db.prepare(
+      `INSERT OR IGNORE INTO list_contacts (list_id, contact_id)
+       SELECT list_id, ? FROM list_contacts WHERE contact_id = ?`,
+    ).run(toContactId, fromContactId);
+  };
+
+  const fromCustomer = getCustomerByContactId(fromContactId);
+  if (!fromCustomer) {
+    moveListContacts();
+    return;
+  }
+
+  const toCustomer = getCustomerByContactId(toContactId);
+  if (!toCustomer) {
+    db.prepare(
+      `UPDATE customers SET contact_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+    ).run(toContactId, fromCustomer.id);
+    moveListContacts();
+    return;
+  }
+
+  // Ambos são customers: funde preservando o consentimento mais restritivo.
+  const fromPref = getPreference(fromCustomer.id);
+  const toPref = getPreference(toCustomer.id);
+  const restrictive = ['OPTED_OUT', 'SUPPRESSED', 'BLOCKED'];
+  if (fromPref && restrictive.includes(fromPref.marketing_status)) {
+    upsertPreference(toCustomer.id, fromPref.marketing_status, fromPref.source);
+  } else if (fromPref && (!toPref || toPref.marketing_status === 'UNKNOWN') && fromPref.marketing_status !== 'UNKNOWN') {
+    upsertPreference(toCustomer.id, fromPref.marketing_status, fromPref.source);
+  }
+
+  // Memberships de lista do customer duplicado migram para o mantido.
+  db.prepare(
+    `INSERT OR IGNORE INTO list_members (list_id, customer_id)
+     SELECT list_id, ? FROM list_members WHERE customer_id = ?`,
+  ).run(toCustomer.id, fromCustomer.id);
+
+  // Histórico de campanha: re-aponta preservando o que não conflita (PK campaign+customer).
+  db.prepare('UPDATE OR IGNORE campaign_recipients SET customer_id = ? WHERE customer_id = ?').run(
+    toCustomer.id,
+    fromCustomer.id,
+  );
+
+  // Remove o customer de origem (cascata apaga apenas a preferência da origem,
+  // já mesclada acima).
+  db.prepare('DELETE FROM customers WHERE id = ?').run(fromCustomer.id);
+  moveListContacts();
+}
+
 /**
  * Remove contatos com JID @lid: identificador interno do multi-device,
  * sem nome e cujo "user" NÃO é um número de telefone real.
+ * Customer vinculado é migrado para o contato de mesmo telefone; se não
+ * houver equivalente, a linha é mantida (nunca perder dados de cliente).
  */
-export function deleteLidContacts(): number {
-  return Number(db.prepare("DELETE FROM contacts WHERE jid LIKE '%@lid'").run().changes);
+export function deleteLidContacts(): LidCleanupResult {
+  const rows = db
+    .prepare("SELECT id, phone FROM contacts WHERE jid LIKE '%@lid' AND phone IS NOT NULL")
+    .all() as Array<{ id: number; phone: string }>;
+  const noPhone = db
+    .prepare("SELECT id FROM contacts WHERE jid LIKE '%@lid' AND phone IS NULL")
+    .all() as Array<{ id: number }>;
+
+  let removed = 0;
+  let migrated = 0;
+  let kept = 0;
+
+  const targetStmt = db.prepare(
+    `SELECT id FROM contacts
+     WHERE phone = ? AND id != ? AND jid NOT LIKE '%@lid'
+     ORDER BY id LIMIT 1`,
+  );
+
+  for (const row of [...rows, ...noPhone.map((r) => ({ id: r.id, phone: null as string | null }))]) {
+    const hasCustomer = getCustomerByContactId(row.id) !== undefined;
+    const target = row.phone ? (targetStmt.get(row.phone, row.id) as { id: number } | undefined) : undefined;
+
+    if (hasCustomer && !target) {
+      kept += 1; // sem herdeiro: a linha vira a fonte dos dados do customer
+      continue;
+    }
+    if (hasCustomer && target) {
+      migrateContactData(row.id, target.id);
+      migrated += 1;
+    }
+    db.prepare('DELETE FROM contacts WHERE id = ?').run(row.id);
+    removed += 1;
+  }
+
+  return { removed, migrated, kept };
 }
 
 /** Grupos de mesmo nome normalizado com mais de uma linha. */
@@ -443,6 +547,9 @@ export function dedupeByName(): { result: DedupeResult['nameMergedGroups']; remo
         if (row) {
           removed.push({ id: row.id, name: row.name, phone: row.phone, jid: row.jid, keptId: keepId });
         }
+        // Preserva customer, preferência (opt-in/out), list_members e histórico
+        // de campanha antes do cascade do DELETE.
+        migrateContactData(dupeId, keepId);
         db.prepare('DELETE FROM contacts WHERE id = ?').run(dupeId);
       }
     }
@@ -650,14 +757,12 @@ export function listCampaigns(): CampaignRow[] {
 
 export function updateCampaignStatus(id: number, status: string): void {
   const now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+  // started_at preserva o primeiro início (COALESCE): pausar/retomar não zera o cronômetro.
   const updates: string[] = [`status = ?`, `started_at = COALESCE(started_at, ${now})`];
   const params: (string | number)[] = [status];
 
   if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
     updates.push(`completed_at = ${now}`);
-  }
-  if (status === 'RUNNING') {
-    updates.push(`started_at = ${now}`);
   }
 
   db.prepare(`UPDATE campaigns SET ${updates.join(', ')} WHERE id = ?`).run(...params, id);
@@ -813,6 +918,22 @@ export function markRecipientFailed(campaignId: number, customerId: number, erro
          error = ?
      WHERE campaign_id = ? AND customer_id = ?`,
   ).run(error, error, campaignId, customerId);
+}
+
+/**
+ * Marca um destinatário como excluído (não elegível: sem telefone, opt-out,
+ * customer inexistente...). CANCELLED NÃO conta como falha de envio — usar
+ * FAILED aqui dispararia o protection mode indevidamente.
+ */
+export function markRecipientCancelled(campaignId: number, customerId: number, reason: string): void {
+  db.prepare(
+    `UPDATE campaign_recipients
+     SET status = 'CANCELLED',
+         completed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+         last_error = ?,
+         error = ?
+     WHERE campaign_id = ? AND customer_id = ?`,
+  ).run(reason, reason, campaignId, customerId);
 }
 
 /** Recover stale PROCESSING jobs whose lease has expired. */

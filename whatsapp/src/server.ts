@@ -4,7 +4,7 @@ import { CONNECT_PAGE_HTML } from './connect-page.js';
 import { closeDb, countLists, insertList } from './db.js';
 import { providerManager } from './provider/provider-manager.js';
 import { router } from './routes.js';
-import { startWorker } from './broadcast.js';
+import { startWorker, stopWorker } from './broadcast.js';
 import { forwardIncomingMessage, type RawIncomingMessage } from './incoming.js';
 import { logger } from './log.js';
 import { requireAuth } from './auth.js';
@@ -93,12 +93,6 @@ async function main(): Promise<void> {
     router(req, res, next);
   });
 
-  // Error handler
-  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    logger.error('api.unhandled_error', { error: err instanceof Error ? err.message : String(err) });
-    if (!res.headersSent) res.status(500).json({ error: 'Erro interno.' });
-  });
-
   // ── Incoming messages → backend (AI pipeline) ──────────
   for (const account of providerManager.getAllAccounts()) {
     const accountId = account.id;
@@ -127,6 +121,22 @@ async function main(): Promise<void> {
       .catch((err) => res.status(500).json({ error: err instanceof Error ? err.message : 'crm-sync failed' }));
   });
 
+  // Rota de API desconhecida -> JSON (evita o HTML padrão do Express).
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Rota não encontrada.' });
+  });
+
+  // Error handler — registrado por último: pega JSON malformado (400) e
+  // qualquer erro lançado dentro das rotas (500) em JSON.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof SyntaxError && 'status' in err && (err as { status?: number }).status === 400) {
+      if (!res.headersSent) res.status(400).json({ error: 'JSON inválido no corpo da requisição.' });
+      return;
+    }
+    logger.error('api.unhandled_error', { error: err instanceof Error ? err.message : String(err) });
+    if (!res.headersSent) res.status(500).json({ error: 'Erro interno.' });
+  });
+
   app.listen(PORT, () => {
     logger.info('api.started', { port: PORT, accounts: providerManager.getAccountIds() });
   });
@@ -148,6 +158,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info('api.shutdown_requested', { signal });
+    stopWorker();
     try {
       await providerManager.stopAll();
     } finally {
