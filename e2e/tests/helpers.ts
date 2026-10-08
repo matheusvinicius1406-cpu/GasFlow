@@ -92,3 +92,90 @@ export async function seedProduct(
 
   return { codigo: body.codigo, nome }
 }
+
+export interface SeedExpenseOverrides {
+  description?: string
+  amount?: number
+  /** ExpenseCategory do backend: FUEL | MAINTENANCE | SUPPLIES | UTILITIES | SALARY | TAX | OTHER */
+  category?: string
+  /** ISO (YYYY-MM-DD ou datetime). Default: agora (cai no preset de 30 dias). */
+  date?: string
+}
+
+export interface SeededExpense {
+  id: number
+  description: string
+}
+
+/**
+ * Create an expense via the real API so a finance section has data to render.
+ *
+ * Deterministic by default (fixed description/amount/category) so screenshots
+ * and assertions stay comparable between runs. Pass `description` when the
+ * test needs a unique string (server-side `q` search).
+ */
+export async function seedExpense(
+  request: APIRequestContext,
+  token: string,
+  overrides: SeedExpenseOverrides = {},
+): Promise<SeededExpense> {
+  const data = {
+    description: 'Despesa seed E2E',
+    amount: 250,
+    category: 'FUEL',
+    ...overrides,
+  }
+  const res = await request.post('/api/finance/expenses', {
+    headers: auth(token),
+    data,
+  })
+  if (res.status() !== 200) {
+    throw new Error(`seedExpense: HTTP ${res.status()} ${await res.text()}`)
+  }
+  const body = (await res.json()) as { expense: { id: number } }
+  return { id: body.expense.id, description: data.description }
+}
+
+export interface SeededReceivable {
+  orderCodigo: string
+  total: number
+  customerNome: string
+}
+
+/**
+ * Create a CONFIRMED order so it has an OPEN receivable.
+ *
+ * Confirming is what materializes the receivable (UpdateOrderStatusUseCase →
+ * CreateReceivableUseCase) — the API deliberately exposes no receivable
+ * endpoint. Deterministic: fixed product price (R$ 120), quantity 1, no
+ * delivery fee, so the UI assertions can expect "R$ 120,00".
+ */
+export async function seedReceivable(
+  request: APIRequestContext,
+  token: string,
+): Promise<SeededReceivable> {
+  const customer = await seedCustomer(request, token)
+  const product = await seedProduct(request, token)
+
+  const orderRes = await request.post('/api/orders/', {
+    headers: auth(token),
+    data: {
+      client_codigo: customer.codigo,
+      items: [{ product_codigo: product.codigo, quantity: 1 }],
+    },
+  })
+  if (orderRes.status() !== 200) {
+    throw new Error(`seedReceivable: criar pedido HTTP ${orderRes.status()} ${await orderRes.text()}`)
+  }
+  const order = (await orderRes.json()) as { codigo: string; total: number }
+
+  const confirm = await request.patch(`/api/orders/${order.codigo}/status`, {
+    headers: auth(token),
+    data: { status: 'CONFIRMED' },
+  })
+  if (confirm.status() !== 200) {
+    throw new Error(`seedReceivable: confirmar pedido HTTP ${confirm.status()} ${await confirm.text()}`)
+  }
+
+  return { orderCodigo: order.codigo, total: order.total, customerNome: customer.nome }
+}

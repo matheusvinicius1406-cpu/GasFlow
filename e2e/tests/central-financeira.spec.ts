@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { ADMIN_PASSWORD, ADMIN_USER, uid } from './helpers'
+import { ADMIN_PASSWORD, ADMIN_USER, adminToken, seedExpense, seedReceivable, uid } from './helpers'
 
 /**
  * E2E-12: Central Financeira (P12 / Fase 5)
@@ -52,6 +52,31 @@ test.describe('E2E-12: Central Financeira — login e menu final', () => {
 })
 
 test.describe('E2E-12: Central Financeira — presets, seções e escritas', () => {
+  // Caminho vazio (o que o usuário vê ao abrir o painel sem movimento).
+  // Precisa de base limpa, então roda ANTES do teste que semeia — a suíte é
+  // serial (workers: 1) e os arquivos rodam em ordem alfabética.
+  test('sem movimentações no período mostra o empty da Visão Geral', async ({ page, request }) => {
+    const token = await adminToken()
+    const res = await request.get('/api/finance/reports/period?days=30', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.status()).toBe(200)
+    const period = (await res.json()) as { total_receipts: number; total_expenses: number }
+    test.skip(
+      Number(period.total_receipts) !== 0 || Number(period.total_expenses) !== 0,
+      'base com movimentações nos últimos 30 dias — para testar o caminho vazio ' +
+        'rode com stack limpa: docker compose -f docker-compose.e2e.yml down -v && up -d',
+    )
+
+    await page.goto('/finance')
+    await expect(page.getByRole('heading', { level: 2, name: 'Visão Geral' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { level: 3, name: 'Sem movimentações neste período' })
+    ).toBeVisible()
+    // O shell substitui a seção inteira: sem dado, a tabela nem existe.
+    await expect(page.getByTestId('vg-tabela')).toHaveCount(0)
+  })
+
   test('presets de período, inclusive 180 dias', async ({ page }) => {
     await page.goto('/finance')
     await expect(page.getByRole('heading', { level: 1, name: 'Central Financeira' })).toBeVisible()
@@ -71,6 +96,9 @@ test.describe('E2E-12: Central Financeira — presets, seções e escritas', () 
     await page.goto('/finance')
 
     const botoes = secoes(page).getByRole('button')
+    // `goto` resolve antes da primeira renderização do React: espera o grupo
+    // existir antes de contar, senão o count() síncrono devolve 0.
+    await expect(botoes.first()).toBeVisible()
     const total = await botoes.count()
     // 15 seções com audit.view; 14 sem (Auditoria fica oculta sem a permissão).
     expect(total).toBeGreaterThanOrEqual(14)
@@ -90,7 +118,12 @@ test.describe('E2E-12: Central Financeira — presets, seções e escritas', () 
     await expect(page.getByRole('heading', { level: 2, name: 'Conciliação', exact: true })).toBeVisible()
   })
 
-  test('cria uma despesa pela UI e ela aparece na tabela', async ({ page }) => {
+  test('cria uma despesa pela UI e ela aparece na tabela', async ({ page, request }) => {
+    // Sem movimentação no período o shell renderiza o empty e a tabela não
+    // existe — semeia 1 despesa pela API real antes de exercitar a UI.
+    const token = await adminToken()
+    await seedExpense(request, token)
+
     await page.goto('/finance')
 
     const tabela = page.getByTestId('vg-tabela')
@@ -118,6 +151,47 @@ test.describe('E2E-12: Central Financeira — presets, seções e escritas', () 
     // Busca no servidor (q em description) e confirma a linha na tabela.
     await page.getByLabel('Buscar movimentações').fill(descricao)
     await expect(tabela.getByText(descricao, { exact: true })).toBeVisible()
+  })
+
+  test('registrar recebimento pela tabela de Recebíveis', async ({ page, request }) => {
+    // O recebível só existe porque confirmar o pedido o materializa — sem o
+    // fix da Fase 8 este diálogo devolvia 400 e a seção Clientes ficava vazia.
+    const token = await adminToken()
+    const { orderCodigo } = await seedReceivable(request, token)
+
+    await page.goto('/finance')
+    const tabela = page.getByTestId('vg-tabela')
+    await expect(tabela).toBeVisible()
+
+    await page
+      .getByRole('group', { name: 'Tipo de movimentação' })
+      .getByRole('button', { name: 'Recebíveis' })
+      .click()
+
+    const linha = page.getByRole('row').filter({ hasText: `#${orderCodigo}` })
+    await expect(linha).toContainText('Aberto')
+
+    await linha
+      .getByRole('button', { name: `Registrar pagamento do pedido ${orderCodigo}` })
+      .click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: 'Registrar recebimento' })).toBeVisible()
+    // Valor cheio pré-preenchido (total do pedido: produto R$ 120 × 1).
+    await expect(dialog.getByLabel('Valor do recebimento em reais')).toHaveValue(/^120(\.00)?$/)
+    await dialog.getByRole('button', { name: 'Registrar', exact: true }).click()
+
+    await expect(dialog).toHaveCount(0)
+    // Quitado: a aba lista títulos em aberto (repo.list_open), então a linha
+    // some — o recebimento agora aparece na aba Pagamentos.
+    await expect(linha).toHaveCount(0)
+    await page
+      .getByRole('group', { name: 'Tipo de movimentação' })
+      .getByRole('button', { name: 'Pagamentos' })
+      .click()
+    await expect(
+      page.getByRole('row').filter({ hasText: `#${orderCodigo}` })
+    ).toContainText('Pago')
   })
 })
 
