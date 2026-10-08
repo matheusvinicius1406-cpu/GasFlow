@@ -17,6 +17,10 @@ from app.infrastructure.repositories.client_repository import SQLAlchemyClientRe
 from app.infrastructure.repositories.product_repository import SQLAlchemyProductRepository
 from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
 from app.infrastructure.repositories.inventory_repository import SQLAlchemyInventoryRepository
+from app.infrastructure.repositories.financial_repositories import (
+    SQLAlchemyReceivableRepository,
+    SQLAlchemyFinancialLedgerRepository,
+)
 from app.application.order.use_cases import (
     CreateOrderUseCase,
     GetOrderUseCase,
@@ -151,6 +155,10 @@ def update_order_status(
             repository=repos["order"],
             inventory_repo=repos["inventory"],
             order_item_repo=repos["order_item"],
+            # FASE 8: confirmar o pedido materializa o recebível (sem ele o
+            # pagamento devolve 400 e o aging de Clientes fica vazio).
+            receivable_repo=SQLAlchemyReceivableRepository(repos["db"], ctx.tenant_id),
+            ledger_repo=SQLAlchemyFinancialLedgerRepository(repos["db"], ctx.tenant_id),
         )
         order = use_case.execute(codigo, data.status)
         if not order:

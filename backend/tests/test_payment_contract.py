@@ -66,7 +66,7 @@ def _create_receivable(client, headers, order_codigo, customer_codigo, total):
         uc.execute(order_codigo, customer_codigo, Decimal(str(total)))
 
 
-def _create_order(client, headers, name_suffix="", total=100.00):
+def _create_order(client, headers, name_suffix="", total=100.00, with_receivable=True):
     """Helper: create client + product + stock + order + receivable. Returns order_codigo."""
     n = _unique()
 
@@ -116,9 +116,25 @@ def _create_order(client, headers, name_suffix="", total=100.00):
     order_codigo = order_resp.json()["codigo"]
 
     # Create receivable for the order
-    _create_receivable(client, headers, order_codigo, client_codigo, total)
+    if with_receivable:
+        _create_receivable(client, headers, order_codigo, client_codigo, total)
 
     return order_codigo
+
+
+def _confirm_order_without_receivable(order_codigo):
+    """Simula um pedido confirmado ANTES do fix: status muda, recebível não.
+
+    É o estado legado do banco de produção: UpdateOrderStatusUseCase sem os
+    repositórios financeiros (como era chamado até a FASE 8).
+    """
+    from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
+    from app.application.order.use_cases import UpdateOrderStatusUseCase
+    from app.infrastructure.database.init_db import engine
+    from sqlalchemy.orm import Session
+
+    with Session(engine) as db:
+        UpdateOrderStatusUseCase(repository=SQLAlchemyOrderRepository(db, "default")).execute(order_codigo, "CONFIRMED")
 
 
 class TestPaymentContract:
@@ -292,3 +308,93 @@ class TestIdempotency:
         )
         assert pay_resp.status_code == 200
         assert pay_resp.json()["total"] == 2
+
+
+class TestReceivableCriadoNaConfirmacao:
+    """FASE 8: confirmar o pedido materializa o recebível (antes só os testes o criavam)."""
+
+    def test_confirmar_pedido_cria_recebivel_e_libera_pagamento(self, client, admin_token):
+        """PATCH status CONFIRMED → receivables tem 1 item OPEN → pagamento passa."""
+        headers = auth_header(admin_token)
+        order_codigo = _create_order(client, headers, "autorecv", with_receivable=False)
+
+        # Ainda PENDING: pagamento continua rejeitado
+        resp = client.post(
+            f"/finance/orders/{order_codigo}/payments",
+            json={"amount": 40.00, "method": "CASH"},
+            headers=headers,
+        )
+        assert resp.status_code == 400
+        assert "no receivable" in resp.json()["detail"].lower()
+
+        patch = client.patch(
+            f"/orders/{order_codigo}/status",
+            json={"status": "CONFIRMED"},
+            headers=headers,
+        )
+        assert patch.status_code == 200, patch.json()
+
+        rec_resp = client.get(
+            "/finance/receivables",
+            params={"order_codigo": order_codigo},
+            headers=headers,
+        )
+        assert rec_resp.status_code == 200
+        items = rec_resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["status"] == "OPEN"
+        assert float(items[0]["paid_amount"]) == 0.00
+        assert float(items[0]["remaining_amount"]) == 100.00
+
+        pay = client.post(
+            f"/finance/orders/{order_codigo}/payments",
+            json={"amount": 40.00, "method": "CASH"},
+            headers=headers,
+        )
+        assert pay.status_code == 200, pay.json()
+        assert pay.json()["status"] == "created"
+
+        # Idempotente: confirmar de novo não duplica o recebível
+        again = client.patch(
+            f"/orders/{order_codigo}/status",
+            json={"status": "CONFIRMED"},
+            headers=headers,
+        )
+        assert again.status_code == 200
+        rec_again = client.get(
+            "/finance/receivables",
+            params={"order_codigo": order_codigo},
+            headers=headers,
+        )
+        assert rec_again.json()["total"] == 1
+
+    def test_pedido_legado_sem_recebivel_recebe_no_pagamento(self, client, admin_token):
+        """Pedido confirmado antes do fix (sem recebível) paga sem backfill."""
+        headers = auth_header(admin_token)
+        order_codigo = _create_order(client, headers, "legacy", with_receivable=False)
+        _confirm_order_without_receivable(order_codigo)
+
+        # Prova do estado legado: confirmado e ainda sem recebível
+        rec_before = client.get(
+            "/finance/receivables",
+            params={"order_codigo": order_codigo},
+            headers=headers,
+        )
+        assert rec_before.json()["total"] == 0
+
+        pay = client.post(
+            f"/finance/orders/{order_codigo}/payments",
+            json={"amount": 100.00, "method": "PIX"},
+            headers=headers,
+        )
+        assert pay.status_code == 200, pay.json()
+
+        rec_after = client.get(
+            "/finance/receivables",
+            params={"order_codigo": order_codigo},
+            headers=headers,
+        )
+        items = rec_after.json()["items"]
+        assert len(items) == 1
+        assert items[0]["status"] == "PAID"
+        assert float(items[0]["remaining_amount"]) == 0.00

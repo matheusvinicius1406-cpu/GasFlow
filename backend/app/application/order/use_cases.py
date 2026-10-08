@@ -196,11 +196,20 @@ class UpdateOrderStatusUseCase:
     """
 
     def __init__(
-        self, repository: OrderRepository, inventory_repo: Optional[InventoryRepository] = None, order_item_repo=None
+        self,
+        repository: OrderRepository,
+        inventory_repo: Optional[InventoryRepository] = None,
+        order_item_repo=None,
+        receivable_repo=None,
+        ledger_repo=None,
     ):
         self.repository = repository
         self.inventory_repo = inventory_repo
         self.order_item_repo = order_item_repo
+        # Opcional: sem os repositórios financeiros o comportamento é o antigo
+        # (só muda status) — os testes de domínio construem o use case sem eles.
+        self.receivable_repo = receivable_repo
+        self.ledger_repo = ledger_repo
 
     def execute(self, codigo: str, status: str) -> Optional[Order]:
         order = self.repository.buscar_por_codigo(codigo)
@@ -222,7 +231,31 @@ class UpdateOrderStatusUseCase:
         # CONFIRMED é apenas confirmação comercial; CANCELLED não devolve
         # nada porque nada foi debitado (o débito é na entrega DELIVERED).
 
-        return self.repository.atualizar_status(codigo, order_status)
+        updated = self.repository.atualizar_status(codigo, order_status)
+        if updated and order_status == OrderStatus.CONFIRMED:
+            self._criar_recebivel(updated)
+        return updated
+
+    def _criar_recebivel(self, order: Order) -> None:
+        """Cria o recebível do pedido quando ele é confirmado (FASE 8).
+
+        O docstring do CreateReceivableUseCase diz "when order is confirmed",
+        mas nada em produção o chamava: o pagamento devolvia 400 ("No
+        receivable") e a seção Clientes/aging ficava sempre zerada. Idempotente
+        (devolve o recebível já existente); pedido de valor zero não gera
+        recebível porque a entidade exige original_amount > 0.
+        """
+        if self.receivable_repo is None or self.ledger_repo is None:
+            return
+        if order.total <= 0:
+            return
+
+        from app.application.financial.use_cases import CreateReceivableUseCase
+
+        CreateReceivableUseCase(
+            receivable_repo=self.receivable_repo,
+            ledger_repo=self.ledger_repo,
+        ).execute(order.codigo, order.client_codigo, order.total)
 
     def _deduct_stock(self, order: Order):
         """Deprecated (Decisão B3a): débito movido para a entrega DELIVERED.

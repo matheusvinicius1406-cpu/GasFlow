@@ -25,7 +25,7 @@ from app.domain.financial.repository import (
     CashMovementRepository,
     FinancialLedgerRepository,
 )
-from app.domain.order.entity import PaymentStatus as OrderPaymentStatus
+from app.domain.order.entity import PaymentStatus as OrderPaymentStatus, OrderStatus
 from app.domain.order.repository import OrderRepository
 
 
@@ -65,7 +65,7 @@ class RegisterPaymentUseCase:
         # 2. Get or create receivable
         receivable = self.receivable_repo.get_by_order(order_codigo)
         if not receivable:
-            raise ValueError(f"No receivable found for order {order_codigo}")
+            receivable = self._recebivel_do_pedido(order_codigo)
 
         if receivable.status in (ReceivableStatus.PAID, ReceivableStatus.CANCELLED):
             raise ValueError(f"Order {order_codigo} is already {receivable.status.value}")
@@ -140,6 +140,23 @@ class RegisterPaymentUseCase:
             "cash_movement": cash_movement,
             "status": "created",
         }
+
+    def _recebivel_do_pedido(self, order_codigo: str) -> Receivable:
+        """Materializa o recebível de um pedido confirmado que não tem um.
+
+        Antes do fix (UpdateOrderStatusUseCase → CreateReceivable) nenhum caminho
+        de produção criava recebível: pedidos confirmados antes do deploy também
+        ficariam sem ele, e nenhum backfill os alcançaria. Pedido PENDING/CANCELLED
+        mantém o erro original — nele o recebível nunca existiu por desenho.
+        """
+        order = self.order_repo.buscar_por_codigo(order_codigo) if self.order_repo else None
+        if order is None or order.status in (OrderStatus.PENDING, OrderStatus.CANCELLED) or order.total <= 0:
+            raise ValueError(f"No receivable found for order {order_codigo}")
+
+        return CreateReceivableUseCase(
+            receivable_repo=self.receivable_repo,
+            ledger_repo=self.ledger_repo,
+        ).execute(order_codigo, order.client_codigo, order.total)
 
 
 class CreateReceivableUseCase:
