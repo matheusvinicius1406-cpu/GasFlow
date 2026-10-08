@@ -3,8 +3,10 @@
 **Data:** 2026-09-25 · **Atualizado:** 2026-10-08 · **Escopo:** fechar a missão da Central Financeira com o E2E
 de ponta a ponta (checklist §6 de `central-financeira-fase2.md`) · **Estado:**
 E2E **executado** contra o stack `docker-compose.e2e.yml` — 20 testes, 19 pass
-/ 1 skip — e evidências gravadas em `central-financeira-fase5-evidencias/`.
-Ainda abertos (§4): o roteiro manual das 15 seções e o PDF do Electron.
+/ 1 skip — e evidências gravadas em `central-financeira-fase5-evidencias/`
+(8 PNGs + o PDF do Electron, `09`, gerado pelo `printToPDF` real via
+`f33ad0c`). Ainda abertos (§4): o roteiro manual das 15 seções — que também
+é onde falta repetir a impressão nas demais seções.
 
 ---
 
@@ -28,6 +30,7 @@ Ainda abertos (§4): o roteiro manual das 15 seções e o PDF do Electron.
 | — | `06953d9` | fix Fase 8 — recebível criado na confirmação do pedido; pagamento de pedido legado materializa o título |
 | — | `4986317` | fix — aba Recebíveis deixa de mandar `date_from/date_to` (filtravam por vencimento `NULL` e escondiam a ação de recebimento) |
 | — | `2d097b5` | evidências — 8 screenshots + config `npm run evidencias` |
+| — | `f33ad0c` | evidências — PDF do Electron (`printToPDF`) — harness do desktop + teste `fase5-pdf-electron.spec.ts` + `09-impressao-electron.pdf` |
 
 ---
 
@@ -44,7 +47,7 @@ Todos executados nesta sessão (frontend em `GasFlow/frontend`, backend em `GasF
 | Formato (backend) | `ruff check app tests` + `ruff format` | **OK** (o pre-commit também roda os dois) |
 | Guard de integridade | `ADMIN_PASSWORD=audit-password-123 python -m tests.integrity_audit` | **`findings=19 pendentes=0`** (9 `dado-invisivel` + 10 `whatsapp-sem-consumidor`) |
 | E2E (execução) | `npx playwright test` com o stack em `:8080` | **20 testes — 19 passed / 1 skip em 2,8 min**; `tsc --noEmit --strict` da spec **limpo** |
-| Evidências | `npm run evidencias` | **2 testes passando → 8 PNGs** em `central-financeira-fase5-evidencias/` |
+| Evidências | `npm run evidencias` | **3 testes passando (1,1 min) → 8 PNGs + `09-impressao-electron.pdf`** em `central-financeira-fase5-evidencias/` |
 | mypy (backend) | `python -m mypy app` | **4 erros pré-existentes** em `app/application/contacts/renamer.py` (92, 715, 728, 736) — outra missão; ver §7 |
 
 > **Nota de ambiente (pytest):** não rode o `pytest` com `ADMIN_PASSWORD=audit-password-123`.
@@ -56,10 +59,11 @@ Todos executados nesta sessão (frontend em `GasFlow/frontend`, backend em `GasF
 > `check-added-large-files` não executa — o AppLocker bloqueia o
 > `check-added-large-files.exe` do cache do pre-commit (`WinError 4551`), com
 > ou sem diff. Os commits desta fase usaram `SKIP=check-added-large-files`
-> **com o cheque feito na mão** (arquivo maior stagingado: 86 KB, limite do
-> hook: 500 KB) e os demais hooks (`trailing-whitespace`, `end-of-file-fixer`,
-> `check-json/yaml`, `ruff`, `ruff-format`) rodaram e passaram. Não é problema
-> do repo: em ambiente sem AppLocker o hook roda normal.
+> **com o cheque feito na mão** (arquivo maior stagingado: 367 KB — o PDF da
+> evidência `09`, limite do hook: 500 KB) e os demais hooks
+> (`trailing-whitespace`, `end-of-file-fixer`, `check-json/yaml`, `ruff`,
+> `ruff-format`) rodaram e passaram. Não é problema do repo: em ambiente sem
+> AppLocker o hook roda normal.
 
 ---
 
@@ -115,19 +119,25 @@ título não existe e sem `4986317` ele é escondido pelo filtro de vencimento.
   Geral, presets, escritas, redirects); **falta** o que só o roteiro faz —
   estados de loading/error por seção, gate `VIEWER` sem botão de escrita e
   aba Auditoria escondida sem `audit.view`.
-- [ ] **Impressão de cada seção principal** — meio caminho: o CSS de impressão
-  do browser está fotografado (evidência `07`, cabeçalho `print-only` +
-  conteúdo sem sidebar/header) e o fallback `window.print` está coberto pelo
-  E2E; **falta** o PDF real do Electron (`printToPDF`, modo `pdf`), que exige
-  o desktop em execução.
+- [ ] **Impressão de cada seção principal** — quase: os dois meios estão
+  fotografados. O CSS de impressão do browser está na evidência `07`
+  (cabeçalho `print-only` + conteúdo sem sidebar/header) e o fallback
+  `window.print` está coberto pelo E2E; o PDF real do Electron (**`f33ad0c`**)
+  passou a ser evidência: `fase5-pdf-electron.spec.ts` sobe o desktop de
+  verdade (`dist/main` + handler `reports:export-pdf` + gate
+  `finance.export_pdf`) com userData isolado, clica **Imprimir** e grava
+  `09-impressao-electron.pdf` (3 páginas, `printToPDF`, 367 KB), assegurando
+  que nenhum toast "Falha ao gerar o PDF" aparece. **Falta** repetir a
+  impressão nas demais seções principais pelo roteiro manual.
 - [x] **Screenshots + evidências** — 8 capturas do stack real em
   `central-financeira-fase5-evidencias/`, geradas por `npm run evidencias`
-  (ver §5).
+  (ver §5), mais o PDF `09` do mesmo run.
 
-> Os dois itens abertos não são de ambiente nem foram marcados por engano: o
-> que era automatizável (E2E + evidências) foi executado e validado, e o que
-> depende de ritual humano ou do desktop (manual das 15 seções, PDF do
-> Electron) segue explicitamente pendente com o roteiro na §5.
+> Os dois itens abertos se resumem ao roteiro manual da §5 (o de impressão só
+> falta repetir nas demais seções): o que era automatizável (E2E, evidências e
+> o PDF do Electron) foi executado e validado, e o que depende de ritual humano
+> (estados de loading/error, gate VIEWER, aba Auditoria sem `audit.view`,
+> impressão seção a seção) segue explicitamente pendente.
 
 ---
 
@@ -158,12 +168,17 @@ aba Auditoria some e o deep-link mostra "Sem permissão").
 | Mapa de Calor | `MapaCalorSection` (Leaflet) |
 
 **Impressão** — por seção principal: (a) no Electron, o botão **Imprimir** deve
-gerar o PDF via `printToPDF` do conteúdo renderizado (modo `pdf`); (b) no
-browser, deve abrir o diálogo do sistema (modo `print`) com o cabeçalho
+gerar o PDF via `printToPDF` do conteúdo renderizado (modo `pdf`) — **já
+provado para a Visão Geral** pelo teste `fase5-pdf-electron.spec.ts` (evidência
+`09` abaixo), que sobe o app real pelo harness
+`desktop/scripts/evidence-pdf-harness.js` (userData isolado em `%TEMP%`,
+apontado ao stack em `:8080` com sufixo `/api` no gate, WhatsApp/impressão
+desligados, diálogos nativos auto-recusados e `shell.openPath` capturado);
+(b) no browser, deve abrir o diálogo do sistema (modo `print`) com o cabeçalho
 `print-only` (marca + "Central Financeira · <seção>" + período + gerado em) e o
 rodapé com as 3 assinaturas; sidebar/header/ações ficam ocultos (`data-no-print`).
 
-**Screenshots** — gravados em `docs/auditoria/central-financeira-fase5-evidencias/`:
+**Evidências** — gravadas em `docs/auditoria/central-financeira-fase5-evidencias/`:
 
 | Arquivo | Mostra |
 |---|---|
@@ -175,8 +190,9 @@ rodapé com as 3 assinaturas; sidebar/header/ações ficam ocultos (`data-no-pri
 | `06-recebiveis-aba.png` | aba Recebíveis com título **Aberto** e a ação "Registrar pagamento" — o registro de `06953d9` + `4986317` |
 | `07-impressao-visao-geral.png` | `@media print`: sidebar/header ocultos, cabeçalho `print-only` com marca, seção, período e "Gerado em" |
 | `08-modo-tv.png` | modo TV ativo com o chip "ESC para sair" |
+| `09-impressao-electron.pdf` | PDF de 3 páginas gerado pelo `printToPDF` do Electron (`f33ad0c`) sobre a Visão Geral — magic `%PDF-1.4`, Skia/PDF, 367 KB |
 
-Regenerar (base limpa → seed determinístico → 8 capturas):
+Regenerar (base limpa → seed determinístico → 8 capturas + PDF):
 
 ```bash
 docker compose -f docker-compose.e2e.yml down -v
@@ -184,7 +200,9 @@ docker compose -f docker-compose.e2e.yml up -d --build
 cd e2e && npm run evidencias
 ```
 
-O script é `e2e/scripts/fase5-evidencias.spec.ts` numa config própria
+São 3 testes: `fase5-evidencias.spec.ts` (as 8 capturas), a sanidade dos
+nomes e `fase5-pdf-electron.spec.ts` (o PDF, que precisa do `desktop/node_modules`
+e do `dist/main` versionado). Tudo numa config própria
 (`playwright.evidencias.config.ts`, `testDir: ./scripts`), então a suíte de CI
 nunca depende de nem altera o estado da base para fotografar.
 

@@ -32,13 +32,26 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
   em `docs/auditoria/central-financeira-fase5-evidencias/`, regeneráveis com
   `npm run evidencias` (config própria, fora do testDir de CI). Commit
   `2d097b5`.
+- **PDF pelo printToPDF do Electron:** `npm run evidencias` agora roda 3
+  testes e também grava `09-impressao-electron.pdf` (3 páginas, 367 KB) com o
+  app de verdade — o harness `desktop/scripts/evidence-pdf-harness.js` entra
+  como `main` e carrega `dist/main/index.js` com userData isolado em `%TEMP%`
+  (o app instalado não é tocado), apontado ao stack E2E pelo gate
+  `setBackendBaseUrl(.../api)` — sem o sufixo `/api` o nginx devolve o SPA e o
+  gate nega —, diálogos nativos auto-recusados e `shell.openPath` capturado.
+  O teste `e2e/scripts/fase5-pdf-electron.spec.ts` login pela UI, clica
+  **Imprimir**, valida `%PDF-` e assegura que nenhum toast "Falha ao gerar o
+  PDF" apareceu. Commit `f33ad0c`.
 - **Relatório da Fase 5 atualizado:** gates re-executados (frontend 441,
   backend 2239, integrity `findings=19 pendentes=0`), §4 com o que de fato
-  rodou e §7 com as constatações de CI — `e2e.yml` incondicional cancelado por
-  timeout de 45 min no run 132, 2º E2E dentro do `ci.yml` com `needs` (pula
-  quando o backend falha), `mypy` vermelho por 4 erros pré-existentes de
-  `contacts/renamer.py` e o step de Playwright dos PRs rodando em ~11 s contra
-  2,8 min medidos localmente.
+  rodou — o item de impressão perde o "falta o PDF do Electron" e os dois
+  abertos (manual das 15 seções e impressão seção a seção) remetem ao roteiro
+  da §5 —, §5 com a lista das 9 evidências e §7 com as constatações de CI —
+  `e2e.yml` incondicional cancelado por timeout de 45 min
+  no run 132, 2º E2E dentro do `ci.yml` com `needs` (pula quando o backend
+  falha), `mypy` vermelho por 4 erros pré-existentes de `contacts/renamer.py` e
+  o step de Playwright dos PRs rodando em ~11 s contra 2,8 min medidos
+  localmente.
 
 ### 📍 Renomeador de contatos — Fase 3: "entre ruas" com dado oficial do IBGE
 
