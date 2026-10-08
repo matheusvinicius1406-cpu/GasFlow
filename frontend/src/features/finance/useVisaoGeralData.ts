@@ -243,8 +243,15 @@ export function useVisaoGeralData(days: number) {
       const res = await apiClient.get<ListResponse<VisaoRow>>(TABLE_ENDPOINT[tab], {
         params: {
           ...(qApplied ? { q: qApplied } : {}),
-          date_from: range.from,
-          date_to: range.to,
+          // date_from/date_to filtram por VENCIMENTO em /finance/receivables.
+          // Como nada cria vencimento (NULL) e o título normal vence DEPOIS do
+          // fim do período, a linha inteira sumia — e com ela a única ação
+          // "Registrar pagamento" da tela. Recebível é obrigação em aberto, não
+          // movimento do período: a lista ignora a janela (a coluna Vencimento
+          // continua ordenável).
+          ...(tab === 'receivables'
+            ? {}
+            : { date_from: range.from, date_to: range.to }),
           order_by: orderBy,
           order,
           page,
