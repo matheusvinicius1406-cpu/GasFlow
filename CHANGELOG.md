@@ -4,6 +4,42 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 💰 Central Financeira — recebível na confirmação + validação da Fase 5
+
+- **Recebível criado na confirmação do pedido (Fase 8):** `UpdateOrderStatusUseCase`
+  ganhou os repositórios financeiros e, ao virar `CONFIRMED`, materializa o
+  título via `CreateReceivableUseCase` (idempotente; total ≤ 0 não gera).
+  Antes, nada em produção criava o recebível: `POST /finance/orders/:codigo/payments`
+  respondia 400 e o aging/Clientes ficava zerado — só os testes criavam o título
+  na mão. Pedido legado (confirmado antes do deploy) também é coberto:
+  `RegisterPaymentUseCase` materializa o título na hora do pagamento, sem
+  backfill. Commits `06953d9`, testes em `test_payment_contract.py`
+  (+2) e suíte backend em **2239 passed / 30 skipped**.
+- **Aba Recebíveis sem filtro de período:** `fetchTable` mandava
+  `date_from/date_to` para todas as abas, e em `/finance/receivables` eles
+  filtram por **vencimento** — como o título normal tem `vencimento NULL` ou
+  posterior ao fim da janela, a linha inteira sumia e com ela a única ação
+  "Registrar pagamento do pedido". A aba deixa de enviar a janela (as demais
+  seguem filtrando). Commit `4986317`; 441 testes de frontend.
+- **E2E da Fase 5 executado contra o stack:** `npm test` → **20 testes: 19
+  passed / 1 skip** (2,8 min). `seedExpense`/`seedReceivable` em
+  `e2e/tests/helpers.ts` semeiam pela API real, o caminho vazio virou caso
+  próprio (com `test.skip` explicado em base suja) e o caso novo "registrar
+  recebimento" prova o ciclo completo: título `Aberto` → diálogo → linha sai
+  da lista de abertos → badge `Pago` em Pagamentos. Commit `7f5d742`.
+- **Evidências:** 8 screenshots do stack real (Visão Geral 30/180 dias, DRE,
+  Clientes, Conciliação, aba Recebíveis, impressão `@media print` e modo TV)
+  em `docs/auditoria/central-financeira-fase5-evidencias/`, regeneráveis com
+  `npm run evidencias` (config própria, fora do testDir de CI). Commit
+  `2d097b5`.
+- **Relatório da Fase 5 atualizado:** gates re-executados (frontend 441,
+  backend 2239, integrity `findings=19 pendentes=0`), §4 com o que de fato
+  rodou e §7 com as constatações de CI — `e2e.yml` incondicional cancelado por
+  timeout de 45 min no run 132, 2º E2E dentro do `ci.yml` com `needs` (pula
+  quando o backend falha), `mypy` vermelho por 4 erros pré-existentes de
+  `contacts/renamer.py` e o step de Playwright dos PRs rodando em ~11 s contra
+  2,8 min medidos localmente.
+
 ### 📍 Renomeador de contatos — Fase 3: "entre ruas" com dado oficial do IBGE
 
 - **Provedor IBGE/CNEFE:** `app/infrastructure/geocoding/ibge_provider.py`
