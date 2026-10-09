@@ -1,0 +1,9725 @@
+{
+ "total_operations": 668,
+ "distinct_paths": 582,
+ "summary": {
+  "AUTENTICADA": 267,
+  "PERMISSAO": 182,
+  "SEM_AUTH?": 87,
+  "ADMIN": 52,
+  "ENTREGADOR": 42,
+  "SOMENTE_DB": 14,
+  "SERVICO": 9,
+  "PUBLICA_DESIGN": 6,
+  "FORA_DO_SCHEMA": 4,
+  "ROLE": 3,
+  "SERVICO_OU_USER": 2
+ },
+ "routes": [
+  {
+   "path": "/",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "root"
+  },
+  {
+   "path": "/admin/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_audit"
+  },
+  {
+   "path": "/admin/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/admin/drivers",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/admin/drivers/{driver_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "deactivate_driver"
+  },
+  {
+   "path": "/admin/drivers/{driver_id}/reset-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "reset_driver_password"
+  },
+  {
+   "path": "/admin/roles",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_roles"
+  },
+  {
+   "path": "/admin/roles/{role_id}/permissions",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "update_role_permissions"
+  },
+  {
+   "path": "/admin/users",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_users"
+  },
+  {
+   "path": "/admin/users",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "create_user"
+  },
+  {
+   "path": "/admin/users/{user_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "update_user"
+  },
+  {
+   "path": "/admin/users/{user_id}/activate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "activate_user"
+  },
+  {
+   "path": "/admin/users/{user_id}/deactivate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "deactivate_user"
+  },
+  {
+   "path": "/admin/users/{user_id}/reset-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "reset_password"
+  },
+  {
+   "path": "/ai/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "get_audit_log"
+  },
+  {
+   "path": "/ai/chat",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "chat"
+  },
+  {
+   "path": "/ai/conversations",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "list_conversations"
+  },
+  {
+   "path": "/ai/model/download",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "download_model"
+  },
+  {
+   "path": "/ai/model/download-progress",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "download_progress"
+  },
+  {
+   "path": "/ai/settings",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "get_ai_settings"
+  },
+  {
+   "path": "/ai/settings",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "patch_ai_settings"
+  },
+  {
+   "path": "/ai/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "ai_status"
+  },
+  {
+   "path": "/ai/test",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "ai_test"
+  },
+  {
+   "path": "/ai/tools",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "ai"
+   ],
+   "name": "list_tools"
+  },
+  {
+   "path": "/api/driver/v1/auth/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_driver_login"
+  },
+  {
+   "path": "/api/driver/v1/auth/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_driver_logout"
+  },
+  {
+   "path": "/api/driver/v1/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_list_deliveries"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_get_delivery"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}/accept",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_accept_delivery"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}/arrive",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_arrive_delivery"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}/complete",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_complete_delivery"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}/fail",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_fail_delivery"
+  },
+  {
+   "path": "/api/driver/v1/deliveries/{delivery_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_start_delivery"
+  },
+  {
+   "path": "/api/driver/v1/location",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_update_location"
+  },
+  {
+   "path": "/api/driver/v1/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_driver_me"
+  },
+  {
+   "path": "/api/driver/v1/proofs",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_upload_proof"
+  },
+  {
+   "path": "/api/driver/v1/routes",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_list_routes"
+  },
+  {
+   "path": "/api/driver/v1/routes/current",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_current_route"
+  },
+  {
+   "path": "/api/driver/v1/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-app-legacy"
+   ],
+   "name": "legacy_sync"
+  },
+  {
+   "path": "/api/v1/admin/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_audit"
+  },
+  {
+   "path": "/api/v1/admin/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/api/v1/admin/drivers",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/api/v1/admin/drivers/{driver_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "deactivate_driver"
+  },
+  {
+   "path": "/api/v1/admin/drivers/{driver_id}/reset-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "reset_driver_password"
+  },
+  {
+   "path": "/api/v1/admin/roles",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_roles"
+  },
+  {
+   "path": "/api/v1/admin/roles/{role_id}/permissions",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "update_role_permissions"
+  },
+  {
+   "path": "/api/v1/admin/users",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "list_users"
+  },
+  {
+   "path": "/api/v1/admin/users",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "create_user"
+  },
+  {
+   "path": "/api/v1/admin/users/{user_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "update_user"
+  },
+  {
+   "path": "/api/v1/admin/users/{user_id}/activate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "activate_user"
+  },
+  {
+   "path": "/api/v1/admin/users/{user_id}/deactivate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "deactivate_user"
+  },
+  {
+   "path": "/api/v1/admin/users/{user_id}/reset-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "admin"
+   ],
+   "name": "reset_password"
+  },
+  {
+   "path": "/api/v1/ai/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "get_audit_log"
+  },
+  {
+   "path": "/api/v1/ai/chat",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "chat"
+  },
+  {
+   "path": "/api/v1/ai/conversations",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "list_conversations"
+  },
+  {
+   "path": "/api/v1/ai/model/download",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "download_model"
+  },
+  {
+   "path": "/api/v1/ai/model/download-progress",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "download_progress"
+  },
+  {
+   "path": "/api/v1/ai/settings",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "get_ai_settings"
+  },
+  {
+   "path": "/api/v1/ai/settings",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "patch_ai_settings"
+  },
+  {
+   "path": "/api/v1/ai/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "ai_status"
+  },
+  {
+   "path": "/api/v1/ai/test",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "ai"
+   ],
+   "name": "ai_test"
+  },
+  {
+   "path": "/api/v1/ai/tools",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "ai"
+   ],
+   "name": "list_tools"
+  },
+  {
+   "path": "/api/v1/audio/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "get_audio_metrics"
+  },
+  {
+   "path": "/api/v1/audio/process",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "process_audio"
+  },
+  {
+   "path": "/api/v1/audio/transcribe",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "transcribe_audio"
+  },
+  {
+   "path": "/api/v1/auth/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "get_audit"
+  },
+  {
+   "path": "/api/v1/auth/change-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "change_password"
+  },
+  {
+   "path": "/api/v1/auth/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "auth"
+   ],
+   "name": "login"
+  },
+  {
+   "path": "/api/v1/auth/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "logout"
+  },
+  {
+   "path": "/api/v1/auth/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "get_me"
+  },
+  {
+   "path": "/api/v1/auth/mobile/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_login"
+  },
+  {
+   "path": "/api/v1/auth/mobile/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_db",
+    "get_mobile_context"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_logout"
+  },
+  {
+   "path": "/api/v1/auth/mobile/refresh",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_refresh"
+  },
+  {
+   "path": "/api/v1/auth/refresh",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "auth"
+   ],
+   "name": "refresh"
+  },
+  {
+   "path": "/api/v1/auth/roles",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_roles"
+  },
+  {
+   "path": "/api/v1/auth/tenants",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_tenants"
+  },
+  {
+   "path": "/api/v1/auth/tenants",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "create_tenant"
+  },
+  {
+   "path": "/api/v1/auth/users",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_users"
+  },
+  {
+   "path": "/api/v1/auth/users",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "create_user"
+  },
+  {
+   "path": "/api/v1/automation/agents",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_agents"
+  },
+  {
+   "path": "/api/v1/automation/agents/runs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_agent_runs"
+  },
+  {
+   "path": "/api/v1/automation/agents/runs/{run_id}/stop",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "stop_agent"
+  },
+  {
+   "path": "/api/v1/automation/agents/{agent_id}/execute",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "execute_agent"
+  },
+  {
+   "path": "/api/v1/automation/approvals",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_approvals"
+  },
+  {
+   "path": "/api/v1/automation/approvals/{approval_id}/approve",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "approve_action"
+  },
+  {
+   "path": "/api/v1/automation/approvals/{approval_id}/reject",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "reject_action"
+  },
+  {
+   "path": "/api/v1/automation/kill-switch",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "get_kill_switch"
+  },
+  {
+   "path": "/api/v1/automation/kill-switch",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "toggle_kill_switch"
+  },
+  {
+   "path": "/api/v1/automation/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "get_metrics"
+  },
+  {
+   "path": "/api/v1/automation/runs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_runs"
+  },
+  {
+   "path": "/api/v1/automation/runs/{run_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "cancel_run"
+  },
+  {
+   "path": "/api/v1/automation/runs/{run_id}/pause",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "pause_run"
+  },
+  {
+   "path": "/api/v1/automation/workflows",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_workflows"
+  },
+  {
+   "path": "/api/v1/automation/workflows",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "automation"
+   ],
+   "name": "create_workflow"
+  },
+  {
+   "path": "/api/v1/automation/workflows/{workflow_id}/execute",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "execute_workflow"
+  },
+  {
+   "path": "/api/v1/clients/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "list_clients"
+  },
+  {
+   "path": "/api/v1/clients/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "create_client"
+  },
+  {
+   "path": "/api/v1/clients/legacy",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "list_clients_legacy"
+  },
+  {
+   "path": "/api/v1/clients/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_client"
+  },
+  {
+   "path": "/api/v1/clients/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "update_client"
+  },
+  {
+   "path": "/api/v1/clients/{codigo}/360",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_customer_360"
+  },
+  {
+   "path": "/api/v1/clients/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "disable_client"
+  },
+  {
+   "path": "/api/v1/clients/{codigo}/orders",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_customer_orders"
+  },
+  {
+   "path": "/api/v1/communication/history",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "get_communication_history"
+  },
+  {
+   "path": "/api/v1/communication/send",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "send_notification"
+  },
+  {
+   "path": "/api/v1/communication/templates",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "list_templates"
+  },
+  {
+   "path": "/api/v1/communication/templates/{event}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "update_template"
+  },
+  {
+   "path": "/api/v1/coupons",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "list_coupons"
+  },
+  {
+   "path": "/api/v1/coupons",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "create_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/apply",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "apply_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/by-client/{client_codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "client_coupons"
+  },
+  {
+   "path": "/api/v1/coupons/by-client/{client_codigo}/referrals",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "client_referrals"
+  },
+  {
+   "path": "/api/v1/coupons/generate-invite-token",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "generate_invite_token"
+  },
+  {
+   "path": "/api/v1/coupons/remove",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "remove_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/reports/redemptions",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "redemptions"
+  },
+  {
+   "path": "/api/v1/coupons/reports/usage",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "usage_report"
+  },
+  {
+   "path": "/api/v1/coupons/validate/{code}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "validate_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/{coupon_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "delete_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/{coupon_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "get_coupon"
+  },
+  {
+   "path": "/api/v1/coupons/{coupon_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "update_coupon"
+  },
+  {
+   "path": "/api/v1/delivery-drivers/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/api/v1/delivery-drivers/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/api/v1/delivery-drivers/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "get_driver"
+  },
+  {
+   "path": "/api/v1/delivery-drivers/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "update_driver"
+  },
+  {
+   "path": "/api/v1/delivery-drivers/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "disable_driver"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_deliveries"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_delivery"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_delivery"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries/{delivery_id}/assign",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "assign_delivery"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries/{delivery_id}/eta",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "delivery_eta"
+  },
+  {
+   "path": "/api/v1/delivery/deliveries/{delivery_id}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_delivery_status"
+  },
+  {
+   "path": "/api/v1/delivery/dispatch/candidates/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_candidates"
+  },
+  {
+   "path": "/api/v1/delivery/dispatch/suggest",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "suggest_driver_for_delivery"
+  },
+  {
+   "path": "/api/v1/delivery/dispatch/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_summary"
+  },
+  {
+   "path": "/api/v1/delivery/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/api/v1/delivery/drivers",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_driver"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/location",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_driver_location"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_driver_status"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/stock",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_driver_stock"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/stock/damage",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "damage_driver_stock"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/stock/load",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "load_driver_stock"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/stock/reconcile",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "reconcile_driver_stock"
+  },
+  {
+   "path": "/api/v1/delivery/drivers/{driver_id}/stock/unblock",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "unblock_driver_stock"
+  },
+  {
+   "path": "/api/v1/delivery/locations",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_driver_locations"
+  },
+  {
+   "path": "/api/v1/delivery/route/optimize",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "optimize_delivery_route"
+  },
+  {
+   "path": "/api/v1/delivery/routes",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_routes"
+  },
+  {
+   "path": "/api/v1/delivery/routes",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_route"
+  },
+  {
+   "path": "/api/v1/delivery/routes/{route_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_route"
+  },
+  {
+   "path": "/api/v1/delivery/routes/{route_id}/dispatch",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_route"
+  },
+  {
+   "path": "/api/v1/delivery/routes/{route_id}/stops/{stop_id}/arrive",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "arrive_stop"
+  },
+  {
+   "path": "/api/v1/delivery/routes/{route_id}/stops/{stop_id}/complete",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "complete_stop"
+  },
+  {
+   "path": "/api/v1/delivery/routes/{route_id}/stops/{stop_id}/fail",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "fail_stop"
+  },
+  {
+   "path": "/api/v1/delivery/vehicles",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_vehicles"
+  },
+  {
+   "path": "/api/v1/delivery/vehicles",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_vehicle"
+  },
+  {
+   "path": "/api/v1/demo-request",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "Leads"
+   ],
+   "name": "create_demo_request"
+  },
+  {
+   "path": "/api/v1/dispatch/assign",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "assign_driver_to_delivery"
+  },
+  {
+   "path": "/api/v1/dispatch/recommend",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "get_dispatch_recommendations"
+  },
+  {
+   "path": "/api/v1/dispatch/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "dispatch_status"
+  },
+  {
+   "path": "/api/v1/driver/auth/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_login"
+  },
+  {
+   "path": "/api/v1/driver/auth/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_logout"
+  },
+  {
+   "path": "/api/v1/driver/availability",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_set_availability"
+  },
+  {
+   "path": "/api/v1/driver/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_list_deliveries"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_get_delivery"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}/accept",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_accept_delivery"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}/arrive",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_arrive_delivery"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}/complete",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_complete_delivery"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}/fail",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_fail_delivery"
+  },
+  {
+   "path": "/api/v1/driver/deliveries/{delivery_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_start_delivery"
+  },
+  {
+   "path": "/api/v1/driver/location",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_update_location"
+  },
+  {
+   "path": "/api/v1/driver/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_me"
+  },
+  {
+   "path": "/api/v1/driver/proofs",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_upload_proof"
+  },
+  {
+   "path": "/api/v1/driver/routes",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_list_routes"
+  },
+  {
+   "path": "/api/v1/driver/routes/current",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_current_route"
+  },
+  {
+   "path": "/api/v1/driver/sync",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_db",
+    "get_mobile_context"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_delta_sync"
+  },
+  {
+   "path": "/api/v1/driver/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "_authenticate_driver"
+   ],
+   "tags": [
+    "driver-v1"
+   ],
+   "name": "v1_driver_sync"
+  },
+  {
+   "path": "/api/v1/finance/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "finance_audit"
+  },
+  {
+   "path": "/api/v1/finance/budget",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "get_budget"
+  },
+  {
+   "path": "/api/v1/finance/budget",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "put_budget"
+  },
+  {
+   "path": "/api/v1/finance/cash",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_cash_movements"
+  },
+  {
+   "path": "/api/v1/finance/cash/balance",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "get_cash_balance"
+  },
+  {
+   "path": "/api/v1/finance/expenses",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_expenses"
+  },
+  {
+   "path": "/api/v1/finance/expenses",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "register_expense"
+  },
+  {
+   "path": "/api/v1/finance/expenses/{expense_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "cancel_expense"
+  },
+  {
+   "path": "/api/v1/finance/orders/{order_codigo}/payments",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "register_payment"
+  },
+  {
+   "path": "/api/v1/finance/payments",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_payments"
+  },
+  {
+   "path": "/api/v1/finance/payments/{payment_id}/refund",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "refund_payment"
+  },
+  {
+   "path": "/api/v1/finance/receivables",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_receivables"
+  },
+  {
+   "path": "/api/v1/finance/receivables/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "receivables_summary"
+  },
+  {
+   "path": "/api/v1/finance/reports/categories",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "categories_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/conciliation",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "conciliation_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/daily",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "daily_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/dre",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "dre_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/hourly",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "hourly_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/methods",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "methods_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/period",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "period_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/products",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "products_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/projection",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "projection_report"
+  },
+  {
+   "path": "/api/v1/finance/reports/team",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "team_report"
+  },
+  {
+   "path": "/api/v1/finance/saved-reports",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_saved_reports"
+  },
+  {
+   "path": "/api/v1/finance/saved-reports",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "create_saved_report"
+  },
+  {
+   "path": "/api/v1/finance/saved-reports/{report_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "delete_saved_report"
+  },
+  {
+   "path": "/api/v1/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "health"
+  },
+  {
+   "path": "/api/v1/integrations",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_integrations"
+  },
+  {
+   "path": "/api/v1/integrations",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "create_integration"
+  },
+  {
+   "path": "/api/v1/integrations/import",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "import_order"
+  },
+  {
+   "path": "/api/v1/integrations/sync-all",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_all"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "delete_integration"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "get_integration"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "update_integration"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/logs",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_logs"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/orders",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_imported"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/orders/{imported_order_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "get_imported"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/orders/{imported_order_id}/reprocess",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "reprocess_imported"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/rotate-token",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "rotate_token"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_manual"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/sync-run",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_run"
+  },
+  {
+   "path": "/api/v1/integrations/{integration_id}/test-connection",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "test_connection"
+  },
+  {
+   "path": "/api/v1/internal/driver/location/relay",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "_require_relay_service_key"
+   ],
+   "tags": [
+    "Driver Relay"
+   ],
+   "name": "relay_driver_location"
+  },
+  {
+   "path": "/api/v1/inventory/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "list_inventory"
+  },
+  {
+   "path": "/api/v1/inventory/reconciliation/check",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "reconciliation_check"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "get_inventory"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}/adjustments",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "adjust_stock"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}/entries",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "add_stock"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}/losses",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "record_loss"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}/minimum",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "set_minimum"
+  },
+  {
+   "path": "/api/v1/inventory/{product_codigo}/movements",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "get_movements"
+  },
+  {
+   "path": "/api/v1/leads",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Leads"
+   ],
+   "name": "list_leads"
+  },
+  {
+   "path": "/api/v1/leads",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "Leads"
+   ],
+   "name": "create_lead"
+  },
+  {
+   "path": "/api/v1/mobile/version",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "mobile-update"
+   ],
+   "name": "get_mobile_version"
+  },
+  {
+   "path": "/api/v1/operations/dashboard",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_operational_dashboard"
+  },
+  {
+   "path": "/api/v1/operations/map/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_active_deliveries"
+  },
+  {
+   "path": "/api/v1/operations/map/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_driver_locations"
+  },
+  {
+   "path": "/api/v1/orders/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "list_orders"
+  },
+  {
+   "path": "/api/v1/orders/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "create_order"
+  },
+  {
+   "path": "/api/v1/orders/apply-coupon",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "apply_coupon_orders_path"
+  },
+  {
+   "path": "/api/v1/orders/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "get_order"
+  },
+  {
+   "path": "/api/v1/orders/{codigo}/assign-driver",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "assign_driver"
+  },
+  {
+   "path": "/api/v1/orders/{codigo}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "update_order_status"
+  },
+  {
+   "path": "/api/v1/orders/{order_codigo}/remove-coupon",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "remove_coupon_orders_path"
+  },
+  {
+   "path": "/api/v1/payments/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "list_payments"
+  },
+  {
+   "path": "/api/v1/payments/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_payment"
+  },
+  {
+   "path": "/api/v1/payments/methods",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "list_methods"
+  },
+  {
+   "path": "/api/v1/payments/methods",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_method"
+  },
+  {
+   "path": "/api/v1/payments/methods/{method_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "delete_method"
+  },
+  {
+   "path": "/api/v1/payments/methods/{method_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "update_method"
+  },
+  {
+   "path": "/api/v1/payments/methods/{method_id}/toggle",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "toggle_method"
+  },
+  {
+   "path": "/api/v1/payments/pix",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "get_pix"
+  },
+  {
+   "path": "/api/v1/payments/pix",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_pix"
+  },
+  {
+   "path": "/api/v1/payments/pix/payload",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "generate_pix_payload"
+  },
+  {
+   "path": "/api/v1/payments/pix/{config_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "delete_pix"
+  },
+  {
+   "path": "/api/v1/payments/pix/{config_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "update_pix"
+  },
+  {
+   "path": "/api/v1/payments/pix/{txid}/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "pix_status"
+  },
+  {
+   "path": "/api/v1/payments/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "payment_summary"
+  },
+  {
+   "path": "/api/v1/payments/webhook/pix",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "payments"
+   ],
+   "name": "pix_webhook"
+  },
+  {
+   "path": "/api/v1/payments/{payment_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "get_payment"
+  },
+  {
+   "path": "/api/v1/payments/{payment_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "cancel_payment"
+  },
+  {
+   "path": "/api/v1/payments/{payment_id}/confirm",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "confirm_payment"
+  },
+  {
+   "path": "/api/v1/payments/{payment_id}/refund",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "refund_payment"
+  },
+  {
+   "path": "/api/v1/printer/agent/jobs/{job_id}/result",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_report_result"
+  },
+  {
+   "path": "/api/v1/printer/agent/next",
+   "methods": [
+    "GET"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_claim_next"
+  },
+  {
+   "path": "/api/v1/printer/agent/status",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_report_status"
+  },
+  {
+   "path": "/api/v1/printer/jobs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "list_print_jobs"
+  },
+  {
+   "path": "/api/v1/printer/jobs/{job_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_print_job"
+  },
+  {
+   "path": "/api/v1/printer/jobs/{job_id}/retry",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "retry_print_job"
+  },
+  {
+   "path": "/api/v1/printer/orders/{order_id}/jobs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_order_print_jobs"
+  },
+  {
+   "path": "/api/v1/printer/print",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "create_print_job"
+  },
+  {
+   "path": "/api/v1/printer/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_printer_status"
+  },
+  {
+   "path": "/api/v1/products/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "list_products"
+  },
+  {
+   "path": "/api/v1/products/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "create_product"
+  },
+  {
+   "path": "/api/v1/products/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "get_product"
+  },
+  {
+   "path": "/api/v1/products/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "update_product"
+  },
+  {
+   "path": "/api/v1/products/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "disable_product"
+  },
+  {
+   "path": "/api/v1/public/referral/invite/{token}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Public Signup"
+   ],
+   "name": "public_invite_peek"
+  },
+  {
+   "path": "/api/v1/public/referral/signup",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Public Signup"
+   ],
+   "name": "public_referral_signup"
+  },
+  {
+   "path": "/api/v1/purchase-notes",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "list_notes"
+  },
+  {
+   "path": "/api/v1/purchase-notes",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "create_note"
+  },
+  {
+   "path": "/api/v1/purchase-notes/{note_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "get_note"
+  },
+  {
+   "path": "/api/v1/purchase-notes/{note_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "update_note"
+  },
+  {
+   "path": "/api/v1/purchase-notes/{note_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "cancel_note"
+  },
+  {
+   "path": "/api/v1/purchase-notes/{note_id}/confirm",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "confirm_note"
+  },
+  {
+   "path": "/api/v1/purchase-notes/{note_id}/pdf",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "note_pdf"
+  },
+  {
+   "path": "/api/v1/ready",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "ready"
+  },
+  {
+   "path": "/api/v1/reports/daily",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_daily_report"
+  },
+  {
+   "path": "/api/v1/reports/daily.pdf",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_daily_report_pdf"
+  },
+  {
+   "path": "/api/v1/reports/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_delivery_report"
+  },
+  {
+   "path": "/api/v1/reports/heatmap",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_delivery_heatmap"
+  },
+  {
+   "path": "/api/v1/reports/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_business_summary"
+  },
+  {
+   "path": "/api/v1/settings",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_all_settings"
+  },
+  {
+   "path": "/api/v1/settings/category/{category}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_category"
+  },
+  {
+   "path": "/api/v1/settings/key/{key}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_key"
+  },
+  {
+   "path": "/api/v1/settings/key/{key}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "update_key"
+  },
+  {
+   "path": "/api/v1/settings/permissions/matrix",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "permissions_matrix"
+  },
+  {
+   "path": "/api/v1/settings/permissions/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "my_permissions"
+  },
+  {
+   "path": "/api/v1/settings/seed",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "seed"
+  },
+  {
+   "path": "/api/v1/webhooks/alerts",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "alerts"
+   ],
+   "name": "receive_alert"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_accounts"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_account"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "account_health"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "logout_account"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/messages",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_messages"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/messages",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "send_message"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/qr",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_account_qr"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_account"
+  },
+  {
+   "path": "/api/v1/whatsapp/accounts/{account_id}/stop",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "stop_account"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_campaigns"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "create_campaign"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "cancel_campaign"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}/pause",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "pause_campaign"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}/recipients",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign_recipients"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}/results",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign_results"
+  },
+  {
+   "path": "/api/v1/whatsapp/campaigns/{campaign_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_campaign"
+  },
+  {
+   "path": "/api/v1/whatsapp/cloud-api/webhook",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "whatsapp-cloud-api"
+   ],
+   "name": "verify_subscription"
+  },
+  {
+   "path": "/api/v1/whatsapp/cloud-api/webhook",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "whatsapp-cloud-api"
+   ],
+   "name": "receive_event"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "list_contacts"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/export-vcf",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "export_vcf"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/import-vcf",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "import_vcf"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/jobs",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_create"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/jobs/{job_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_status"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/jobs/{job_id}/process",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_process"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/organizer/backfill-codes",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_backfill_codes"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/organizer/conflicts",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_conflicts"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/organizer/geocode-origem",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_geocode_origem"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/organizer/rename-apply",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_rename_apply"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/organizer/rename-preview",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_rename_preview"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/reactivate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "reactivate_inactive"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "sync_contacts"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/sync-batch",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "sync_batch"
+  },
+  {
+   "path": "/api/v1/whatsapp/contacts/{codigo}/enrich",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "enrich_contact"
+  },
+  {
+   "path": "/api/v1/whatsapp/conversations",
+   "methods": [
+    "GET"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "list_conversations"
+  },
+  {
+   "path": "/api/v1/whatsapp/conversations/{conversation_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "get_conversation"
+  },
+  {
+   "path": "/api/v1/whatsapp/conversations/{conversation_id}/release",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "release_conversation"
+  },
+  {
+   "path": "/api/v1/whatsapp/conversations/{conversation_id}/reply",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "operator_reply"
+  },
+  {
+   "path": "/api/v1/whatsapp/conversations/{conversation_id}/takeover",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "takeover_conversation"
+  },
+  {
+   "path": "/api/v1/whatsapp/crm-sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "trigger_crm_sync"
+  },
+  {
+   "path": "/api/v1/whatsapp/customers",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_customers"
+  },
+  {
+   "path": "/api/v1/whatsapp/customers/{contact_id}/promote",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "promote_to_customer"
+  },
+  {
+   "path": "/api/v1/whatsapp/customers/{customer_id}/opt-in",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "opt_in_customer"
+  },
+  {
+   "path": "/api/v1/whatsapp/customers/{customer_id}/opt-out",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "opt_out_customer"
+  },
+  {
+   "path": "/api/v1/whatsapp/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "health_check"
+  },
+  {
+   "path": "/api/v1/whatsapp/incoming",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO_OU_USER",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service_or_user"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "process_incoming"
+  },
+  {
+   "path": "/api/v1/whatsapp/lists",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_lists"
+  },
+  {
+   "path": "/api/v1/whatsapp/lists",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "create_list"
+  },
+  {
+   "path": "/api/v1/whatsapp/lists/seed",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "seed_lists"
+  },
+  {
+   "path": "/api/v1/whatsapp/lists/{list_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_list_detail"
+  },
+  {
+   "path": "/api/v1/whatsapp/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "logout_session"
+  },
+  {
+   "path": "/api/v1/whatsapp/qr",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_qr_code"
+  },
+  {
+   "path": "/api/v1/whatsapp/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_session"
+  },
+  {
+   "path": "/api/v1/whatsapp/stats",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "get_stats"
+  },
+  {
+   "path": "/api/v1/whatsapp/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_status"
+  },
+  {
+   "path": "/audio/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "get_audio_metrics"
+  },
+  {
+   "path": "/audio/process",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "process_audio"
+  },
+  {
+   "path": "/audio/transcribe",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "audio"
+   ],
+   "name": "transcribe_audio"
+  },
+  {
+   "path": "/auth/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "get_audit"
+  },
+  {
+   "path": "/auth/change-password",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "change_password"
+  },
+  {
+   "path": "/auth/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "auth"
+   ],
+   "name": "login"
+  },
+  {
+   "path": "/auth/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "logout"
+  },
+  {
+   "path": "/auth/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "get_me"
+  },
+  {
+   "path": "/auth/mobile/login",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_login"
+  },
+  {
+   "path": "/auth/mobile/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_db",
+    "get_mobile_context"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_logout"
+  },
+  {
+   "path": "/auth/mobile/refresh",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_refresh"
+  },
+  {
+   "path": "/auth/refresh",
+   "methods": [
+    "POST"
+   ],
+   "class": "PUBLICA_DESIGN",
+   "deps": [],
+   "tags": [
+    "auth"
+   ],
+   "name": "refresh"
+  },
+  {
+   "path": "/auth/roles",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_roles"
+  },
+  {
+   "path": "/auth/tenants",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_tenants"
+  },
+  {
+   "path": "/auth/tenants",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "create_tenant"
+  },
+  {
+   "path": "/auth/users",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "list_users"
+  },
+  {
+   "path": "/auth/users",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "auth"
+   ],
+   "name": "create_user"
+  },
+  {
+   "path": "/automation/agents",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_agents"
+  },
+  {
+   "path": "/automation/agents/runs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_agent_runs"
+  },
+  {
+   "path": "/automation/agents/runs/{run_id}/stop",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "stop_agent"
+  },
+  {
+   "path": "/automation/agents/{agent_id}/execute",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "execute_agent"
+  },
+  {
+   "path": "/automation/approvals",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_approvals"
+  },
+  {
+   "path": "/automation/approvals/{approval_id}/approve",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "approve_action"
+  },
+  {
+   "path": "/automation/approvals/{approval_id}/reject",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "reject_action"
+  },
+  {
+   "path": "/automation/kill-switch",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "get_kill_switch"
+  },
+  {
+   "path": "/automation/kill-switch",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "toggle_kill_switch"
+  },
+  {
+   "path": "/automation/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "get_metrics"
+  },
+  {
+   "path": "/automation/runs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_runs"
+  },
+  {
+   "path": "/automation/runs/{run_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "cancel_run"
+  },
+  {
+   "path": "/automation/runs/{run_id}/pause",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "pause_run"
+  },
+  {
+   "path": "/automation/whatsapp/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "get_audit_log"
+  },
+  {
+   "path": "/automation/whatsapp/connection-check",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "check_connection"
+  },
+  {
+   "path": "/automation/whatsapp/executions",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "list_executions"
+  },
+  {
+   "path": "/automation/whatsapp/executions/{execution_id}/approve",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "approve_execution"
+  },
+  {
+   "path": "/automation/whatsapp/executions/{execution_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "cancel_execution"
+  },
+  {
+   "path": "/automation/whatsapp/executions/{execution_id}/process",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "process_execution"
+  },
+  {
+   "path": "/automation/whatsapp/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "get_metrics"
+  },
+  {
+   "path": "/automation/whatsapp/preview",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "preview_template"
+  },
+  {
+   "path": "/automation/whatsapp/process-pending",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "process_pending"
+  },
+  {
+   "path": "/automation/whatsapp/rules",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "list_rules"
+  },
+  {
+   "path": "/automation/whatsapp/rules",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "create_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "delete_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "get_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "update_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}/activate",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "activate_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}/execute",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "execute_rule"
+  },
+  {
+   "path": "/automation/whatsapp/rules/{rule_id}/pause",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-automation"
+   ],
+   "name": "pause_rule"
+  },
+  {
+   "path": "/automation/workflows",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "list_workflows"
+  },
+  {
+   "path": "/automation/workflows",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "automation"
+   ],
+   "name": "create_workflow"
+  },
+  {
+   "path": "/automation/workflows/{workflow_id}/execute",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "automation"
+   ],
+   "name": "execute_workflow"
+  },
+  {
+   "path": "/clients/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "list_clients"
+  },
+  {
+   "path": "/clients/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "create_client"
+  },
+  {
+   "path": "/clients/legacy",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "list_clients_legacy"
+  },
+  {
+   "path": "/clients/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_client"
+  },
+  {
+   "path": "/clients/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "update_client"
+  },
+  {
+   "path": "/clients/{codigo}/360",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_customer_360"
+  },
+  {
+   "path": "/clients/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "disable_client"
+  },
+  {
+   "path": "/clients/{codigo}/orders",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Clients"
+   ],
+   "name": "get_customer_orders"
+  },
+  {
+   "path": "/communication/history",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "get_communication_history"
+  },
+  {
+   "path": "/communication/send",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "send_notification"
+  },
+  {
+   "path": "/communication/templates",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "list_templates"
+  },
+  {
+   "path": "/communication/templates/{event}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "communication"
+   ],
+   "name": "update_template"
+  },
+  {
+   "path": "/coupons",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "list_coupons"
+  },
+  {
+   "path": "/coupons",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "create_coupon"
+  },
+  {
+   "path": "/coupons/apply",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "apply_coupon"
+  },
+  {
+   "path": "/coupons/by-client/{client_codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "client_coupons"
+  },
+  {
+   "path": "/coupons/by-client/{client_codigo}/referrals",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "client_referrals"
+  },
+  {
+   "path": "/coupons/generate-invite-token",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "generate_invite_token"
+  },
+  {
+   "path": "/coupons/remove",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "remove_coupon"
+  },
+  {
+   "path": "/coupons/reports/redemptions",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "redemptions"
+  },
+  {
+   "path": "/coupons/reports/usage",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "usage_report"
+  },
+  {
+   "path": "/coupons/validate/{code}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "validate_coupon"
+  },
+  {
+   "path": "/coupons/{coupon_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "delete_coupon"
+  },
+  {
+   "path": "/coupons/{coupon_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "get_coupon"
+  },
+  {
+   "path": "/coupons/{coupon_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "update_coupon"
+  },
+  {
+   "path": "/dashboard",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "dashboard"
+   ],
+   "name": "get_dashboard"
+  },
+  {
+   "path": "/delivery-drivers/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/delivery-drivers/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/delivery-drivers/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "get_driver"
+  },
+  {
+   "path": "/delivery-drivers/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "update_driver"
+  },
+  {
+   "path": "/delivery-drivers/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Delivery Drivers"
+   ],
+   "name": "disable_driver"
+  },
+  {
+   "path": "/delivery/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_deliveries"
+  },
+  {
+   "path": "/delivery/deliveries",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_delivery"
+  },
+  {
+   "path": "/delivery/deliveries/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_delivery"
+  },
+  {
+   "path": "/delivery/deliveries/{delivery_id}/assign",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "assign_delivery"
+  },
+  {
+   "path": "/delivery/deliveries/{delivery_id}/eta",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "delivery_eta"
+  },
+  {
+   "path": "/delivery/deliveries/{delivery_id}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_delivery_status"
+  },
+  {
+   "path": "/delivery/dispatch/candidates/{delivery_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_candidates"
+  },
+  {
+   "path": "/delivery/dispatch/suggest",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "suggest_driver_for_delivery"
+  },
+  {
+   "path": "/delivery/dispatch/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_summary"
+  },
+  {
+   "path": "/delivery/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_drivers"
+  },
+  {
+   "path": "/delivery/drivers",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_driver"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_driver"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/location",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_driver_location"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "update_driver_status"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/stock",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_driver_stock"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/stock/damage",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "damage_driver_stock"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/stock/load",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "load_driver_stock"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/stock/reconcile",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "reconcile_driver_stock"
+  },
+  {
+   "path": "/delivery/drivers/{driver_id}/stock/unblock",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "unblock_driver_stock"
+  },
+  {
+   "path": "/delivery/locations",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_driver_locations"
+  },
+  {
+   "path": "/delivery/route/optimize",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "optimize_delivery_route"
+  },
+  {
+   "path": "/delivery/routes",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_routes"
+  },
+  {
+   "path": "/delivery/routes",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_route"
+  },
+  {
+   "path": "/delivery/routes/{route_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "get_route"
+  },
+  {
+   "path": "/delivery/routes/{route_id}/dispatch",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "dispatch_route"
+  },
+  {
+   "path": "/delivery/routes/{route_id}/stops/{stop_id}/arrive",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "arrive_stop"
+  },
+  {
+   "path": "/delivery/routes/{route_id}/stops/{stop_id}/complete",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "complete_stop"
+  },
+  {
+   "path": "/delivery/routes/{route_id}/stops/{stop_id}/fail",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "fail_stop"
+  },
+  {
+   "path": "/delivery/vehicles",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "list_vehicles"
+  },
+  {
+   "path": "/delivery/vehicles",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "delivery-ops"
+   ],
+   "name": "create_vehicle"
+  },
+  {
+   "path": "/demo-request",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "Leads"
+   ],
+   "name": "create_demo_request"
+  },
+  {
+   "path": "/dispatch/assign",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "assign_driver_to_delivery"
+  },
+  {
+   "path": "/dispatch/recommend",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "get_dispatch_recommendations"
+  },
+  {
+   "path": "/dispatch/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "dispatch"
+   ],
+   "name": "dispatch_status"
+  },
+  {
+   "path": "/docs",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "class": "FORA_DO_SCHEMA",
+   "deps": [],
+   "tags": [],
+   "name": "swagger_ui_html"
+  },
+  {
+   "path": "/docs/oauth2-redirect",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "class": "FORA_DO_SCHEMA",
+   "deps": [],
+   "tags": [],
+   "name": "swagger_ui_redirect"
+  },
+  {
+   "path": "/driver/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "list_my_deliveries"
+  },
+  {
+   "path": "/driver/deliveries/{delivery_id}/accept",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "accept_my_delivery"
+  },
+  {
+   "path": "/driver/deliveries/{delivery_id}/arrive",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "arrive_my_delivery"
+  },
+  {
+   "path": "/driver/deliveries/{delivery_id}/complete",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "complete_my_delivery"
+  },
+  {
+   "path": "/driver/deliveries/{delivery_id}/fail",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "fail_my_delivery"
+  },
+  {
+   "path": "/driver/deliveries/{delivery_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "start_my_delivery"
+  },
+  {
+   "path": "/driver/location",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "update_my_location"
+  },
+  {
+   "path": "/driver/locations",
+   "methods": [
+    "POST"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "ingest_locations"
+  },
+  {
+   "path": "/driver/locations/history",
+   "methods": [
+    "GET"
+   ],
+   "class": "ROLE",
+   "deps": [
+    "get_tenant_context",
+    "require_role"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "get_location_history"
+  },
+  {
+   "path": "/driver/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_tenant_context",
+    "require_driver"
+   ],
+   "tags": [
+    "driver-self"
+   ],
+   "name": "get_my_profile"
+  },
+  {
+   "path": "/driver/sync",
+   "methods": [
+    "GET"
+   ],
+   "class": "ENTREGADOR",
+   "deps": [
+    "get_db",
+    "get_mobile_context"
+   ],
+   "tags": [
+    "driver-mobile"
+   ],
+   "name": "mobile_delta_sync"
+  },
+  {
+   "path": "/finance/audit",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "finance_audit"
+  },
+  {
+   "path": "/finance/budget",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "get_budget"
+  },
+  {
+   "path": "/finance/budget",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "put_budget"
+  },
+  {
+   "path": "/finance/cash",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_cash_movements"
+  },
+  {
+   "path": "/finance/cash/balance",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "get_cash_balance"
+  },
+  {
+   "path": "/finance/expenses",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_expenses"
+  },
+  {
+   "path": "/finance/expenses",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "register_expense"
+  },
+  {
+   "path": "/finance/expenses/{expense_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "cancel_expense"
+  },
+  {
+   "path": "/finance/orders/{order_codigo}/payments",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "register_payment"
+  },
+  {
+   "path": "/finance/payments",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_payments"
+  },
+  {
+   "path": "/finance/payments/{payment_id}/refund",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "refund_payment"
+  },
+  {
+   "path": "/finance/receivables",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_receivables"
+  },
+  {
+   "path": "/finance/receivables/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "receivables_summary"
+  },
+  {
+   "path": "/finance/reports/categories",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "categories_report"
+  },
+  {
+   "path": "/finance/reports/conciliation",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "conciliation_report"
+  },
+  {
+   "path": "/finance/reports/daily",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "daily_report"
+  },
+  {
+   "path": "/finance/reports/dre",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "dre_report"
+  },
+  {
+   "path": "/finance/reports/hourly",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "hourly_report"
+  },
+  {
+   "path": "/finance/reports/methods",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "methods_report"
+  },
+  {
+   "path": "/finance/reports/period",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "period_report"
+  },
+  {
+   "path": "/finance/reports/products",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "products_report"
+  },
+  {
+   "path": "/finance/reports/projection",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "projection_report"
+  },
+  {
+   "path": "/finance/reports/team",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "team_report"
+  },
+  {
+   "path": "/finance/saved-reports",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "list_saved_reports"
+  },
+  {
+   "path": "/finance/saved-reports",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "create_saved_report"
+  },
+  {
+   "path": "/finance/saved-reports/{report_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "finance"
+   ],
+   "name": "delete_saved_report"
+  },
+  {
+   "path": "/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "health"
+  },
+  {
+   "path": "/integrations",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_integrations"
+  },
+  {
+   "path": "/integrations",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "create_integration"
+  },
+  {
+   "path": "/integrations/import",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "import_order"
+  },
+  {
+   "path": "/integrations/sync-all",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_all"
+  },
+  {
+   "path": "/integrations/{integration_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "delete_integration"
+  },
+  {
+   "path": "/integrations/{integration_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "get_integration"
+  },
+  {
+   "path": "/integrations/{integration_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "update_integration"
+  },
+  {
+   "path": "/integrations/{integration_id}/logs",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_logs"
+  },
+  {
+   "path": "/integrations/{integration_id}/orders",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "list_imported"
+  },
+  {
+   "path": "/integrations/{integration_id}/orders/{imported_order_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "get_imported"
+  },
+  {
+   "path": "/integrations/{integration_id}/orders/{imported_order_id}/reprocess",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "reprocess_imported"
+  },
+  {
+   "path": "/integrations/{integration_id}/rotate-token",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "rotate_token"
+  },
+  {
+   "path": "/integrations/{integration_id}/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_manual"
+  },
+  {
+   "path": "/integrations/{integration_id}/sync-run",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "sync_run"
+  },
+  {
+   "path": "/integrations/{integration_id}/test-connection",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Integrations"
+   ],
+   "name": "test_connection"
+  },
+  {
+   "path": "/inventory/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "list_inventory"
+  },
+  {
+   "path": "/inventory/reconciliation/check",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "reconciliation_check"
+  },
+  {
+   "path": "/inventory/{product_codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "get_inventory"
+  },
+  {
+   "path": "/inventory/{product_codigo}/adjustments",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "adjust_stock"
+  },
+  {
+   "path": "/inventory/{product_codigo}/entries",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "add_stock"
+  },
+  {
+   "path": "/inventory/{product_codigo}/losses",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "record_loss"
+  },
+  {
+   "path": "/inventory/{product_codigo}/minimum",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "set_minimum"
+  },
+  {
+   "path": "/inventory/{product_codigo}/movements",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Inventory"
+   ],
+   "name": "get_movements"
+  },
+  {
+   "path": "/leads",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "Leads"
+   ],
+   "name": "list_leads"
+  },
+  {
+   "path": "/leads",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "Leads"
+   ],
+   "name": "create_lead"
+  },
+  {
+   "path": "/metrics",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "metrics_endpoint"
+  },
+  {
+   "path": "/mobile/version",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "mobile-update"
+   ],
+   "name": "get_mobile_version"
+  },
+  {
+   "path": "/openapi.json",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "class": "FORA_DO_SCHEMA",
+   "deps": [],
+   "tags": [],
+   "name": "openapi"
+  },
+  {
+   "path": "/operations/dashboard",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_operational_dashboard"
+  },
+  {
+   "path": "/operations/map/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_active_deliveries"
+  },
+  {
+   "path": "/operations/map/drivers",
+   "methods": [
+    "GET"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "operations"
+   ],
+   "name": "get_driver_locations"
+  },
+  {
+   "path": "/orders/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "list_orders"
+  },
+  {
+   "path": "/orders/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "create_order"
+  },
+  {
+   "path": "/orders/apply-coupon",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "apply_coupon_orders_path"
+  },
+  {
+   "path": "/orders/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "get_order"
+  },
+  {
+   "path": "/orders/{codigo}/assign-driver",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "assign_driver"
+  },
+  {
+   "path": "/orders/{codigo}/status",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Orders"
+   ],
+   "name": "update_order_status"
+  },
+  {
+   "path": "/orders/{order_codigo}/remove-coupon",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Coupons"
+   ],
+   "name": "remove_coupon_orders_path"
+  },
+  {
+   "path": "/payments/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "list_payments"
+  },
+  {
+   "path": "/payments/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_payment"
+  },
+  {
+   "path": "/payments/methods",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "list_methods"
+  },
+  {
+   "path": "/payments/methods",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_method"
+  },
+  {
+   "path": "/payments/methods/{method_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "delete_method"
+  },
+  {
+   "path": "/payments/methods/{method_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "update_method"
+  },
+  {
+   "path": "/payments/methods/{method_id}/toggle",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "toggle_method"
+  },
+  {
+   "path": "/payments/pix",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "get_pix"
+  },
+  {
+   "path": "/payments/pix",
+   "methods": [
+    "POST"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "create_pix"
+  },
+  {
+   "path": "/payments/pix/payload",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "generate_pix_payload"
+  },
+  {
+   "path": "/payments/pix/{config_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "delete_pix"
+  },
+  {
+   "path": "/payments/pix/{config_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "ADMIN",
+   "deps": [
+    "get_tenant_context",
+    "require_admin"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "update_pix"
+  },
+  {
+   "path": "/payments/pix/{txid}/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "pix_status"
+  },
+  {
+   "path": "/payments/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "payment_summary"
+  },
+  {
+   "path": "/payments/webhook/pix",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "payments"
+   ],
+   "name": "pix_webhook"
+  },
+  {
+   "path": "/payments/{payment_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "get_payment"
+  },
+  {
+   "path": "/payments/{payment_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "cancel_payment"
+  },
+  {
+   "path": "/payments/{payment_id}/confirm",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "confirm_payment"
+  },
+  {
+   "path": "/payments/{payment_id}/refund",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "payments"
+   ],
+   "name": "refund_payment"
+  },
+  {
+   "path": "/printer/agent/jobs/{job_id}/result",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_report_result"
+  },
+  {
+   "path": "/printer/agent/next",
+   "methods": [
+    "GET"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_claim_next"
+  },
+  {
+   "path": "/printer/agent/status",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "agent_report_status"
+  },
+  {
+   "path": "/printer/jobs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "list_print_jobs"
+  },
+  {
+   "path": "/printer/jobs/{job_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_print_job"
+  },
+  {
+   "path": "/printer/jobs/{job_id}/retry",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "retry_print_job"
+  },
+  {
+   "path": "/printer/orders/{order_id}/jobs",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_order_print_jobs"
+  },
+  {
+   "path": "/printer/print",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "create_print_job"
+  },
+  {
+   "path": "/printer/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "printer"
+   ],
+   "name": "get_printer_status"
+  },
+  {
+   "path": "/products/",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "list_products"
+  },
+  {
+   "path": "/products/",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "create_product"
+  },
+  {
+   "path": "/products/{codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "get_product"
+  },
+  {
+   "path": "/products/{codigo}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "update_product"
+  },
+  {
+   "path": "/products/{codigo}/disable",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Products"
+   ],
+   "name": "disable_product"
+  },
+  {
+   "path": "/public/referral/invite/{token}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Public Signup"
+   ],
+   "name": "public_invite_peek"
+  },
+  {
+   "path": "/public/referral/signup",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "Public Signup"
+   ],
+   "name": "public_referral_signup"
+  },
+  {
+   "path": "/public/tracking/link",
+   "methods": [
+    "POST"
+   ],
+   "class": "ROLE",
+   "deps": [
+    "get_tenant_context",
+    "require_role"
+   ],
+   "tags": [
+    "public-tracking"
+   ],
+   "name": "create_public_link"
+  },
+  {
+   "path": "/public/tracking/revoke/{driver_id}",
+   "methods": [
+    "POST"
+   ],
+   "class": "ROLE",
+   "deps": [
+    "get_tenant_context",
+    "require_role"
+   ],
+   "tags": [
+    "public-tracking"
+   ],
+   "name": "revoke_public_links"
+  },
+  {
+   "path": "/public/tracking/{token}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "public-tracking"
+   ],
+   "name": "public_tracking_snapshot"
+  },
+  {
+   "path": "/purchase-notes",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "list_notes"
+  },
+  {
+   "path": "/purchase-notes",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "create_note"
+  },
+  {
+   "path": "/purchase-notes/{note_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "get_note"
+  },
+  {
+   "path": "/purchase-notes/{note_id}",
+   "methods": [
+    "PATCH"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "update_note"
+  },
+  {
+   "path": "/purchase-notes/{note_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "cancel_note"
+  },
+  {
+   "path": "/purchase-notes/{note_id}/confirm",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "confirm_note"
+  },
+  {
+   "path": "/purchase-notes/{note_id}/pdf",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Purchase Notes"
+   ],
+   "name": "note_pdf"
+  },
+  {
+   "path": "/ready",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [],
+   "name": "ready"
+  },
+  {
+   "path": "/realtime/stats",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "realtime"
+   ],
+   "name": "realtime_stats"
+  },
+  {
+   "path": "/redoc",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "class": "FORA_DO_SCHEMA",
+   "deps": [],
+   "tags": [],
+   "name": "redoc_html"
+  },
+  {
+   "path": "/reorder/customers/{customer_codigo}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Reorder Intelligence"
+   ],
+   "name": "get_customer_reorder"
+  },
+  {
+   "path": "/reorder/opportunities",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Reorder Intelligence"
+   ],
+   "name": "list_opportunities"
+  },
+  {
+   "path": "/reorder/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "_get_service",
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Reorder Intelligence"
+   ],
+   "name": "get_summary"
+  },
+  {
+   "path": "/reports/daily",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_daily_report"
+  },
+  {
+   "path": "/reports/daily.pdf",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_daily_report_pdf"
+  },
+  {
+   "path": "/reports/deliveries",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_delivery_report"
+  },
+  {
+   "path": "/reports/heatmap",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_delivery_heatmap"
+  },
+  {
+   "path": "/reports/summary",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "reports"
+   ],
+   "name": "get_business_summary"
+  },
+  {
+   "path": "/segments",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "list_segments"
+  },
+  {
+   "path": "/segments",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "create_segment"
+  },
+  {
+   "path": "/segments/rules",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "get_available_rules"
+  },
+  {
+   "path": "/segments/{segment_id}",
+   "methods": [
+    "DELETE"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "delete_segment"
+  },
+  {
+   "path": "/segments/{segment_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "get_segment"
+  },
+  {
+   "path": "/segments/{segment_id}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "update_segment"
+  },
+  {
+   "path": "/segments/{segment_id}/evaluate",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "evaluate_segment"
+  },
+  {
+   "path": "/segments/{segment_id}/preview",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "segmentation"
+   ],
+   "name": "preview_segment"
+  },
+  {
+   "path": "/settings",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_all_settings"
+  },
+  {
+   "path": "/settings/category/{category}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_category"
+  },
+  {
+   "path": "/settings/key/{key}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "get_key"
+  },
+  {
+   "path": "/settings/key/{key}",
+   "methods": [
+    "PUT"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "update_key"
+  },
+  {
+   "path": "/settings/permissions/matrix",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "permissions_matrix"
+  },
+  {
+   "path": "/settings/permissions/me",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_tenant_context"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "my_permissions"
+  },
+  {
+   "path": "/settings/seed",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "Settings"
+   ],
+   "name": "seed"
+  },
+  {
+   "path": "/whatsapp/accounts",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_accounts"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_account"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "account_health"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "logout_account"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/messages",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_messages"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/messages",
+   "methods": [
+    "POST"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "send_message"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/qr",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_account_qr"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_account"
+  },
+  {
+   "path": "/whatsapp/accounts/{account_id}/stop",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "stop_account"
+  },
+  {
+   "path": "/whatsapp/campaigns",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_campaigns"
+  },
+  {
+   "path": "/whatsapp/campaigns",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "create_campaign"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}/cancel",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "cancel_campaign"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}/pause",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "pause_campaign"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}/recipients",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign_recipients"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}/results",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_campaign_results"
+  },
+  {
+   "path": "/whatsapp/campaigns/{campaign_id}/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_campaign"
+  },
+  {
+   "path": "/whatsapp/contacts",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "list_contacts"
+  },
+  {
+   "path": "/whatsapp/contacts/export-vcf",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "export_vcf"
+  },
+  {
+   "path": "/whatsapp/contacts/import-vcf",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "import_vcf"
+  },
+  {
+   "path": "/whatsapp/contacts/jobs",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_create"
+  },
+  {
+   "path": "/whatsapp/contacts/jobs/{job_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_status"
+  },
+  {
+   "path": "/whatsapp/contacts/jobs/{job_id}/process",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission",
+    "require_renamer_enabled"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "contact_job_process"
+  },
+  {
+   "path": "/whatsapp/contacts/organizer/backfill-codes",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_backfill_codes"
+  },
+  {
+   "path": "/whatsapp/contacts/organizer/conflicts",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_conflicts"
+  },
+  {
+   "path": "/whatsapp/contacts/organizer/geocode-origem",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_geocode_origem"
+  },
+  {
+   "path": "/whatsapp/contacts/organizer/rename-apply",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_rename_apply"
+  },
+  {
+   "path": "/whatsapp/contacts/organizer/rename-preview",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "organizer_rename_preview"
+  },
+  {
+   "path": "/whatsapp/contacts/reactivate",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "reactivate_inactive"
+  },
+  {
+   "path": "/whatsapp/contacts/sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "sync_contacts"
+  },
+  {
+   "path": "/whatsapp/contacts/sync-batch",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "sync_batch"
+  },
+  {
+   "path": "/whatsapp/contacts/{codigo}/enrich",
+   "methods": [
+    "POST"
+   ],
+   "class": "PERMISSAO",
+   "deps": [
+    "get_db",
+    "get_tenant_context",
+    "require_permission"
+   ],
+   "tags": [
+    "contacts-crm"
+   ],
+   "name": "enrich_contact"
+  },
+  {
+   "path": "/whatsapp/conversations",
+   "methods": [
+    "GET"
+   ],
+   "class": "SOMENTE_DB",
+   "deps": [
+    "get_db"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "list_conversations"
+  },
+  {
+   "path": "/whatsapp/conversations/{conversation_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "get_conversation"
+  },
+  {
+   "path": "/whatsapp/conversations/{conversation_id}/release",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "release_conversation"
+  },
+  {
+   "path": "/whatsapp/conversations/{conversation_id}/reply",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "operator_reply"
+  },
+  {
+   "path": "/whatsapp/conversations/{conversation_id}/takeover",
+   "methods": [
+    "POST"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "takeover_conversation"
+  },
+  {
+   "path": "/whatsapp/crm-sync",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "trigger_crm_sync"
+  },
+  {
+   "path": "/whatsapp/customers",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_customers"
+  },
+  {
+   "path": "/whatsapp/customers/{contact_id}/promote",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "promote_to_customer"
+  },
+  {
+   "path": "/whatsapp/customers/{customer_id}/opt-in",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "opt_in_customer"
+  },
+  {
+   "path": "/whatsapp/customers/{customer_id}/opt-out",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "opt_out_customer"
+  },
+  {
+   "path": "/whatsapp/health",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "health_check"
+  },
+  {
+   "path": "/whatsapp/incoming",
+   "methods": [
+    "POST"
+   ],
+   "class": "SERVICO_OU_USER",
+   "deps": [
+    "get_db",
+    "require_whatsapp_service_or_user"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "process_incoming"
+  },
+  {
+   "path": "/whatsapp/lists",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "list_lists"
+  },
+  {
+   "path": "/whatsapp/lists",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "create_list"
+  },
+  {
+   "path": "/whatsapp/lists/seed",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "seed_lists"
+  },
+  {
+   "path": "/whatsapp/lists/{list_id}",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_list_detail"
+  },
+  {
+   "path": "/whatsapp/logout",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "logout_session"
+  },
+  {
+   "path": "/whatsapp/qr",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_qr_code"
+  },
+  {
+   "path": "/whatsapp/start",
+   "methods": [
+    "POST"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "start_session"
+  },
+  {
+   "path": "/whatsapp/stats",
+   "methods": [
+    "GET"
+   ],
+   "class": "AUTENTICADA",
+   "deps": [
+    "get_db",
+    "get_tenant_context"
+   ],
+   "tags": [
+    "whatsapp-conversations"
+   ],
+   "name": "get_stats"
+  },
+  {
+   "path": "/whatsapp/status",
+   "methods": [
+    "GET"
+   ],
+   "class": "SEM_AUTH?",
+   "deps": [],
+   "tags": [
+    "WhatsApp"
+   ],
+   "name": "get_status"
+  }
+ ]
+}
