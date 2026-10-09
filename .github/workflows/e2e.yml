@@ -42,11 +42,26 @@ jobs:
           docker compose -f docker-compose.e2e.yml logs --tail=120
           exit 1
 
-      - name: Deps E2E + navegador Chromium
+      - name: Cache do Chromium (Playwright)
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+      # Dois steps com timeout individual em vez de um bloco só: na run 132
+      # (2026-10-07) o bloco `npm ci && playwright install` ficou ~44min
+      # preso e o job morreu no timeout-minutes sem indicar qual dos dois
+      # travou. Com o cache acima, o download do Chromium é pulado na maior
+      # parte das runs.
+      - name: Deps E2E (npm ci)
+        timeout-minutes: 10
         working-directory: e2e
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+
+      - name: Navegador Chromium (Playwright)
+        timeout-minutes: 10
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright
         working-directory: e2e
