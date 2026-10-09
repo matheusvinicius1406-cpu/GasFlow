@@ -23,6 +23,9 @@ logs/
 # Database
 *.db
 *.sqlite3
+# Backups locais de banco (reconstrução de migrations 2026-10-09; ver docs/migrations.md)
+*.db.legacy
+*.db.bak
 
 # Desktop (Electron) runtime data e artefatos de build
 # (app.db = banco local do usuário; release/ = instaladores .exe)

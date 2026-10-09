@@ -141,7 +141,12 @@ porque `init_db()` roda `create_all()` + migrações leves **em paralelo** às m
 - Script de verificação: `C:\Users\mathe\AppData\Local\Temp\opencode\alembic_drift_check.py`
   (reexecutável; cruza migrations × schema real).
 
-Ainda não apliquei nada no banco (nem `stamp`, nem índices). Requer decisão + backup.
+**Resolvido em 2026-10-09:** o banco foi reconstruído a partir das migrations
+(`alembic_version = 9f4b7e2a6c31`, 12 índices de migration presentes, admin
+auto-restaurado no primeiro login). Zero migrations modificadas. Procedimento,
+política e passo-a-passo para recaída em **`docs/migrations.md`**. Pendência de
+fundo (`init_db` ainda usa `create_all` sem gravar `alembic_version`) segue
+aberta como item separado.
 
 ## Verificação de impacto (antes de aplicar)
 
