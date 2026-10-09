@@ -130,8 +130,12 @@ async def create_segment(
 
 
 @router.get("/rules", response_model=AvailableRulesResponse)
-async def get_available_rules():
-    """Get available rule fields and operators."""
+async def get_available_rules(_ctx: TenantContext = Depends(get_tenant_context)):
+    """Get available rule fields and operators.
+
+    Sessão obrigatória desde a matriz de rotas (2026-10-09) — única rota do
+    módulo sem auth (era leitura de catálogo, mas expunha contrato interno).
+    """
     fields = [
         {
             "value": f.value,

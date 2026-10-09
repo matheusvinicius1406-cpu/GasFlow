@@ -9,9 +9,10 @@ Arquitetura: Domain-Driven Design (DDD)
 """
 
 import asyncio
+import hmac
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.infrastructure.database.init_db import init_db
@@ -248,9 +249,32 @@ init_db()
 logger.info(f"GasFlow backend starting — env={settings.environment}", extra={"service": "gasflow-backend"})
 
 
+def _metrics_allowed(request: Request) -> bool:
+    """GET /metrics é infraestrutura, não API de produto.
+
+    Antes da matriz de rotas (2026-10-09) era anônimo e anunciava volume de
+    requisições/erros por rota a qualquer um que varresse a porta. Hoje:
+      * METRICS_PUBLIC=1 → liberado (rede interna do compose/monitoração);
+      * senão → só com a chave de serviço (X-GasFlow-Key ou Bearer);
+      * sem as duas → 401 (sem credenciais ≠ sem permissão).
+    """
+    if settings.metrics_public:
+        return True
+    key = settings.whatsapp_service_key
+    if not key:
+        return False
+    supplied = request.headers.get("X-GasFlow-Key")
+    if not supplied:
+        auth = request.headers.get("Authorization") or ""
+        supplied = auth[7:] if auth.startswith("Bearer ") else None
+    return bool(supplied) and hmac.compare_digest(key, supplied)
+
+
 @app.get("/metrics")
-def metrics_endpoint():
+def metrics_endpoint(request: Request):
     """Prometheus metrics (formato text/plain)."""
+    if not _metrics_allowed(request):
+        raise HTTPException(status_code=401, detail="Metrics disabled (METRICS_PUBLIC=0 ou chave de serviço)")
     body, content_type = render_metrics()
     return Response(content=body, media_type=content_type)
 

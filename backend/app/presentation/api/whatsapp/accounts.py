@@ -19,10 +19,21 @@ from sqlalchemy.orm import Session
 
 import httpx
 
+from app.domain.security.models import TenantContext
 from app.infrastructure.database.dependencies import get_db
+from app.presentation.dependencies import require_permission
 
 
-router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
+# As 31 rotas deste router são um PROXY para o serviço WhatsApp. Antes elas
+# não tinham nenhuma dependência de autenticação: qualquer anônimo podia
+# listar contas, ver QR, disparar mensagens e manipular campanhas (achado da
+# matriz de rotas de 2026-10-09). Toda rota exige `whatsapp.read`; envio em
+# particular sobe para `whatsapp.send`.
+router = APIRouter(
+    prefix="/whatsapp",
+    tags=["WhatsApp"],
+    dependencies=[Depends(require_permission("whatsapp.read"))],
+)
 
 
 # ── Config ────────────────────────────────────────────────
@@ -146,7 +157,12 @@ class WhatsAppSendMessageRequest(BaseModel):
 
 
 @router.post("/accounts/{account_id}/messages")
-async def send_message(account_id: str, data: WhatsAppSendMessageRequest, db: Session = Depends(get_db)):
+async def send_message(
+    account_id: str,
+    data: WhatsAppSendMessageRequest,
+    db: Session = Depends(get_db),
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
     """Send a message via a specific WhatsApp account.
 
     Persiste o envio na thread do CRM (direction=OUTGOING, sender=human)

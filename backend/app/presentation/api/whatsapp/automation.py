@@ -270,6 +270,8 @@ async def get_audit_log(
 @router.get("/connection-check")
 async def check_connection(
     account_id: str = Query("primary"),
+    # Única rota do módulo sem auth (matriz de rotas 2026-10-09).
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Check if WhatsApp service is connected."""
     bridge = WhatsAppSendBridge()

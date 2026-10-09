@@ -303,8 +303,12 @@ def test_ws_rejects_pending_password_change(client, admin_token):
     assert "Password change required" in (exc.value.reason or "")
 
 
-def test_realtime_stats_endpoint(client):
-    res = client.get("/realtime/stats")
+def test_realtime_stats_endpoint(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    # Matriz de rotas 2026-10-09: era anônimo e vazava a contagem de conexões.
+    assert client.get("/realtime/stats").status_code == 401
+
+    res = client.get("/realtime/stats", headers=headers)
     assert res.status_code == 200
     body = res.json()
     assert "total_connections" in body

@@ -62,6 +62,8 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:8080}
         - ALLOW_INSECURE_AUTH=${ALLOW_INSECURE_AUTH:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # /metrics fechado fora do compose (rede interna é quem faz scrape)
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-true}
       - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
       - RATE_LIMIT_MODE=${RATE_LIMIT_MODE:-memory}
       - RATE_LIMIT_REDIS_URL=redis://redis:6379/0

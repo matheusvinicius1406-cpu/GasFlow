@@ -18,10 +18,16 @@ import json
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Dict, Set, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query
 from datetime import datetime
 
 from app.domain.events.event_bus import get_event_bus, EventType, DomainEvent
+
+# /realtime/stats é exposto aqui (routers de infra) mas precisa de sessão;
+# o import é no topo para o FastAPI injetar via Depends (e para a matriz de
+# rotas enxergar a dependência de auth).
+from app.domain.security.models import TenantContext
+from app.presentation.dependencies import get_tenant_context
 
 if TYPE_CHECKING:
     from app.infrastructure.realtime.pubsub import RedisPubSub
@@ -371,7 +377,11 @@ async def websocket_endpoint(
 
 
 @router.get("/realtime/stats")
-async def realtime_stats():
-    """Get WebSocket connection statistics."""
+async def realtime_stats(_ctx: TenantContext = Depends(get_tenant_context)):
+    """Get WebSocket connection statistics.
+
+    Sessão obrigatoria desde a matriz de rotas (2026-10-09): sem auth o
+    endpoint vazava quantas conexões/tenants estavam online.
+    """
     manager = get_ws_manager()
     return manager.get_stats()

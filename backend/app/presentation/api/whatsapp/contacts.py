@@ -82,11 +82,17 @@ def _svc(db: Session, ctx: TenantContext) -> ContactService:
 
 
 @router.post("/sync")
-async def sync_contacts():
+async def sync_contacts(
+    _ctx: TenantContext = Depends(require_permission("whatsapp.read")),
+):
     """Dispara a coleta de contatos no serviço WhatsApp (proxy legado).
 
     Reorg F5: antes era POST /whatsapp/contacts/sync no router de contas;
     agora vive no namespace unificado de contatos.
+
+    Exige sessão com `whatsapp.read` (matriz de rotas 2026-10-09): era o único
+    endpoint de contatos sem autenticação — qualquer anônimo disparava coleta
+    no serviço.
     """
     from app.presentation.api.whatsapp.accounts import _proxy_post
 

@@ -118,7 +118,9 @@ async def list_workflows(ctx: TenantContext = Depends(get_tenant_context)):
 
 
 @router.post("/workflows")
-async def create_workflow(req: WorkflowCreateRequest):
+async def create_workflow(req: WorkflowCreateRequest, _ctx: TenantContext = Depends(get_tenant_context)):
+    # Sem auth até a matriz de rotas (2026-10-09): era a única rota do módulo
+    # sem get_tenant_context, ou seja, qualquer anônimo criava workflow.
     wf = WorkflowDefinition(
         name=req.name, description=req.description, trigger_type=req.trigger_type, trigger_event=req.trigger_event
     )

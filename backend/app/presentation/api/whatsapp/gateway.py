@@ -421,6 +421,10 @@ async def list_conversations(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    # Sem auth antes da matriz de rotas (2026-10-09): qualquer anônimo lia o
+    # histórico de conversas. Hoje exige sessão; escopo por tenant continua
+    # pendente (o modelo de conversa ainda não tem tenant_id).
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """List active WhatsApp conversations."""
 

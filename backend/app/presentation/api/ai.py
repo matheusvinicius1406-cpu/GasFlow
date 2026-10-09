@@ -447,8 +447,12 @@ def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext
 
 
 @router.get("/tools", response_model=List[ToolInfo])
-def list_tools():
-    """List available AI tools."""
+def list_tools(_ctx: TenantContext = Depends(get_tenant_context)):
+    """List available AI tools.
+
+    Exige sessão desde a matriz de rotas (2026-10-09) — era a única rota de
+    /ai sem autenticação e devolve o catálogo de ferramentas com escopo.
+    """
     registry = _get_tools()
     return [
         ToolInfo(

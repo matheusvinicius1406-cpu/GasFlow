@@ -68,6 +68,12 @@ class Settings(BaseModel):
     # FORA por padrão e DOCS_ENABLED=1 força reabrir.
     docs_enabled: bool = env_flag("DOCS_ENABLED", os.getenv("ENVIRONMENT", "development") != "production")
 
+    # /metrics do Prometheus expoe volume de requisicoes/erros por rota.
+    # Fechado por padrao (matriz de rotas 2026-10-09): quem escanear a porta
+    # nao le a metrica sem METRICS_PUBLIC=1 (rede interna do compose) ou sem
+    # a chave de servico (X-GasFlow-Key / Authorization Bearer).
+    metrics_public: bool = env_flag("METRICS_PUBLIC", False)
+
     # Database
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./gasflow.db")
 
