@@ -1,0 +1,15 @@
+# Ignorados com justificativa — gate Trivy (ci.yml, CRITICAL/HIGH,
+# ignore-unfixed: true, exit-code: 1). Revogar quando a condição sair.
+#
+# CVE-2026-102990 / GHSA-c475-qrg2-pj4r (basic-ftp <=6.2.0, HIGH)
+# Cadeia: whatsapp-web.js -> puppeteer -> @puppeteer/browsers ->
+# proxy-agent -> pac-proxy-agent -> get-uri -> basic-ftp@5.3.1.
+# Só existe correção em basic-ftp >= 6.2.1 (major, ESM-only); o upstream
+# get-uri (inclusive o latest 8.x) ainda amarra basic-ftp em ^5, então não
+# há bump de range possível. Forçar 6.x via `overrides` trocaria o pacote
+# para ESM-only dentro do require() comum do proxy do puppeteer — risco de
+# quebrar o download de navegador no engine de rollback WA_ENGINE=wwebjs.
+# O engine padrão (Baileys, WebSocket puro) não carrega puppeteer em
+# runtime, então a superfície atingível hoje é nula. Revogar quando:
+# (a) get-uri adotar basic-ftp ^6, ou (b) o rollback wwebjs sair do repo.
+CVE-2026-102990

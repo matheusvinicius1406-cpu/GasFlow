@@ -70,6 +70,27 @@ fresco do PyPI em `~/gfdeps`; o mypy foi validado também em Windows).
   (c) considerar pinar as demais dependências diretas do backend pelo mesmo
   motivo do sqlalchemy (determinismo do gate).
 
+## Capítulo 2 — Trivy (scan de vulnerabilidades), no mesmo dia
+
+Com o Backend verde, o job `trivy` deixou de ser pulado pelo `needs` e
+falhou no step **Scan whatsapp** (os scans de backend/frontend tinham
+passado; o do agent nem chegou a rodar — o job para no primeiro exit 1).
+Reprodução local com Trivy 0.75.0 + `docker build` da imagem whatsapp:
+13 findings, todos com correção publicada:
+
+| Onde | Finding | Correção aplicada |
+|---|---|---|
+| Camada OS (debian 13.7) | libpcre2-8-0 e libssl3t64/openssl-provider-legacy (5 HIGH, fix em `deb13u3`) | Nenhuma no código: o CI builda sem cache e o `apt-get upgrade` do Dockerfile já puxa o `deb13u3`. O build local reproduzia u2 por cache de camada velha. |
+| npm vendorizado do base image (`/usr/local/lib/node_modules/npm`) | brace-expansion 5.0.9 (CVE-2026-102276) e undici 6.28.0 (CVE-2026-19534) | `rm -rf` do npm/npx no final do Dockerfile de **whatsapp** e **agent** — o runtime é só `node dist/...`; a árvore sai da imagem de verdade (não é skip de scan) e o CLI deixa de existir em produção. `npm prune --omit=dev` junto tira tsx/typescript/eslint da imagem. |
+| Árvore de produção do whatsapp | proxy-addr 2.0.7→2.0.8 (CRITICAL), sharp 0.35.4→0.35.5, brace-expansion 2.1.4→2.1.7, music-metadata→11.16.1, ip-address→10.7.3 | `npm update` no lockfile (todos dentro dos ranges; sharp é peer `"*"` do baileys). |
+| Árvore de produção do whatsapp | basic-ftp 5.3.1 (CVE-2026-102990, HIGH) na cadeia puppeteer→proxy-agent→get-uri do engine de rollback wwebjs | `.trivyignore` na raiz com justificativa e critério de revogação: único fix é major ESM-only e o upstream get-uri (inclusive 8.x) ainda amarra `^5`; engine padrão Baileys não carrega puppeteer. |
+
+Validação local: rebuild `--no-cache` das imagens whatsapp e agent →
+Trivy `exit 0` com os mesmos filtros do CI (e com `--ignorefile
+.trivyignore`); smoke das imagens (`node v26.9.0`, `dist/` presente,
+`npm` ausente); `npm run typecheck` 0 e `npm test` **106/106** no
+whatsapp com o lockfile novo.
+
 ## Evidências
 
 - Runs: [174 (CI, mypy, 4 erros do renomeador)](https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/37666209440),

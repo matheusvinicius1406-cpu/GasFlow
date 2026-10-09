@@ -3,13 +3,10 @@ FROM node:26-slim
 # Agente de integração: processo Node puro (sem Chromium, sem bindings
 # nativos). Imagem slim basta; curl é necessário ao healthcheck do compose.
 #
-# Node 26 (e não 24) por dois motivos: paridade com o serviço whatsapp e,
-# principalmente, o npm embutido. O `node:24-slim` traz npm 11.19.0, cujas
-# dependências vendorizadas aparecem no scan do Trivy sem correção possível
-# pelo projeto — tar 7.5.19 (CVE-2026-73566), brace-expansion 5.0.7
-# (CVE-2026-14257/69152) e ip-address 10.2.0 (CVE-2026-69192). O
-# `node:26-slim` traz npm 11.19.1 já com tar 7.5.22, brace-expansion 5.0.9
-# e ip-address 10.5.0.
+# Node 26 (e não 24): paridade com o serviço whatsapp. O histórico da
+# escolha pelo npm embutido (tar/brace-expansion/ip-address vendorizados)
+# ficou obsoleto: em produção o npm é REMOVIDO da imagem (ver RUN final),
+# então CVEs do CLI embutido não são mais superfície de scan.
 # `apt-get upgrade`: mantém a base Debian patcheada para o scan do Trivy
 # (exit-code 1 em CRITICAL/HIGH) — mesma regra do backend/whatsapp.
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,6 +27,13 @@ COPY . .
 # Compila TypeScript -> dist (dist/ é gitignored, então o build é
 # obrigatório na imagem; sem isso `node dist/index.js` falharia)
 RUN npm run build
+
+# Produção sem npm e sem devDeps — mesma regra do serviço whatsapp:
+# o npm vendorizado do base image (brace-expansion 5.0.9, undici 6.28.0)
+# tem CVEs que só a Docker Hub corrige, e o runtime só executa
+# `node dist/index.js`.
+RUN npm prune --omit=dev \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 ENV NODE_ENV=production
 

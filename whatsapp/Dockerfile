@@ -46,6 +46,20 @@ RUN npm run build
 # Cria diretórios de dados (sessão Baileys + SQLite)
 RUN mkdir -p data baileys_auth wwebjs_auth
 
+# Produção sem npm e sem devDeps.
+#
+# Trivy roda com exit-code: 1 em CRITICAL/HIGH e o npm vendorizado do base
+# image (usr/local/lib/node_modules/npm) traz brace-expansion 5.0.9
+# (CVE-2026-102276) e undici 6.28.0 (CVE-2026-19534) que o projeto não
+# consegue corrigir — só a Docker Hub corrige, no próximo rebuild do
+# node:26-slim. Como o runtime é apenas `node dist/server.js`, remover
+# npm/npx tira a árvore da imagem de verdade (não é skip de scan), leva a
+# imagem a ficar menor e elimina a superfície do CLI em produção.
+# `npm prune --omit=dev` remove tsx/typescript/eslint etc. — o CI de teste
+# roda no checkout, não dentro desta imagem.
+RUN npm prune --omit=dev \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 EXPOSE 3000
 
 CMD ["node", "dist/server.js"]
