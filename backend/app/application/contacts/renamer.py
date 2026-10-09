@@ -49,7 +49,7 @@ def _sem_acento(texto: str) -> str:
     return "".join(ch for ch in decomposto if unicodedata.category(ch) != "Mn")
 
 
-def _chave(texto: str) -> str:
+def _chave(texto: Optional[str]) -> str:
     """Forma canônica para comparar sem acento e sem caixa."""
     return re.sub(r"\s+", " ", _sem_acento(texto or "").lower()).strip()
 
@@ -710,7 +710,7 @@ def renomear(nome_bruto: Optional[str]) -> Dict[str, Any]:
     #     antes de " - " no nome final); o que vem DEPOIS do nome é reapostado.
     if cauda and not da_cauda:
         indice = cauda.find(nome) if nome else -1
-        if indice >= 0:
+        if indice >= 0 and nome is not None:
             antes = _normaliza_espacos(cauda[:indice]).strip(" \t-.,;:()")
             depois = _normaliza_espacos(cauda[indice + len(nome) :]).strip(" \t-.,;:()")
         else:
@@ -724,7 +724,7 @@ def renomear(nome_bruto: Optional[str]) -> Dict[str, Any]:
     sobra_depois = _limpa_pontas(sobra_depois) if sobra_depois else ""
     referencia = " ".join(p for p in (_referencia_do_bruto(bruto), sobra_depois, antes) if p) or None
 
-    endereco = _limpa_pontas(re.sub(r"[:]", " ", endereco_bruto))
+    endereco: Optional[str] = _limpa_pontas(re.sub(r"[:]", " ", endereco_bruto))
     endereco = _aplicar_ordinal(endereco) if endereco else None
     # Observação: NÃO existe mais a queda de "palavra de via sozinha". Ela foi
     # escrita para o endereço completo; com o número separado, o pedaço antes

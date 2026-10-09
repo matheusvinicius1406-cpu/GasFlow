@@ -74,11 +74,11 @@ backend$ python -m pytest tests/test_whatsapp_proxy_routes.py      # 8 passed
 backend$ python -m pytest tests/test_auth_negative_matrix.py       # 23 passed
 backend$ python -m pytest tests/test_realtime.py                   # 16 passed
 backend$ python -m pytest -q -p no:randomly                        # 2263 passed, 30 skipped,
-                                                                  # 1 failed* (pré-existente), 1 error** 
+                                                                  # 1 failed* (pré-existente)
                                                                   # (24min49s)
 backend$ ruff check <arquivos alterados>                           # limpo
-backend$ mypy app                                                  # 4 errors, todos pré-existentes
-                                                                  # em app/application/contacts/renamer.py
+backend$ mypy app                                                  # 0 errors (era 4; corrigidos)
+frontend$ npx vitest run src/features/finance src/lib/utils.test.ts # 117 passed
 ```
 
 - `tests/test_whatsapp_proxy_routes.py`: contrato de proxy + **401 anônimo**,
@@ -87,10 +87,16 @@ backend$ mypy app                                                  # 4 errors, t
   caminho feliz autenticado e `/metrics` (401 anônimo → 200 com chave de serviço ou
   `METRICS_PUBLIC`).
 
-\* `tests/test_routing_optimizer.py::test_reordena_com_ganho_real` — falha pré-existente
-neste ambiente (`provider="fallback"` vs `"haversine"`); nenhuma alteração em
-`app/application/routing` (verificado com `git diff HEAD`).
-\** erro de fixture do próprio teste corrigido no mesmo dia (`admin_token`).
+\* `tests/test_routing_optimizer.py::test_reordena_com_ganho_real` — **confirmado
+pré-existente**: rodado em worktree do commit `beab979` (antes de qualquer mudança
+desta sessão) com a mesma venv → mesmo resultado (`provider="fallback"` vs
+`"haversine"`), 1 failed / 7 passed. Nenhuma alteração em `app/application/routing`.
+
+**Mypy**: os 4 erros do baseline (`app/application/contacts/renamer.py`) foram
+corrigidos — `_chave` aceita `Optional[str]` (já tratava `None` em runtime),
+narrowing de `nome` na cauda e `endereco: Optional[str]`. `mypy app` agora
+termina com "Success: no issues found in 337 source files"; 78 testes de
+renomeador continuam verdes.
 
 ## Status da Fase 1
 
@@ -155,9 +161,12 @@ Ainda não apliquei nada no banco (nem `stamp`, nem índices). Requer decisão +
 2. **10 rotas `SOMENTE_DB`** (ex.: `POST /auth/mobile/*`, `POST /integrations/import`,
    `POST /public/referral/*`) — sem credencial no router; a importação de integração
    precisa de revisão.
-3. **Alembic**: banco local em `f2b9d4c6a8e0` vs head `9f4b7e2a6c31` (17 migrations);
-   `init_db` compensa com `create_all` e migrações leves → risco de drift.
-4. **CI**: e2e >45min; mypy baseline (4 erros em `renamer.py`); TS7/typescript-eslint.
+3. **Alembic** (diagnóstico feito, correção pendente de decisão): banco local em
+   `f2b9d4c6a8e0` vs head `9f4b7e2a6c31` (17 migrations); o schema real já tem as
+   tabelas (via `create_all`), mas **~12 índices dessas migrations nunca foram
+   criados** e `alembic upgrade head` falharia por tabela já existente. Ver seção
+   "Diagnóstico do alembic".
+4. **CI**: e2e >45min; TS7/typescript-eslint. (Mypy baseline resolvido: 0 erros.)
 5. `/metrics` fora do compose precisa de `METRICS_PUBLIC=1` ou da chave de serviço no
    `prometheus.yml` correspondente (o de `monitoring/` aponta para `backend:8000`
    dentro do compose, que já liga a flag).
