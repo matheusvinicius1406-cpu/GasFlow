@@ -153,7 +153,14 @@ export function DreSection({ data }: { data: DreData }) {
                         )}
                       </span>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label={`Despesa ${CATEGORY_LABELS[item.category] ?? item.category}`}
+                      aria-valuenow={Math.round(Math.min(100, Math.max(0, pct)))}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
                       <div
                         className="h-full rounded-full bg-destructive"
                         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}

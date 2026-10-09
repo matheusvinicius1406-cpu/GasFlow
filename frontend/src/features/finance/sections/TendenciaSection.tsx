@@ -4,7 +4,6 @@ import {
   Legend,
   Line,
   LineChart as RechartsLineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -12,8 +11,15 @@ import {
 import { Alert } from '@/components/ui/Alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
-import { chartVar } from '../chartTokens'
-import { toCsvDate } from '../exportPeriodCsv'
+import { chartVar, useChartThemeTick } from '../chartTokens'
+import {
+  CHART_MARGIN,
+  ChartFrame,
+  dateXAxisProps,
+  gridProps,
+  moneyTooltipProps,
+  moneyYAxisProps,
+} from '../chartKit'
 import type { PeriodData } from '../useVisaoGeralData'
 import { money } from '../useVisaoGeralData'
 import { KpiCard } from './KpiCard'
@@ -95,6 +101,8 @@ function calcularTendencia(period: PeriodData): Tendencia {
  * dados.
  */
 export function TendenciaSection({ data }: { data: PeriodData }) {
+  // Dispara re-render na troca de tema para as cores (chartVar) re-resolverem.
+  useChartThemeTick()
   const { pontos, inclinacao, projecaoTotal, mediaDiaria } = calcularTendencia(data)
   const subindo = inclinacao >= 0
 
@@ -127,24 +135,20 @@ export function TendenciaSection({ data }: { data: PeriodData }) {
         projeção estatística simples — não altera dados.
       </Alert>
 
-      <Card data-testid="tendencia-serie">
+      <Card className="avoid-break" data-testid="tendencia-serie">
         <CardHeader>
           <CardTitle className="text-base">Recebimentos, média móvel e projeção</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={320}>
-            <RechartsLineChart data={pontos} margin={{ top: 5, right: 12, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(d: string) => toCsvDate(d).slice(0, 5)}
-              />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value) => formatCurrency(Number(value))}
-                labelFormatter={(label) => toCsvDate(String(label))}
-              />
+          <ChartFrame
+            height={320}
+            label={`Recebimentos, média móvel de ${JANELA_MM} dias e projeção de ${HORIZONTE} dias — média diária de ${formatCurrency(mediaDiaria)}`}
+          >
+            <RechartsLineChart data={pontos} margin={CHART_MARGIN}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...dateXAxisProps} />
+              <YAxis {...moneyYAxisProps} />
+              <Tooltip {...moneyTooltipProps} />
               <Legend />
               <Line
                 type="monotone"
@@ -175,7 +179,7 @@ export function TendenciaSection({ data }: { data: PeriodData }) {
                 connectNulls
               />
             </RechartsLineChart>
-          </ResponsiveContainer>
+          </ChartFrame>
         </CardContent>
       </Card>
     </div>

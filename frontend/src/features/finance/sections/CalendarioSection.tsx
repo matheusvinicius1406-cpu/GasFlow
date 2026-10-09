@@ -89,7 +89,9 @@ export function CalendarioSection({ data }: { data: CalendarioData }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
+          {/* 6 colunas no celular (4 linhas), 12 no tablet e 24 no desktop —
+              o grid fixo de 24 colunas virava microscópio no mobile. */}
+          <div className="grid grid-cols-6 gap-1 sm:grid-cols-12 lg:[grid-template-columns:repeat(24,minmax(0,1fr))]">
             {porHora.map((h) => (
               <div
                 key={h.hour}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Flame } from 'lucide-react'
+import { chartVar, useChartThemeTick } from '@/features/finance/chartTokens'
 
 /**
  * DeliveryHeatmap — densidade de entregas por bairro (F8).
@@ -10,6 +11,9 @@ import { Flame } from 'lucide-react'
  * Cada bairro com centroide vira um círculo: raio e cor escalam com a
  * contagem (verde → amarelo → vermelho). Popup com o número. Sem postgis,
  * sem API key; só visualização (E3 — nada de posicionamento aqui).
+ *
+ * As cores vêm dos tokens do tema (nenhum hex literal) e a camada é
+ * redesenhada na troca de tema — `chartVar` só resolve no render.
  *
  * Bairros sem centroide (entregas sem lat/lng) NÃO vão para o mapa —
  * seguem visíveis na lista lateral da página.
@@ -27,11 +31,11 @@ interface DeliveryHeatmapProps {
   className?: string
 }
 
-/** Verde (pouco) → amarelo (médio) → vermelho (denso). */
+/** Verde (pouco) → amarelo (médio) → vermelho (denso), via tokens do tema. */
 function colorFor(ratio: number): string {
-  if (ratio < 0.34) return '#16a34a'
-  if (ratio < 0.67) return '#eab308'
-  return '#dc2626'
+  if (ratio < 0.34) return chartVar('--success')
+  if (ratio < 0.67) return chartVar('--warning')
+  return chartVar('--destructive')
 }
 
 /** Raio em metros: 150m (1 entrega) até 900m (densidade máxima). */
@@ -44,6 +48,8 @@ export function DeliveryHeatmap({ cells, className = 'h-96' }: DeliveryHeatmapPr
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
+  // Re-render na troca de tema → o efeito abaixo redesenha com as novas cores.
+  const themeTick = useChartThemeTick()
 
   // Cria o mapa uma única vez.
   useEffect(() => {
@@ -67,7 +73,7 @@ export function DeliveryHeatmap({ cells, className = 'h-96' }: DeliveryHeatmapPr
     }
   }, [])
 
-  // Re-renderiza a camada quando as células mudam.
+  // Re-renderiza a camada quando as células mudam (ou o tema troca).
   useEffect(() => {
     const map = mapRef.current
     const layer = layerRef.current
@@ -97,7 +103,7 @@ export function DeliveryHeatmap({ cells, className = 'h-96' }: DeliveryHeatmapPr
       const bounds = L.latLngBounds(mappable.map((c) => [c.center!.lat, c.center!.lng] as [number, number]))
       map.fitBounds(bounds.pad(0.25), { maxZoom: 15 })
     }
-  }, [cells])
+  }, [cells, themeTick])
 
   const mappable = cells.filter((c) => c.center)
   if (cells.length === 0) {

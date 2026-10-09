@@ -521,10 +521,28 @@ body {
     display: block !important;
   }
 
-  /* Não corta cartão/linha no meio da página. */
+  /* Não corta cartão/linha/gráfico no meio da página. */
   .avoid-break,
   table,
   tr {
     break-inside: avoid;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODO TV (P10) — rótulos maiores para leitura à distância.
+   O TvMode grava `data-tv` no <html>; o font-size em CSS vence o
+   atributo `font-size` do SVG (recharts escreve ticks como atributo).
+   ═══════════════════════════════════════════════════════════════ */
+
+html[data-tv='true'] .recharts-text {
+  font-size: 14px;
+}
+
+html[data-tv='true'] .recharts-legend-item-text {
+  font-size: 15px;
+}
+
+html[data-tv='true'] .recharts-default-tooltip {
+  font-size: 14px;
 }

@@ -1,4 +1,5 @@
 import { AlertTriangle, Boxes, DollarSign, TrendingUp } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts'
 import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -10,7 +11,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/Table'
-import { cn, formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
+import { cn, formatAxisCurrency, formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
+import {
+  CHART_MARGIN,
+  ChartFrame,
+  axisTick,
+  gridProps,
+  moneyTooltipProps,
+} from '../chartKit'
+import { chartVar, useChartThemeTick } from '../chartTokens'
 import type { ProductsData } from '../useAnalyticsData'
 import { money } from '../useVisaoGeralData'
 import { KpiCard } from './KpiCard'
@@ -21,11 +30,17 @@ import { KpiCard } from './KpiCard'
  * é `null` (a linha mostra "Sem custo", nunca zero disfarçado).
  */
 export function ProdutosSection({ data }: { data: ProductsData }) {
+  // Dispara re-render na troca de tema para a cor (chartVar) re-resolver.
+  useChartThemeTick()
   const items = data.items
   const receita = money(data.revenue)
   const quantidade = items.reduce((s, i) => s + i.quantity, 0)
   const margemConhecida = items.reduce((s, i) => s + (i.cost_known ? money(i.margin) : 0), 0)
   const semCusto = items.filter((i) => !i.cost_known).length
+
+  // Top 5 por receita — o ranking que a tabela mostra em ordem de página.
+  const topReceita = [...items].sort((a, b) => money(b.revenue) - money(a.revenue)).slice(0, 5)
+  const lider = topReceita[0]
 
   return (
     <div className="space-y-6" data-testid="produtos-section">
@@ -63,6 +78,28 @@ export function ProdutosSection({ data }: { data: ProductsData }) {
           {semCusto} produto{semCusto === 1 ? '' : 's'} sem nota de compra confirmada. Para esses, a
           margem fica indisponível até a nota ser confirmada.
         </Alert>
+      )}
+
+      {lider && (
+        <Card className="avoid-break" data-testid="produtos-top5">
+          <CardHeader>
+            <CardTitle className="text-base">Receita por produto (top 5)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartFrame
+              height={240}
+              label={`Receita dos cinco produtos que mais faturaram — líder ${lider.product_nome} com ${formatCurrency(money(lider.revenue))}`}
+            >
+              <BarChart data={topReceita} layout="vertical" margin={CHART_MARGIN}>
+                <CartesianGrid {...gridProps} />
+                <XAxis type="number" tick={axisTick} tickFormatter={(value) => formatAxisCurrency(Number(value))} />
+                <YAxis type="category" dataKey="product_nome" width={140} tick={axisTick} />
+                <Tooltip {...moneyTooltipProps} />
+                <Bar dataKey="revenue" name="Receita" fill={chartVar('--primary')} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ChartFrame>
+          </CardContent>
+        </Card>
       )}
 
       <Card data-testid="produtos-tabela">

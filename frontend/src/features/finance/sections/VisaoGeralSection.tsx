@@ -10,14 +10,16 @@ import {
 } from 'lucide-react'
 import {
   Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
   Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -50,7 +52,16 @@ import {
 } from '@/components/ui/Table'
 import { cn, formatCurrency, formatPercent } from '@/lib/utils'
 import type { CashMovement, FinanceExpense, FinancePayment, Receivable } from '@/types'
-import { chartToken, chartVar } from '../chartTokens'
+import { chartToken, chartVar, useChartThemeTick } from '../chartTokens'
+import {
+  CHART_MARGIN,
+  ChartFrame,
+  axisTick,
+  dateXAxisProps,
+  gridProps,
+  moneyTooltipProps,
+  moneyYAxisProps,
+} from '../chartKit'
 import { toCsvDate } from '../exportPeriodCsv'
 import { CATEGORY_LABELS, METHOD_LABELS } from '../financeLabels'
 import { KpiCard } from './KpiCard'
@@ -208,6 +219,8 @@ function MetaCard({
 
 export function VisaoGeralSection({ data, can }: VisaoGeralSectionProps) {
   const period = data.period
+  // Dispara re-render na troca de tema para as cores (chartVar) re-resolverem.
+  useChartThemeTick()
   const descId = useId()
   const amountId = useId()
   const categoryId = useId()
@@ -313,6 +326,25 @@ export function VisaoGeralSection({ data, can }: VisaoGeralSectionProps) {
     .map((c) => ({ name: CATEGORY_LABELS[c.category] ?? c.category, value: money(c.total) }))
     .filter((d) => d.value > 0)
 
+  // Comparativo com o período ANTERIOR de mesma duração (o backend já devolve
+  // `previous`; os pcts nos KPIs vêm dele) — barras agrupadas por total.
+  const ant = period.previous
+  const comparativo = ant
+    ? [
+        { name: 'Recebimentos', atual: money(period.total_receipts), anterior: money(ant.total_receipts) },
+        { name: 'Despesas', atual: money(period.total_expenses), anterior: money(ant.total_expenses) },
+        { name: 'Resultado', atual: money(period.net_result), anterior: money(ant.net_result) },
+      ]
+    : []
+
+  // Resultado acumulado dia a dia (soma corrente do net_result).
+  let acumuladoSaldo = 0
+  const acumulado = period.daily.map((d) => {
+    acumuladoSaldo += money(d.net_result)
+    return { date: d.date, acumulado: Number(acumuladoSaldo.toFixed(2)) }
+  })
+  const acumuladoFinal = acumulado[acumulado.length - 1]?.acumulado ?? 0
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -378,64 +410,133 @@ export function VisaoGeralSection({ data, can }: VisaoGeralSectionProps) {
           realizado={money(period.total_expenses)}
           days={period.days}
         />
-        <Card className="lg:col-span-2" data-testid="vg-fluxo">
+        <Card className="avoid-break lg:col-span-2" data-testid="vg-fluxo">
           <CardHeader>
             <CardTitle className="text-base">Entradas, saídas e resultado por dia</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={period.daily} margin={{ top: 5, right: 12, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d: string) => toCsvDate(d).slice(0, 5)} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip
-                  formatter={(value) => formatCurrency(Number(value))}
-                  labelFormatter={(label) => toCsvDate(String(label))}
-                />
+            <ChartFrame
+              height={280}
+              label={`Entradas, saídas e resultado por dia — ${formatCurrency(
+                money(period.total_receipts)
+              )} de recebimentos e ${formatCurrency(money(period.total_expenses))} de despesas no período`}
+            >
+              <ComposedChart data={period.daily} margin={CHART_MARGIN}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...dateXAxisProps} />
+                <YAxis {...moneyYAxisProps} />
+                <Tooltip {...moneyTooltipProps} />
                 <Legend />
                 <Bar dataKey="receipts" name="Recebimentos" fill={chartVar('--success')} radius={[3, 3, 0, 0]} />
                 <Bar dataKey="expenses" name="Despesas" fill={chartVar('--destructive')} radius={[3, 3, 0, 0]} />
                 <Line type="monotone" dataKey="net_result" name="Resultado" stroke={chartVar('--info')} strokeWidth={2} dot={false} />
               </ComposedChart>
-            </ResponsiveContainer>
+            </ChartFrame>
           </CardContent>
         </Card>
       </div>
 
-      <Card data-testid="vg-categorias">
-        <CardHeader>
-          <CardTitle className="text-base">Despesas por categoria</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.categoriesFailed ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Não foi possível carregar as categorias.
-            </p>
-          ) : data.categories === null ? (
-            <div className="flex justify-center py-8">
-              <LoadingSpinner />
-            </div>
-          ) : donutData.length === 0 ? (
-            <EmptyState
-              icon={BarChart3}
-              title="Sem despesas por categoria"
-              description="Nenhuma despesa ativa no período escolhido."
-            />
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={2}>
-                  {donutData.map((entry, i) => (
-                    <Cell key={entry.name} fill={chartToken(i)} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="avoid-break" data-testid="vg-categorias">
+          <CardHeader>
+            <CardTitle className="text-base">Despesas por categoria</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.categoriesFailed ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Não foi possível carregar as categorias.
+              </p>
+            ) : data.categories === null ? (
+              <div className="flex justify-center py-8">
+                <LoadingSpinner />
+              </div>
+            ) : donutData.length === 0 ? (
+              <EmptyState
+                icon={BarChart3}
+                title="Sem despesas por categoria"
+                description="Nenhuma despesa ativa no período escolhido."
+              />
+            ) : (
+              <ChartFrame
+                height={280}
+                label={`Despesas por categoria — total de ${formatCurrency(
+                  money(data.categories.total)
+                )} no período`}
+              >
+                <PieChart>
+                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={2}>
+                    {donutData.map((entry, i) => (
+                      <Cell key={`${i}-${entry.name}`} fill={chartToken(i)} />
+                    ))}
+                  </Pie>
+                  <Tooltip {...moneyTooltipProps} />
+                  <Legend />
+                </PieChart>
+              </ChartFrame>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="avoid-break" data-testid="vg-comparativo">
+          <CardHeader>
+            <CardTitle className="text-base">Período atual vs anterior</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {comparativo.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Sem período anterior para comparar.
+              </p>
+            ) : (
+              <ChartFrame
+                height={280}
+                label={`Comparativo com o período anterior de mesma duração — recebimentos ${formatCurrency(
+                  money(period.total_receipts)
+                )} contra ${formatCurrency(money(ant?.total_receipts ?? 0))}, despesas ${formatCurrency(
+                  money(period.total_expenses)
+                )} contra ${formatCurrency(money(ant?.total_expenses ?? 0))}`}
+              >
+                <BarChart data={comparativo} margin={CHART_MARGIN}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="name" tick={axisTick} />
+                  <YAxis {...moneyYAxisProps} />
+                  <Tooltip {...moneyTooltipProps} />
+                  <Legend />
+                  <Bar dataKey="anterior" name="Período anterior" fill={chartVar('--muted-foreground')} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="atual" name="Este período" fill={chartVar('--primary')} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartFrame>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="avoid-break" data-testid="vg-acumulado">
+          <CardHeader>
+            <CardTitle className="text-base">Resultado acumulado no período</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartFrame
+              height={280}
+              label={`Resultado acumulado dia a dia — fecha o período em ${formatCurrency(acumuladoFinal)}`}
+            >
+              <LineChart data={acumulado} margin={CHART_MARGIN}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...dateXAxisProps} />
+                <YAxis {...moneyYAxisProps} />
+                <Tooltip {...moneyTooltipProps} />
+                <ReferenceLine y={0} stroke="var(--border)" />
+                <Line
+                  type="monotone"
+                  dataKey="acumulado"
+                  name="Resultado acumulado"
+                  stroke={chartVar('--info')}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ChartFrame>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card data-testid="vg-tabela">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">

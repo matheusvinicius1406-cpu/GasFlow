@@ -99,11 +99,11 @@ export function MapaCalorSection() {
                   {data.neighborhoods.map((n) => (
                     <div key={n.neighborhood} className="flex items-center gap-3">
                       <span className="w-40 truncate text-sm font-medium">{n.neighborhood}</span>
-                      <div className="h-3 flex-1 rounded-full bg-muted">
+                      {/* Barra decorativa — o número ao lado já é o conteúdo. */}
+                      <div className="h-3 flex-1 rounded-full bg-muted" aria-hidden>
                         <div
                           className="h-3 rounded-full bg-primary"
                           style={{ width: `${(n.count / maxCount) * 100}%` }}
-                          aria-hidden
                         />
                       </div>
                       <span className="w-12 text-right text-sm text-muted-foreground">{n.count}</span>

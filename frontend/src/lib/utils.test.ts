@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, formatDate, formatPhone, cn } from './utils'
+import { formatCurrency, formatDate, formatPhone, formatAxisCurrency, cn } from './utils'
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -17,6 +17,25 @@ describe('formatCurrency', () => {
   it('formats Brazilian Real', () => {
     expect(formatCurrency(89.9)).toContain('89')
     expect(formatCurrency(0)).toContain('0')
+  })
+})
+
+describe('formatAxisCurrency', () => {
+  it('mantém o formato cheio abaixo de R$ 1 mil', () => {
+    expect(formatAxisCurrency(0)).toBe('R$ 0')
+    // Intl usa espaço não separável (R$ 500,00) — referência é o próprio formatCurrency.
+    expect(formatAxisCurrency(500)).toBe(formatCurrency(500))
+  })
+
+  it('compacta mil, milhões e bilhões', () => {
+    expect(formatAxisCurrency(1000)).toBe('R$ 1 mil')
+    expect(formatAxisCurrency(1500)).toBe('R$ 1,5 mil')
+    expect(formatAxisCurrency(2_000_000)).toBe('R$ 2 mi')
+    expect(formatAxisCurrency(3_000_000_000)).toBe('R$ 3 bi')
+  })
+
+  it('preserva o sinal de negativo com o traço tipográfico', () => {
+    expect(formatAxisCurrency(-1500)).toBe('−R$ 1,5 mil')
   })
 })
 

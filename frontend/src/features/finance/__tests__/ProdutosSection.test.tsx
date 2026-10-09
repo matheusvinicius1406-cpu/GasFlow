@@ -82,6 +82,15 @@ describe('ProdutosSection (P6 — dado)', () => {
     renderWithProviders(<ProdutosSection data={{ ...produtos, items: produtos.items.slice(0, 1) }} />)
     expect(screen.queryByText('Margem incompleta')).toBeNull()
   })
+
+  it('mostra o gráfico de receita (top 5) com o líder no rótulo', () => {
+    renderWithProviders(<ProdutosSection data={produtos} />)
+
+    expect(screen.getByTestId('produtos-top5')).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: /^Receita dos cinco produtos que mais faturaram — líder Gás 13kg com R\$\s3\.000,00/ })
+    ).toBeInTheDocument()
+  })
 })
 
 describe('ProdutosSection (P6 — estados do shell)', () => {

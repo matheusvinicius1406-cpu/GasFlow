@@ -80,7 +80,14 @@ export function ClientesSection({ data }: { data: ClientesData }) {
               <p className={cn('text-lg font-bold', b.total > 0 ? 'text-foreground' : 'text-muted-foreground')}>
                 {formatCurrency(b.total)}
               </p>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label={`Aging ${b.bucket} dias`}
+                aria-valuenow={Math.round((b.total / maxBucket) * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
                 <div
                   className={cn('h-full rounded-full', b.bucket === '90+' ? 'bg-destructive' : 'bg-warning')}
                   style={{ width: `${(b.total / maxBucket) * 100}%` }}

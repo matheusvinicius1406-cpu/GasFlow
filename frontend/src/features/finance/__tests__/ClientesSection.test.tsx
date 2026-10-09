@@ -78,6 +78,15 @@ describe('ClientesSection (P7 — dado)', () => {
     expect(screen.getByText('#PED9')).toBeInTheDocument()
     expect(screen.getByText('Ação manual')).toBeInTheDocument()
   })
+
+  it('expõe o aging como progressbar relativo ao maior bucket', () => {
+    renderWithProviders(<ClientesSection data={clientes} />)
+
+    // maxBucket = 1500 (bucket 0-30)
+    expect(screen.getByRole('progressbar', { name: 'Aging 0-30 dias' })).toHaveAttribute('aria-valuenow', '100')
+    expect(screen.getByRole('progressbar', { name: 'Aging 31-60 dias' })).toHaveAttribute('aria-valuenow', '20')
+    expect(screen.getByRole('progressbar', { name: 'Aging 90+ dias' })).toHaveAttribute('aria-valuenow', '47')
+  })
 })
 
 describe('ClientesSection (P7 — estados do shell)', () => {

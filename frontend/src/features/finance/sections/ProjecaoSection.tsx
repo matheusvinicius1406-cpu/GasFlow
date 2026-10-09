@@ -1,18 +1,17 @@
 import { ArrowDownCircle, ArrowUpCircle, Info, Wallet } from 'lucide-react'
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts'
 import { Alert } from '@/components/ui/Alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
-import { chartVar } from '../chartTokens'
-import { toCsvDate } from '../exportPeriodCsv'
+import { chartVar, useChartThemeTick } from '../chartTokens'
+import {
+  CHART_MARGIN,
+  ChartFrame,
+  dateXAxisProps,
+  gridProps,
+  moneyTooltipProps,
+  moneyYAxisProps,
+} from '../chartKit'
 import type { ProjectionData } from '../useAnalyticsData'
 import { money } from '../useVisaoGeralData'
 import { KpiCard } from './KpiCard'
@@ -23,14 +22,14 @@ import { KpiCard } from './KpiCard'
  * a seção repete para não vender precisão que não existe.
  */
 export function ProjecaoSection({ data }: { data: ProjectionData }) {
+  // Dispara re-render na troca de tema para as cores (chartVar) re-resolverem.
+  useChartThemeTick()
   const projetado = money(data.projected_balance)
   const atual = money(data.current_balance)
 
   const serie = data.daily.map((d) => ({
     date: d.date,
     saldo: money(d.balance),
-    entradas: money(d.inflow),
-    saidas: money(d.outflow),
   }))
 
   return (
@@ -70,24 +69,20 @@ export function ProjecaoSection({ data }: { data: ProjectionData }) {
         {formatCurrency(money(data.avg_daily_expenses))} por dia.
       </Alert>
 
-      <Card data-testid="projecao-serie">
+      <Card className="avoid-break" data-testid="projecao-serie">
         <CardHeader>
           <CardTitle className="text-base">Saldo projetado por dia</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={serie} margin={{ top: 5, right: 12, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(d: string) => toCsvDate(d).slice(0, 5)}
-              />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value) => formatCurrency(Number(value))}
-                labelFormatter={(label) => toCsvDate(String(label))}
-              />
+          <ChartFrame
+            height={300}
+            label={`Saldo projetado por dia — de ${formatCurrency(atual)} hoje para ${formatCurrency(projetado)} em ${data.horizon} dias`}
+          >
+            <LineChart data={serie} margin={CHART_MARGIN}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...dateXAxisProps} />
+              <YAxis {...moneyYAxisProps} />
+              <Tooltip {...moneyTooltipProps} />
               <Line
                 type="monotone"
                 dataKey="saldo"
@@ -97,7 +92,7 @@ export function ProjecaoSection({ data }: { data: ProjectionData }) {
                 dot={false}
               />
             </LineChart>
-          </ResponsiveContainer>
+          </ChartFrame>
           <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5" />
             Linha de saldo acumulado — recebíveis com vencimento e média de despesas do período.

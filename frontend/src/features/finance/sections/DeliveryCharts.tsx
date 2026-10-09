@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  LineChart, Line,
 } from 'recharts'
 import { FileDown, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -10,7 +10,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { apiClient } from '@/lib/api/client'
 import { exportCurrentViewPdf } from '@/lib/exportPdf'
-import { chartVar } from '../chartTokens'
+import { axisTick, countYAxisProps, dateXAxisProps, gridProps, ChartFrame, CHART_MARGIN } from '../chartKit'
+import { chartVar, useChartThemeTick } from '../chartTokens'
 
 interface DayPoint { day: string; created: number; delivered: number; failed: number }
 interface DriverPoint { driver_id: string; assigned: number; delivered: number; failed: number; avg_minutes: number | null }
@@ -30,7 +31,6 @@ const PERIODS = [7, 30, 90] as const
  * diálogo de impressão — ver `lib/exportPdf`). */
 function useExportPdf() {
   const [exporting, setExporting] = useState(false)
-  const sectionRef = useRef<HTMLDivElement | null>(null)
 
   const exportPdf = useCallback(async () => {
     setExporting(true)
@@ -41,7 +41,7 @@ function useExportPdf() {
     }
   }, [])
 
-  return { exportPdf, exporting, sectionRef }
+  return { exportPdf, exporting }
 }
 
 /**
@@ -54,7 +54,9 @@ export function DeliveryCharts() {
   const [data, setData] = useState<DeliveryReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const { exportPdf, exporting, sectionRef } = useExportPdf()
+  const { exportPdf, exporting } = useExportPdf()
+  // Dispara re-render na troca de tema para as cores (chartVar) re-resolverem.
+  useChartThemeTick()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -108,9 +110,9 @@ export function DeliveryCharts() {
           action={<Button onClick={fetchData}>Tentar novamente</Button>}
         />
       ) : data ? (
-        <div ref={sectionRef} className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {/* Entregas por período */}
-          <Card className="lg:col-span-2">
+          <Card className="avoid-break lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Entregas por dia</CardTitle>
             </CardHeader>
@@ -118,24 +120,27 @@ export function DeliveryCharts() {
               {data.by_day.length === 0 ? (
                 <EmptyState icon={FileDown} title="Sem dados" description="Nenhuma entrega na janela." />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={data.by_day} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={(d: string) => d.slice(5)} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <ChartFrame
+                  height={260}
+                  label={`Entregas por dia nos últimos ${days} dias — criadas, entregues e falhas`}
+                >
+                  <LineChart data={data.by_day} margin={CHART_MARGIN}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="day" {...dateXAxisProps} />
+                    <YAxis {...countYAxisProps} />
                     <Tooltip />
                     <Legend />
                     <Line type="monotone" dataKey="created" name="Criadas" stroke={chartVar('--muted-foreground')} strokeWidth={2} dot={false} />
                     <Line type="monotone" dataKey="delivered" name="Entregues" stroke={chartVar('--success')} strokeWidth={2} dot={false} />
                     <Line type="monotone" dataKey="failed" name="Falhas" stroke={chartVar('--destructive')} strokeWidth={2} dot={false} />
                   </LineChart>
-                </ResponsiveContainer>
+                </ChartFrame>
               )}
             </CardContent>
           </Card>
 
           {/* Performance por entregador */}
-          <Card>
+          <Card className="avoid-break">
             <CardHeader>
               <CardTitle className="text-base">Comparativo por entregador</CardTitle>
             </CardHeader>
@@ -143,23 +148,23 @@ export function DeliveryCharts() {
               {data.by_driver.length === 0 ? (
                 <EmptyState icon={FileDown} title="Sem dados" description="Nenhuma entrega atribuída." />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={data.by_driver} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <ChartFrame height={240} label="Entregas e falhas por entregador">
+                  <BarChart data={data.by_driver} margin={CHART_MARGIN}>
+                    <CartesianGrid {...gridProps} />
                     <XAxis dataKey="driver_id" tick={{ fontSize: 10 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis {...countYAxisProps} />
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="delivered" name="Entregues" fill={chartVar('--success')} radius={[3, 3, 0, 0]} />
                     <Bar dataKey="failed" name="Falhas" fill={chartVar('--destructive')} radius={[3, 3, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartFrame>
               )}
             </CardContent>
           </Card>
 
           {/* Tempo médio de entrega (atribuição → DELIVERED) */}
-          <Card>
+          <Card className="avoid-break">
             <CardHeader>
               <CardTitle className="text-base">Tempo médio de entrega (min)</CardTitle>
             </CardHeader>
@@ -167,21 +172,24 @@ export function DeliveryCharts() {
               {data.by_driver.filter((d) => d.avg_minutes != null).length === 0 ? (
                 <EmptyState icon={FileDown} title="Sem dados" description="Nenhuma entrega concluída com tempo medido." />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={data.by_driver.filter((d) => d.avg_minutes != null)} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <ChartFrame
+                  height={240}
+                  label="Tempo médio de entrega por entregador, em minutos (atribuição → entrega)"
+                >
+                  <BarChart data={data.by_driver.filter((d) => d.avg_minutes != null)} margin={CHART_MARGIN}>
+                    <CartesianGrid {...gridProps} />
                     <XAxis dataKey="driver_id" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
+                    <YAxis width={48} tick={axisTick} tickFormatter={(value) => `${Number(value)} min`} />
+                    <Tooltip formatter={(value) => `${Number(value)} min`} />
                     <Bar dataKey="avg_minutes" name="Minutos (atribuição → entrega)" fill={chartVar('--info')} radius={[3, 3, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartFrame>
               )}
             </CardContent>
           </Card>
 
           {/* Por região (bairro) */}
-          <Card className="lg:col-span-2">
+          <Card className="avoid-break lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Entregas por bairro</CardTitle>
             </CardHeader>
@@ -189,15 +197,15 @@ export function DeliveryCharts() {
               {data.by_neighborhood.length === 0 ? (
                 <EmptyState icon={FileDown} title="Sem dados" description="Nenhuma entrega concluída." />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={data.by_neighborhood} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <ChartFrame height={240} label="Entregas concluídas por bairro">
+                  <BarChart data={data.by_neighborhood} margin={CHART_MARGIN}>
+                    <CartesianGrid {...gridProps} />
                     <XAxis dataKey="neighborhood" tick={{ fontSize: 10 }} interval={0} angle={-20} height={50} textAnchor="end" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis {...countYAxisProps} />
                     <Tooltip />
                     <Bar dataKey="count" name="Entregas" fill={chartVar('--warning')} radius={[3, 3, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartFrame>
               )}
             </CardContent>
           </Card>

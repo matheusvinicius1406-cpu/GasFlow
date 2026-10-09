@@ -28,6 +28,15 @@ export interface PeriodComparison {
   net_pct?: number | null
 }
 
+/** Totais do período anterior de mesma duração (já calculado pelo backend). */
+export interface PeriodTotals {
+  from: string
+  to: string
+  total_receipts: number | string
+  total_expenses: number | string
+  net_result: number | string
+}
+
 export interface PeriodData {
   from: string
   to: string
@@ -36,6 +45,7 @@ export interface PeriodData {
   total_expenses: number | string
   net_result: number | string
   daily: PeriodDay[]
+  previous?: PeriodTotals
   comparison: PeriodComparison
 }
 

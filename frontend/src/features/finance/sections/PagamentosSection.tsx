@@ -54,16 +54,24 @@ export function PagamentosSection({ data }: { data: MethodBreakdownData }) {
               {items.map((item, index) => {
                 const valor = money(item.total)
                 const pct = total > 0 ? (valor / total) * 100 : 0
+                const rotulo = METHOD_LABELS[item.method] ?? item.method
                 return (
                   <div key={item.method} className="space-y-1">
                     <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="font-medium">{METHOD_LABELS[item.method] ?? item.method}</span>
+                      <span className="font-medium">{rotulo}</span>
                       <span className="text-muted-foreground">
                         {formatCurrency(valor)}
                         <span className="ml-2 text-xs">{formatPercent(item.pct ?? pct)}</span>
                       </span>
                     </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label={`Proporção de ${rotulo} no total recebido`}
+                      aria-valuenow={Math.round(pct)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
                       <div
                         className="h-full rounded-full"
                         style={{ width: `${pct}%`, backgroundColor: chartToken(index) }}

@@ -52,6 +52,16 @@ describe('DeliveryCharts (movido para o Financeiro no P8)', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/reports/deliveries', { params: { days: 30 } })
   })
 
+  it('cada gráfico tem rótulo acessível com a unidade correta', async () => {
+    renderWithProviders(<DeliveryCharts />)
+    await waitFor(() => screen.getByText('Entregas por dia'))
+
+    expect(screen.getByRole('img', { name: /^Entregas por dia nos últimos 30 dias/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Entregas e falhas por entregador' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Tempo médio de entrega por entregador, em minutos/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Entregas concluídas por bairro' })).toBeInTheDocument()
+  })
+
   it('troca o período e refaz a chamada', async () => {
     renderWithProviders(<DeliveryCharts />)
     await waitFor(() => screen.getByText('Entregas por dia'))

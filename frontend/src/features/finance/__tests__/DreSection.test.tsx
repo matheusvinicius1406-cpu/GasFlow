@@ -70,6 +70,17 @@ describe('DreSection (P6 — dado)', () => {
     renderWithProviders(<DreSection data={{ ...dre, cmv_coverage: 100 }} />)
     expect(screen.queryByText('CMV parcial')).toBeNull()
   })
+
+  it('expõe as barras de despesa por categoria como progressbar', () => {
+    renderWithProviders(<DreSection data={dre} />)
+
+    const barras = screen.getAllByRole('progressbar')
+    expect(barras).toHaveLength(2)
+    expect(barras[0]).toHaveAttribute('aria-label', 'Despesa Combustível')
+    expect(barras[0]).toHaveAttribute('aria-valuenow', '67')
+    expect(barras[1]).toHaveAttribute('aria-label', 'Despesa Imposto')
+    expect(barras[1]).toHaveAttribute('aria-valuenow', '33')
+  })
 })
 
 describe('DreSection (P6 — estados do shell)', () => {

@@ -47,7 +47,9 @@ export function useTvMode({
 
   const toggle = useCallback(() => setActive((prev) => !prev), [])
 
-  // Entrar: fullscreen (feature-detect) + tema escuro. Sair: restaura os dois.
+  // Entrar: fullscreen (feature-detect) + tema escuro + `data-tv` no raiz
+  // (CSS escala os rótulos dos gráficos para leitura à distância).
+  // Sair: restaura os três.
   useEffect(() => {
     if (!active) return
     const element = containerRef.current
@@ -55,10 +57,12 @@ export function useTvMode({
       const request = element.requestFullscreen()
       if (request && typeof request.catch === 'function') request.catch(() => undefined)
     }
+    document.documentElement.dataset.tv = 'true'
 
     const previousTheme = themeModeRef.current
     setThemeMode('dark')
     return () => {
+      delete document.documentElement.dataset.tv
       setThemeMode(previousTheme)
       if (typeof document.exitFullscreen === 'function' && document.fullscreenElement) {
         void document.exitFullscreen().catch(() => undefined)

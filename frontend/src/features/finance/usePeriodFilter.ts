@@ -62,7 +62,6 @@ export function findSection(slug: string): SectionDef {
 export function usePeriodFilter() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [days, setDays] = useState<number>(DEFAULT_DAYS)
-  const [q, setQ] = useState('')
 
   const secaoParam = searchParams.get('secao')
   const secao = secaoParam && SECTIONS.some((s) => s.slug === secaoParam) ? secaoParam : DEFAULT_SECAO
@@ -76,5 +75,5 @@ export function usePeriodFilter() {
     [searchParams, setSearchParams]
   )
 
-  return { days, setDays, presets: PERIOD_PRESETS, q, setQ, secao, setSecao }
+  return { days, setDays, presets: PERIOD_PRESETS, secao, setSecao }
 }

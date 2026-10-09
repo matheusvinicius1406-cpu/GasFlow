@@ -221,11 +221,13 @@ describe('Central Financeira — modo TV (P10)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Modo TV' }))
     expect(screen.getByRole('button', { name: 'Modo TV' })).toHaveAttribute('aria-pressed', 'true')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(document.documentElement.dataset.tv).toBe('true')
     expect(screen.getByText(/Modo TV · Visão Geral · ESC para sair/)).toBeInTheDocument()
 
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.getByRole('button', { name: 'Modo TV' })).toHaveAttribute('aria-pressed', 'false')
     expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(document.documentElement.dataset.tv).toBeUndefined()
   })
 
   it('rotaciona a seção a cada 15 segundos', () => {

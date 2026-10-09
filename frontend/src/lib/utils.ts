@@ -20,6 +20,21 @@ export function formatCurrency(value: number): string {
 /** Alias for backward compatibility */
 export const formatMoney = formatCurrency
 
+/**
+ * Rótulo compacto para eixo monetário de gráfico — em vez de "R$ 1.500,00"
+ * (largo demais para o tick, corta na margem), devolve "R$ 1,5 mil".
+ * Abaixo de R$ 1 mil mantém o formato cheio; acima usa mil/mi/bi.
+ */
+export function formatAxisCurrency(value: number): string {
+  const abs = Math.abs(value)
+  if (value === 0) return 'R$ 0'
+  if (abs < 1000) return formatCurrency(value)
+  const step = abs >= 1e9 ? 1e9 : abs >= 1e6 ? 1e6 : 1e3
+  const sufixo = step === 1e9 ? 'bi' : step === 1e6 ? 'mi' : 'mil'
+  const numero = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(abs / step)
+  return `${value < 0 ? '−' : ''}R$ ${numero} ${sufixo}`
+}
+
 // ── Number Formatting ──────────────────────────────────────
 
 export function formatNumber(value: number): string {

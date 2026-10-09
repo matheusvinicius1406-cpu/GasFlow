@@ -55,6 +55,15 @@ describe('PagamentosSection (P7 — dado)', () => {
     expect(within(screen.getByTestId('pagamentos-formas')).getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Dinheiro')).toBeInTheDocument()
   })
+
+  it('expõe as barras de proporção como progressbar acessível', () => {
+    renderWithProviders(<PagamentosSection data={pagamentos} />)
+
+    const pix = screen.getByRole('progressbar', { name: 'Proporção de PIX no total recebido' })
+    expect(pix).toHaveAttribute('aria-valuenow', '75')
+    const dinheiro = screen.getByRole('progressbar', { name: 'Proporção de Dinheiro no total recebido' })
+    expect(dinheiro).toHaveAttribute('aria-valuenow', '25')
+  })
 })
 
 describe('PagamentosSection (P7 — estados do shell)', () => {

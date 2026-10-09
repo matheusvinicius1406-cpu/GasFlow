@@ -1,0 +1,33 @@
+{
+  "municipio": "1501402",
+  "enderecos": 601192,
+  "enderecos_ancora": 550883,
+  "enderecos_ancora_pct": 91.6,
+  "ruas_com_ancora": 5822,
+  "ruas_com_2_ancoras": 5707,
+  "ruas_com_2_ancoras_pct": 98.0,
+  "enderecos_casados_face": 514459,
+  "enderecos_casados_face_pct": 85.6,
+  "faces": 38718,
+  "nos_distintos": 44354,
+  "nos_cruzamento": 30203,
+  "faces_com_2_extremos_cruzados": 25175,
+  "faces_com_2_extremos_cruzados_pct": 65.0,
+  "ruas_faces": 5348,
+  "ruas_com_2_cruzamentos": 5041,
+  "ruas_com_2_cruzamentos_pct": 94.3,
+  "passe_local": {
+    "amostra": 100,
+    "seed": 42,
+    "tempo_s": 1.2,
+    "ruas_com_entre": 67,
+    "ruas_com_entre_pct": 67.0,
+    "cobertura_eixo_media": 0.658,
+    "motivos": {
+      "ok": 67,
+      "menos_de_duas_intersecoes": 17,
+      "sem_face": 11,
+      "sem_ancora_util": 5
+    }
+  }
+}

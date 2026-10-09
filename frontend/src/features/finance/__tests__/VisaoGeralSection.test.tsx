@@ -197,6 +197,48 @@ describe('Visão Geral (P5)', () => {
   })
 })
 
+describe('Visão Geral — gráficos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    h.hasPermission = () => true
+    h.post.mockResolvedValue({ data: {} })
+    mockGetResolvendo()
+    vi.spyOn(window, 'confirm').mockImplementation(() => true)
+  })
+
+  it('expõe os quatro gráficos com rótulo acessível (fluxo, categorias, comparativo e acumulado)', async () => {
+    await abrirSecao()
+
+    expect(screen.getByRole('img', { name: /^Entradas, saídas e resultado por dia —/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Despesas por categoria —/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Comparativo com o período anterior/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Resultado acumulado dia a dia —/ })).toBeInTheDocument()
+  })
+
+  it('o comparativo cita os totais do período atual e do anterior', async () => {
+    await abrirSecao()
+
+    // \s cobre o espaço não separável do Intl entre "R$" e o número.
+    const comparativo = screen.getByRole('img', {
+      name: /recebimentos R\$\s1\.500,00 contra R\$\s1\.300,00, despesas R\$\s400,00 contra R\$\s450,00/,
+    })
+    expect(comparativo).toBeInTheDocument()
+  })
+
+  it('sem período anterior mostra o texto de fallback no comparativo', async () => {
+    const semAnterior = { ...periodo, previous: undefined }
+    h.get.mockImplementation((url: string) =>
+      Promise.resolve({ data: url === '/finance/reports/period' ? semAnterior : fixtureFor(url) })
+    )
+    renderWithProviders(<CentralFinanceiraPage />)
+
+    expect(await screen.findByText('Sem período anterior para comparar.')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /^Comparativo com o período anterior/ })).toBeNull()
+    // O acumulado continua de pé mesmo sem anterior.
+    expect(screen.getByRole('img', { name: /^Resultado acumulado dia a dia —/ })).toBeInTheDocument()
+  })
+})
+
 describe('Visão Geral — escritas (D2)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
