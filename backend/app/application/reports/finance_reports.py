@@ -61,7 +61,7 @@ def _period_meta(start: datetime, end: datetime) -> Dict[str, Any]:
 
 def _unit_costs_by_product(db: Session, tenant_id: str) -> Dict[str, Decimal]:
     """Custo médio ponderado (R$/unid.) por produto — notas CONFIRMED."""
-    rows = (
+    rows: List[Any] = (
         db.query(
             PurchaseNoteItemModel.product_codigo,
             func.sum(PurchaseNoteItemModel.quantity),
@@ -86,7 +86,7 @@ def _sold_items_in_period(
     db: Session, tenant_id: str, start: datetime, end: datetime
 ) -> List[Tuple[str, str, int, Decimal]]:
     """Itens vendidos em pedidos criados no período: (código, nome, qtd, receita)."""
-    rows = (
+    rows: List[Any] = (
         db.query(
             OrderItemModel.product_codigo,
             func.max(OrderItemModel.product_nome),
@@ -99,8 +99,8 @@ def _sold_items_in_period(
         )
         .filter(
             OrderItemModel.tenant_id == tenant_id,
-            OrderModel.created_at >= start,
-            OrderModel.created_at < end,
+            OrderModel.created_at >= start,  # type: ignore[arg-type]
+            OrderModel.created_at < end,  # type: ignore[arg-type]
         )
         .group_by(OrderItemModel.product_codigo)
         .all()
@@ -128,13 +128,13 @@ def dre(db: Session, tenant_id: str, start: datetime, end: datetime) -> Dict[str
     cmv = _q(cmv)
     gross_profit = _q(revenue - cmv)
 
-    expense_rows = (
+    expense_rows: List[Any] = (
         db.query(ExpenseModel.category, func.coalesce(func.sum(ExpenseModel.amount), 0))
         .filter(
             ExpenseModel.tenant_id == tenant_id,
             ExpenseModel.status == "ACTIVE",
-            ExpenseModel.date >= start,
-            ExpenseModel.date < end,
+            ExpenseModel.date >= start,  # type: ignore[arg-type]
+            ExpenseModel.date < end,  # type: ignore[arg-type]
         )
         .group_by(ExpenseModel.category)
         .all()
@@ -314,7 +314,7 @@ def team(db: Session, tenant_id: str, days: int) -> Dict[str, Any]:
             ExpenseModel.tenant_id == tenant_id,
             ExpenseModel.status == "ACTIVE",
             ExpenseModel.category == "SALARY",
-            ExpenseModel.date >= since,
+            ExpenseModel.date >= since,  # type: ignore[arg-type]
         )
         .scalar()
         or 0
@@ -350,7 +350,7 @@ def hourly(db: Session, tenant_id: str, start: datetime, end: datetime) -> Dict[
 
     Despesas não têm hora confiável e ficam de fora — só a receita.
     """
-    ts = func.coalesce(PaymentModel.paid_at, PaymentModel.created_at)
+    ts: Any = func.coalesce(PaymentModel.paid_at, PaymentModel.created_at)
     rows = (
         db.query(
             func.strftime("%H", ts),
@@ -386,7 +386,7 @@ def conciliation(db: Session, tenant_id: str, start: datetime, end: datetime) ->
 
     Itens divergentes saem com códigos em `issues` (semântica "a revisar").
     """
-    ts = func.coalesce(PaymentModel.paid_at, PaymentModel.created_at)
+    ts: Any = func.coalesce(PaymentModel.paid_at, PaymentModel.created_at)
     payments = (
         db.query(PaymentModel)
         .filter(

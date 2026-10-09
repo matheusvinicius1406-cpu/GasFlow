@@ -108,7 +108,7 @@ class StockDailySnapshotService:
             for p in self.db.query(StockDailySnapshotModel)
             .filter(
                 StockDailySnapshotModel.tenant_id == self.tenant_id,
-                StockDailySnapshotModel.snapshot_date < day,
+                StockDailySnapshotModel.snapshot_date < day,  # type: ignore[arg-type]
             )
             .order_by(StockDailySnapshotModel.snapshot_date.desc())
             .all()

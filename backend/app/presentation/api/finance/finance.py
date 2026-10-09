@@ -830,7 +830,7 @@ def finance_audit(
         .filter(
             AuthAuditModel.tenant_id == ctx.tenant_id,
             AuthAuditModel.resource.in_(FINANCE_AUDIT_RESOURCES),
-            AuthAuditModel.timestamp >= since,
+            AuthAuditModel.timestamp >= since,  # type: ignore[arg-type]
         )
         .order_by(AuthAuditModel.timestamp.desc(), AuthAuditModel.id)
         .limit(limit)

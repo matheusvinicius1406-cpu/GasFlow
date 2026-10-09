@@ -36,7 +36,7 @@ def _base_query(db: Session, tenant_id: str, days: int):
     """Janela base: criadas nos últimos N dias (independe do status)."""
     return db.query(DeliveryRecord).filter(
         DeliveryRecord.tenant_id == tenant_id,
-        DeliveryRecord.created_at >= _since(days),
+        DeliveryRecord.created_at >= _since(days),  # type: ignore[arg-type]
     )
 
 

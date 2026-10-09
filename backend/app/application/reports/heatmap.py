@@ -54,7 +54,7 @@ def delivery_heatmap(db: Session, tenant_id: str, days: int = 30) -> Dict[str, A
 
     since = now - timedelta(days=days)
 
-    rows = (
+    rows: List[Any] = (
         db.query(
             DeliveryRecord.address_neighborhood,
             func.count(DeliveryRecord.id),
@@ -66,7 +66,7 @@ def delivery_heatmap(db: Session, tenant_id: str, days: int = 30) -> Dict[str, A
         .filter(
             DeliveryRecord.tenant_id == tenant_id,
             DeliveryRecord.status == "DELIVERED",
-            DeliveryRecord.delivered_at >= since,
+            DeliveryRecord.delivered_at >= since,  # type: ignore[arg-type]
         )
         .group_by(DeliveryRecord.address_neighborhood)
         .all()

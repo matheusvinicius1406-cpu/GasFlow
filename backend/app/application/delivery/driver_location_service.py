@@ -230,7 +230,9 @@ def purge_old_locations(db: Session, days: int = RETENTION_DAYS) -> int:
 
     cutoff = datetime.utcnow() - timedelta(days=days)
     deleted = (
-        db.query(DriverLocationRecord).filter(DriverLocationRecord.timestamp < cutoff).delete(synchronize_session=False)
+        db.query(DriverLocationRecord)
+        .filter(DriverLocationRecord.timestamp < cutoff)  # type: ignore[arg-type]
+        .delete(synchronize_session=False)
     )
     db.commit()
     return deleted

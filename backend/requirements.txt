@@ -6,7 +6,11 @@ uvicorn[standard]
 # Fixada: 0.0.12 tem múltiplos advisories (PYSEC-2026-1851/1852/3036–3040).
 python-multipart>=0.0.32
 
-sqlalchemy
+# Fixada: o resolve fresco passou a trazer 2.1.x em meados de 2026-09, e os
+# stubs novos de Query.filter (colunas datetime legadas em estilo Column)
+# reprovaram o mypy do CI em código que já rodava em produção — ver
+# docs/ci/RELATORIO-CI-2026-10-09.md. Atualizar daqui é decisão consciente.
+sqlalchemy==2.1.4
 psycopg2-binary
 
 pydantic
