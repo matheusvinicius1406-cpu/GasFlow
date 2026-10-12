@@ -39,7 +39,12 @@ class AgentEngine:
         self._definitions: Dict[str, AgentDefinition] = {}
         self._runs: List[AgentRun] = []
         self._steps: List[AgentStep] = []
-        self._metrics = {
+        # Métricas por tenant (P0 multiempresa).
+        self._metrics: Dict[str, Dict[str, int]] = {}
+
+    @staticmethod
+    def _empty_metrics() -> Dict[str, int]:
+        return {
             "agents_started": 0,
             "agents_completed": 0,
             "agents_failed": 0,
@@ -47,8 +52,8 @@ class AgentEngine:
             "tool_blocked": 0,
         }
 
-    def get_metrics(self) -> Dict[str, Any]:
-        return dict(self._metrics)
+    def get_metrics(self, tenant_id: str = "default") -> Dict[str, Any]:
+        return dict(self._metrics.get(tenant_id, self._empty_metrics()))
 
     def register_agent(self, definition: AgentDefinition):
         self._definitions[definition.id] = definition
@@ -79,21 +84,23 @@ class AgentEngine:
         correlation_id: Optional[str] = None,
         trigger_event_id: Optional[str] = None,
         dry_run: bool = False,
+        tenant_id: str = "default",
     ) -> AgentRun:
-        """Execute an agent run."""
+        """Execute an agent run (escopo do run = tenant_id do chamador)."""
         agent_def = self._definitions.get(agent_id)
         if not agent_def:
-            run = AgentRun(agent_id=agent_id, goal=goal, context=context)
+            run = AgentRun(agent_id=agent_id, tenant_id=tenant_id, goal=goal, context=context)
             run.fail(f"Agent '{agent_id}' not found")
             return run
 
         if not agent_def.enabled:
-            run = AgentRun(agent_id=agent_id, goal=goal, context=context)
+            run = AgentRun(agent_id=agent_id, tenant_id=tenant_id, goal=goal, context=context)
             run.fail(f"Agent '{agent_id}' is disabled")
             return run
 
         run = AgentRun(
             agent_id=agent_id,
+            tenant_id=tenant_id,
             agent_version=agent_def.version,
             goal=goal,
             context=context,
@@ -106,7 +113,7 @@ class AgentEngine:
 
         run.start()
         self._runs.append(run)
-        self._inc_metric("agents_started")
+        self._inc_metric("agents_started", run.tenant_id)
 
         # Generate plan (deterministic for now)
         plan = self._generate_plan(agent_def, goal, context)
@@ -117,7 +124,7 @@ class AgentEngine:
         for i, step_plan in enumerate(plan):
             if i >= agent_def.max_steps:
                 run.fail(f"Exceeded max steps ({agent_def.max_steps})")
-                self._inc_metric("agents_failed")
+                self._inc_metric("agents_failed", run.tenant_id)
                 break
 
             step = AgentStep(
@@ -131,18 +138,20 @@ class AgentEngine:
             # Validate tool permission
             if step.tool_name and step.tool_name not in agent_def.allowed_tools:
                 step.fail(f"Tool '{step.tool_name}' not in allowed tools for {agent_def.scope.value}")
-                self._inc_metric("tool_blocked")
+                self._inc_metric("tool_blocked", run.tenant_id)
                 self._steps.append(step)
                 continue
 
             # Check risk ceiling
-            policy_check = self.policy.check_permission(step.tool_name or "READ", agent_def.scope.value)
+            policy_check = self.policy.check_permission(
+                step.tool_name or "READ", agent_def.scope.value, tenant_id=run.tenant_id
+            )
             risk = policy_check.get("risk_level", "LOW")
             ceiling = agent_def.risk_ceiling
             risk_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
             if risk_order.get(risk, 0) > risk_order.get(ceiling, 0):
                 step.fail(f"Risk '{risk}' exceeds ceiling '{ceiling}'")
-                self._inc_metric("tool_blocked")
+                self._inc_metric("tool_blocked", run.tenant_id)
                 self._steps.append(step)
                 continue
 
@@ -153,8 +162,9 @@ class AgentEngine:
                     arguments=step.arguments,
                     actor=f"agent:{agent_id}",
                     risk_level=risk,
+                    tenant_id=run.tenant_id,
                 )
-                self._inc_metric("tool_blocked")  # temporarily blocked
+                self._inc_metric("tool_blocked", run.tenant_id)  # temporarily blocked
                 step.status = "WAITING_APPROVAL"
                 step.status = "WAITING_APPROVAL"
                 self._steps.append(step)
@@ -171,7 +181,7 @@ class AgentEngine:
                     run.context.update(result.get("data", {}))
                 else:
                     step.fail(result.get("error", "Tool failed"))
-                self._inc_metric("tool_calls")
+                self._inc_metric("tool_calls", run.tenant_id)
 
             self._steps.append(step)
 
@@ -182,7 +192,7 @@ class AgentEngine:
             run.complete(
                 {"steps_completed": len([s for s in self._steps if s.run_id == run.id and s.status == "COMPLETED"])}
             )
-            self._inc_metric("agents_completed")
+            self._inc_metric("agents_completed", run.tenant_id)
 
         return run
 
@@ -213,8 +223,11 @@ class AgentEngine:
         return plan
 
     def _execute_tool(self, tool_name: Optional[str], arguments: Dict[str, Any]) -> Dict[str, Any]:
-        if not tool_name:
-            return {"success": False, "error": "No tool specified"}
+        if not tool_name or self.tools is None:
+            return {
+                "success": False,
+                "error": "No tool registry available" if not tool_name else "Tool registry not configured",
+            }
         tool = self.tools.get(tool_name)
         if not tool or not tool.handler:
             return {"success": False, "error": f"Tool '{tool_name}' not available"}
@@ -224,27 +237,35 @@ class AgentEngine:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def stop_agent(self, run_id: str) -> bool:
+    def stop_agent(self, run_id: str, tenant_id: str = "default") -> bool:
         for run in self._runs:
-            if run.id == run_id and run.status in (AgentStatus.EXECUTING, AgentStatus.PLANNING):
+            if (
+                run.id == run_id
+                and run.tenant_id == tenant_id
+                and run.status in (AgentStatus.EXECUTING, AgentStatus.PLANNING)
+            ):
                 run.stop()
                 return True
         return False
 
-    def get_run(self, run_id: str) -> Optional[AgentRun]:
+    def get_run(self, run_id: str, tenant_id: Optional[str] = None) -> Optional[AgentRun]:
         for r in self._runs:
-            if r.id == run_id:
+            if r.id == run_id and (tenant_id is None or r.tenant_id == tenant_id):
                 return r
         return None
 
-    def get_runs(self, agent_id: Optional[str] = None) -> List[AgentRun]:
+    def get_runs(self, agent_id: Optional[str] = None, tenant_id: Optional[str] = None) -> List[AgentRun]:
+        runs = list(self._runs)
+        if tenant_id is not None:
+            runs = [r for r in runs if r.tenant_id == tenant_id]
         if agent_id:
-            return [r for r in self._runs if r.agent_id == agent_id]
-        return list(self._runs)
+            return [r for r in runs if r.agent_id == agent_id]
+        return runs
 
     def get_steps(self, run_id: str) -> List[AgentStep]:
         return [s for s in self._steps if s.run_id == run_id]
 
-    def _inc_metric(self, key: str):
-        if key in self._metrics:
-            self._metrics[key] += 1
+    def _inc_metric(self, key: str, tenant_id: str = "default"):
+        bucket = self._metrics.setdefault(tenant_id, self._empty_metrics())
+        if key in bucket:
+            bucket[key] += 1

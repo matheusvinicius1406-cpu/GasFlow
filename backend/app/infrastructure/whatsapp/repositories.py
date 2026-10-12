@@ -32,14 +32,20 @@ from app.infrastructure.repositories.whatsapp_model import (
 
 
 class SQLAlchemyConversationRepository(ConversationRepository):
-    """SQLAlchemy conversation repository."""
+    """SQLAlchemy conversation repository (escopado por tenant — P0 multiempresa)."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: str = "default"):
         self.session = session
+        self.tenant_id = tenant_id
+
+    def _scoped(self):
+        return self.session.query(WhatsAppConversationModel).filter(
+            WhatsAppConversationModel.tenant_id == self.tenant_id
+        )
 
     def find_by_phone_and_account(self, customer_phone: str, account_id: str) -> Optional[Conversation]:
         model = (
-            self.session.query(WhatsAppConversationModel)
+            self._scoped()
             .filter(
                 and_(
                     WhatsAppConversationModel.phone_number == customer_phone,
@@ -55,7 +61,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_domain(model)
 
     def find_by_id(self, conversation_id: int) -> Optional[Conversation]:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return None
         return self._to_domain(model)
@@ -65,6 +71,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         if conversation.draft:
             draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)
         model = WhatsAppConversationModel(
+            tenant_id=self.tenant_id,
             account_id=conversation.account_id,
             phone_number=conversation.customer_phone,
             client_codigo=conversation.customer_codigo,
@@ -80,7 +87,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_domain(model)
 
     def update_state(self, conversation_id: int, state: ConversationState) -> bool:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return False
         model.status = state.value
@@ -89,7 +96,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def update_customer(self, conversation_id: int, customer_codigo: str) -> bool:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return False
         model.client_codigo = customer_codigo
@@ -98,7 +105,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def update_draft(self, conversation_id: int, draft: Optional[ConversationDraft]) -> bool:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return False
         model.draft_json = json.dumps(draft.to_dict(), ensure_ascii=False) if draft else None
@@ -109,9 +116,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
     def list_active(
         self, account_id: Optional[str] = None, limit: int = 50, offset: int = 0
     ) -> Tuple[List[Conversation], int]:
-        query = self.session.query(WhatsAppConversationModel).filter(
-            WhatsAppConversationModel.status.notin_(["CLOSED"])
-        )
+        query = self._scoped().filter(WhatsAppConversationModel.status.notin_(["CLOSED"]))
         if account_id:
             query = query.filter(WhatsAppConversationModel.account_id == account_id)
         total = query.count()
@@ -120,14 +125,15 @@ class SQLAlchemyConversationRepository(ConversationRepository):
 
     def count_active(self, account_id: Optional[str] = None) -> int:
         query = self.session.query(func.count(WhatsAppConversationModel.id)).filter(
-            WhatsAppConversationModel.status.notin_(["CLOSED"])
+            WhatsAppConversationModel.tenant_id == self.tenant_id,
+            WhatsAppConversationModel.status.notin_(["CLOSED"]),
         )
         if account_id:
             query = query.filter(WhatsAppConversationModel.account_id == account_id)
         return query.scalar() or 0
 
     def takeover(self, conversation_id: int, operator: str) -> bool:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return False
         model.human_operator = operator
@@ -137,7 +143,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return True
 
     def release_to_ai(self, conversation_id: int) -> bool:
-        model = self.session.get(WhatsAppConversationModel, conversation_id)
+        model = self._scoped().filter(WhatsAppConversationModel.id == conversation_id).first()
         if not model:
             return False
         model.human_operator = None
@@ -151,7 +157,14 @@ class SQLAlchemyConversationRepository(ConversationRepository):
             return False
         exists_q = self.session.query(
             self.session.query(WhatsAppMessageModel)
-            .filter(WhatsAppMessageModel.provider_message_id == provider_message_id)
+            .join(
+                WhatsAppConversationModel,
+                WhatsAppMessageModel.conversation_id == WhatsAppConversationModel.id,
+            )
+            .filter(
+                WhatsAppMessageModel.provider_message_id == provider_message_id,
+                WhatsAppConversationModel.tenant_id == self.tenant_id,
+            )
             .exists()
         )
         return exists_q.scalar()
@@ -173,6 +186,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
             state = ConversationState.IDLE
         return Conversation(
             id=model.id,
+            tenant_id=model.tenant_id or "default",
             account_id=model.account_id,
             customer_phone=model.phone_number,
             customer_codigo=model.client_codigo,

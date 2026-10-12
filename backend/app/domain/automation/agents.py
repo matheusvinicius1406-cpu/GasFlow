@@ -73,6 +73,7 @@ class AgentRun:
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     agent_id: str = ""
+    tenant_id: str = "default"
     agent_version: int = 1
     status: AgentStatus = AgentStatus.IDLE
     goal: str = ""

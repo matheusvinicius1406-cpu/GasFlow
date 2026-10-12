@@ -375,7 +375,7 @@ async def process_incoming(
 ):
     """Process incoming WhatsApp message through AI pipeline."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     registry = _build_tool_registry(db)
     ai_engine = AIEngine(llm_provider=get_llm_provider(), tool_registry=registry)
@@ -388,7 +388,7 @@ async def process_incoming(
         conversation_repo=conv_repo,
         message_repo=msg_repo,
         ai_engine=ai_engine,
-        customer_repository=SQLAlchemyClientRepository(db),
+        customer_repository=SQLAlchemyClientRepository(db, ctx.tenant_id),
         product_repository=SQLAlchemyProductRepository(db),
         inventory_repository=SQLAlchemyInventoryRepository(db),
     )
@@ -422,18 +422,18 @@ async def list_conversations(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     # Sem auth antes da matriz de rotas (2026-10-09): qualquer anônimo lia o
-    # histórico de conversas. Hoje exige sessão; escopo por tenant continua
-    # pendente (o modelo de conversa ainda não tem tenant_id).
-    _ctx: TenantContext = Depends(get_tenant_context),
+    # histórico de conversas. Desde 2026-10-10 (P0 multiempresa) a listagem
+    # também é escopada pelo tenant do token — ver SQLAlchemyConversationRepository.
+    ctx: TenantContext = Depends(get_tenant_context),
 ):
-    """List active WhatsApp conversations."""
+    """List active WhatsApp conversations (somente as do tenant do usuário)."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     conversations, total = conv_repo.list_active(account_id=account_id, limit=limit, offset=offset)
 
     # Nome do contato: resolved do cadastro de clientes (cache por telefone).
-    client_repo = SQLAlchemyClientRepository(db)
+    client_repo = SQLAlchemyClientRepository(db, ctx.tenant_id)
     name_cache: Dict[str, Optional[str]] = {}
 
     def _contact_name(phone: str) -> Optional[str]:
@@ -469,9 +469,9 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: int, db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)
 ):
-    """Get conversation detail with messages."""
+    """Get conversation detail with messages (404 para conversa de outro tenant)."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     conv = conv_repo.find_by_id(conversation_id)
     if not conv:
@@ -479,10 +479,10 @@ async def get_conversation(
 
     contact_name = None
     if conv.customer_codigo:
-        client = SQLAlchemyClientRepository(db).buscar_por_codigo(conv.customer_codigo)
+        client = SQLAlchemyClientRepository(db, ctx.tenant_id).buscar_por_codigo(conv.customer_codigo)
         contact_name = client.nome if client and client.nome else None
     if not contact_name:
-        client = SQLAlchemyClientRepository(db).buscar_por_telefone(conv.customer_phone)
+        client = SQLAlchemyClientRepository(db, ctx.tenant_id).buscar_por_telefone(conv.customer_phone)
         contact_name = client.nome if client and client.nome else None
 
     messages = msg_repo.list_by_conversation(conversation_id, limit=200)
@@ -522,7 +522,7 @@ async def takeover_conversation(
 ):
     """Operator takes over conversation."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     operator_gw = OperatorGateway(conv_repo, msg_repo)
     result = operator_gw.takeover(conversation_id, req.operator)
@@ -537,7 +537,7 @@ async def release_conversation(
 ):
     """Release conversation back to AI."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
     operator_gw = OperatorGateway(conv_repo, msg_repo)
     result = operator_gw.release_to_ai(conversation_id)
@@ -563,7 +563,7 @@ async def operator_reply(
     4. Propaga erro de envio (não finge mais que enviou).
     """
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     msg_repo = SQLAlchemyConversationMessageRepository(db)
 
     conv = conv_repo.find_by_id(conversation_id)
@@ -608,9 +608,9 @@ async def operator_reply(
 
 @router.get("/stats")
 async def get_stats(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
-    """Get conversation statistics."""
+    """Get conversation statistics (do tenant do usuário)."""
 
-    conv_repo = SQLAlchemyConversationRepository(db)
+    conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     return {
         "active_conversations": conv_repo.count_active(),
         "by_account": {a: conv_repo.count_active(account_id=a) for a in ["primary", "secondary"]},

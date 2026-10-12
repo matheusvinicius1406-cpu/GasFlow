@@ -35,7 +35,9 @@ class WhatsAppConversationModel(Base):
     messages = relationship("WhatsAppMessageModel", back_populates="conversation")
 
     __table_args__ = (
-        UniqueConstraint("account_id", "phone_number", name="uq_wa_conversation_account_phone"),
+        # Unicidade por tenant: duas empresas podem ter conversa com o mesmo
+        # telefone (P0 multiempresa — migração c1a2b3d4e5f6).
+        UniqueConstraint("tenant_id", "account_id", "phone_number", name="uq_wa_conversation_tenant_account_phone"),
         Index("ix_wa_conversation_status", "status"),
     )
 

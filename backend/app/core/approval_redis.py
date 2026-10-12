@@ -11,7 +11,9 @@ Mesmo contrato do ApprovalEngine (policy.py), trocando o Dict em processo
 por Redis (compartilhado entre workers/instâncias):
 - ``approval:{id}``   → JSON do Approval, com TTL = TTL da aprovação
   (expiração vira consequência do Redis, não de varredura)
-- ``approvals:index`` → ZSET de ids (score = created_at epoch) para listagem
+- ``approvals:{tenant}:index`` → ZSET de ids (score = created_at epoch) para
+  listagem — índice por tenant (P0 multiempresa: um tenant nunca lista
+  aprovações dos demais; o contrato ``get_pending(tenant_id=...)`` filtra)
 
 ``redis`` é importado lazy (conector) — dev/testes rodam sem ele; o default
 continua in-memory via APPROVAL_QUEUE_MODE=memory.
@@ -32,12 +34,15 @@ from app.domain.automation.policy import Approval, ApprovalEngine, ApprovalStatu
 
 logger = logging.getLogger("app.core.approval_redis")
 
-INDEX_KEY = "approvals:index"
+
+def _index_key(tenant_id: str = "default") -> str:
+    return f"approvals:{tenant_id}:index"
 
 
 def _serialize(approval: Approval) -> str:
     data = {
         "id": approval.id,
+        "tenant_id": approval.tenant_id,
         "action": approval.action,
         "arguments_hash": approval.arguments_hash,
         "actor": approval.actor,
@@ -61,6 +66,7 @@ def _deserialize(raw: str) -> Optional[Approval]:
         data = json.loads(raw)
         return Approval(
             id=data["id"],
+            tenant_id=data.get("tenant_id", "default"),
             action=data["action"],
             arguments_hash=data.get("arguments_hash", ""),
             actor=data.get("actor", ""),
@@ -152,8 +158,10 @@ class RedisApprovalEngine:
         workflow_id: Optional[str] = None,
         run_id: Optional[str] = None,
         step_id: Optional[str] = None,
+        tenant_id: str = "default",
     ) -> Approval:
         approval = Approval(
+            tenant_id=tenant_id,
             action=action,
             arguments_hash=hash_arguments(arguments),
             actor=actor,
@@ -167,10 +175,12 @@ class RedisApprovalEngine:
         client = self._connect()
         ttl_s = self._ttl_seconds()
         # SET (com TTL) + ZADD: aprovação criada só existe se persistida.
+        # O índice é por tenant — listagem de um tenant nunca vê ids dos demais.
+        idx = _index_key(approval.tenant_id)
         client.set(self._key(approval.id), _serialize(approval), ex=ttl_s)
-        client.zadd(INDEX_KEY, {approval.id: approval.created_at.timestamp()})
-        client.zremrangebyscore(INDEX_KEY, "-inf", approval.created_at.timestamp() - ttl_s)
-        client.expire(INDEX_KEY, ttl_s)
+        client.zadd(idx, {approval.id: approval.created_at.timestamp()})
+        client.zremrangebyscore(idx, "-inf", approval.created_at.timestamp() - ttl_s)
+        client.expire(idx, ttl_s)
         return approval
 
     def _load(self, approval_id: str) -> Optional[Approval]:
@@ -183,9 +193,13 @@ class RedisApprovalEngine:
         client = self._connect()
         client.set(self._key(approval.id), _serialize(approval), ex=self._ttl_seconds())
 
-    def approve(self, approval_id: str, approved_by: str) -> bool:
+    def approve(self, approval_id: str, approved_by: str, tenant_id: Optional[str] = None) -> bool:
         approval = self._load(approval_id)
         if not approval:
+            return False
+        # Dono: com tenant_id informado, id de outro tenant é tratado como
+        # inexistente (sem vazar existência).
+        if tenant_id is not None and approval.tenant_id != tenant_id:
             return False
         if approval.status != ApprovalStatus.PENDING:
             return False
@@ -199,10 +213,12 @@ class RedisApprovalEngine:
         self._save(approval)
         return True
 
-    def reject(self, approval_id: str, _rejected_by: str = "") -> bool:
+    def reject(self, approval_id: str, _rejected_by: str = "", tenant_id: Optional[str] = None) -> bool:
         # _rejected_by: parte do contrato de auditoria; ainda não registrado.
         approval = self._load(approval_id)
         if not approval:
+            return False
+        if tenant_id is not None and approval.tenant_id != tenant_id:
             return False
         if approval.status != ApprovalStatus.PENDING:
             return False
@@ -243,29 +259,34 @@ class RedisApprovalEngine:
             return False
         return True
 
-    def get_pending(self) -> List[Approval]:
-        approvals = self._list_all()
+    def get_pending(self, tenant_id: Optional[str] = None) -> List[Approval]:
+        approvals = self._list_all(tenant_id)
         return [a for a in approvals if a.status == ApprovalStatus.PENDING and not a.is_expired]
 
-    def get_all(self) -> List[Approval]:
-        return self._list_all()
+    def get_all(self, tenant_id: Optional[str] = None) -> List[Approval]:
+        return self._list_all(tenant_id)
 
-    def _list_all(self) -> List[Approval]:
+    def _list_all(self, tenant_id: Optional[str] = None) -> List[Approval]:
         client = self._connect()
-        ids = client.zrange(INDEX_KEY, 0, -1)
+        ids = client.zrange(_index_key(tenant_id or "default"), 0, -1)
         approvals: List[Approval] = []
         for raw_id in ids:
             approval_id = raw_id.decode("utf-8") if isinstance(raw_id, bytes) else raw_id
             approval = self._load(approval_id)
-            if approval:
-                approvals.append(approval)
+            if not approval:
+                continue
+            # Defesa em profundidade: o índice já é por tenant, mas um id
+            # plantado errado não pode vazar entre tenants.
+            if tenant_id is not None and approval.tenant_id != tenant_id:
+                continue
+            approvals.append(approval)
         approvals.sort(key=lambda a: a.created_at)
         return approvals
 
-    def expire_old(self) -> int:
+    def expire_old(self, tenant_id: Optional[str] = None) -> int:
         """No Redis a expiração é feita pelo TTL da chave; varredura é best-effort."""
         count = 0
-        for approval in self._list_all():
+        for approval in self._list_all(tenant_id):
             if approval.status == ApprovalStatus.PENDING and approval.is_expired:
                 approval.status = ApprovalStatus.EXPIRED
                 self._save(approval)

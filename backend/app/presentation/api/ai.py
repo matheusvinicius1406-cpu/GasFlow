@@ -415,14 +415,14 @@ def chat(request: ChatRequest, db: Session = Depends(get_db), ctx: TenantContext
     try:
         permission_level = _role_to_permission_level(ctx)
         engine = _get_engine()
-        engine.conversation_repo = SQLAlchemyConversationRepository(db)
+        engine.conversation_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
         engine.message_repo = SQLAlchemyMessageRepository(db)
 
         # Create or get conversation
         conv_id = request.conversation_id
         if not conv_id:
             conv_id = str(uuid.uuid4())
-            conv_repo = SQLAlchemyConversationRepository(db)
+            conv_repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
             from app.domain.ai.conversation import Conversation
 
             conv_repo.create(Conversation(external_id=conv_id, title=request.message[:50]))
@@ -468,8 +468,8 @@ def list_tools(_ctx: TenantContext = Depends(get_tenant_context)):
 
 @router.get("/conversations", response_model=List[ConversationInfo])
 def list_conversations(db: Session = Depends(get_db), ctx: TenantContext = Depends(get_tenant_context)):
-    """List recent conversations."""
-    repo = SQLAlchemyConversationRepository(db)
+    """List recent conversations (somente as do tenant do usuário)."""
+    repo = SQLAlchemyConversationRepository(db, ctx.tenant_id)
     convs = repo.list_all(limit=20)
     return [
         ConversationInfo(

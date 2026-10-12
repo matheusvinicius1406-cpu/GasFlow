@@ -548,7 +548,7 @@ class MessageGateway:
             publish_whatsapp_event(
                 EventType.WHATSAPP_MESSAGE_RECEIVED,
                 conversation.id,
-                tenant_id="default",
+                tenant_id=conversation.tenant_id or "default",
                 data={
                     "conversation_id": conversation.id,
                     "customer_phone": conversation.customer_phone,
@@ -814,7 +814,7 @@ class MessageGateway:
                         publish_order_event(
                             EventType.ORDER_CREATED,
                             str(order_data.get("order_codigo", "")),
-                            tenant_id="default",
+                            tenant_id=conversation.tenant_id or "default",
                             data={"source": "WHATSAPP", "conversation_id": conversation.id},
                         )
                     except Exception:

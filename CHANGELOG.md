@@ -4,6 +4,38 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### 🔒 P0 multiempresa — isolamento de conversas WhatsApp e automação por tenant
+
+- **Conversas WhatsApp por tenant (migração `c1a2b3d4e5f6`):** unicidade
+  deixou de ser global `(account_id, phone_number)` e passou a ser
+  `(tenant_id, account_id, phone_number)` — duas empresas do mesmo ambiente
+  agora podem ter conversa com o mesmo telefone. Backfill marca linhas
+  existentes como `tenant 'default'` (o serviço Node continua gravando como
+  default, comportamento de produção preservado). SQLite: troca de constraint
+  via `batch_alter_table`, com downgrade documentado.
+- **Repositório de conversas escopado:** `SQLAlchemyConversationRepository`
+  recebe `tenant_id` e filtra `find_by_phone_and_account`, `find_by_id`,
+  `list_active`, `count_active`, `takeover`, `release_to_ai` e
+  `find_duplicate_message`; `create` grava o tenant do chamador. API
+  (`/whatsapp/conversations*`, `/whatsapp/incoming`, `send_message`) usa o
+  `ctx.tenant_id` do token — conversa de outro tenant responde 404, sem
+  vazar existência. Conversas da IA (`ai_conversations`) seguem o mesmo
+  escopo.
+- **Automação por tenant:** workflows default são semeados por tenant sob
+  demanda (`_tenant_workflows`); runs, aprovações, kill switch e métricas
+  carregam `tenant_id` — um operador derruba a automação da própria empresa,
+  nunca a dos demais. Kill switch virou método `is_kill_switch_active(tenant_id)`
+  (antes property global). Fila de aprovações Redis ganhou payload com
+  tenant e índice por tenant (`approvals:{tenant}:index`), com dono
+  checado em `approve`/`reject` (id de outro tenant = tratado como
+  inexistente). `AgentEngine._execute_tool` agora trata
+  `tool_registry=None` (antes estourava `AttributeError`).
+- **Testes:** 37 testes cross-tenant novos em
+  `test_cross_tenant_isolation.py` (conversas repo+API, workflows, kill
+  switch, agent runs, semântica de dono das aprovações, serialização
+  Redis); call sites de `is_kill_switch_active` ajustados em
+  `test_security.py` e `test_driver_api.py`.
+
 ### 💰 Central Financeira — recebível na confirmação + validação da Fase 5
 
 - **Recebível criado na confirmação do pedido (Fase 8):** `UpdateOrderStatusUseCase`

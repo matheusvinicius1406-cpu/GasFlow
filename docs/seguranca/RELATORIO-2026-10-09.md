@@ -160,9 +160,14 @@ aberta como item separado.
 
 ## Pendências conhecidas (não resolvidas aqui)
 
-1. **Escopo por tenant**: `GET /whatsapp/conversations` e o catálogo de workflows em
+1. ~~**Escopo por tenant**: `GET /whatsapp/conversations` e o catálogo de workflows em
    memória (`_workflows`) não têm `tenant_id` — o modelo de conversa WhatsApp ainda não
-   suporta multiempresa. Hoje o gate é de sessão/permissão, não de tenant.
+   suporta multiempresa. Hoje o gate é de sessão/permissão, não de tenant.~~
+   **Resolvido em 2026-10-10 (P0 multiempresa):** conversas WhatsApp e catálogo/runs/
+   aprovações/kill-switch/métricas de automação ganharam `tenant_id` (domínio,
+   repositórios escopados, API usando `ctx.tenant_id`, migração `c1a2b3d4e5f6` com
+   backfill para `'default'` e unique constraint por tenant). Ver CHANGELOG e
+   `tests/test_cross_tenant_isolation.py` (37 testes).
 2. **10 rotas `SOMENTE_DB`** (ex.: `POST /auth/mobile/*`, `POST /integrations/import`,
    `POST /public/referral/*`) — sem credencial no router; a importação de integração
    precisa de revisão.

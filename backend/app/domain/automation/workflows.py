@@ -57,6 +57,7 @@ class WorkflowDefinition:
     """Workflow definition — the blueprint."""
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    tenant_id: str = "default"
     name: str = ""
     description: str = ""
     version: int = 1
@@ -88,6 +89,7 @@ class WorkflowRun:
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     workflow_id: str = ""
+    tenant_id: str = "default"
     workflow_version: int = 1
     status: WorkflowStatus = WorkflowStatus.ACTIVE
     current_step_id: Optional[str] = None

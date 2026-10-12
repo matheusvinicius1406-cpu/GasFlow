@@ -61,7 +61,9 @@ class PolicyEngine:
 
     def __init__(self):
         self._policies: Dict[str, ActionPolicy] = {}
-        self._kill_switch = False
+        # Kill switch por tenant (P0 multiempresa): um operador derruba a
+        # automação da própria empresa, nunca a dos demais.
+        self._kill_switch: Dict[str, bool] = {}
         self._disabled_actions: List[str] = []
 
     def register_policy(self, policy: ActionPolicy):
@@ -70,12 +72,18 @@ class PolicyEngine:
     def get_policy(self, action: str) -> Optional[ActionPolicy]:
         return self._policies.get(action)
 
-    def check_permission(self, action: str, role: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def check_permission(
+        self,
+        action: str,
+        role: str,
+        context: Optional[Dict[str, Any]] = None,
+        tenant_id: str = "default",
+    ) -> Dict[str, Any]:
         """
         Check if an action is permitted.
         Returns: {"allowed": bool, "requires_approval": bool, "risk_level": str, "reason": str}
         """
-        if self._kill_switch:
+        if self._kill_switch.get(tenant_id, False):
             return {
                 "allowed": False,
                 "requires_approval": False,
@@ -137,15 +145,14 @@ class PolicyEngine:
             "reason": "OK",
         }
 
-    def activate_kill_switch(self):
-        self._kill_switch = True
+    def activate_kill_switch(self, tenant_id: str = "default"):
+        self._kill_switch[tenant_id] = True
 
-    def deactivate_kill_switch(self):
-        self._kill_switch = False
+    def deactivate_kill_switch(self, tenant_id: str = "default"):
+        self._kill_switch[tenant_id] = False
 
-    @property
-    def is_kill_switch_active(self) -> bool:
-        return self._kill_switch
+    def is_kill_switch_active(self, tenant_id: str = "default") -> bool:
+        return self._kill_switch.get(tenant_id, False)
 
     def disable_action(self, action: str):
         if action not in self._disabled_actions:
@@ -171,6 +178,7 @@ class Approval:
     """One-time, bound, expiring approval for an action."""
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    tenant_id: str = "default"
     action: str = ""
     arguments_hash: str = ""  # Hash of action arguments for binding
     actor: str = ""  # Who requested
@@ -217,9 +225,11 @@ class ApprovalEngine:
         workflow_id: Optional[str] = None,
         run_id: Optional[str] = None,
         step_id: Optional[str] = None,
+        tenant_id: str = "default",
     ) -> Approval:
         """Create a new approval request."""
         approval = Approval(
+            tenant_id=tenant_id,
             action=action,
             arguments_hash=hash_arguments(arguments),
             actor=actor,
@@ -266,11 +276,17 @@ class ApprovalEngine:
             return False
         return True
 
-    def approve(self, approval_id: str, approved_by: str) -> bool:
-        """Approve an approval request. One-time use."""
+    def approve(self, approval_id: str, approved_by: str, tenant_id: Optional[str] = None) -> bool:
+        """Approve an approval request. One-time use.
+
+        ``tenant_id`` (quando informado) é o dono exigido: aprovações de outro
+        tenant são tratadas como inexistentes (False) — sem vazar existência.
+        """
         with self._lock:
             approval = self._approvals.get(approval_id)
             if not approval:
+                return False
+            if tenant_id is not None and approval.tenant_id != tenant_id:
                 return False
             if approval.status != ApprovalStatus.PENDING:
                 return False
@@ -282,12 +298,14 @@ class ApprovalEngine:
             approval.approved_by = approved_by
             return True
 
-    def reject(self, approval_id: str, _rejected_by: str = "") -> bool:
+    def reject(self, approval_id: str, _rejected_by: str = "", tenant_id: Optional[str] = None) -> bool:
         # _rejected_by: parte do contrato de auditoria; ainda não registrado.
-        """Reject an approval request."""
+        """Reject an approval request (tenant_id, se informado, é o dono exigido)."""
         with self._lock:
             approval = self._approvals.get(approval_id)
             if not approval:
+                return False
+            if tenant_id is not None and approval.tenant_id != tenant_id:
                 return False
             if approval.status != ApprovalStatus.PENDING:
                 return False
@@ -309,13 +327,19 @@ class ApprovalEngine:
                 return False
             return approval.is_valid
 
-    def get_pending(self) -> List[Approval]:
+    def get_pending(self, tenant_id: Optional[str] = None) -> List[Approval]:
         with self._lock:
-            return [a for a in self._approvals.values() if a.status == ApprovalStatus.PENDING and not a.is_expired]
+            return [
+                a
+                for a in self._approvals.values()
+                if a.status == ApprovalStatus.PENDING
+                and not a.is_expired
+                and (tenant_id is None or a.tenant_id == tenant_id)
+            ]
 
-    def get_all(self) -> List[Approval]:
+    def get_all(self, tenant_id: Optional[str] = None) -> List[Approval]:
         with self._lock:
-            return list(self._approvals.values())
+            return [a for a in self._approvals.values() if tenant_id is None or a.tenant_id == tenant_id]
 
     def expire_old(self) -> int:
         """Expire old approvals. Returns count of expired."""

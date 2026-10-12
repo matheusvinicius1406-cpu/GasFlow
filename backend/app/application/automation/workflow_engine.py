@@ -44,7 +44,13 @@ class WorkflowEngine:
         self.tools = tool_registry
         self._run_history: List[WorkflowRun] = []
         self._step_history: List[WorkflowStepRun] = []
-        self._metrics = {
+        # Métricas por tenant (P0 multiempresa): um tenant nunca lê contadores
+        # de execução dos demais.
+        self._metrics: Dict[str, Dict[str, int]] = {}
+
+    @staticmethod
+    def _empty_metrics() -> Dict[str, int]:
+        return {
             "workflows_started": 0,
             "workflows_completed": 0,
             "workflows_failed": 0,
@@ -54,8 +60,8 @@ class WorkflowEngine:
             "approvals_granted": 0,
         }
 
-    def get_metrics(self) -> Dict[str, Any]:
-        return dict(self._metrics)
+    def get_metrics(self, tenant_id: str = "default") -> Dict[str, Any]:
+        return dict(self._metrics.get(tenant_id, self._empty_metrics()))
 
     def execute_workflow(
         self,
@@ -68,6 +74,7 @@ class WorkflowEngine:
         """Execute a workflow definition."""
         run = WorkflowRun(
             workflow_id=definition.id,
+            tenant_id=definition.tenant_id,
             workflow_version=definition.version,
             correlation_id=correlation_id,
             trigger_event_id=trigger_event_id,
@@ -79,7 +86,7 @@ class WorkflowEngine:
 
         run.start()
         self._run_history.append(run)
-        self._inc_metric("workflows_started")
+        self._inc_metric("workflows_started", run.tenant_id)
 
         # Execute steps sequentially
         current_step_id = definition.first_step_id
@@ -87,7 +94,7 @@ class WorkflowEngine:
             step_def = definition.get_step(current_step_id)
             if not step_def:
                 run.fail(f"Step '{current_step_id}' not found in definition")
-                self._inc_metric("workflows_failed")
+                self._inc_metric("workflows_failed", run.tenant_id)
                 break
 
             # Check conditions
@@ -104,7 +111,7 @@ class WorkflowEngine:
             self._step_history.append(step_run)
 
             if step_run.status == StepStatus.COMPLETED:
-                self._inc_metric("steps_completed")
+                self._inc_metric("steps_completed", run.tenant_id)
                 # Merge result into context
                 if step_run.result:
                     run.context.update(step_run.result)
@@ -114,12 +121,12 @@ class WorkflowEngine:
                 run.current_step_id = current_step_id
                 return run
             elif step_run.status == StepStatus.FAILED:
-                self._inc_metric("steps_failed")
+                self._inc_metric("steps_failed", run.tenant_id)
                 if step_def.next_step_on_failure:
                     current_step_id = step_def.next_step_on_failure
                 else:
                     run.fail(f"Step '{step_def.name}' failed: {step_run.error}")
-                    self._inc_metric("workflows_failed")
+                    self._inc_metric("workflows_failed", run.tenant_id)
                     break
             else:
                 # SKIPPED or unknown
@@ -127,7 +134,7 @@ class WorkflowEngine:
 
         if run.status == WorkflowStatus.ACTIVE:
             run.complete()
-            self._inc_metric("workflows_completed")
+            self._inc_metric("workflows_completed", run.tenant_id)
 
         return run
 
@@ -170,18 +177,18 @@ class WorkflowEngine:
         # 1. Aprovação precisa estar APPROVED e não expirada.
         if not self.approvals.is_valid(approval_id):
             step_run.fail("Approval is not valid (rejected, expired, or revoked)")
-            self._inc_metric("steps_failed")
+            self._inc_metric("steps_failed", run.tenant_id)
             run.fail(f"Step '{step_def.name}' failed: approval invalid")
             return run
 
         # 2. Binding: argumentos a executar == argumentos aprovados.
         if not self.approvals.validate_binding(approval_id, step_def.tool_name or step_def.name, step_def.arguments):
             step_run.fail("Approval binding mismatch — arguments differ from approved")
-            self._inc_metric("steps_failed")
+            self._inc_metric("steps_failed", run.tenant_id)
             run.fail(f"Step '{step_def.name}' failed: approval binding mismatch")
             return run
 
-        self._inc_metric("approvals_granted")
+        self._inc_metric("approvals_granted", run.tenant_id)
 
         # Executa o restante do run a partir do step atual.
         current_step_id: Optional[str] = run.current_step_id
@@ -189,7 +196,7 @@ class WorkflowEngine:
             s_def = definition.get_step(current_step_id)
             if not s_def:
                 run.fail(f"Step '{current_step_id}' not found in definition")
-                self._inc_metric("workflows_failed")
+                self._inc_metric("workflows_failed", run.tenant_id)
                 break
 
             if s_def.condition:
@@ -211,7 +218,7 @@ class WorkflowEngine:
                     )
                     resumed_gate.complete({"approved": True})
                     self._step_history.append(resumed_gate)
-                    self._inc_metric("steps_completed")
+                    self._inc_metric("steps_completed", run.tenant_id)
                     current_step_id = s_def.next_step_on_success
                     continue
 
@@ -226,7 +233,7 @@ class WorkflowEngine:
                 if result.get("success"):
                     resumed.complete(result.get("data"))
                     self._step_history.append(resumed)
-                    self._inc_metric("steps_completed")
+                    self._inc_metric("steps_completed", run.tenant_id)
                     if resumed.result:
                         run.context.update(resumed.result)
                     current_step_id = s_def.next_step_on_success
@@ -234,16 +241,16 @@ class WorkflowEngine:
                 else:
                     resumed.fail(result.get("error", "Tool execution failed"))
                     self._step_history.append(resumed)
-                    self._inc_metric("steps_failed")
+                    self._inc_metric("steps_failed", run.tenant_id)
                     run.fail(f"Step '{s_def.name}' failed: {resumed.error}")
-                    self._inc_metric("workflows_failed")
+                    self._inc_metric("workflows_failed", run.tenant_id)
                     break
 
             # Steps seguintes: execução normal.
             step_run_next = self._execute_step(run, s_def, dry_run=False)
             self._step_history.append(step_run_next)
             if step_run_next.status == StepStatus.COMPLETED:
-                self._inc_metric("steps_completed")
+                self._inc_metric("steps_completed", run.tenant_id)
                 if step_run_next.result:
                     run.context.update(step_run_next.result)
                 current_step_id = s_def.next_step_on_success
@@ -251,19 +258,19 @@ class WorkflowEngine:
                 run.current_step_id = current_step_id
                 return run
             elif step_run_next.status == StepStatus.FAILED:
-                self._inc_metric("steps_failed")
+                self._inc_metric("steps_failed", run.tenant_id)
                 if s_def.next_step_on_failure:
                     current_step_id = s_def.next_step_on_failure
                 else:
                     run.fail(f"Step '{s_def.name}' failed: {step_run_next.error}")
-                    self._inc_metric("workflows_failed")
+                    self._inc_metric("workflows_failed", run.tenant_id)
                     break
             else:
                 current_step_id = s_def.next_step_on_success
 
         if run.status == WorkflowStatus.ACTIVE:
             run.complete()
-            self._inc_metric("workflows_completed")
+            self._inc_metric("workflows_completed", run.tenant_id)
 
         return run
 
@@ -288,7 +295,9 @@ class WorkflowEngine:
 
                 # Check approval requirement
                 if step_def.requires_approval:
-                    policy_check = self.policy.check_permission(step_def.tool_name or "", "WORKFLOW")
+                    policy_check = self.policy.check_permission(
+                        step_def.tool_name or "", "WORKFLOW", tenant_id=run.tenant_id
+                    )
                     if policy_check.get("requires_approval"):
                         approval = self.approvals.create_approval(
                             action=step_def.tool_name or "",
@@ -298,8 +307,9 @@ class WorkflowEngine:
                             workflow_id=run.workflow_id,
                             run_id=run.id,
                             step_id=step_def.id,
+                            tenant_id=run.tenant_id,
                         )
-                        self._inc_metric("approvals_requested")
+                        self._inc_metric("approvals_requested", run.tenant_id)
                         step_run.wait_approval(approval.id)
                         return step_run
 
@@ -319,8 +329,9 @@ class WorkflowEngine:
                     workflow_id=run.workflow_id,
                     run_id=run.id,
                     step_id=step_def.id,
+                    tenant_id=run.tenant_id,
                 )
-                self._inc_metric("approvals_requested")
+                self._inc_metric("approvals_requested", run.tenant_id)
                 step_run.wait_approval(approval.id)
 
             elif step_def.action_type == "notification":
@@ -423,6 +434,7 @@ class WorkflowEngine:
         run.cancel()
         return True
 
-    def _inc_metric(self, key: str):
-        if key in self._metrics:
-            self._metrics[key] += 1
+    def _inc_metric(self, key: str, tenant_id: str = "default"):
+        bucket = self._metrics.setdefault(tenant_id, self._empty_metrics())
+        if key in bucket:
+            bucket[key] += 1

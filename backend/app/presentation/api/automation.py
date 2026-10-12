@@ -14,13 +14,19 @@ POST /automation/agents/{id}/execute — Execute agent
 GET /automation/agents/runs — List agent runs
 POST /automation/kill-switch — Toggle kill switch
 GET /automation/metrics — Metrics
+
+Isolamento multiempresa (P0, 2026-10-10): todo acesso é escopado pelo
+tenant do token autenticado (ctx.tenant_id). Workflows default são
+semeados por tenant sob demanda; kill switch, aprovações, runs e métricas
+são por tenant — um operador nunca enxerga nem afeta a automação de outra
+empresa. Ids de outro tenant respondem 404 (sem vazar existência).
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from app.presentation.dependencies import get_tenant_context
 from app.domain.security.models import TenantContext
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Dict, Optional, Any
 
 from app.core.config import settings
 from app.domain.automation.events import EventBus
@@ -55,21 +61,33 @@ _approval_engine = (
 )
 _workflow_engine = WorkflowEngine(_policy_engine, _approval_engine)
 _agent_engine = AgentEngine(_policy_engine, _approval_engine, tool_registry=None)
-_workflows: Dict[str, WorkflowDefinition] = {}
+
+# Workflows por tenant (P0 multiempresa): tenant_id → {workflow_id: def}.
+# Os 5 defaults são semeados sob demanda no primeiro acesso do tenant.
+_workflows: Dict[str, Dict[str, WorkflowDefinition]] = {}
 
 # Initialize defaults
 register_default_policies(_policy_engine)
 create_default_agents(_agent_engine)
 
-# Register default workflows
-for wf in [
-    create_low_stock_workflow(),
-    create_receivable_overdue_workflow(),
-    create_customer_reactivation_workflow(),
-    create_order_completion_workflow(),
-    create_payment_confirmation_workflow(),
-]:
-    _workflows[wf.id] = wf
+
+def _tenant_workflows(tenant_id: str) -> Dict[str, WorkflowDefinition]:
+    """Workflows do tenant, com seed lazy dos defaults na primeira chamada."""
+    store = _workflows.get(tenant_id)
+    if store is None:
+        store = {}
+        for factory in (
+            create_low_stock_workflow,
+            create_receivable_overdue_workflow,
+            create_customer_reactivation_workflow,
+            create_order_completion_workflow,
+            create_payment_confirmation_workflow,
+        ):
+            wf = factory()
+            wf.tenant_id = tenant_id
+            store[wf.id] = wf
+        _workflows[tenant_id] = store
+    return store
 
 
 # ── Schemas ─────────────────────────────────────────────
@@ -110,21 +128,27 @@ class KillSwitchRequest(BaseModel):
 
 @router.get("/workflows")
 async def list_workflows(ctx: TenantContext = Depends(get_tenant_context)):
+    workflows = _tenant_workflows(ctx.tenant_id)
     return {
         "workflows": [
-            {"id": w.id, "name": w.name, "status": w.status.value, "steps": len(w.steps)} for w in _workflows.values()
+            {"id": w.id, "name": w.name, "status": w.status.value, "steps": len(w.steps)} for w in workflows.values()
         ]
     }
 
 
 @router.post("/workflows")
-async def create_workflow(req: WorkflowCreateRequest, _ctx: TenantContext = Depends(get_tenant_context)):
+async def create_workflow(req: WorkflowCreateRequest, ctx: TenantContext = Depends(get_tenant_context)):
     # Sem auth até a matriz de rotas (2026-10-09): era a única rota do módulo
     # sem get_tenant_context, ou seja, qualquer anônimo criava workflow.
+    # Desde 2026-10-10 (P0 multiempresa) o workflow nasce no tenant do token.
     wf = WorkflowDefinition(
-        name=req.name, description=req.description, trigger_type=req.trigger_type, trigger_event=req.trigger_event
+        tenant_id=ctx.tenant_id,
+        name=req.name,
+        description=req.description,
+        trigger_type=req.trigger_type,
+        trigger_event=req.trigger_event,
     )
-    _workflows[wf.id] = wf
+    _tenant_workflows(ctx.tenant_id)[wf.id] = wf
     return {"id": wf.id, "name": wf.name, "status": wf.status.value}
 
 
@@ -132,7 +156,7 @@ async def create_workflow(req: WorkflowCreateRequest, _ctx: TenantContext = Depe
 async def execute_workflow(
     workflow_id: str, req: WorkflowExecuteRequest, ctx: TenantContext = Depends(get_tenant_context)
 ):
-    wf = _workflows.get(workflow_id)
+    wf = _tenant_workflows(ctx.tenant_id).get(workflow_id)
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
     run = _workflow_engine.execute_workflow(wf, req.context, req.correlation_id, dry_run=req.dry_run)
@@ -142,9 +166,17 @@ async def execute_workflow(
 # ── Runs ────────────────────────────────────────────────
 
 
+def _owned_run_or_404(run_id: str, tenant_id: str):
+    run = _workflow_engine.get_run(run_id)
+    # 404 (não 403) para run de outro tenant: não vaza existência.
+    if not run or run.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
+
+
 @router.get("/runs")
 async def list_runs(ctx: TenantContext = Depends(get_tenant_context)):
-    runs = _workflow_engine._run_history
+    runs = [r for r in _workflow_engine._run_history if r.tenant_id == ctx.tenant_id]
     return {
         "runs": [
             {
@@ -160,6 +192,7 @@ async def list_runs(ctx: TenantContext = Depends(get_tenant_context)):
 
 @router.post("/runs/{run_id}/pause")
 async def pause_run(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
+    _owned_run_or_404(run_id, ctx.tenant_id)
     if _workflow_engine.pause_run(run_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot pause run")
@@ -167,6 +200,7 @@ async def pause_run(run_id: str, ctx: TenantContext = Depends(get_tenant_context
 
 @router.post("/runs/{run_id}/cancel")
 async def cancel_run(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
+    _owned_run_or_404(run_id, ctx.tenant_id)
     if _workflow_engine.cancel_run(run_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot cancel run")
@@ -187,45 +221,48 @@ async def list_approvals(ctx: TenantContext = Depends(get_tenant_context)):
                 "risk_level": a.risk_level,
                 "created_at": a.created_at.isoformat(),
             }
-            for a in _approval_engine.get_all()
+            for a in _approval_engine.get_all(tenant_id=ctx.tenant_id)
         ]
     }
 
 
-@router.post("/approvals/{approval_id}/approve")
-async def approve_action(approval_id: str, req: ApprovalRequest, ctx: TenantContext = Depends(get_tenant_context)):
-    if not _approval_engine.approve(approval_id, req.approved_by):
-        raise HTTPException(status_code=400, detail="Cannot approve")
-    resumed_run: Optional[str] = None
-    if req.resume:
-        resumed_run = _resume_paused_run(approval_id)
-    return {"success": True, "resumed_run_id": resumed_run}
-
-
-def _resume_paused_run(approval_id: str) -> Optional[str]:
+def _resume_paused_run(approval_id: str, tenant_id: str) -> Optional[str]:
     """Após aprovar, retoma o run pausado no step que aguardava a aprovação.
 
     O WorkflowEngine.valida binding (argumentos aprovados == executados) e
     executa o restante do run. Em memória por processo (histórico de runs);
     com APPROVAL_QUEUE_MODE=redis a fila em si é compartilhada entre workers.
+
+    Escopo (P0 multiempresa): approval, run e definição precisam pertencer
+    ao tenant autenticado — qualquer divergência aborta a retomada.
     """
     approval = _approval_engine.get(approval_id)
-    if not approval or not approval.run_id:
+    if not approval or not approval.run_id or approval.tenant_id != tenant_id:
         return None
     run = _workflow_engine.get_run(approval.run_id)
-    if not run:
+    if not run or run.tenant_id != tenant_id:
         return None
     # Reconstrói a definição usada pelo run (definições vivem em _workflows).
-    definition = _workflows.get(run.workflow_id)
+    definition = _tenant_workflows(tenant_id).get(run.workflow_id)
     if not definition:
         return None
     resumed = _workflow_engine.resume_after_approval(definition, run)
     return resumed.id
 
 
+@router.post("/approvals/{approval_id}/approve")
+async def approve_action(approval_id: str, req: ApprovalRequest, ctx: TenantContext = Depends(get_tenant_context)):
+    if not _approval_engine.approve(approval_id, req.approved_by, tenant_id=ctx.tenant_id):
+        raise HTTPException(status_code=400, detail="Cannot approve")
+    resumed_run: Optional[str] = None
+    if req.resume:
+        resumed_run = _resume_paused_run(approval_id, ctx.tenant_id)
+    return {"success": True, "resumed_run_id": resumed_run}
+
+
 @router.post("/approvals/{approval_id}/reject")
 async def reject_action(approval_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    if _approval_engine.reject(approval_id):
+    if _approval_engine.reject(approval_id, tenant_id=ctx.tenant_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot reject")
 
@@ -251,13 +288,14 @@ async def execute_agent(agent_id: str, req: AgentExecuteRequest, ctx: TenantCont
         req.context,
         req.correlation_id,
         dry_run=req.dry_run,
+        tenant_id=ctx.tenant_id,
     )
     return {"run_id": run.id, "status": run.status.value}
 
 
 @router.get("/agents/runs")
 async def list_agent_runs(ctx: TenantContext = Depends(get_tenant_context)):
-    runs = _agent_engine.get_runs()
+    runs = _agent_engine.get_runs(tenant_id=ctx.tenant_id)
     return {
         "runs": [
             {
@@ -274,7 +312,7 @@ async def list_agent_runs(ctx: TenantContext = Depends(get_tenant_context)):
 
 @router.post("/agents/runs/{run_id}/stop")
 async def stop_agent(run_id: str, ctx: TenantContext = Depends(get_tenant_context)):
-    if _agent_engine.stop_agent(run_id):
+    if _agent_engine.stop_agent(run_id, tenant_id=ctx.tenant_id):
         return {"success": True}
     raise HTTPException(status_code=400, detail="Cannot stop agent")
 
@@ -285,15 +323,15 @@ async def stop_agent(run_id: str, ctx: TenantContext = Depends(get_tenant_contex
 @router.post("/kill-switch")
 async def toggle_kill_switch(req: KillSwitchRequest, ctx: TenantContext = Depends(get_tenant_context)):
     if req.active:
-        _policy_engine.activate_kill_switch()
+        _policy_engine.activate_kill_switch(ctx.tenant_id)
     else:
-        _policy_engine.deactivate_kill_switch()
-    return {"active": _policy_engine.is_kill_switch_active}
+        _policy_engine.deactivate_kill_switch(ctx.tenant_id)
+    return {"active": _policy_engine.is_kill_switch_active(ctx.tenant_id)}
 
 
 @router.get("/kill-switch")
 async def get_kill_switch(ctx: TenantContext = Depends(get_tenant_context)):
-    return {"active": _policy_engine.is_kill_switch_active}
+    return {"active": _policy_engine.is_kill_switch_active(ctx.tenant_id)}
 
 
 # ── Metrics ─────────────────────────────────────────────
@@ -302,8 +340,8 @@ async def get_kill_switch(ctx: TenantContext = Depends(get_tenant_context)):
 @router.get("/metrics")
 async def get_metrics(ctx: TenantContext = Depends(get_tenant_context)):
     return {
-        "workflow": _workflow_engine.get_metrics(),
-        "agent": _agent_engine.get_metrics(),
-        "kill_switch": _policy_engine.is_kill_switch_active,
-        "pending_approvals": len(_approval_engine.get_pending()),
+        "workflow": _workflow_engine.get_metrics(ctx.tenant_id),
+        "agent": _agent_engine.get_metrics(ctx.tenant_id),
+        "kill_switch": _policy_engine.is_kill_switch_active(ctx.tenant_id),
+        "pending_approvals": len(_approval_engine.get_pending(tenant_id=ctx.tenant_id)),
     }

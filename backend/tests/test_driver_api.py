@@ -896,9 +896,9 @@ class TestAdversarial:
 
         engine = PolicyEngine()
         engine.activate_kill_switch()
-        assert engine.is_kill_switch_active
+        assert engine.is_kill_switch_active()
         engine.deactivate_kill_switch()
-        assert not engine.is_kill_switch_active
+        assert not engine.is_kill_switch_active()
 
     """60. All previous phases regress?"""
 

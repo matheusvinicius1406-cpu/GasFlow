@@ -190,7 +190,7 @@ async def send_message(
             # Mesma regra de normalização do gateway (dígitos, lstrip 0, min 8).
             digits = _re.sub(r"\D", "", payload["recipient"]).lstrip("0")
             if len(digits) >= 8:
-                conv_repo = SQLAlchemyConversationRepository(db)
+                conv_repo = SQLAlchemyConversationRepository(db, _ctx.tenant_id)
                 msg_repo = SQLAlchemyConversationMessageRepository(db)
                 conv = conv_repo.find_by_phone_and_account(digits, account_id)
                 if not conv:

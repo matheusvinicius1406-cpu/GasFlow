@@ -852,11 +852,11 @@ class TestAdversarial:
         from app.domain.automation.policy import PolicyEngine
 
         engine = PolicyEngine()
-        assert not engine.is_kill_switch_active
+        assert not engine.is_kill_switch_active()
         engine.activate_kill_switch()
-        assert engine.is_kill_switch_active
+        assert engine.is_kill_switch_active()
         engine.deactivate_kill_switch()
-        assert not engine.is_kill_switch_active
+        assert not engine.is_kill_switch_active()
 
     """30. All previous phases pass? PASS (full regression)"""
 

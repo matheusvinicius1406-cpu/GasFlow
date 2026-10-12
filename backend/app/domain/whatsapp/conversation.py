@@ -2,7 +2,8 @@
 WhatsApp Conversation — FASE 10
 
 State machine + memory for WhatsApp conversations.
-Each conversation is isolated by (account_id, customer_phone).
+Each conversation is isolated by (tenant_id, account_id, customer_phone) —
+o tenant_id é o escopo de multiempresa (P0 de isolamento, 2026-10-10).
 """
 
 from dataclasses import dataclass, field
@@ -77,6 +78,7 @@ class Conversation:
     """WhatsApp conversation entity."""
 
     id: Optional[int] = None
+    tenant_id: str = "default"
     account_id: str = ""
     customer_phone: str = ""
     customer_codigo: Optional[str] = None

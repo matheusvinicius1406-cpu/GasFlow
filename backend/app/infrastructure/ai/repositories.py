@@ -13,8 +13,12 @@ from app.infrastructure.ai.models import ConversationModel, AIMessageModel
 
 
 class SQLAlchemyConversationRepository(ConversationRepository):
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, tenant_id: str = "default"):
         self.db = db
+        self.tenant_id = tenant_id
+
+    def _scoped(self):
+        return self.db.query(ConversationModel).filter(ConversationModel.tenant_id == self.tenant_id)
 
     def _to_entity(self, m: ConversationModel) -> Conversation:
         return Conversation(
@@ -27,6 +31,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
 
     def create(self, conversation: Conversation) -> Conversation:
         model = ConversationModel(
+            tenant_id=self.tenant_id,
             external_id=conversation.external_id,
             title=conversation.title,
             created_at=conversation.created_at or datetime.utcnow(),
@@ -37,7 +42,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return self._to_entity(model)
 
     def get_by_external_id(self, external_id: str) -> Optional[Conversation]:
-        model = self.db.query(ConversationModel).filter(ConversationModel.external_id == external_id).first()
+        model = self._scoped().filter(ConversationModel.external_id == external_id).first()
         if not model:
             return None
         conv = self._to_entity(model)
@@ -52,7 +57,7 @@ class SQLAlchemyConversationRepository(ConversationRepository):
         return conv
 
     def list_all(self, limit: int = 50) -> List[Conversation]:
-        models = self.db.query(ConversationModel).order_by(ConversationModel.created_at.desc()).limit(limit).all()
+        models = self._scoped().order_by(ConversationModel.created_at.desc()).limit(limit).all()
         return [self._to_entity(m) for m in models]
 
     def _message_to_entity(self, m: AIMessageModel) -> Message:
