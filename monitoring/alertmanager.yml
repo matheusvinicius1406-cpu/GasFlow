@@ -10,5 +10,16 @@ receivers:
     webhook_configs:
       # Receiver próprio no backend GasFlow — registra o alerta em log
       # estruturado (integrável depois a Telegram/Slack/e-mail).
+      #
+      # Segurança: o backend exige o segredo compartilhado
+      # (ALERTS_WEBHOOK_SECRET) em `X-Alert-Secret` ou `Authorization: Bearer`.
+      # Em produção, defina ALERTS_WEBHOOK_SECRET no backend E descomente o
+      # bloco `http_config` abaixo, montando o MESMO valor no arquivo
+      # /etc/alertmanager/alerts_secret (uma linha, sem quebra).
+      # Sem o segredo, o backend responde 503 em produção (fail-closed).
       - url: "http://backend:8000/api/v1/webhooks/alerts"
         send_resolved: true
+        # http_config:
+        #   authorization:
+        #     type: Bearer
+        #     credentials_file: /etc/alertmanager/alerts_secret

@@ -75,3 +75,70 @@ class TestAlertsWebhook:
         resp = client.post("/api/v1/webhooks/alerts", json={"alerts": []})
         assert resp.status_code == 200
         assert resp.json() == {"ok": True, "received": 0}
+
+
+class TestAlertsWebhookOriginGate:
+    """Gate de origem (matriz de rotas 2026-10-09).
+
+    Sem segredo: dev aceita; produção responde 503 (fail-closed).
+    Com segredo: exige X-Alert-Secret ou Bearer; ausente/errado = 401.
+    """
+
+    def test_secret_configured_rejects_missing(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "s3cr3t")
+        resp = client.post("/webhooks/alerts", json={"alerts": []})
+        assert resp.status_code == 401
+        assert resp.json()["error"] == "unauthorized"
+
+    def test_secret_configured_rejects_wrong(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "s3cr3t")
+        resp = client.post(
+            "/webhooks/alerts",
+            json={"alerts": []},
+            headers={"X-Alert-Secret": "errado"},
+        )
+        assert resp.status_code == 401
+
+    def test_secret_configured_accepts_dedicated_header(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "s3cr3t")
+        resp = client.post(
+            "/webhooks/alerts",
+            json={"alerts": []},
+            headers={"X-Alert-Secret": "s3cr3t"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True, "received": 0}
+
+    def test_secret_configured_accepts_bearer(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "s3cr3t")
+        resp = client.post(
+            "/webhooks/alerts",
+            json={"alerts": []},
+            headers={"Authorization": "Bearer s3cr3t"},
+        )
+        assert resp.status_code == 200
+
+    def test_production_without_secret_is_fail_closed(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "")
+        monkeypatch.setattr(settings, "environment", "production")
+        resp = client.post("/webhooks/alerts", json={"alerts": []})
+        assert resp.status_code == 503
+        assert resp.json()["error"] == "webhook_not_configured"
+
+    def test_development_without_secret_still_accepts(self, client: TestClient, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "alerts_webhook_secret", "")
+        monkeypatch.setattr(settings, "environment", "development")
+        resp = client.post("/webhooks/alerts", json={"alerts": []})
+        assert resp.status_code == 200

@@ -84,6 +84,10 @@ services:
       # aprovação criada por um worker precisa existir no worker do "aprovar".
       - APPROVAL_QUEUE_MODE=${APPROVAL_QUEUE_MODE:-redis}
       - APPROVAL_QUEUE_REDIS_URL=redis://redis:6379/0
+      # Segredo do receiver do Alertmanager (POST /webhooks/alerts). Sem ele,
+      # o backend responde 503 em produção (fail-closed). O Alertmanager
+      # precisa do MESMO valor para assinar — ver monitoring/alertmanager.yml.
+      - ALERTS_WEBHOOK_SECRET=${ALERTS_WEBHOOK_SECRET:-}
     # Aplica migrations antes de servir — o schema em prod é do Alembic,
     # não do create_all do boot (que segue disponível p/ dev/tests).
     command: >

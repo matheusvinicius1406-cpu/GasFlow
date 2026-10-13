@@ -74,6 +74,12 @@ class Settings(BaseModel):
     # a chave de servico (X-GasFlow-Key / Authorization Bearer).
     metrics_public: bool = env_flag("METRICS_PUBLIC", False)
 
+    # /webhooks/alerts (receiver do Alertmanager) exige o segredo no header
+    # `X-Alert-Secret` ou `Authorization: Bearer` quando definido. Sem
+    # segredo, produção responde 503 (fail-closed) e dev/rede interna segue
+    # (matriz de rotas 2026-10-09; ver alerts_webhook.py).
+    alerts_webhook_secret: str = os.getenv("ALERTS_WEBHOOK_SECRET", "")
+
     # Database
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./gasflow.db")
 

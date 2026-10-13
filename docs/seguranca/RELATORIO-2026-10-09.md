@@ -180,3 +180,12 @@ aberta como item separado.
 5. `/metrics` fora do compose precisa de `METRICS_PUBLIC=1` ou da chave de serviço no
    `prometheus.yml` correspondente (o de `monitoring/` aponta para `backend:8000`
    dentro do compose, que já liga a flag).
+
+## Atualização 2026-10-13 — fechamento das pendências 2 e da dívida `/webhooks/alerts`
+
+- **10 rotas `SOMENTE_DB` — auditadas: todas públicas por design (nada a mudar no código).**
+  - `POST /auth/mobile/login` e `POST /auth/mobile/refresh` — credenciais (entregador) + rate limit 10/min/IP; refresh opaco rotativo com revogação de família.
+  - `POST /integrations/import` — token por integração no header `X-Integration-Token` (401 sem match); o agente da revenda não tem conta no GasFlow — o par (integration_id, import_token) é a credencial.
+  - `GET /public/referral/invite/{token}` e `POST /public/referral/signup` — token de convite assinado (`GF-INV-`), rate limit por telefone + IP, consentimento LGPD obrigatório e idempotência.
+  Nenhuma ficou sem credencial: o classificador apenas não enxerga auth aplicada no handler. Permanecem na allowlist com esta justificativa (fecha a pendência 2).
+- **`POST /webhooks/alerts` — origem agora validada.** `ALERTS_WEBHOOK_SECRET` exige `X-Alert-Secret` ou `Authorization: Bearer` (comparado com `hmac.compare_digest`); sem segredo, **produção responde 503 (fail-closed)** e dev/rede interna segue como antes. Testes em `tests/test_alerts_webhook.py` (401 ausente/errado, 200 com header e com Bearer, 503 em produção sem segredo). Alertmanager documentado em `monitoring/alertmanager.yml`; env em `docker-compose.prod.yml` e `.env.example` (fecha a dívida do webhook).
