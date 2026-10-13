@@ -63,12 +63,26 @@ alembic upgrade head                      # reconstrói do zero
 O banco `.legacy` pode ser descartado depois de confirmar que o novo
 funciona.
 
-## Pendência: `init_db` ainda usa `create_all`
+## Resolvido (2026-10-13): `init_db` bootstrapa banco vazio pelo Alembic
 
-Enquanto `init_db()` chamar `create_all()` sem gravar `alembic_version`, o
-problema acima pode se repetir se alguém bootar o app num banco novo sem
-rodar `alembic upgrade head` antes. A correção de fundo é fazer `init_db`
-rodar `alembic upgrade head` (uma fonte de verdade), o que também eliminaria
-a necessidade de `_ensure_sqlite_columns`. Isso é um item separado — mexe no
-caminho de boot do backend, dos testes e do Desktop, e merece sessão própria
-com regressão completa.
+`init_db()` agora detecta **banco vazio** (`_database_is_empty()`) e cria o
+schema por `alembic upgrade head` (`_run_alembic_upgrade`) em dev/prod/Desktop
+— o banco novo nasce com `alembic_version` gravado, que era a causa do drift.
+
+- **Bancos já populados** (legado ou migrado) seguem no `create_all` +
+  `_ensure_sqlite_columns()`, que vira rede de compat para colunas faltantes.
+- **Testes**: `ENVIRONMENT=test` (e `GASFLOW_INIT_DB_ALEMBIC=0`) mantêm o
+  `create_all` efêmero no engine isolado — sem migrar a cada sessão.
+- O **exe/Desktop** já rodava `run_migrations()` antes do `init_db` (banco
+  não-vazio → caminho inalterado).
+- Testes: `tests/test_init_db_alembic_boot.py`.
+
+### Bug corrigido junto: backup A.3 nunca era criado no Windows
+
+`_backup_before_migration()` montava o caminho com `str(engine.url)` — que no
+Windows **percent-encoda** o caminho (`C%3A%5CUsers\...`), então
+`Path(...).exists()` era sempre `False` e o backup automático era pulado em
+silêncio (`tests/test_schema_migration.py::test_backup_created_before_first_migration`
+falhava desde então). Agora usa `engine.url.database` (caminho decodificado) e
+ignora `:memory:`. `_ensure_sqlite_columns()` continua como rede de compat,
+para o caso de uma migration futura falhar no meio.

@@ -19,6 +19,10 @@ import pytest
 # This ensures Settings.from_env() uses test values
 os.environ.setdefault("ADMIN_PASSWORD", "test_password_123")
 os.environ.setdefault("ENVIRONMENT", "test")
+# Testes criam o schema do zero por create_all no engine isolado (efêmero).
+# Desliga o bootstrap por Alembic do init_db para não migrar a cada sessão
+# contra o banco temporário (ver init_db._alembic_boot_enabled).
+os.environ["GASFLOW_INIT_DB_ALEMBIC"] = "0"
 
 
 def _build_isolated_engine():

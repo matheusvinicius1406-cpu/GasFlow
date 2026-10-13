@@ -176,11 +176,19 @@ def _backup_before_migration() -> None:
 
     from sqlalchemy import text
 
-    url = str(engine.url)
-    if not url.startswith("sqlite"):
+    if engine.url.get_backend_name() != "sqlite":
         return  # backup de arquivo só faz sentido para SQLite
 
-    db_path = Path(url.removeprefix("sqlite:///")).resolve()
+    # `engine.url.database` é o caminho já decodificado. NÃO usar
+    # `str(engine.url)`: no Windows ele percent-encoda o caminho
+    # (`C%3A%5CUsers\...`) e o arquivo "não existe", pulando o backup.
+    database = engine.url.database
+    if not database or database == ":memory:":
+        return  # banco em memória — nada a proteger
+
+    db_path = Path(database)
+    if not db_path.is_absolute():
+        db_path = db_path.resolve()
     if not db_path.exists():
         return  # banco novo — nada a proteger
 
@@ -593,8 +601,88 @@ def _reorg_cleanup() -> None:
         logger.warning("reorg.v4.cleanup_done")
 
 
-def init_db():
+def _alembic_boot_enabled() -> bool:
+    """Alembic bootstrap do banco vazio no boot do backend (A3).
+
+    Mesma fonte de schema que produção/Desktop (alembic upgrade head),
+    eliminando o banco que nascia só por `create_all` sem `alembic_version`.
+
+    Desligado em testes (ENVIRONMENT=test — schema efêmero e isolado) e por
+    `GASFLOW_INIT_DB_ALEMBIC=0`. Ligado em dev/prod/Desktop.
+    """
+    import os
+
+    if os.getenv("GASFLOW_INIT_DB_ALEMBIC", "1").strip().lower() in ("0", "false", "no", "off"):
+        return False
+    return os.getenv("ENVIRONMENT", "development").strip().lower() != "test"
+
+
+def _database_is_empty() -> bool:
+    """True quando o banco não tem nenhuma tabela (banco novo)."""
+    from sqlalchemy import inspect
+
+    return not inspect(engine).get_table_names()
+
+
+def _run_alembic_upgrade(url: str, backend_dir=None) -> bool:
+    """Aplica `alembic upgrade head` no banco do `url`. True se aplicou.
+
+    Chamado SÓ para banco vazio (a cadeia completa cria o schema + a tabela
+    `alembic_version`). Qualquer indisponibilidade (alembic ausente, ini não
+    encontrado) devolve False e o chamador cai no `create_all` — o boot nunca
+    quebra por causa da migração. O env.py do Alembic resolve o DATABASE_URL
+    em runtime, então ele é apontado para `url` durante a execução.
+
+    `backend_dir` (raiz com alembic.ini + migrations/) é parametrizável para
+    teste; em runtime usa a raiz do pacote backend.
+    """
+    import os
+    from pathlib import Path
+
+    if backend_dir is None:
+        backend_dir = Path(__file__).resolve().parents[3]
+    else:
+        backend_dir = Path(backend_dir)
+    ini = backend_dir / "alembic.ini"
+    if not ini.is_file():
+        return False
+    try:
+        from alembic import command
+        from alembic.config import Config
+    except Exception:  # pragma: no cover — alembic é dependência do projeto
+        return False
+
+    cfg = Config(str(ini))
+    cfg.set_main_option("script_location", str(backend_dir / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", url)
+
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+    return True
+
+
+def _bootstrap_schema() -> None:
+    """Cria o schema de um banco novo pela fonte de verdade (Alembic).
+
+    Banco vazio + ambiente não-test → `alembic upgrade head`.
+    Qualquer outro caso (legado já populado, testes, falha do alembic) usa
+    `create_all`, com `_ensure_sqlite_columns()` como rede de compat.
+    """
+    if _alembic_boot_enabled() and _database_is_empty():
+        if _run_alembic_upgrade(str(engine.url)):
+            return
     Base.metadata.create_all(bind=engine)
+
+
+def init_db():
+    _bootstrap_schema()
     try:
         _backup_before_migration()
         _ensure_sqlite_columns()
