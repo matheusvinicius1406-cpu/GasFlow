@@ -1,3 +1,7 @@
+> ⚠️ **[histórico — 2026-08-30]** Números e status abaixo são deste recorte (889
+> testes, antes das Fases 9–16 e do P0). Estado atual e pendências:
+> `docs/PLANO_MASTER.md` e `CHANGELOG.md`.
+
 # GASFLOW — FINAL CROSS-PHASE STATUS
 # FASES 5 + 6 + 7 + 8 + 15.1 + 15.2 + 15.3 + 16.0 (POST-16.0)
 

@@ -144,14 +144,16 @@ fonte de verdade** — o `init_db` é o plano B.
 
 ## Sobre `desktop/dist/` versionado
 
-<arg_value><b88a6f17>> [histórico] Os fontes do main process (`src/main/*.ts`) não estão nesta
-> árvore — apenas o `dist/` compilado é versionado. A restauração dos fontes
-> está em andamento na branch `refactor/desktop-sources` (Onda 4 da auditoria).
+<arg_value><b88a6f17>Os **fontes do main process vivem em `desktop/src/main/*.ts`** (e o preload em
+`desktop/src/preload/index.ts`) — a Onda 4 da auditoria migrou o antigo
+`dist/main/*.js` compilado para TypeScript. O `dist/` é **artefato de build
+versionado**: o Electron carrega `dist/main/index.js` direto, e `npm run build`
+regenera o `dist/` a partir dos fontes.
 
-O Electron carrega `dist/main/index.js` direto — alterações no main process
-são feitas hoje no próprio `dist/` (com os testes de fumaça em `desktop/tests/`
-cobrindo updater, config e preload). `npm run typecheck` usa um placeholder em
-`src/` até os fontes serem restaurados.
+Alterações no main process são feitas **nos `.ts` de `src/`**, nunca no `dist/`
+(scripts de pre-commit não reescrevem o `dist/`). Testes de fumaça em
+`desktop/tests/` cobrem updater, config e preload; `npm run typecheck` roda
+sobre `src/`.
 
 ## Arquitetura / decisões
 
@@ -186,8 +188,9 @@ Embutidos: `resources/frontend` (React), `resources/agent`, `resources/whatsapp`
 
 ## Limitações conhecidas
 
-- **Backend precisa de Python na máquina** nesta versão (PyInstaller na
-  roadmap para instalador totalmente autônomo).
+- **Backend empacotado**: o instalador embute o backend PyInstaller
+  (`backend/dist/gasflow-backend.exe`, onefile); o Electron o prefere quando
+  empacotado e cai para o Python da máquina no dev.
 - WhatsApp: use um número dedicado — automação não-oficial tem risco de
   banimento; use com moderação.
 - WhatsApp Web audio: depende do whisper instalado na máquina (usado pelo

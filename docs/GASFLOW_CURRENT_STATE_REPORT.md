@@ -1,3 +1,8 @@
+> ⚠️ **[histórico — 2026-08-29]** Recorte anterior às Fases 9–16, ao P0 de
+> persistência e ao isolamento multiempresa. Muito do que aparece como "gap"
+> aqui já foi implementado (PIX, providers de IA/áudio, CI, multiempresa).
+> Estado atual: `docs/PLANO_MASTER.md`.
+
 # GASFLOW CURRENT STATE REPORT
 
 > [histórico] Este documento menciona whatsapp-web.js — motor antigo, substituído por Baileys (ver docs/phase16/BAILEYS_MIGRATION.md).
