@@ -1,57 +1,7 @@
 {
-  "total": 20,
+  "total": 9,
   "pending": 0,
   "findings": [
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/campaigns/*/preview",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/contacts/dedupe",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/customers/*/status",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/customers/sync",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/contacts",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/contacts/*",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/customers",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/customers/*",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/sync",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/whatsapp/accounts/*/media",
-      "detail": "rota do serviço WhatsApp sem consumidor no repo"
-    },
     {
       "check": "dado-invisivel",
       "target": "automation_rules",
@@ -61,11 +11,6 @@
       "check": "dado-invisivel",
       "target": "driver_refresh_tokens",
       "detail": "tabela sem uso fora da própria camada (DriverRefreshTokenRecord)"
-    },
-    {
-      "check": "dado-invisivel",
-      "target": "driver_sessions",
-      "detail": "tabela sem uso fora da própria camada (DriverSessionRecord)"
     },
     {
       "check": "dado-invisivel",

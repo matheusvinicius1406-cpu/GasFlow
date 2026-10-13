@@ -17,11 +17,6 @@
     },
     {
       "check": "dado-invisivel",
-      "target": "driver_sessions",
-      "reason": "Sessões do entregador — infraestrutura de auth (F2.5)."
-    },
-    {
-      "check": "dado-invisivel",
       "target": "financial_ledger",
       "reason": "Livro-razão interno derivado de payments/receivables; sem tela própria."
     },
@@ -54,56 +49,6 @@
       "check": "dado-invisivel",
       "target": "vehicle_loads",
       "reason": "Cargas do veículo do entregador — núcleo do estoque do entregador (F7)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/whatsapp/accounts/*/media",
-      "reason": "API do serviço WhatsApp não exposta pelo proxy do backend; sem consumidor no repo (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/contacts/dedupe",
-      "reason": "Deduplicação de contatos do serviço Node; o produto usa /whatsapp/contacts/sync (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/customers/*/status",
-      "reason": "Atualização de status de cliente no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/customers/sync",
-      "reason": "Sync de clientes no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/contacts",
-      "reason": "CRUD de contatos em listas no serviço Node; o proxy do backend não expõe (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/contacts/*",
-      "reason": "Idem /lists/*/contacts (add/remove de contato em lista)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/customers",
-      "reason": "CRUD de clientes em listas no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/customers/*",
-      "reason": "Idem /lists/*/customers (add/remove de cliente em lista)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/lists/*/sync",
-      "reason": "Sync de lista no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
-    },
-    {
-      "check": "whatsapp-sem-consumidor",
-      "target": "/campaigns/*/preview",
-      "reason": "Pré-visualização de campanha no serviço Node; sem consumidor no repo (dívida: expor ou remover)."
     }
   ]
 }

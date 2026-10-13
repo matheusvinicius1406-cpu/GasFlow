@@ -84,6 +84,40 @@ async def _proxy_post(path: str, data: Optional[dict] = None) -> dict:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+async def _proxy_put(path: str, data: Optional[dict] = None) -> dict:
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.put(
+                f"{WHATSAPP_SERVICE_URL}/api{path}",
+                json=data or {},
+                headers=_get_headers(),
+                timeout=10,
+            )
+            return response.json()
+        except httpx.ConnectError as exc:
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.") from exc
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+async def _proxy_delete(path: str) -> dict:
+    """DELETE no serviço WhatsApp. 204 sem corpo vira `{"ok": True}`."""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.delete(
+                f"{WHATSAPP_SERVICE_URL}/api{path}",
+                headers=_get_headers(),
+                timeout=10,
+            )
+            if response.status_code == 204 or not response.content:
+                return {"ok": True}
+            return response.json()
+        except httpx.ConnectError as exc:
+            raise HTTPException(status_code=503, detail="Serviço WhatsApp não está acessível.") from exc
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 # ── Schemas ───────────────────────────────────────────────
 
 
@@ -365,3 +399,137 @@ async def get_campaign_recipients(campaign_id: int):
 async def get_list_detail(list_id: int):
     """Proxy: detalhe de lista (o FE consome no wizard de campanha)."""
     return await _proxy_get(f"/lists/{list_id}")
+
+
+# ═══════════════════════════════════════════════════════════
+# Proxy completo (dívida D3 — antes sem consumidor no repo)
+#
+# Estas rotas existiam no serviço WhatsApp e ficavam na allowlist de
+# integridade por não ter consumidor no repo (ver integridade/D3). O proxy
+# as expõe: GET fica em `whatsapp.read` (gate do router) e toda MUTAÇâO exige
+# `whatsapp.send`.
+# ═══════════════════════════════════════════════════════════
+
+
+class WhatsAppCustomerStatusRequest(BaseModel):
+    status: str
+
+
+# ── Mídia (envio de arquivo/base64) ───────────────────────
+
+
+@router.post("/accounts/{account_id}/media")
+async def send_media(
+    account_id: str,
+    payload: dict,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: envio de mídia (data+mimetype base64 ou mediaPath)."""
+    return await _proxy_post(f"/whatsapp/accounts/{account_id}/media", payload)
+
+
+# ── Contatos: deduplicação ────────────────────────────────
+
+
+@router.post("/contacts/dedupe")
+async def dedupe_contacts(_ctx: TenantContext = Depends(require_permission("whatsapp.send"))):
+    """Proxy: deduplicação de contatos do serviço Node."""
+    return await _proxy_post("/contacts/dedupe")
+
+
+# ── Clientes: sync e status ───────────────────────────────
+
+
+@router.post("/customers/sync")
+async def sync_customers(_ctx: TenantContext = Depends(require_permission("whatsapp.send"))):
+    """Proxy: sync de clientes no serviço Node (empurra ao CRM)."""
+    return await _proxy_post("/customers/sync")
+
+
+@router.put("/customers/{customer_id}/status")
+async def update_customer_status(
+    customer_id: int,
+    data: WhatsAppCustomerStatusRequest,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: atualiza o status do cliente (CUSTOMER/PROSPECT/UNKNOWN)."""
+    return await _proxy_put(f"/customers/{customer_id}/status", data.model_dump())
+
+
+# ── Listas: contatos ──────────────────────────────────────
+
+
+@router.get("/lists/{list_id}/contacts")
+async def list_list_contacts(list_id: int):
+    """Proxy: contatos de uma lista."""
+    return await _proxy_get(f"/lists/{list_id}/contacts")
+
+
+@router.post("/lists/{list_id}/contacts/{contact_id}")
+async def add_list_contact(
+    list_id: int,
+    contact_id: int,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: adiciona contato à lista."""
+    return await _proxy_post(f"/lists/{list_id}/contacts/{contact_id}")
+
+
+@router.delete("/lists/{list_id}/contacts/{contact_id}")
+async def remove_list_contact(
+    list_id: int,
+    contact_id: int,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: remove contato da lista."""
+    return await _proxy_delete(f"/lists/{list_id}/contacts/{contact_id}")
+
+
+# ── Listas: clientes ──────────────────────────────────────
+
+
+@router.get("/lists/{list_id}/customers")
+async def list_list_customers(list_id: int):
+    """Proxy: clientes de uma lista."""
+    return await _proxy_get(f"/lists/{list_id}/customers")
+
+
+@router.post("/lists/{list_id}/customers/{customer_id}")
+async def add_list_customer(
+    list_id: int,
+    customer_id: int,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: adiciona cliente à lista."""
+    return await _proxy_post(f"/lists/{list_id}/customers/{customer_id}")
+
+
+@router.delete("/lists/{list_id}/customers/{customer_id}")
+async def remove_list_customer(
+    list_id: int,
+    customer_id: int,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: remove cliente da lista."""
+    return await _proxy_delete(f"/lists/{list_id}/customers/{customer_id}")
+
+
+# ── Listas: sync ──────────────────────────────────────────
+
+
+@router.post("/lists/{list_id}/sync")
+async def sync_list(list_id: int, _ctx: TenantContext = Depends(require_permission("whatsapp.send"))):
+    """Proxy: sync de uma lista (contatos + clientes + CRM)."""
+    return await _proxy_post(f"/lists/{list_id}/sync")
+
+
+# ── Campanhas: preview ────────────────────────────────────
+
+
+@router.post("/campaigns/{campaign_id}/preview")
+async def preview_campaign(
+    campaign_id: int,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.send")),
+):
+    """Proxy: pré-visualização dos destinatários de uma campanha DRAFT."""
+    return await _proxy_post(f"/campaigns/{campaign_id}/preview")
