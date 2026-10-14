@@ -120,8 +120,8 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | # | Pendência | Status | Esforço | Fonte |
 |---|---|---|---|---|
 | B1 | E2E no CI >45 min | ⚠️ **parcial** — mitigado (cache Chromium, steps, timeout); falta confirmar <15 min numa run verde | S | `ci/RELATORIO-CI-2026-10-09` |
-| B2 | PRs do Dependabot vermelhas (TS7 no whatsapp, ESLint10; 25+ branches) | ⏳ aberta — depende de D5 | S–M | `integridade/DEPENDABOT_v1.1.7` |
-| B3 | `gh` CLI ausente na máquina de dev | ⏳ aberta (manual) | S | `ci/RELATORIO-CI-2026-10-09` |
+| B2 | PRs do Dependabot vermelhas (TS7 no whatsapp, ESLint10; 25+ branches) | ⚠️ **premissa desatualizada** — medido 2026-10-14: são **13 PRs** (não 25+), e **12/13 estão verdes** (0 falhas de check). A única vermelha é **#50** (TS 6→7 em `/frontend`, 3 checks falhando). **#25** (TS 6→7 em `/whatsapp`) está **verde** com 6 checks — o "TS7 no whatsapp vermelho" do doc original não se confirma. Fechar os 12 verdes seria erro; ver §8.13 | ⏳ **decisão pendente** (mergear vs. deixar) | S | API GitHub, 2026-10-14 |
+| B3 | `gh` CLI ausente na máquina de dev | ⚠️ **parcial** — `gh` 2.102.0 **instalado** (winget), mas **não autenticado**; operar fechar/mergear PR exige `gh auth login` interativo. Diagnóstico de CI via API anônima já é possível (repo público) | ⏳ **bloqueada em auth** | S | API GitHub, 2026-10-14 |
 | B4 | Testes do desktop cobrem só fumaça (updater/config/preload) | ⏳ aberta (diferível) | M | `auditoria/FALHAS` |
 
 ### C. Decisões de produto
@@ -162,7 +162,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 
 | # | Item | Status |
 |---|---|---|
-| F1 | `desktop/README.md` descrevia só o caminho `create_all` | ⚠️ marcado corrigido, **re-verificar** |
+| F1 | `desktop/README.md` descrevia só o caminho `create_all` | ✅ **confirmada resolvida em 2026-10-14** — linhas 126–143 descrevem `alembic upgrade head` como primário, `stamp head` para banco legado e `create_all` só como plano B; bate com `backend/desktop_entry.py::run_migrations()` |
 | F2 | Docs históricos com `whatsapp-web.js` ainda confundindo | ⏳ **superado por esta sessão** — todos os docs apagados |
 | F3 | `GASFLOW_CURRENT_STATE_REPORT` / `AUDITORIA` descreviam estado pré-correção | ✅ resolvida |
 | F4 | `FINAL_SYSTEM_STATUS` citava 889 testes | ✅ resolvida |
@@ -196,7 +196,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | # | Item | Fonte apagada |
 |---|---|---|
 | I1 | ~12 telas sem teste dedicado; estados de permissão/offline não unificados (P2) | `phase15/FE01_SCREEN_INVENTORY` |
-| I2 | ESLint sem config no repo (gate usa só `tsc`) + HTTPS/TLS fora de escopo | `phase15/DP01_CICD_DEPLOY` |
+| I2 | ~~ESLint sem config no repo~~ **facto errado** — configs existem (`frontend/eslint.config.js`, `whatsapp/eslint.config.js`), `npm run lint` verde nos dois, e o CI **já roda lint no frontend** (`ci.yml:64`) | ⚠️ **corrigido 2026-10-14**: o gap real era o job do whatsapp não rodar lint apesar do script existir — step adicionado. `desktop`/`e2e`/`agent` seguem sem ESLint (desktop cobre com `tsc`; escopo de adicionar é decisão, não bug) |
 | I3 | `favorite_product` do Customer360 = `NOT_IMPLEMENTED` (LOW) | `phase6/PHASE6_FINAL_VALIDATION` |
 | I4 | `order.created`/`payment.*` fora do Event Bus; consumidor `driver:*` no frontend (P2+) | `phase15/RT01_DECISION` |
 | I5 | `docs/routing/osrm.md` inexistente (ver §8.1) — e a feature está entregue | esta auditoria |
@@ -331,6 +331,10 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 8. **A suíte de frontend NÃO roda estável no default desta máquina.** O pool de forks do Vitest morre com `Timeout waiting for worker to respond` — em 3 runs seguidos ela reportou 370, 452 e 394 testes, com 6–9 arquivos que **nunca subiram worker** e eram contados como "passed" no resumo. Causa: 4 cores lógicos / 11,8 GB e jsdom criado por arquivo. **Correção: `vitest run --maxWorkers=2`** → 74 arquivos / 452 testes / 0 erros, determinístico. Vale para CI local e para o gate manual.
 9. **O backend leva ~61 min, não ~25 min** como estimava o PLANO_MASTER (medido: 3648 s). Planejar o gate em cima disso — é o motivo de dois runs terem estourado timeout de shell.
 10. **`alembic heads` hoje é `c1a2b3d4e5f6`** (migração do P0 multiempresa, `33b7de0`), não mais `9f4b7e2a6c31` como registrava o PLANO_MASTER §4. Head único, sem divergência.
+11. **`docs/routing/osrm.md` foi recriado em 2026-10-14** (Onda 2.1) a partir do código real (`osrm_provider.py`, `factory.py`, `circuit_breaker.py`, `docker-compose.osrm.yml`, flags de `config.py`), não da spec prometida — a feature já estava entregue, só o doc faltava.
+12. **`desktop/README.md:147` estava corrompido** com o texto literal `<arg_value><b88a6f17>` no meio de uma frase — resíduo de alguma ferramenta. Removido. Era o único arquivo do repo com esse padrão.
+13. **B2 do Dependabot tinha premissa errada.** A fonte `DEPENDABOT_v1.1.7` dizia "25+ branches vermelhas, TS7 no whatsapp". Medido via API em 2026-10-14: **13 PRs abertos**, **12/13 verdes** (checks 0 falhas). As duas versões do bump TS 6→7 estão **divergentes**: `/whatsapp` (**#25**) verde, `/frontend` (**#50**) vermelho (3 checks falhando) — mesmo `typescript@7.0.2`, então o problema do #50 é do pacote/consumidor do frontend, não do TS em si. Consequência prática: a pendência não é "fechar PRs inviáveis" (quase todas são viáveis), é **mergear os 12 verdes e investigar só o #50**.
+14. **O gap real de lint era o job do WhatsApp no CI.** O `frontend` já rodava `npm run lint` desde antes (`ci.yml:64`), e existiam `eslint.config.js` válidos em `frontend/` e `whatsapp/` — o §3-I2 original ("ESLint sem config no repo") estava errado. O job `whatsapp` tinha `Typecheck` e `Build (tsc)` mas nenhum step de lint, apesar de o script existir e passar localmente. Step adicionado em 2026-10-14 (Onda 2.2). `desktop`, `e2e` e `agent` seguem sem ESLint por decisão de escopo — `desktop` é coberto por `tsc`.
 
 ---
 

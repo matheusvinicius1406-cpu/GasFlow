@@ -92,6 +92,8 @@ jobs:
         run: npm run typecheck
       - name: Build (tsc)
         run: npm run build
+      - name: Lint
+        run: npm run lint
       - name: Test
         run: npm test
 
