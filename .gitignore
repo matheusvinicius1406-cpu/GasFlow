@@ -87,3 +87,7 @@ agent/dist/
 # Artefatos residuais do electron-builder (runs falhas deixam win-unpacked em dist/)
 desktop/dist/win-unpacked/
 desktop/dist/builder-debug.yml
+
+# Legado da raiz do workspace (fora do git por tamanho/sensibilidade;
+# recuperar o conteúdo nos commits 2026-10-14 de data/ e _legado_raiz/)
+_legado_raiz/*.zip

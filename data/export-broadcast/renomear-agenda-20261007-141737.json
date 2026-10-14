@@ -1,0 +1,181 @@
+{
+  "geradoEm": "2026-10-07T14:17:37.638715+00:00",
+  "modo": "dry-run",
+  "db": "C:\\Users\\mathe\\OneDrive\\Desktop\\automação zap\\data\\app.db",
+  "totalContatos": 5840,
+  "alterados": 0,
+  "excluidos": 32,
+  "mantidos": 5808,
+  "amostra": [],
+  "excluidos_detalhe": [
+    {
+      "id": 2,
+      "original": "+55 91 8168-9969",
+      "motivo": "numero"
+    },
+    {
+      "id": 16,
+      "original": "Jorge Gás(concorrente)",
+      "motivo": "concorrente"
+    },
+    {
+      "id": 41,
+      "original": "Concorrente Ligue",
+      "motivo": "concorrente"
+    },
+    {
+      "id": 50,
+      "original": "Ats Gás (Concorrente)",
+      "motivo": "concorrente"
+    },
+    {
+      "id": 53,
+      "original": "2318=Portal Gas Pesquisa",
+      "motivo": "pesquisa"
+    },
+    {
+      "id": 71,
+      "original": "Concorrente",
+      "motivo": "concorrente"
+    },
+    {
+      "id": 786,
+      "original": "Pesquisar",
+      "motivo": "pesquisa"
+    },
+    {
+      "id": 1084,
+      "original": "2203= Pesquisa",
+      "motivo": "pesquisa"
+    },
+    {
+      "id": 1177,
+      "original": "Pix",
+      "motivo": "pix"
+    },
+    {
+      "id": 1208,
+      "original": "091-993-954741",
+      "motivo": "numero"
+    },
+    {
+      "id": 1389,
+      "original": "...",
+      "motivo": "numero"
+    },
+    {
+      "id": 1422,
+      "original": ". Portaria Castro Moura",
+      "motivo": "portaria"
+    },
+    {
+      "id": 1602,
+      "original": ".",
+      "motivo": "numero"
+    },
+    {
+      "id": 2177,
+      "original": "Preço De Portaria (Alexandre do 🍤",
+      "motivo": "portaria"
+    },
+    {
+      "id": 3088,
+      "original": "Pix Soledade",
+      "motivo": "pix"
+    },
+    {
+      "id": 4077,
+      "original": "+55 91 8537-8933",
+      "motivo": "numero"
+    },
+    {
+      "id": 4582,
+      "original": "Trote",
+      "motivo": "trote"
+    },
+    {
+      "id": 4855,
+      "original": "Maria Luiza Portaria",
+      "motivo": "portaria"
+    },
+    {
+      "id": 5198,
+      "original": "Pesquisa",
+      "motivo": "pesquisa"
+    },
+    {
+      "id": 5550,
+      "original": "Senhor Lucivaldo Portaria",
+      "motivo": "portaria"
+    },
+    {
+      "id": 5989,
+      "original": "984-217-572",
+      "motivo": "numero"
+    },
+    {
+      "id": 6066,
+      "original": "091-982-445288",
+      "motivo": "numero"
+    },
+    {
+      "id": 6143,
+      "original": "Pix Portaria",
+      "motivo": "pix"
+    },
+    {
+      "id": 6171,
+      "original": "PORTARIA",
+      "motivo": "portaria"
+    },
+    {
+      "id": 6275,
+      "original": "Pedido",
+      "motivo": "pedido"
+    },
+    {
+      "id": 6606,
+      "original": "Mateus Pix",
+      "motivo": "pix"
+    },
+    {
+      "id": 6883,
+      "original": "Cliente Novo",
+      "motivo": "cliente_novo"
+    },
+    {
+      "id": 7285,
+      "original": "Portaria Al F Casa 44",
+      "motivo": "portaria"
+    },
+    {
+      "id": 7347,
+      "original": "Pesquisa D Preços",
+      "motivo": "pesquisa"
+    },
+    {
+      "id": 7703,
+      "original": "Na última bloco 28 Apartamento 202",
+      "motivo": "na_ultima"
+    },
+    {
+      "id": 7944,
+      "original": "091-981-716981",
+      "motivo": "numero"
+    },
+    {
+      "id": 8288,
+      "original": "+55 91 98397-8948",
+      "motivo": "numero"
+    }
+  ],
+  "ia": {
+    "pendentes": 744,
+    "enviados": 0,
+    "aplicados": 0,
+    "ignorados": 0,
+    "sem_resposta": 0,
+    "provider": null
+  },
+  "mudancas": []
+}
