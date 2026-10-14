@@ -119,7 +119,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 
 | # | Pendência | Status | Esforço | Fonte |
 |---|---|---|---|---|
-| B1 | E2E no CI >45 min | ⚠️ **parcial** — mitigado (cache Chromium, steps, timeout); falta confirmar <15 min numa run verde | S | `ci/RELATORIO-CI-2026-10-09` |
+| B1 | E2E no CI >45 min | ✅ **resolvida** — run `bb4f26d` em 2026-10-14: job **`playwright` = 2 min 12 s**, não >45 min. CI inteira (6 jobs) fechou em **8 min 36 s**, verde. A premissa ">45 min" está **falsificada** | ~~S~~ ✅ | run 38595001184 / 38595001354 |
 | B2 | PRs do Dependabot vermelhas (TS7 no whatsapp, ESLint10; 25+ branches) | ⚠️ **premissa desatualizada** — medido 2026-10-14: são **13 PRs** (não 25+), e **12/13 estão verdes** (0 falhas de check). A única vermelha é **#50** (TS 6→7 em `/frontend`, 3 checks falhando). **#25** (TS 6→7 em `/whatsapp`) está **verde** com 6 checks — o "TS7 no whatsapp vermelho" do doc original não se confirma. Fechar os 12 verdes seria erro; ver §8.13 | ⏳ **decisão pendente** (mergear vs. deixar) | S | API GitHub, 2026-10-14 |
 | B3 | `gh` CLI ausente na máquina de dev | ⚠️ **parcial** — `gh` 2.102.0 **instalado** (winget), mas **não autenticado**; operar fechar/mergear PR exige `gh auth login` interativo. Diagnóstico de CI via API anônima já é possível (repo público) | ⏳ **bloqueada em auth** | S | API GitHub, 2026-10-14 |
 | B4 | Testes do desktop cobrem só fumaça (updater/config/preload) | ⏳ aberta (diferível) | M | `auditoria/FALHAS` |
@@ -335,6 +335,8 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 12. **`desktop/README.md:147` estava corrompido** com o texto literal `<arg_value><b88a6f17>` no meio de uma frase — resíduo de alguma ferramenta. Removido. Era o único arquivo do repo com esse padrão.
 13. **B2 do Dependabot tinha premissa errada.** A fonte `DEPENDABOT_v1.1.7` dizia "25+ branches vermelhas, TS7 no whatsapp". Medido via API em 2026-10-14: **13 PRs abertos**, **12/13 verdes** (checks 0 falhas). As duas versões do bump TS 6→7 estão **divergentes**: `/whatsapp` (**#25**) verde, `/frontend` (**#50**) vermelho (3 checks falhando) — mesmo `typescript@7.0.2`, então o problema do #50 é do pacote/consumidor do frontend, não do TS em si. Consequência prática: a pendência não é "fechar PRs inviáveis" (quase todas são viáveis), é **mergear os 12 verdes e investigar só o #50**.
 14. **O gap real de lint era o job do WhatsApp no CI.** O `frontend` já rodava `npm run lint` desde antes (`ci.yml:64`), e existiam `eslint.config.js` válidos em `frontend/` e `whatsapp/` — o §3-I2 original ("ESLint sem config no repo") estava errado. O job `whatsapp` tinha `Typecheck` e `Build (tsc)` mas nenhum step de lint, apesar de o script existir e passar localmente. Step adicionado em 2026-10-14 (Onda 2.2). `desktop`, `e2e` e `agent` seguem sem ESLint por decisão de escopo — `desktop` é coberto por `tsc`.
+15. **Os tempos do PLANO_MASTER confundiam máquina local com CI.** O backend leva **~61 min localmente** (§8.9, 3648 s) mas **5 min 51 s no CI** — runners do GitHub são bem mais rápidos que a máquina de dev (4 cores lógicos / 11,8 GB). Ambos os números são verdadeiros para o seu ambiente; o planejamento deve usar o valor do ambiente alvo. Pela mesma razão o ">45 min de E2E" (B1) nunca se confirmou: medido **2 min 12 s** no CI.
+16. **Run de CI de referência (commit `bb4f26d`, 2026-10-14) — 6/6 jobs verdes em 8 min 36 s:** `Agent` 0:17 · `WhatsApp` 0:37 (já com o step de lint novo) · `Migrations` 0:54 · `Frontend` 1:14 · `Trivy` 2:39 · `Backend` 5:51. Workflow `Build & Push Images` separado, 4/4 verdes (até 1:15). É a baseline de regressão daqui pra frente.
 
 ---
 
@@ -353,6 +355,7 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 | `desktop: npm run typecheck` | exit 0 |
 | `desktop: npm test` | **71 passed / 0 failed** |
 | `tests.integrity_audit` | findings=9 / **pendentes=0** |
+| CI no `main` (run `bb4f26d`, 2026-10-14) | **6/6 jobs verdes em 8 min 36 s** (E2E 2:12, Backend 5:51) — ver §8.16 |
 
 ```bash
 cd backend
