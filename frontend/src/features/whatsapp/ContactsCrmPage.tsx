@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Upload, Download, RefreshCw, Sparkles, Send, Search, Users } from 'lucide-react'
+import { Upload, Download, RefreshCw, Sparkles, Send, Search, Users, CopyX } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -108,6 +108,24 @@ export function ContactsCrmPage() {
     }
   }
 
+  const handleDedupe = async () => {
+    setBusy('dedupe')
+    setNotice('')
+    try {
+      const res = await apiClient.post('/whatsapp/contacts/dedupe')
+      const d = res.data.dedupe ?? {}
+      setNotice(
+        `Deduplicação: ${d.lidRemoved ?? 0} LID removido(s), ${d.nameRemoved ?? 0} duplicata(s) por nome` +
+          `${d.reportFile ? ` — relatório em ${d.reportFile}` : ''}.`,
+      )
+      fetchContacts()
+    } catch {
+      setNotice('Falha ao deduplicar os contatos.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   const handleReactivate = async (dryRun: boolean) => {
     setBusy(dryRun ? 'preview' : 'reactivate')
     try {
@@ -144,6 +162,9 @@ export function ContactsCrmPage() {
           </Button>
           <Button variant="outline" onClick={handleSync} disabled={!!busy}>
             <RefreshCw className="mr-1 h-4 w-4" /> Sincronizar WhatsApp
+          </Button>
+          <Button variant="outline" onClick={handleDedupe} disabled={!!busy}>
+            <CopyX className="mr-1 h-4 w-4" /> {busy === 'dedupe' ? 'Deduplicando...' : 'Deduplicar'}
           </Button>
         </PageActions>
       </PageHeader>

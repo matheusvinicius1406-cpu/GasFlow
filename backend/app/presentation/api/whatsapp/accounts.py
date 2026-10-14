@@ -437,6 +437,20 @@ async def dedupe_contacts(_ctx: TenantContext = Depends(require_permission("what
     return await _proxy_post("/contacts/dedupe")
 
 
+@router.get("/node-contacts")
+async def list_node_contacts(
+    limit: int = 100,
+    offset: int = 0,
+    _ctx: TenantContext = Depends(require_permission("whatsapp.read")),
+):
+    """Proxy: contatos do serviço Node (ids do Node, não os `codigo` do CRM).
+
+    Necessário para `promote`, que recebe o id do contato no Node — o
+    `/whatsapp/contacts` devolve o CRM e não serve para esse fluxo.
+    """
+    return await _proxy_get(f"/contacts?limit={limit}&offset={offset}")
+
+
 # ── Clientes: sync e status ───────────────────────────────
 
 

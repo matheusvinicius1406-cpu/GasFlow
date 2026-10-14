@@ -7,12 +7,13 @@
  * Frontend NEVER knows about the Node.js service.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wifi, WifiOff, RefreshCw, LogOut, Smartphone, MessageSquare } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, LogOut, Smartphone, MessageSquare, Send, Paperclip } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/Input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Page, PageHeader, PageTitle, Section } from '@/components/layout/Page'
 import { ConversationsPage } from './ConversationsPage'
@@ -225,6 +226,119 @@ function AccountCard({ account, onRefresh }: { account: WhatsAppAccount; onRefre
   )
 }
 
+/**
+ * Envio de mídia (imagem, áudio, documento) por uma conta conectada.
+ *
+ * O serviço aceita `data` (base64) + `mimetype`, ou `mediaPath` no servidor.
+ * Do navegador só o base64 é possível — o arquivo é lido via FileReader.
+ */
+function SendMediaCard({ accounts }: { accounts: WhatsAppAccount[] }) {
+  const [accountId, setAccountId] = useState('')
+  const [recipient, setRecipient] = useState('')
+  const [caption, setCaption] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const connected = accounts.filter((a) => a.status.connected)
+  const effectiveId = accountId || connected[0]?.id || ''
+
+  const handleSend = async (file: File) => {
+    if (!effectiveId || !recipient.trim()) return
+    setBusy(true)
+    setNotice('')
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'))
+        reader.readAsDataURL(file)
+      })
+      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+      await apiClient.post(`/whatsapp/accounts/${effectiveId}/media`, {
+        recipient: recipient.trim(),
+        caption: caption.trim() || undefined,
+        data: base64,
+        mimetype: file.type || 'application/octet-stream',
+        filename: file.name,
+      })
+      setNotice(`Mídia "${file.name}" enviada para ${recipient.trim()}.`)
+      setCaption('')
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { detail?: string; error?: string } } })?.response?.data
+      setNotice(d?.detail || d?.error || 'Falha ao enviar a mídia.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Paperclip className="h-5 w-5 text-primary" />
+          Enviar mídia
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Conta que enviará a mídia"
+            className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            value={effectiveId}
+            onChange={(e) => setAccountId(e.target.value)}
+            disabled={busy || connected.length === 0}
+          >
+            {connected.length === 0 && <option value="">Nenhuma conta conectada</option>}
+            {connected.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          <Input
+            aria-label="Número do destinatário"
+            placeholder="Número (ex.: 5591999999999)"
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            className="w-56"
+            disabled={busy}
+          />
+          <Input
+            aria-label="Legenda da mídia"
+            placeholder="Legenda (opcional)"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            className="w-56"
+            disabled={busy}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInput.current?.click()}
+            disabled={busy || !effectiveId || !recipient.trim()}
+          >
+            <Send className="mr-1 h-4 w-4" />
+            {busy ? 'Enviando...' : 'Enviar arquivo'}
+          </Button>
+        </div>
+
+        <input
+          ref={fileInput}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleSend(file)
+            e.target.value = ''
+          }}
+        />
+
+        {notice && <div className="rounded-md bg-primary/10 p-3 text-sm text-foreground">{notice}</div>}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function WhatsAppAccountsPage() {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([])
   const [loading, setLoading] = useState(true)
@@ -338,6 +452,8 @@ export function WhatsAppAccountsPage() {
           <AccountCard key={account.id} account={account} onRefresh={fetchAccounts} />
         ))}
       </div>
+
+      {accounts.length > 0 && <SendMediaCard accounts={accounts} />}
 
       {accounts.length === 0 && (
         <Card>

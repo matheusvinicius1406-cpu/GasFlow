@@ -737,6 +737,7 @@ export function CampaignWizardPage() {
   // UI state
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Fetch lists
@@ -859,6 +860,38 @@ export function CampaignWizardPage() {
     setStep(step - 1)
   }
 
+  // Cria a campanha como DRAFT uma única vez (preview e start reutilizam).
+  const ensureCampaign = async () => {
+    if (createdCampaign) return createdCampaign
+    const { data: created } = await apiClient.post('/whatsapp/campaigns', {
+      name: name.trim(),
+      message: message.trim(),
+      listId: selectedListId,
+    })
+    setCreatedCampaign(created)
+    return created as CampaignFull
+  }
+
+  // Calcula os destinatários REAIS no serviço (opt-out, bloqueio, duplicatas).
+  // Substitui a estimativa local, que reportava tudo como elegível.
+  const handleRealPreview = async () => {
+    if (!selectedListId) return
+    setPreviewing(true)
+    setSubmitError(null)
+    try {
+      const created = await ensureCampaign()
+      const { data } = await apiClient.post(`/whatsapp/campaigns/${created.id}/preview`)
+      setPreview(data)
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Erro ao calcular os destinatários.'
+      setSubmitError(msg)
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   // Submit campaign
   const handleSubmit = async () => {
     if (!selectedListId) return
@@ -866,13 +899,8 @@ export function CampaignWizardPage() {
     setSubmitError(null)
 
     try {
-      // Create campaign
-      const { data: created } = await apiClient.post('/whatsapp/campaigns', {
-        name: name.trim(),
-        message: message.trim(),
-        listId: selectedListId,
-      })
-      setCreatedCampaign(created)
+      // Create campaign (no-op se já criada pelo preview)
+      const created = await ensureCampaign()
 
       // Start campaign
       await apiClient.post(`/whatsapp/campaigns/${created.id}/start`)
@@ -984,6 +1012,20 @@ export function CampaignWizardPage() {
             <Button onClick={handleNext}>
               Próximo
               <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          )}
+          {step === 3 && (
+            <Button
+              variant="outline"
+              onClick={handleRealPreview}
+              disabled={submitting || previewing}
+            >
+              {previewing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Eye className="h-4 w-4 mr-2" />
+              )}
+              {previewing ? 'Calculando...' : 'Calcular destinatários'}
             </Button>
           )}
           {step === 3 && (

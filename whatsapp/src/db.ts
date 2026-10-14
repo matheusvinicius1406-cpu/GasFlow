@@ -623,19 +623,27 @@ function mapRowToCustomerWithContact(row: Record<string, unknown>): CustomerRow 
   return { ...customer, contact };
 }
 
-export function listCustomers(filter: ListCustomersFilter): Array<CustomerRow & { contact: ContactRow }> {
+export function listCustomers(
+  filter: ListCustomersFilter,
+): Array<CustomerRow & { contact: ContactRow; marketing_status: string }> {
   const rows = db
     .prepare(
       `SELECT cu.id, cu.contact_id, cu.customer_status, cu.created_at, cu.updated_at,
-              c.phone, c.jid, c.name, c.push_name, c.business_name, c.is_business, c.is_group, c.last_seen_at
+              c.phone, c.jid, c.name, c.push_name, c.business_name, c.is_business, c.is_group, c.last_seen_at,
+              COALESCE(cp.marketing_status, 'UNKNOWN') AS marketing_status
        FROM customers cu
        JOIN contacts c ON c.id = cu.contact_id
+       LEFT JOIN contact_preferences cp ON cp.customer_id = cu.id
        WHERE (? IS NULL OR cu.customer_status = ?)
        ORDER BY cu.id
        LIMIT ? OFFSET ?`,
     )
     .all(filter.customerStatus ?? null, filter.customerStatus ?? null, filter.limit, filter.offset) as unknown as Array<Record<string, unknown>>;
-  return rows.map(mapRowToCustomerWithContact);
+  // marketing_status é LGPD — vem do LEFT JOIN (cliente sem preferência = UNKNOWN).
+  return rows.map((row) => ({
+    ...mapRowToCustomerWithContact(row),
+    marketing_status: String(row.marketing_status ?? 'UNKNOWN'),
+  }));
 }
 
 export function countCustomers(filter: { customerStatus?: string } = {}): number {

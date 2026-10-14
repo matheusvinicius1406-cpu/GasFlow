@@ -10,6 +10,8 @@ import {
   ContactsCrmPage,
   ContactsOrganizerPage,
   ContactsRenamerPage,
+  ListsPage,
+  WhatsAppCustomersPage,
   CampaignWizardPage,
   CampaignResultsPage,
   CampaignHistoryPage,
@@ -78,6 +80,11 @@ export function App() {
         <Route path="whatsapp/contacts/organizer" element={<ContactsOrganizerPage />} />
         {/* Renomeador .vcf (Fase 2 §9): prévia paginada + job + triagem + export. */}
         <Route path="whatsapp/contacts/renomeador" element={<ContactsRenamerPage />} />
+        {/* Listas de disparo: membros (contatos), sync CRM e seed de teste.
+            Não confundir com os segmentos comerciais em /segments (features/segments). */}
+        <Route path="whatsapp/lists" element={<ListsPage />} />
+        {/* Base WhatsApp: status de marketing, opt-in/out e promote para contato. */}
+        <Route path="whatsapp/customers" element={<WhatsAppCustomersPage />} />
         <Route path="whatsapp/campaigns" element={<CampaignHistoryPage />} />
         <Route path="whatsapp/campaigns/new" element={<CampaignWizardPage />} />
         <Route path="whatsapp/campaigns/:id" element={<CampaignResultsPage />} />

@@ -52,9 +52,10 @@ describe('WhatsAppAccountsPage', () => {
     renderWithProviders(<WhatsAppAccountsPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Principal')).toBeInTheDocument()
+      // O nome aparece no card E no <option> do seletor de envio de mídia.
+      expect(screen.getAllByText('Principal').length).toBeGreaterThan(0)
     })
-    expect(screen.getByText('Secundária')).toBeInTheDocument()
+    expect(screen.getAllByText('Secundária').length).toBeGreaterThan(0)
     // Status labels appear both on the badge and the status row.
     expect(screen.getAllByText('Conectado').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Desconectado').length).toBeGreaterThan(0)
