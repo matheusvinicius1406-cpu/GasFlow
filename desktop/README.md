@@ -144,7 +144,7 @@ fonte de verdade** — o `init_db` é o plano B.
 
 ## Sobre `desktop/dist/` versionado
 
-<arg_value><b88a6f17>Os **fontes do main process vivem em `desktop/src/main/*.ts`** (e o preload em
+Os **fontes do main process vivem em `desktop/src/main/*.ts`** (e o preload em
 `desktop/src/preload/index.ts`) — a Onda 4 da auditoria migrou o antigo
 `dist/main/*.js` compilado para TypeScript. O `dist/` é **artefato de build
 versionado**: o Electron carrega `dist/main/index.js` direto, e `npm run build`
