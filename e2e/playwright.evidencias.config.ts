@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
  * Evidências da Fase 5 (Central Financeira — P12)
  *
  * Config separada da suíte: este run semeia uma base determinística e grava
- * screenshots em docs/auditoria/central-financeira-fase5-evidencias/.
+ * screenshots em e2e/evidencias/.
  * Fica FORA do testDir padrão (./tests) de propósito — a suíte de CI não pode
  * depender de nem alterar o estado da base para "fotografar".
  *

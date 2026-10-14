@@ -10,14 +10,15 @@ import { adminToken, seedExpense, seedReceivable } from '../tests/helpers'
  * Base determinística: 2 despesas + 2 recebíveis (um em aberto, um quitado),
  * todos os dados reais da API — nada é injetado no DOM.
  *
- * Capturas (lista sugerida no §5 de docs/auditoria/central-financeira-fase5.md):
+ * Capturas (lista sugerida no §5 da Fase 5; doc apagado — ver
+ * `git show fdd2129:docs/auditoria/central-financeira-fase5.md`):
  *   01 Visão Geral 30 dias        05 Conciliação (P8)
  *   02 Visão Geral 180 dias       06 aba Recebíveis (fix da Fase 8)
  *   03 DRE (P6)                   07 impressão (@media print)
  *   04 Clientes (P7, aging)       08 modo TV
  */
 
-const OUT = join(__dirname, '..', '..', 'docs', 'auditoria', 'central-financeira-fase5-evidencias')
+const OUT = join(__dirname, '..', 'evidencias')
 
 function secoes(page: Page) {
   return page.getByRole('group', { name: 'Seções da Central Financeira' })

@@ -13,12 +13,12 @@ import { ADMIN_PASSWORD, ADMIN_USER, adminToken, seedExpense, seedReceivable } f
  * só isola o userData (não toca no app instalado da máquina), desliga
  * WhatsApp/impressão e redireciona o gate IPC para o stack.
  *
- * Sai: docs/auditoria/central-financeira-fase5-evidencias/09-impressao-electron.pdf
+ * Sai: e2e/evidencias/09-impressao-electron.pdf
  */
 
 const REPO = join(__dirname, '..', '..')
 const DESKTOP = join(REPO, 'desktop')
-const OUT = join(REPO, 'docs', 'auditoria', 'central-financeira-fase5-evidencias')
+const OUT = join(REPO, 'e2e', 'evidencias')
 const HARNESS = join(DESKTOP, 'scripts', 'evidence-pdf-harness.js')
 
 function electronPath(): string {
