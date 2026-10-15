@@ -124,6 +124,33 @@ class PurchaseNoteService:
     def _get_model(self, note_id: str) -> Optional[PurchaseNoteModel]:
         return self._query().filter(PurchaseNoteModel.id == note_id).first()
 
+    def _replace_items(self, model: PurchaseNoteModel, note_id: str, items_data: List[dict]) -> None:
+        if not items_data:
+            raise PurchaseNoteError("Nota deve ter pelo menos um item")
+        self.db.query(PurchaseNoteItemModel).filter(PurchaseNoteItemModel.purchase_note_id == note_id).delete()
+        total = 0
+        for item in items_data:
+            quantity = int(item.get("quantity", 0))
+            unit_price_cents = int(round(float(item.get("unit_price", 0)) * 100))
+            if quantity <= 0:
+                raise PurchaseNoteError("Quantidade deve ser maior que 0")
+            product_codigo = (item.get("product_codigo") or "").strip()
+            if not product_codigo:
+                raise PurchaseNoteError("product_codigo é obrigatório em todos os itens")
+            subtotal = quantity * unit_price_cents
+            total += subtotal
+            self.db.add(
+                PurchaseNoteItemModel(
+                    purchase_note_id=note_id,
+                    product_codigo=product_codigo,
+                    product_name=item.get("product_name") or product_codigo,
+                    quantity=quantity,
+                    unit_price_cents=unit_price_cents,
+                    subtotal_cents=subtotal,
+                )
+            )
+        model.total_cents = total  # type: ignore[assignment]
+
     # ── Comandos ─────────────────────────────────────────────
 
     def create_note(self, data: dict, created_by: Optional[str] = None) -> dict:
@@ -221,32 +248,7 @@ class PurchaseNoteService:
             model.observations = data["observations"]
 
         if "items" in data and data["items"] is not None:
-            items_data = data["items"]
-            if not items_data:
-                raise PurchaseNoteError("Nota deve ter pelo menos um item")
-            self.db.query(PurchaseNoteItemModel).filter(PurchaseNoteItemModel.purchase_note_id == note_id).delete()
-            total = 0
-            for item in items_data:
-                quantity = int(item.get("quantity", 0))
-                unit_price_cents = int(round(float(item.get("unit_price", 0)) * 100))
-                if quantity <= 0:
-                    raise PurchaseNoteError("Quantidade deve ser maior que 0")
-                product_codigo = (item.get("product_codigo") or "").strip()
-                if not product_codigo:
-                    raise PurchaseNoteError("product_codigo é obrigatório em todos os itens")
-                subtotal = quantity * unit_price_cents
-                total += subtotal
-                self.db.add(
-                    PurchaseNoteItemModel(
-                        purchase_note_id=note_id,
-                        product_codigo=product_codigo,
-                        product_name=item.get("product_name") or product_codigo,
-                        quantity=quantity,
-                        unit_price_cents=unit_price_cents,
-                        subtotal_cents=subtotal,
-                    )
-                )
-            model.total_cents = total  # type: ignore[assignment]
+            self._replace_items(model, note_id, data["items"])
 
         self.db.commit()
         self.db.refresh(model)
@@ -384,7 +386,7 @@ class PurchaseNoteService:
         models = q.order_by(PurchaseNoteModel.note_number.desc()).limit(min(limit, 500)).all()
         return [self._to_dict(m, with_items=False) for m in models]
 
-    def render_pdf_html(self, note_id: str, depot_name: str = "GasFlow", depot_cnpj: str = "") -> str:
+    def render_pdf_html(self, note_id: str, depot_name: str = "GasFlow", _depot_cnpj: str = "") -> str:
         """HTML da nota para o PDF (impresso via Electron printToPDF)."""
         data = self.get_note(note_id)
         if not data:

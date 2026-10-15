@@ -56,7 +56,7 @@ class ESCPOSCommands:
             return value.encode("utf-8", errors="replace")
 
     @classmethod
-    def line(cls, text: str = "", width: int = 48, align: str = "left") -> bytes:
+    def line(cls, text: str = "", _width: int = 48, align: str = "left") -> bytes:
         """Format a line with proper padding."""
         if not text:
             return b"\n"
@@ -117,6 +117,16 @@ class ReceiptFormatter:
         """
         buf = bytearray()
 
+        self._format_header(buf)
+        self._format_order_meta(buf, order)
+        self._format_customer(buf, order)
+        self._format_items(buf, order)
+        self._format_totals(buf, order)
+        self._format_closing(buf, order)
+
+        return bytes(buf)
+
+    def _format_header(self, buf: bytearray) -> None:
         # Initialize printer
         buf.extend(ESCPOSCommands.INIT)
         buf.extend(ESCPOSCommands.LINE_SPACING_DEFAULT)
@@ -130,6 +140,7 @@ class ReceiptFormatter:
         # Separator
         buf.extend(ESCPOSCommands.double_separator(self.width))
 
+    def _format_order_meta(self, buf: bytearray, order: Dict[str, Any]) -> None:
         # Order number and date
         codigo = order.get("codigo", order.get("order_id", "???"))
         created_at = order.get("created_at", "")
@@ -148,6 +159,7 @@ class ReceiptFormatter:
         buf.extend(ESCPOSCommands.line(date_str, align="center"))
         buf.extend(ESCPOSCommands.separator("-", self.width))
 
+    def _format_customer(self, buf: bytearray, order: Dict[str, Any]) -> None:
         # Customer info
         client_name = order.get("client_name", order.get("customer_name", ""))
         if client_name:
@@ -175,6 +187,7 @@ class ReceiptFormatter:
 
         buf.extend(ESCPOSCommands.separator("-", self.width))
 
+    def _format_items(self, buf: bytearray, order: Dict[str, Any]) -> None:
         # Items header
         buf.extend(ESCPOSCommands.BOLD_ON)
         header = f"{'ITEM':<24} {'QTD':>4} {'TOTAL':>10}"
@@ -199,6 +212,7 @@ class ReceiptFormatter:
 
         buf.extend(ESCPOSCommands.separator("-", self.width))
 
+    def _format_totals(self, buf: bytearray, order: Dict[str, Any]) -> None:
         # Totals
         subtotal = order.get("subtotal", 0)
         delivery_fee = order.get("delivery_fee", 0)
@@ -216,6 +230,7 @@ class ReceiptFormatter:
         buf.extend(ESCPOSCommands.line(f"{'TOTAL:':<34} {self._format_money(total):>14}"))
         buf.extend(ESCPOSCommands.BOLD_OFF)
 
+    def _format_closing(self, buf: bytearray, order: Dict[str, Any]) -> None:
         # Payment method
         payment = order.get("payment_method", order.get("payment", ""))
         if payment:
@@ -248,8 +263,6 @@ class ReceiptFormatter:
         # Feed and cut
         buf.extend(b"\n\n\n")
         buf.extend(ESCPOSCommands.CUT_FULL)
-
-        return bytes(buf)
 
     def format_status_check(self) -> bytes:
         """Generate a small test print to verify printer connection."""

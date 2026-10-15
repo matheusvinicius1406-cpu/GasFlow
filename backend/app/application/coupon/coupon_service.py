@@ -8,7 +8,7 @@ Camada de aplicação: orquestra repositórios (SQLAlchemy) e o domínio puro
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session as DBSession
 
@@ -81,8 +81,8 @@ class CouponService:
 
     # ── CRUD ─────────────────────────────────────────────
 
-    def create_coupon(self, data: dict, created_by: str = "") -> CouponModel:
-        code = (data.get("code") or "").strip().upper()
+    def _validate_new_coupon(self, code: str, data: dict) -> None:
+        """Valida código, tipo e valor do novo cupom; levanta CouponServiceError."""
         if not code:
             raise CouponServiceError("CODE_REQUIRED", "Código do cupom é obrigatório.")
         if self.get_by_code(code):
@@ -98,6 +98,8 @@ class CouponService:
         if ctype == CouponType.PERCENTAGE and _to_d(value) > 100:
             raise CouponServiceError("INVALID_PERCENTAGE", "Percentual não pode exceder 100.")
 
+    def _coupon_period(self, data: dict) -> Tuple[datetime, datetime]:
+        """Resolve/valida start_date e end_date; levanta CouponServiceError."""
         start = data.get("start_date") or datetime.utcnow()
         end = data.get("end_date")
         if not end:
@@ -108,6 +110,14 @@ class CouponService:
             end = datetime.fromisoformat(end)
         if end <= start:
             raise CouponServiceError("INVALID_PERIOD", "end_date deve ser posterior a start_date.")
+        return start, end
+
+    def create_coupon(self, data: dict, created_by: str = "") -> CouponModel:
+        code = (data.get("code") or "").strip().upper()
+        self._validate_new_coupon(code, data)
+        start, end = self._coupon_period(data)
+        ctype = data.get("type")
+        value = data.get("value")
 
         coupon = CouponModel(
             id=str(uuid.uuid4()),
@@ -204,7 +214,7 @@ class CouponService:
         ctx = self._order_context(order, coupon)
         return calculate_discount(snapshot, ctx)
 
-    def apply_to_order(self, order_codigo: str, code: str, actor_id: str = "") -> dict:
+    def apply_to_order(self, order_codigo: str, code: str, actor_id: str = "") -> dict:  # noqa: ARG002  # audit trail: aplicacao registra o codigo, nao o operador
         """Aplica o cupom ao pedido: recalcula totals, registra resgate.
 
         Um cupom por pedido (constraint unique em coupon_redemptions).

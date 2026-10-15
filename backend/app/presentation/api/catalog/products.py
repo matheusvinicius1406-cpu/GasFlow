@@ -30,7 +30,7 @@ def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(
 def create_product(
     product: ProductCreate,
     repository: SQLAlchemyProductRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = CreateProductUseCase(repository)
     return use_case.execute(product.model_dump())
@@ -39,7 +39,7 @@ def create_product(
 @router.get("/", response_model=list[ProductResponse])
 def list_products(
     repository: SQLAlchemyProductRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListProductsUseCase(repository)
     return use_case.execute()
@@ -49,7 +49,7 @@ def list_products(
 def get_product(
     codigo: str,
     repository: SQLAlchemyProductRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetProductUseCase(repository)
     product = use_case.execute(codigo)
@@ -63,7 +63,7 @@ def update_product(
     codigo: str,
     data: ProductUpdate,
     repository: SQLAlchemyProductRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = UpdateProductUseCase(repository)
     product = use_case.execute(codigo, data.model_dump(exclude_unset=True))
@@ -76,7 +76,7 @@ def update_product(
 def disable_product(
     codigo: str,
     repository: SQLAlchemyProductRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = DisableProductUseCase(repository)
     product = use_case.execute(codigo)

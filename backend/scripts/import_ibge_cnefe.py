@@ -124,6 +124,24 @@ def _nome_canonico(tipo: str, titulo: str, nome: str) -> str:
     return " ".join(p for p in ((tipo or "").strip(), (titulo or "").strip(), (nome or "").strip()) if p)
 
 
+def _campo(row: list[str], idx: dict[str, int], nome: str, padrao: str = "") -> str:
+    i = idx.get(nome)
+    if i is None or i >= len(row):
+        return padrao
+    return row[i].strip()
+
+
+def _despejar(conn, destinos: list[dict]) -> None:
+    if not destinos:
+        return
+    sql = (
+        f"INSERT INTO cnefe_endereco ({', '.join(_COLUNAS)}) "
+        f"VALUES ({', '.join(':' + c for c in _COLUNAS)}) "
+        "ON CONFLICT DO NOTHING"
+    )
+    conn.execute(text(sql), destinos)
+
+
 def importar(caminho: str, cod_municipio: str) -> int:
     fh = _abrir_csv(caminho)
     with fh:
@@ -138,27 +156,11 @@ def importar(caminho: str, cod_municipio: str) -> int:
         if faltando:
             raise SystemExit(f"CSV sem as colunas {faltando} — arquivo errado?")
 
-        def campo(row: list[str], nome: str, padrao: str = "") -> str:
-            i = idx.get(nome)
-            if i is None or i >= len(row):
-                return padrao
-            return row[i].strip()
-
         engine = create_engine(DATABASE_URL)
         submetidos = 0
         ignorados = 0
         sem_numero = 0
         lote: list[dict] = []
-
-        def despejar(conn, destinos: list[dict]) -> None:
-            if not destinos:
-                return
-            sql = (
-                f"INSERT INTO cnefe_endereco ({', '.join(_COLUNAS)}) "
-                f"VALUES ({', '.join(':' + c for c in _COLUNAS)}) "
-                "ON CONFLICT DO NOTHING"
-            )
-            conn.execute(text(sql), destinos)
 
         # DELETE + INSERT na MESMA transação: idempotente e atômico.
         with engine.begin() as conn:
@@ -169,23 +171,23 @@ def importar(caminho: str, cod_municipio: str) -> int:
             for row in leitor:
                 if not row:
                     continue
-                if campo(row, "COD_MUNICIPIO") != cod_municipio:
+                if _campo(row, idx, "COD_MUNICIPIO") != cod_municipio:
                     ignorados += 1
                     continue
-                tipo = campo(row, "NOM_TIPO_SEGLOGR")
-                titulo = campo(row, "NOM_TITULO_SEGLOGR")
-                nome = campo(row, "NOM_SEGLOGR")
+                tipo = _campo(row, idx, "NOM_TIPO_SEGLOGR")
+                titulo = _campo(row, idx, "NOM_TITULO_SEGLOGR")
+                nome = _campo(row, idx, "NOM_SEGLOGR")
                 canonico = _nome_canonico(tipo, titulo, nome)
-                numero = _inteiro(campo(row, "NUM_ENDERECO"))
+                numero = _inteiro(_campo(row, idx, "NUM_ENDERECO"))
                 if numero is None:
                     sem_numero += 1
                 lote.append(
                     {
                         "cod_municipio": cod_municipio,
-                        "cod_unico_endereco": campo(row, "COD_UNICO_ENDERECO"),
-                        "cod_setor": campo(row, "COD_SETOR"),
-                        "num_quadra": _inteiro(campo(row, "NUM_QUADRA")),
-                        "num_face": _inteiro(campo(row, "NUM_FACE")),
+                        "cod_unico_endereco": _campo(row, idx, "COD_UNICO_ENDERECO"),
+                        "cod_setor": _campo(row, idx, "COD_SETOR"),
+                        "num_quadra": _inteiro(_campo(row, idx, "NUM_QUADRA")),
+                        "num_face": _inteiro(_campo(row, idx, "NUM_FACE")),
                         "num_endereco": numero,
                         # `chave_logradouro` = nome COM tipo ("passagem ivan leao").
                         "chave_logradouro": normalizar(canonico),
@@ -193,17 +195,17 @@ def importar(caminho: str, cod_municipio: str) -> int:
                         # que veio sem o tipo do logradouro (D27).
                         "chave_nome": normalizar(_nome_canonico("", titulo, nome)),
                         "nome_logradouro": canonico,
-                        "lat": _float(campo(row, "LATITUDE")),
-                        "lng": _float(campo(row, "LONGITUDE")),
-                        "cep": campo(row, "CEP"),
-                        "nv_geo_coord": campo(row, "NV_GEO_COORD"),
+                        "lat": _float(_campo(row, idx, "LATITUDE")),
+                        "lng": _float(_campo(row, idx, "LONGITUDE")),
+                        "cep": _campo(row, idx, "CEP"),
+                        "nv_geo_coord": _campo(row, idx, "NV_GEO_COORD"),
                     }
                 )
                 if len(lote) >= _LOTE:
-                    despejar(conn, lote)
+                    _despejar(conn, lote)
                     submetidos += len(lote)
                     lote.clear()
-            despejar(conn, lote)
+            _despejar(conn, lote)
             submetidos += len(lote)
 
             # Conta dentro da MESMA transação: com ON CONFLICT parte das

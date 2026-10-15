@@ -228,7 +228,7 @@ async def test_unrelated_event_goes_only_to_tenant_channel():
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app := __import__("app.main", fromlist=["app"]).app) as c:
+    with TestClient(__import__("app.main", fromlist=["app"]).app) as c:
         yield c
 
 

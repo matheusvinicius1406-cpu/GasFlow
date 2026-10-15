@@ -127,66 +127,7 @@ class AgentEngine:
                 self._inc_metric("agents_failed", run.tenant_id)
                 break
 
-            step = AgentStep(
-                run_id=run.id,
-                step_number=i + 1,
-                description=step_plan.get("description", ""),
-                tool_name=step_plan.get("tool"),
-                arguments=step_plan.get("arguments", {}),
-            )
-
-            # Validate tool permission
-            if step.tool_name and step.tool_name not in agent_def.allowed_tools:
-                step.fail(f"Tool '{step.tool_name}' not in allowed tools for {agent_def.scope.value}")
-                self._inc_metric("tool_blocked", run.tenant_id)
-                self._steps.append(step)
-                continue
-
-            # Check risk ceiling
-            policy_check = self.policy.check_permission(
-                step.tool_name or "READ", agent_def.scope.value, tenant_id=run.tenant_id
-            )
-            risk = policy_check.get("risk_level", "LOW")
-            ceiling = agent_def.risk_ceiling
-            risk_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
-            if risk_order.get(risk, 0) > risk_order.get(ceiling, 0):
-                step.fail(f"Risk '{risk}' exceeds ceiling '{ceiling}'")
-                self._inc_metric("tool_blocked", run.tenant_id)
-                self._steps.append(step)
-                continue
-
-            # Check approval requirement
-            if policy_check.get("requires_approval") and not dry_run:
-                self.approvals.create_approval(
-                    action=step.tool_name or "",
-                    arguments=step.arguments,
-                    actor=f"agent:{agent_id}",
-                    risk_level=risk,
-                    tenant_id=run.tenant_id,
-                )
-                self._inc_metric("tool_blocked", run.tenant_id)  # temporarily blocked
-                step.status = "WAITING_APPROVAL"
-                step.status = "WAITING_APPROVAL"
-                self._steps.append(step)
-                continue
-
-            # Execute tool
-            if dry_run:
-                step.complete({"dry_run": True, "tool": step.tool_name, "args": step.arguments})
-            else:
-                step.start()
-                result = self._execute_tool(step.tool_name, step.arguments)
-                if result.get("success"):
-                    step.complete(result.get("data"))
-                    run.context.update(result.get("data", {}))
-                else:
-                    step.fail(result.get("error", "Tool failed"))
-                self._inc_metric("tool_calls", run.tenant_id)
-
-            self._steps.append(step)
-
-            if step.status == "FAILED":
-                continue  # Continue with next step (non-fatal)
+            self._run_plan_step(run, agent_def, agent_id, dry_run, i, step_plan)
 
         if run.status == AgentStatus.EXECUTING:
             run.complete(
@@ -196,7 +137,75 @@ class AgentEngine:
 
         return run
 
-    def _generate_plan(self, agent_def: AgentDefinition, goal: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _run_plan_step(
+        self,
+        run: AgentRun,
+        agent_def: AgentDefinition,
+        agent_id: str,
+        dry_run: bool,
+        step_index: int,
+        step_plan: Dict[str, Any],
+    ) -> None:
+        """Executa UM item do plan: valida permissão/risco/aprovação ou roda a ferramenta."""
+        step = AgentStep(
+            run_id=run.id,
+            step_number=step_index + 1,
+            description=step_plan.get("description", ""),
+            tool_name=step_plan.get("tool"),
+            arguments=step_plan.get("arguments", {}),
+        )
+
+        # Validate tool permission
+        if step.tool_name and step.tool_name not in agent_def.allowed_tools:
+            step.fail(f"Tool '{step.tool_name}' not in allowed tools for {agent_def.scope.value}")
+            self._inc_metric("tool_blocked", run.tenant_id)
+            self._steps.append(step)
+            return
+
+        # Check risk ceiling
+        policy_check = self.policy.check_permission(
+            step.tool_name or "READ", agent_def.scope.value, tenant_id=run.tenant_id
+        )
+        risk = policy_check.get("risk_level", "LOW")
+        ceiling = agent_def.risk_ceiling
+        risk_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+        if risk_order.get(risk, 0) > risk_order.get(ceiling, 0):
+            step.fail(f"Risk '{risk}' exceeds ceiling '{ceiling}'")
+            self._inc_metric("tool_blocked", run.tenant_id)
+            self._steps.append(step)
+            return
+
+        # Check approval requirement
+        if policy_check.get("requires_approval") and not dry_run:
+            self.approvals.create_approval(
+                action=step.tool_name or "",
+                arguments=step.arguments,
+                actor=f"agent:{agent_id}",
+                risk_level=risk,
+                tenant_id=run.tenant_id,
+            )
+            self._inc_metric("tool_blocked", run.tenant_id)  # temporarily blocked
+            step.status = "WAITING_APPROVAL"
+            step.status = "WAITING_APPROVAL"
+            self._steps.append(step)
+            return
+
+        # Execute tool
+        if dry_run:
+            step.complete({"dry_run": True, "tool": step.tool_name, "args": step.arguments})
+        else:
+            step.start()
+            result = self._execute_tool(step.tool_name, step.arguments)
+            if result.get("success"):
+                step.complete(result.get("data"))
+                run.context.update(result.get("data", {}))
+            else:
+                step.fail(result.get("error", "Tool failed"))
+            self._inc_metric("tool_calls", run.tenant_id)
+
+        self._steps.append(step)
+
+    def _generate_plan(self, agent_def: AgentDefinition, _goal: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate a deterministic plan based on agent scope and goal."""
         plan = []
 

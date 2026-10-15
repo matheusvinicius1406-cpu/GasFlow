@@ -151,7 +151,7 @@ class UpdateRolePermissionsBody(BaseModel):
 
 @router.get("/users")
 async def list_users(
-    ctx: TenantContext = Depends(require_permission("user.read")),
+    _ctx: TenantContext = Depends(require_permission("user.read")),
     search: Optional[str] = None,
     role_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -544,7 +544,7 @@ async def deactivate_driver(
 
 
 @router.get("/roles")
-async def list_roles(ctx: TenantContext = Depends(require_permission("role.manage"))):
+async def list_roles(_ctx: TenantContext = Depends(require_permission("role.manage"))):
     db = _session()
     try:
         roles = db.query(AuthRoleModel).order_by(AuthRoleModel.name).all()

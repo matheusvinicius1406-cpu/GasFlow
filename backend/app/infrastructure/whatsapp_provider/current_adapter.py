@@ -112,6 +112,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
             }
             return mapping.get(state, ConnectionState.DISCONNECTED)
         except Exception:
+            logger.debug("provider.status_failed", exc_info=True)
             return ConnectionState.DISCONNECTED
 
     async def get_connection_info(self) -> ConnectionInfo:
@@ -130,6 +131,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
                 provider_type=self.provider_type,
             )
         except Exception as e:
+            logger.debug("provider.instance_status_failed", exc_info=True)
             return ConnectionInfo(
                 last_error=str(e),
                 provider_type=self.provider_type,
@@ -212,7 +214,7 @@ class WhatsAppWebAdapter(WhatsAppProvider):
                 provider=self.provider_type,
             )
 
-    async def send_media(self, options: SendOptions) -> SendResult:
+    async def send_media(self, options: SendOptions) -> SendResult:  # noqa: ARG002  # contrato do WhatsAppProvider: options declarado na interface
         # Current provider doesn't support media via HTTP API yet
         return SendResult(
             success=False,
@@ -221,11 +223,11 @@ class WhatsAppWebAdapter(WhatsAppProvider):
             provider=self.provider_type,
         )
 
-    async def send_typing(self, recipient: str) -> bool:
+    async def send_typing(self, recipient: str) -> bool:  # noqa: ARG002  # contrato do WhatsAppProvider: recipient declarado na interface
         # Current provider doesn't support typing indicator via HTTP API
         return False
 
-    async def mark_as_read(self, message_id: str) -> bool:
+    async def mark_as_read(self, message_id: str) -> bool:  # noqa: ARG002  # contrato do WhatsAppProvider: message_id declarado na interface
         # Current provider doesn't support mark as read via HTTP API
         return False
 

@@ -11,12 +11,15 @@ Antes disto o `POST /printer/print` e o auto-print enviavam placeholders
 chegava à impressora E o que chegasse estaria errado.
 """
 
+import logging
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session as DBSession
 
 from app.infrastructure.repositories.order_item_model import OrderItemModel
 from app.infrastructure.repositories.order_model import OrderModel
+
+logger = logging.getLogger("gasflow.printing.receipt")
 
 
 class OrderNotFoundError(Exception):
@@ -87,6 +90,7 @@ def _client_name(db: DBSession, tenant_id: str, codigo: Optional[str]) -> str:
         return (getattr(client, "nome", "") or "").strip()
     except Exception:
         # Nome é enfeite do cupom — nunca impedir a impressão do pedido.
+        logger.debug("receipt.client_name_failed", extra={"codigo": codigo}, exc_info=True)
         return ""
 
 
@@ -106,4 +110,5 @@ def _driver_name(db: DBSession, tenant_id: str, codigo: Optional[str]) -> str:
         )
         return (getattr(driver, "nome", "") or "").strip() if driver else ""
     except Exception:
+        logger.debug("receipt.driver_name_failed", extra={"codigo": codigo}, exc_info=True)
         return ""

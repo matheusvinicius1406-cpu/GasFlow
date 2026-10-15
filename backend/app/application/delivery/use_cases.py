@@ -5,7 +5,7 @@ Application layer for delivery operations.
 Uses domain entities + repositories. No direct DB access.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 from app.domain.delivery.delivery import (
@@ -130,6 +130,41 @@ class UpdateDeliveryStatusUseCase:
         self._delivery_repo = delivery_repo
         self._driver_repo = driver_repo
 
+    def _transition_status(
+        self,
+        delivery: Delivery,
+        new_status: str,
+        delivery_id: str,
+        failure_reason: Optional[str],
+        failure_notes: str,
+        proof_type: Optional[str],
+        actor_type: str,
+    ) -> Tuple[bool, bool]:
+        """Aplica a transição pedida. Devolve ``(status_conhecido, transição_ok)``."""
+        if new_status == "EN_ROUTE":
+            return True, bool(delivery.start_route())
+        if new_status == "ARRIVED":
+            return True, bool(delivery.arrive())
+        if new_status == "DELIVERED":
+            proof = None
+            if proof_type:
+                proof = DeliveryProof(
+                    delivery_id=delivery_id,
+                    proof_type=ProofType(proof_type),
+                )
+            return True, bool(delivery.complete(proof))
+        if new_status == "FAILED":
+            reason = DeliveryFailureReason.OTHER
+            if failure_reason:
+                try:
+                    reason = DeliveryFailureReason(failure_reason)
+                except ValueError:
+                    pass
+            return True, bool(delivery.fail(reason, failure_notes))
+        if new_status == "CANCELLED":
+            return True, bool(delivery.cancel(actor_type))
+        return False, False
+
     def execute(
         self,
         tenant_id: str,
@@ -144,31 +179,11 @@ class UpdateDeliveryStatusUseCase:
         if not delivery:
             return {"success": False, "error": "Delivery not found"}
 
-        if new_status == "EN_ROUTE":
-            ok = delivery.start_route()
-        elif new_status == "ARRIVED":
-            ok = delivery.arrive()
-        elif new_status == "DELIVERED":
-            proof = None
-            if proof_type:
-                proof = DeliveryProof(
-                    delivery_id=delivery_id,
-                    proof_type=ProofType(proof_type),
-                )
-            ok = delivery.complete(proof)
-        elif new_status == "FAILED":
-            reason = DeliveryFailureReason.OTHER
-            if failure_reason:
-                try:
-                    reason = DeliveryFailureReason(failure_reason)
-                except ValueError:
-                    pass
-            ok = delivery.fail(reason, failure_notes)
-        elif new_status == "CANCELLED":
-            ok = delivery.cancel(actor_type)
-        else:
+        known, ok = self._transition_status(
+            delivery, new_status, delivery_id, failure_reason, failure_notes, proof_type, actor_type
+        )
+        if not known:
             return {"success": False, "error": f"Unknown status: {new_status}"}
-
         if not ok:
             return {"success": False, "error": f"Cannot transition to {new_status}"}
 

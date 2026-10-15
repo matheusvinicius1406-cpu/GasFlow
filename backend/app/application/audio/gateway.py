@@ -16,6 +16,7 @@ AUDIO → Audio Gateway → STT → TEXT → Conversation Gateway → AI Core �
 Never: Audio → LLM directly
 """
 
+import logging
 import time
 import threading
 from typing import Dict, Any, Optional
@@ -26,6 +27,8 @@ from app.domain.audio.media import (
     MAX_AUDIO_SIZE_MB,
     MAX_AUDIO_DURATION_SECONDS,
 )
+
+logger = logging.getLogger("gasflow.audio.gateway")
 
 
 class AudioGateway:
@@ -220,6 +223,7 @@ class AudioGateway:
                 self._total_stt_latency += latency
             return result
         except Exception:
+            logger.debug("audio.stt_failed", exc_info=True)
             return TranscriptionResult(
                 text="",
                 confidence=0.0,

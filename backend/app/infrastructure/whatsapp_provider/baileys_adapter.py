@@ -222,7 +222,7 @@ class BaileysAdapter(WhatsAppProvider):
             self._last_error = str(e)
             return SendResult(success=False, error=str(e), provider=self.provider_type)
 
-    async def send_media(self, options: SendOptions) -> SendResult:
+    async def send_media(self, options: SendOptions) -> SendResult:  # noqa: ARG002  # contrato do WhatsAppProvider: options declarado na interface
         # Baileys supports media — implement when service is built
         return SendResult(
             success=False,
@@ -231,10 +231,10 @@ class BaileysAdapter(WhatsAppProvider):
             provider=self.provider_type,
         )
 
-    async def send_typing(self, recipient: str) -> bool:
+    async def send_typing(self, recipient: str) -> bool:  # noqa: ARG002  # contrato do WhatsAppProvider: recipient declarado na interface
         return False
 
-    async def mark_as_read(self, message_id: str) -> bool:
+    async def mark_as_read(self, message_id: str) -> bool:  # noqa: ARG002  # contrato do WhatsAppProvider: message_id declarado na interface
         return False
 
     # ── Contacts ─────────────────────────────────────────
@@ -242,7 +242,7 @@ class BaileysAdapter(WhatsAppProvider):
     async def get_contacts(self) -> List[WhatsAppContact]:
         return []
 
-    async def get_contact(self, jid: str) -> Optional[WhatsAppContact]:
+    async def get_contact(self, jid: str) -> Optional[WhatsAppContact]:  # noqa: ARG002  # contrato do WhatsAppProvider: jid declarado na interface
         return None
 
     # ── Session ──────────────────────────────────────────
@@ -265,4 +265,5 @@ class BaileysAdapter(WhatsAppProvider):
                 resp = await client.get(f"{self._service_url}/health")
                 return resp.status_code == 200
         except Exception:
+            logger.debug("baileys.health_check_failed", exc_info=True)
             return False

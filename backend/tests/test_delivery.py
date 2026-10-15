@@ -257,7 +257,7 @@ class TestRouteDomain:
     def test_progress_pct(self):
         r = Route(tenant_id="t1", driver_id="drv-1")
         s1 = r.add_stop(delivery_id="del-1", sequence=1)
-        s2 = r.add_stop(delivery_id="del-2", sequence=2)
+        r.add_stop(delivery_id="del-2", sequence=2)
         assert r.progress_pct == 0.0
         s1.arrive()
         s1.complete()
@@ -266,7 +266,7 @@ class TestRouteDomain:
     def test_get_next_stop(self):
         r = Route(tenant_id="t1", driver_id="drv-1")
         s1 = r.add_stop(delivery_id="del-1", sequence=1)
-        s2 = r.add_stop(delivery_id="del-2", sequence=2)
+        r.add_stop(delivery_id="del-2", sequence=2)
         assert r.get_next_stop().id == s1.id
 
     def test_remove_pending_stop(self):

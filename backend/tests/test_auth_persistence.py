@@ -143,7 +143,7 @@ class TestUserPersistence:
             "test@example.com",
             "oldpassword",
         )
-        user = auth_service.get_user(next(iter(auth_service._users.keys())) if not auth_service._use_db else None)
+        auth_service.get_user(next(iter(auth_service._users.keys())) if not auth_service._use_db else None)
         # Get user by username
         user_repo = auth_service._get_user_repo()
         user_model = user_repo.get_by_username("testuser")

@@ -139,6 +139,52 @@ def _resumo(dados: Dict[str, Any], modo: str, db: str) -> Dict[str, Any]:
     }
 
 
+def _agrupar_por_nome(pendentes: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Chaves repetidas: um nome compartilhado por 2 contatos vira 1 chamada."""
+    por_nome: Dict[str, List[Dict[str, Any]]] = {}
+    for p in pendentes:
+        por_nome.setdefault(p["name"], []).append(p)
+    return por_nome
+
+
+def _aplicar_respostas(
+    dados: Dict[str, Any],
+    por_nome: Dict[str, List[Dict[str, Any]]],
+    respostas: Dict[str, Any],
+    stats: Dict[str, Any],
+) -> None:
+    for bruto, val in respostas.items():
+        # Trava de preservação: "excluir: true" (pix/portaria/trote...) significa
+        # "não renomear, apenas sinalizar" — o contato fica exatamente como está.
+        # Sem isto, o modelo (medido no qwen3:1.7b) devolve excluir=true para
+        # nomes comuns de negócio e encurtaria "Augusto Montenegro Atrás Do Loro
+        # Motos" -> "Augusto Montenegro", perdendo informação do contato.
+        if val.get("excluir"):
+            stats["ignorados"] += len(por_nome.get(bruto, []))
+            continue
+        novo = val.get("nome_final_contato")
+        for p in por_nome.get(bruto, []):
+            if not novo or novo == p["name"]:
+                stats["ignorados"] += 1
+                continue
+            dados["mudancas"].append(
+                {
+                    "id": p["id"],
+                    "phone": p["phone"],
+                    "antes": p["name"],
+                    "depois": novo,
+                    "nome": val.get("nome"),
+                    "endereco": val.get("endereco"),
+                    "numero": val.get("numero"),
+                    "complemento": val.get("complemento"),
+                    "entre_ruas": val.get("entre_ruas"),
+                    "origem": "ia",
+                }
+            )
+            stats["aplicados"] += 1
+            dados["mantidos"] = max(0, dados["mantidos"] - 1)
+
+
 def _rodar_ia(args: argparse.Namespace, dados: Dict[str, Any]) -> Dict[str, Any]:
     """Camada opcional de IA: resolve só os pendentes (contatos sem endereço).
 
@@ -181,49 +227,16 @@ def _rodar_ia(args: argparse.Namespace, dados: Dict[str, Any]) -> Dict[str, Any]
         return stats
     stats["provider"] = provider.model_name
 
-    # Chaves repetidas: um nome compartilhado por 2 contatos vira 1 chamada.
     pendentes = dados["pendentes_ia"]
     if getattr(args, "limit_ia", 0) > 0:
         pendentes = pendentes[: int(args.limit_ia)]
     stats["enviados"] = len(pendentes)
-    por_nome: Dict[str, List[Dict[str, Any]]] = {}
-    for p in pendentes:
-        por_nome.setdefault(p["name"], []).append(p)
+    por_nome = _agrupar_por_nome(pendentes)
 
     brutos = list(por_nome)
     respostas = renomear_com_ia(brutos, provider, lote=int(getattr(settings, "renomeador_ia_lote", 8)))
     stats["sem_resposta"] = len(brutos) - len(respostas)
-
-    for bruto, val in respostas.items():
-        # Trava de preservação: "excluir: true" (pix/portaria/trote...) significa
-        # "não renomear, apenas sinalizar" — o contato fica exatamente como está.
-        # Sem isto, o modelo (medido no qwen3:1.7b) devolve excluir=true para
-        # nomes comuns de negócio e encurtaria "Augusto Montenegro Atrás Do Loro
-        # Motos" -> "Augusto Montenegro", perdendo informação do contato.
-        if val.get("excluir"):
-            stats["ignorados"] += len(por_nome.get(bruto, []))
-            continue
-        novo = val.get("nome_final_contato")
-        for p in por_nome.get(bruto, []):
-            if not novo or novo == p["name"]:
-                stats["ignorados"] += 1
-                continue
-            dados["mudancas"].append(
-                {
-                    "id": p["id"],
-                    "phone": p["phone"],
-                    "antes": p["name"],
-                    "depois": novo,
-                    "nome": val.get("nome"),
-                    "endereco": val.get("endereco"),
-                    "numero": val.get("numero"),
-                    "complemento": val.get("complemento"),
-                    "entre_ruas": val.get("entre_ruas"),
-                    "origem": "ia",
-                }
-            )
-            stats["aplicados"] += 1
-            dados["mantidos"] = max(0, dados["mantidos"] - 1)
+    _aplicar_respostas(dados, por_nome, respostas, stats)
     return stats
 
 

@@ -30,12 +30,7 @@ from typing import List, Optional, Sequence, Tuple
 Ancora = Tuple[float, int]
 
 
-def estimar_numero(posicao: Optional[float], ancoras: Sequence[Ancora]) -> Optional[int]:
-    """Número de casa estimado na `posicao`, ou `None` se não der para estimar.
-
-    Devolve `None` quando: a posição está fora de 0..1; há menos de duas âncoras
-    distintas; ou a posição cai fora da faixa coberta pelas âncoras.
-    """
+def _coerce_alvo(posicao: Optional[float]) -> Optional[float]:
     if posicao is None:
         return None
     try:
@@ -44,7 +39,10 @@ def estimar_numero(posicao: Optional[float], ancoras: Sequence[Ancora]) -> Optio
         return None
     if not 0.0 <= alvo <= 1.0:
         return None
+    return alvo
 
+
+def _ancoras_ordenadas(ancoras: Sequence[Ancora]) -> List[Ancora]:
     # Âncora é DADO (vem do cache/provedor): uma quebrada é ignorada, nunca
     # levanta. Derrubar aqui significaria perder a formatação de 10.000 contatos
     # por causa de uma linha estranha no JSON.
@@ -65,12 +63,10 @@ def estimar_numero(posicao: Optional[float], ancoras: Sequence[Ancora]) -> Optio
         # Duas âncoras no MESMO ponto não definem reta — a segunda é descartada.
         if not ordenadas or item[0] != ordenadas[-1][0]:
             ordenadas.append(item)
+    return ordenadas
 
-    if len(ordenadas) < 2:
-        return None
-    if not ordenadas[0][0] <= alvo <= ordenadas[-1][0]:
-        return None  # fora da faixa: extrapolar seria inventar (D2)
 
+def _interpolar_faixa(alvo: float, ordenadas: List[Ancora]) -> Optional[int]:
     for (p0, n0), (p1, n1) in zip(ordenadas, ordenadas[1:]):
         if p0 <= alvo <= p1:
             if p1 == p0:  # pragma: no cover — a dedup acima impede
@@ -78,6 +74,26 @@ def estimar_numero(posicao: Optional[float], ancoras: Sequence[Ancora]) -> Optio
             fracao = (alvo - p0) / (p1 - p0)
             return int(round(n0 + fracao * (n1 - n0)))
     return None  # pragma: no cover — coberto pela checagem de faixa
+
+
+def estimar_numero(posicao: Optional[float], ancoras: Sequence[Ancora]) -> Optional[int]:
+    """Número de casa estimado na `posicao`, ou `None` se não der para estimar.
+
+    Devolve `None` quando: a posição está fora de 0..1; há menos de duas âncoras
+    distintas; ou a posição cai fora da faixa coberta pelas âncoras.
+    """
+    alvo = _coerce_alvo(posicao)
+    if alvo is None:
+        return None
+
+    ordenadas = _ancoras_ordenadas(ancoras)
+
+    if len(ordenadas) < 2:
+        return None
+    if not ordenadas[0][0] <= alvo <= ordenadas[-1][0]:
+        return None  # fora da faixa: extrapolar seria inventar (D2)
+
+    return _interpolar_faixa(alvo, ordenadas)
 
 
 # ── Geometria do eixo (§8.3.1) ────────────────────────────

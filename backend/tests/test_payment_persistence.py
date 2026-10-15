@@ -165,7 +165,7 @@ class TestPaymentPersistence:
     def test_order_total_paid_persists(self, db, payment_service):
         payment_service.create_method("t1", "CASH", "Dinheiro", "CASH")
         p1 = payment_service.create_payment("t1", "o1", "ORD-1", "C1", 100.0, "CASH")
-        p2 = payment_service.create_payment("t1", "o1", "ORD-1", "C1", 50.0, "CASH")
+        payment_service.create_payment("t1", "o1", "ORD-1", "C1", 50.0, "CASH")
         payment_service.confirm_payment(p1.id, "t1")
         # p2 still pending
         ps2 = PaymentService(db=db)

@@ -125,121 +125,134 @@ def _nome_canonico(tipo, titulo, nome: str) -> str:
     return " ".join(partes)
 
 
+def _geom_linestring(geometry) -> list[list[float]] | None:
+    """GeoJSON é [lng, lat]; axis.projetar_no_eixo espera (lat, lng)."""
+    if geometry.get("type") != "LineString":
+        return None
+    coords = geometry.get("coordinates") or []
+    if len(coords) < 2:
+        return None
+    geom: list[list[float]] = []
+    for par in coords:
+        try:
+            lng, lat = float(par[0]), float(par[1])
+        except (TypeError, ValueError, IndexError):
+            return None
+        geom.append([round(lat, _CASAS), round(lng, _CASAS)])
+    if len(geom) < 2:
+        return None
+    return geom
+
+
+def _extrair_face(feature, cod_municipio: str) -> tuple[dict | None, list[dict], str]:
+    """(face, nos, motivo): face None é descartada; motivo vazio é silencioso."""
+    if not isinstance(feature, dict):
+        return None, [], ""
+    props = feature.get("properties") or {}
+    cod_setor = str(props.get("CD_SETOR") or "").strip()
+    if not cod_setor.startswith(cod_municipio):
+        return None, [], "outro_municipio"
+
+    nome_bruto = props.get("NM_LOG")
+    if nome_bruto is None or not str(nome_bruto).strip():
+        # 19,6% em Belém: sem nome não vira logradouro nem cruzamento.
+        return None, [], "sem_nome"
+
+    geom = _geom_linestring(feature.get("geometry") or {})
+    if geom is None:
+        return None, [], "sem_geom"
+
+    tipo = props.get("NM_TIP_LOG")
+    titulo = props.get("NM_TIT_LOG")
+    nome = str(nome_bruto).strip()
+    canonico = _nome_canonico(tipo, titulo, nome)
+    chave = normalizar(canonico)
+    if not chave:
+        return None, [], "sem_nome"
+
+    face = {
+        "cod_municipio": cod_municipio,
+        "cod_setor": cod_setor,
+        "cod_quadra": _inteiro(props.get("CD_QUADRA")),
+        "cod_face": _inteiro(props.get("CD_FACE")),
+        "chave_logradouro": chave,
+        "nome_logradouro": canonico,
+        # `text()` cru não passa pelo tipo JSON do SQLAlchemy, então a
+        # lista vira string aqui — é exatamente o que o tipo grava em
+        # SQLite (TEXT) e o que ele devolve ao ler via model.
+        "geom": json.dumps(geom),
+        "tot_res": _inteiro(props.get("TOT_RES")),
+        "tot_geral": _inteiro(props.get("TOT_GERAL")),
+    }
+
+    # Extremidades = nós. Vizinhas da mesma rua dividem a extremidade e o
+    # UNIQUE + ON CONFLICT colapsa na mesma linha.
+    nos = [
+        {
+            "cod_municipio": cod_municipio,
+            "node_lat": lat,
+            "node_lng": lng,
+            "chave_logradouro": chave,
+            "nome_logradouro": canonico,
+        }
+        for lat, lng in (geom[0], geom[-1])
+    ]
+    return face, nos, ""
+
+
+def _gravar_banco(conn, cod_municipio: str, faces: list[dict], nos: list[dict]) -> None:
+    conn.execute(text("DELETE FROM logradouro_face WHERE cod_municipio = :cod"), {"cod": cod_municipio})
+    conn.execute(text("DELETE FROM logradouro_no WHERE cod_municipio = :cod"), {"cod": cod_municipio})
+
+    for tabela, colunas, dados in (
+        ("logradouro_face", _COLUNAS_FACE, faces),
+        ("logradouro_no", _COLUNAS_NO, nos),
+    ):
+        for inicio in range(0, len(dados), _LOTE):
+            lote = dados[inicio : inicio + _LOTE]
+            sql = (
+                f"INSERT INTO {tabela} ({', '.join(colunas)}) "
+                f"VALUES ({', '.join(':' + c for c in colunas)}) "
+                "ON CONFLICT DO NOTHING"
+            )
+            conn.execute(text(sql), lote)
+
+
+def _contar_municipio(conn, cod_municipio: str) -> tuple[int, int, int]:
+    n_faces = conn.execute(
+        text("SELECT COUNT(*) FROM logradouro_face WHERE cod_municipio = :cod"),
+        {"cod": cod_municipio},
+    ).scalar_one()
+    n_nos = conn.execute(
+        text("SELECT COUNT(*) FROM logradouro_no WHERE cod_municipio = :cod"),
+        {"cod": cod_municipio},
+    ).scalar_one()
+    n_ruas = conn.execute(
+        text("SELECT COUNT(DISTINCT chave_logradouro) FROM logradouro_face WHERE cod_municipio = :cod"),
+        {"cod": cod_municipio},
+    ).scalar_one()
+    return n_faces, n_nos, n_ruas
+
+
 def importar(caminho: str, cod_municipio: str) -> tuple[int, int]:
     features = _carregar_features(caminho, cod_municipio)
 
     faces: list[dict] = []
     nos: list[dict] = []
-    sem_nome = 0
-    sem_geom = 0
-    outro_municipio = 0
+    contadores = {"sem_nome": 0, "sem_geom": 0, "outro_municipio": 0}
 
     for feature in features:
-        if not isinstance(feature, dict):
-            continue
-        props = feature.get("properties") or {}
-        cod_setor = str(props.get("CD_SETOR") or "").strip()
-        if not cod_setor.startswith(cod_municipio):
-            outro_municipio += 1
-            continue
-
-        nome_bruto = props.get("NM_LOG")
-        if nome_bruto is None or not str(nome_bruto).strip():
-            # 19,6% em Belém: sem nome não vira logradouro nem cruzamento.
-            sem_nome += 1
-            continue
-
-        geometry = feature.get("geometry") or {}
-        if geometry.get("type") != "LineString":
-            sem_geom += 1
-            continue
-        coords = geometry.get("coordinates") or []
-        if len(coords) < 2:
-            sem_geom += 1
-            continue
-
-        # GeoJSON é [lng, lat]; axis.projetar_no_eixo espera (lat, lng).
-        geom: list[list[float]] = []
-        for par in coords:
-            try:
-                lng, lat = float(par[0]), float(par[1])
-            except (TypeError, ValueError, IndexError):
-                geom = []
-                break
-            geom.append([round(lat, _CASAS), round(lng, _CASAS)])
-        if len(geom) < 2:
-            sem_geom += 1
-            continue
-
-        tipo = props.get("NM_TIP_LOG")
-        titulo = props.get("NM_TIT_LOG")
-        nome = str(nome_bruto).strip()
-        canonico = _nome_canonico(tipo, titulo, nome)
-        chave = normalizar(canonico)
-        if not chave:
-            sem_nome += 1
-            continue
-
-        faces.append(
-            {
-                "cod_municipio": cod_municipio,
-                "cod_setor": cod_setor,
-                "cod_quadra": _inteiro(props.get("CD_QUADRA")),
-                "cod_face": _inteiro(props.get("CD_FACE")),
-                "chave_logradouro": chave,
-                "nome_logradouro": canonico,
-                # `text()` cru não passa pelo tipo JSON do SQLAlchemy, então a
-                # lista vira string aqui — é exatamente o que o tipo grava em
-                # SQLite (TEXT) e o que ele devolve ao ler via model.
-                "geom": json.dumps(geom),
-                "tot_res": _inteiro(props.get("TOT_RES")),
-                "tot_geral": _inteiro(props.get("TOT_GERAL")),
-            }
-        )
-
-        # Extremidades = nós. Vizinhas da mesma rua dividem a extremidade e o
-        # UNIQUE + ON CONFLICT colapsa na mesma linha.
-        for lat, lng in (geom[0], geom[-1]):
-            nos.append(
-                {
-                    "cod_municipio": cod_municipio,
-                    "node_lat": lat,
-                    "node_lng": lng,
-                    "chave_logradouro": chave,
-                    "nome_logradouro": canonico,
-                }
-            )
+        face, nos_da_face, motivo = _extrair_face(feature, cod_municipio)
+        if motivo:
+            contadores[motivo] += 1
+        if face is not None:
+            faces.append(face)
+            nos.extend(nos_da_face)
 
     engine = create_engine(DATABASE_URL)
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM logradouro_face WHERE cod_municipio = :cod"), {"cod": cod_municipio})
-        conn.execute(text("DELETE FROM logradouro_no WHERE cod_municipio = :cod"), {"cod": cod_municipio})
-
-        for tabela, colunas, dados in (
-            ("logradouro_face", _COLUNAS_FACE, faces),
-            ("logradouro_no", _COLUNAS_NO, nos),
-        ):
-            for inicio in range(0, len(dados), _LOTE):
-                lote = dados[inicio : inicio + _LOTE]
-                sql = (
-                    f"INSERT INTO {tabela} ({', '.join(colunas)}) "
-                    f"VALUES ({', '.join(':' + c for c in colunas)}) "
-                    "ON CONFLICT DO NOTHING"
-                )
-                conn.execute(text(sql), lote)
-
-        n_faces = conn.execute(
-            text("SELECT COUNT(*) FROM logradouro_face WHERE cod_municipio = :cod"),
-            {"cod": cod_municipio},
-        ).scalar_one()
-        n_nos = conn.execute(
-            text("SELECT COUNT(*) FROM logradouro_no WHERE cod_municipio = :cod"),
-            {"cod": cod_municipio},
-        ).scalar_one()
-        n_ruas = conn.execute(
-            text("SELECT COUNT(DISTINCT chave_logradouro) FROM logradouro_face WHERE cod_municipio = :cod"),
-            {"cod": cod_municipio},
-        ).scalar_one()
+        _gravar_banco(conn, cod_municipio, faces, nos)
+        n_faces, n_nos, n_ruas = _contar_municipio(conn, cod_municipio)
     engine.dispose()
 
     print(f"municipio            : {cod_municipio}")
@@ -247,9 +260,9 @@ def importar(caminho: str, cod_municipio: str) -> tuple[int, int]:
     print(f"faces no banco       : {n_faces}")
     print(f"nos no banco         : {n_nos}")
     print(f"ruas distintas       : {n_ruas}")
-    print(f"descartadas sem nome : {sem_nome}")
-    print(f"descartadas sem geom : {sem_geom}")
-    print(f"outro municipio      : {outro_municipio}")
+    print(f"descartadas sem nome : {contadores['sem_nome']}")
+    print(f"descartadas sem geom : {contadores['sem_geom']}")
+    print(f"outro municipio      : {contadores['outro_municipio']}")
     return n_faces, n_nos
 
 

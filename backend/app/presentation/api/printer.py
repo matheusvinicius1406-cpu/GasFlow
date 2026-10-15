@@ -231,7 +231,7 @@ def agent_report_result(
 @router.post("/agent/status")
 def agent_report_status(
     body: AgentStatusReport,
-    ctx: TenantContext = Depends(require_whatsapp_service),
+    _ctx: TenantContext = Depends(require_whatsapp_service),
 ):
     """Estado atual da impressora na máquina do operador."""
     return {"success": True, "status": report_agent_status(body.status, body.printer_name, body.detail)}

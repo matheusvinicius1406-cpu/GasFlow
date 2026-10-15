@@ -271,7 +271,7 @@ async def reject_action(approval_id: str, ctx: TenantContext = Depends(get_tenan
 
 
 @router.get("/agents")
-async def list_agents(ctx: TenantContext = Depends(get_tenant_context)):
+async def list_agents(_ctx: TenantContext = Depends(get_tenant_context)):
     return {
         "agents": [
             {"id": a.id, "name": a.name, "scope": a.scope.value, "enabled": a.enabled, "risk_ceiling": a.risk_ceiling}

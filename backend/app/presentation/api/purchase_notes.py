@@ -129,7 +129,7 @@ def cancel_note(
 def note_pdf(
     note_id: str,
     svc: PurchaseNoteService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("purchase.read")),
+    _ctx: TenantContext = Depends(require_permission("purchase.read")),
 ):
     """HTML renderizável — o Electron imprime via printToPDF (purchase:export-pdf)."""
     try:

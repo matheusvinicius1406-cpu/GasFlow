@@ -86,7 +86,11 @@ class HuggingFaceProvider(LLMProvider):
         )
 
     def generate_structured(
-        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+        self,
+        messages: List[LLMMessage],
+        schema: Dict[str, Any],  # noqa: ARG002
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
     ) -> LLMResponse:
         return self.generate(messages, temperature=min(temperature, 0.2), max_tokens=max_tokens)
 

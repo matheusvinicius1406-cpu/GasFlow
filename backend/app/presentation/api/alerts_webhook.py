@@ -74,6 +74,7 @@ async def receive_alert(request: Request) -> dict:
     try:
         payload = await request.json()
     except Exception:  # noqa: BLE001
+        logger.warning("alerts.invalid_json", exc_info=True)
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
     alerts = payload.get("alerts", [])

@@ -41,7 +41,7 @@ def _create_operator(client, admin_headers) -> str:
 
     db = Session(bind=engine)
     try:
-        role_id = db.execute(text("SELECT id FROM auth_roles WHERE name = 'OPERATOR'")).scalar_one()
+        db.execute(text("SELECT id FROM auth_roles WHERE name = 'OPERATOR'")).scalar_one()
     finally:
         db.close()
 
@@ -248,7 +248,7 @@ def test_update_role_permissions_invalidates_cache(client, admin_headers):
     db = Session(bind=engine)
     try:
         viewer_id = db.execute(text("SELECT id FROM auth_roles WHERE name = 'VIEWER'")).scalar_one()
-        export_pid = db.execute(text("SELECT id FROM permissions WHERE code = 'finance.export_pdf'")).scalar_one()
+        db.execute(text("SELECT id FROM permissions WHERE code = 'finance.export_pdf'")).scalar_one()
     finally:
         db.close()
 

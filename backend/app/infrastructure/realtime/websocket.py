@@ -292,6 +292,55 @@ def _verify_ws_token(token: str) -> Optional[dict]:
     return None
 
 
+async def _resolve_ws_channel(websocket: WebSocket, meta: dict, channel: str) -> Optional[str]:
+    """Deriva o canal da sessão e valida o tenant. `None` ⇒ canal fechado."""
+    # Derive channel from role if not specified
+    if not channel:
+        if meta["role"] == "DRIVER" and meta.get("driver_id"):
+            channel = f"driver:{meta['driver_id']}"
+        else:
+            channel = f"tenant:{meta['tenant_id']}"
+
+    # Security: ensure channel matches tenant. Driver sessions attach to their
+    # own driver:{id} channel (o nome não contém o tenant) — permitido apenas
+    # para o próprio driver_id da sessão.
+    if meta["tenant_id"] and meta["tenant_id"] not in channel:
+        if meta.get("role") == "DRIVER" and meta.get("driver_id"):
+            if channel != f"driver:{meta['driver_id']}":
+                await websocket.close(code=4003, reason="Forbidden: channel mismatch")
+                return None
+        else:
+            await websocket.close(code=4003, reason="Forbidden: tenant mismatch")
+            return None
+
+    return channel
+
+
+async def _ws_listen_loop(websocket: WebSocket, manager: ConnectionManager) -> None:
+    try:
+        while True:
+            # Keep connection alive, receive pings
+            data = await websocket.receive_text()
+
+            # Handle ping/pong
+            if data == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            elif data == "stats":
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "stats",
+                            **manager.get_stats(),
+                        }
+                    )
+                )
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        logger.debug("ws.unexpected_disconnect — cleaning up connection", exc_info=True)
+        manager.disconnect(websocket)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -319,61 +368,25 @@ async def websocket_endpoint(
         await websocket.close(code=4003, reason="Password change required")
         return
 
-    # Derive channel from role if not specified
-    if not channel:
-        if meta["role"] == "DRIVER" and meta.get("driver_id"):
-            channel = f"driver:{meta['driver_id']}"
-        else:
-            channel = f"tenant:{meta['tenant_id']}"
-
-    # Security: ensure channel matches tenant. Driver sessions attach to their
-    # own driver:{id} channel (o nome não contém o tenant) — permitido apenas
-    # para o próprio driver_id da sessão.
-    if meta["tenant_id"] and meta["tenant_id"] not in channel:
-        if meta.get("role") == "DRIVER" and meta.get("driver_id"):
-            if channel != f"driver:{meta['driver_id']}":
-                await websocket.close(code=4003, reason="Forbidden: channel mismatch")
-                return
-        else:
-            await websocket.close(code=4003, reason="Forbidden: tenant mismatch")
-            return
+    resolved_channel = await _resolve_ws_channel(websocket, meta, channel)
+    if resolved_channel is None:
+        return
 
     manager = get_ws_manager()
-    await manager.connect(websocket, channel, meta)
+    await manager.connect(websocket, resolved_channel, meta)
 
     # Send welcome
     await websocket.send_text(
         json.dumps(
             {
                 "type": "connected",
-                "channel": channel,
+                "channel": resolved_channel,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
     )
 
-    try:
-        while True:
-            # Keep connection alive, receive pings
-            data = await websocket.receive_text()
-
-            # Handle ping/pong
-            if data == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
-            elif data == "stats":
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "stats",
-                            **manager.get_stats(),
-                        }
-                    )
-                )
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception:
-        logger.debug("ws.unexpected_disconnect — cleaning up connection", exc_info=True)
-        manager.disconnect(websocket)
+    await _ws_listen_loop(websocket, manager)
 
 
 @router.get("/realtime/stats")

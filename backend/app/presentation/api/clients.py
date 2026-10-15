@@ -41,7 +41,7 @@ def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(
 def create_client(
     client: ClientCreate,
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = CreateClientUseCase(repository)
     try:
@@ -55,13 +55,10 @@ def list_clients(
     q: Optional[str] = Query(default=None, description="Busca por nome, código, telefone ou bairro"),
     tipo: Optional[str] = Query(default=None, description="Filtrar por tipo"),
     ativo: Optional[bool] = Query(default=None, description="Filtrar por status ativo"),
-    community_member: Optional[bool] = Query(
-        default=None, description="Filtrar por membros da comunidade (true=convidados, false=não convidados)"
-    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListClientsUseCase(repository)
     return use_case.execute(query=q or "", tipo=tipo, ativo=ativo, page=page, page_size=page_size)
@@ -70,7 +67,7 @@ def list_clients(
 @router.get("/legacy", response_model=list[ClientResponse])
 def list_clients_legacy(
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Legacy endpoint — retorna todos os clientes ativos sem paginação."""
     use_case = ListClientsUseCase(repository)
@@ -82,7 +79,7 @@ def list_clients_legacy(
 def get_client(
     codigo: str,
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetClientUseCase(repository)
     client = use_case.execute(codigo)
@@ -134,7 +131,7 @@ def update_client(
     codigo: str,
     data: ClientUpdate,
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = UpdateClientUseCase(repository)
     try:
@@ -150,7 +147,7 @@ def update_client(
 def disable_client(
     codigo: str,
     repository: SQLAlchemyClientRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = DisableClientUseCase(repository)
     client = use_case.execute(codigo)

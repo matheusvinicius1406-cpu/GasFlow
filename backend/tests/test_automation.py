@@ -573,7 +573,7 @@ class TestKillSwitch:
         )
         run = workflow_engine.execute_workflow(wf, {})
         # Tool call should fail due to kill switch
-        steps = workflow_engine.get_step_runs(run.id)
+        workflow_engine.get_step_runs(run.id)
         # Either completed (dry run) or failed (kill switch)
         policy_engine.deactivate_kill_switch()
 
@@ -644,7 +644,7 @@ class TestSecurity:
         run = agent_engine.execute_agent(inv_agent.id, "test", {})
         # Steps using non-allowed tools should be blocked
         steps = agent_engine.get_steps(run.id)
-        blocked = [s for s in steps if s.status == "FAILED" and "not in allowed" in (s.error or "")]
+        [s for s in steps if s.status == "FAILED" and "not in allowed" in (s.error or "")]
         # At least some steps should be blocked if they use tools not in allowlist
         # Inventory agent has get_inventory, get_low_stock, etc. — should be fine
 

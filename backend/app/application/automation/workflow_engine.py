@@ -12,7 +12,7 @@ Executes workflow definitions step by step with:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("gasflow.automation")
 
@@ -91,46 +91,12 @@ class WorkflowEngine:
         # Execute steps sequentially
         current_step_id = definition.first_step_id
         while current_step_id:
-            step_def = definition.get_step(current_step_id)
-            if not step_def:
-                run.fail(f"Step '{current_step_id}' not found in definition")
-                self._inc_metric("workflows_failed", run.tenant_id)
-                break
-
-            # Check conditions
-            if step_def.condition:
-                cond_met = self._evaluate_step_condition(step_def.condition, run.context)
-                if not cond_met:
-                    step_run = self._skip_step(run.id, step_def)
-                    self._step_history.append(step_run)
-                    current_step_id = step_def.next_step_on_success
-                    continue
-
-            # Execute step
-            step_run = self._execute_step(run, step_def, dry_run)
-            self._step_history.append(step_run)
-
-            if step_run.status == StepStatus.COMPLETED:
-                self._inc_metric("steps_completed", run.tenant_id)
-                # Merge result into context
-                if step_run.result:
-                    run.context.update(step_run.result)
-                current_step_id = step_def.next_step_on_success
-            elif step_run.status == StepStatus.WAITING_APPROVAL:
-                # Step waiting for approval — workflow pauses
-                run.current_step_id = current_step_id
+            next_step_id, paused, stop = self._advance_iteration(definition, run, current_step_id, dry_run=dry_run)
+            if paused:
                 return run
-            elif step_run.status == StepStatus.FAILED:
-                self._inc_metric("steps_failed", run.tenant_id)
-                if step_def.next_step_on_failure:
-                    current_step_id = step_def.next_step_on_failure
-                else:
-                    run.fail(f"Step '{step_def.name}' failed: {step_run.error}")
-                    self._inc_metric("workflows_failed", run.tenant_id)
-                    break
-            else:
-                # SKIPPED or unknown
-                current_step_id = step_def.next_step_on_success
+            if stop:
+                break
+            current_step_id = next_step_id
 
         if run.status == WorkflowStatus.ACTIVE:
             run.complete()
@@ -156,10 +122,45 @@ class WorkflowEngine:
         já existente do engine); a fila de aprovações em si pode ser Redis
         (APPROVAL_QUEUE_MODE=redis) para sobreviver a restart/multi-worker.
         """
+        pending = self._find_pending_approval(definition, run)
+        if pending is None:
+            return run
+        step_def = pending[0]
+
+        self._inc_metric("approvals_granted", run.tenant_id)
+
+        # Executa o restante do run a partir do step atual.
+        current_step_id: Optional[str] = run.current_step_id
+        while current_step_id:
+            next_step_id, paused, stop = self._advance_iteration(
+                definition, run, current_step_id, approved_step=step_def
+            )
+            if paused:
+                return run
+            if stop:
+                break
+            current_step_id = next_step_id
+
+        if run.status == WorkflowStatus.ACTIVE:
+            run.complete()
+            self._inc_metric("workflows_completed", run.tenant_id)
+
+        return run
+
+    def _find_pending_approval(
+        self,
+        definition: WorkflowDefinition,
+        run: WorkflowRun,
+    ) -> Optional[Tuple[Any, WorkflowStepRun]]:
+        """Localiza o step de definição + step_run pausado com aprovação pendente.
+
+        Falha o run (e o step) quando não há nada válido a retomar; devolve
+        ``None`` nesses casos — o chamador só retorna o run.
+        """
         step_def = definition.get_step(run.current_step_id or "")
         if not step_def:
             run.fail(f"Step '{run.current_step_id}' not found in definition")
-            return run
+            return None
 
         # Localiza o step_run WAITING_APPROVAL correspondente.
         pending = [
@@ -169,7 +170,7 @@ class WorkflowEngine:
         ]
         if not pending:
             run.fail(f"No pending approval found for step '{step_def.id}'")
-            return run
+            return None
 
         step_run = pending[-1]
         approval_id = step_run.approval_id or ""
@@ -179,100 +180,126 @@ class WorkflowEngine:
             step_run.fail("Approval is not valid (rejected, expired, or revoked)")
             self._inc_metric("steps_failed", run.tenant_id)
             run.fail(f"Step '{step_def.name}' failed: approval invalid")
-            return run
+            return None
 
         # 2. Binding: argumentos a executar == argumentos aprovados.
         if not self.approvals.validate_binding(approval_id, step_def.tool_name or step_def.name, step_def.arguments):
             step_run.fail("Approval binding mismatch — arguments differ from approved")
             self._inc_metric("steps_failed", run.tenant_id)
             run.fail(f"Step '{step_def.name}' failed: approval binding mismatch")
-            return run
+            return None
 
-        self._inc_metric("approvals_granted", run.tenant_id)
+        return step_def, step_run
 
-        # Executa o restante do run a partir do step atual.
-        current_step_id: Optional[str] = run.current_step_id
-        while current_step_id:
-            s_def = definition.get_step(current_step_id)
-            if not s_def:
-                run.fail(f"Step '{current_step_id}' not found in definition")
-                self._inc_metric("workflows_failed", run.tenant_id)
-                break
+    def _advance_iteration(
+        self,
+        definition: WorkflowDefinition,
+        run: WorkflowRun,
+        current_step_id: str,
+        approved_step=None,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[str], bool, bool]:
+        """Um passo do laço de execução: resolve o step e devolve
+        ``(próximo_step_id, pausou, parou)``.
 
-            if s_def.condition:
-                cond_met = self._evaluate_step_condition(s_def.condition, run.context)
-                if not cond_met:
-                    step_run2 = self._skip_step(run.id, s_def)
-                    self._step_history.append(step_run2)
-                    current_step_id = s_def.next_step_on_success
-                    continue
+        ``pausou`` = step ficou WAITING_APPROVAL (o chamador devolve o run);
+        ``parou`` = run falhou/step inexistente (o chamador sai do laço).
+        ``approved_step`` é o step cuja aprovação já foi validada (retomada).
+        """
+        s_def = definition.get_step(current_step_id)
+        if not s_def:
+            run.fail(f"Step '{current_step_id}' not found in definition")
+            self._inc_metric("workflows_failed", run.tenant_id)
+            return None, False, True
 
-            if current_step_id == step_def.id:
-                if s_def.action_type == "approval_request":
-                    # O próprio step era o gate de aprovação — marca completo
-                    # e segue para o próximo step (o envio, etc.).
-                    resumed_gate = WorkflowStepRun(
-                        run_id=run.id,
-                        step_id=s_def.id,
-                        step_name=s_def.name,
-                    )
-                    resumed_gate.complete({"approved": True})
-                    self._step_history.append(resumed_gate)
-                    self._inc_metric("steps_completed", run.tenant_id)
-                    current_step_id = s_def.next_step_on_success
-                    continue
+        if s_def.condition:
+            cond_met = self._evaluate_step_condition(s_def.condition, run.context)
+            if not cond_met:
+                step_run = self._skip_step(run.id, s_def)
+                self._step_history.append(step_run)
+                return s_def.next_step_on_success, False, False
 
-                # Step tool_call aprovado — executa a ferramenta com binding validado.
-                result = self._execute_tool(s_def.tool_name, s_def.arguments)
-                resumed = WorkflowStepRun(
-                    run_id=run.id,
-                    step_id=s_def.id,
-                    step_name=s_def.name,
-                )
-                resumed.start()
-                if result.get("success"):
-                    resumed.complete(result.get("data"))
-                    self._step_history.append(resumed)
-                    self._inc_metric("steps_completed", run.tenant_id)
-                    if resumed.result:
-                        run.context.update(resumed.result)
-                    current_step_id = s_def.next_step_on_success
-                    continue
-                else:
-                    resumed.fail(result.get("error", "Tool execution failed"))
-                    self._step_history.append(resumed)
-                    self._inc_metric("steps_failed", run.tenant_id)
-                    run.fail(f"Step '{s_def.name}' failed: {resumed.error}")
-                    self._inc_metric("workflows_failed", run.tenant_id)
-                    break
+        if approved_step is not None and current_step_id == approved_step.id:
+            return self._resume_approved_step(run, s_def), False, False
 
-            # Steps seguintes: execução normal.
-            step_run_next = self._execute_step(run, s_def, dry_run=False)
-            self._step_history.append(step_run_next)
-            if step_run_next.status == StepStatus.COMPLETED:
-                self._inc_metric("steps_completed", run.tenant_id)
-                if step_run_next.result:
-                    run.context.update(step_run_next.result)
-                current_step_id = s_def.next_step_on_success
-            elif step_run_next.status == StepStatus.WAITING_APPROVAL:
-                run.current_step_id = current_step_id
-                return run
-            elif step_run_next.status == StepStatus.FAILED:
-                self._inc_metric("steps_failed", run.tenant_id)
-                if s_def.next_step_on_failure:
-                    current_step_id = s_def.next_step_on_failure
-                else:
-                    run.fail(f"Step '{s_def.name}' failed: {step_run_next.error}")
-                    self._inc_metric("workflows_failed", run.tenant_id)
-                    break
-            else:
-                current_step_id = s_def.next_step_on_success
+        next_step_id, paused = self._advance_step(run, s_def, current_step_id, dry_run)
+        return next_step_id, paused, False
 
-        if run.status == WorkflowStatus.ACTIVE:
-            run.complete()
-            self._inc_metric("workflows_completed", run.tenant_id)
+    def _resume_approved_step(self, run: WorkflowRun, s_def) -> Optional[str]:
+        """Executa o step cuja aprovação foi validada. Devolve o próximo id (None = fim).
 
-        return run
+        O próprio step pode ser o gate de aprovação (action_type
+        ``approval_request``) — nesse caso ele é marcado completo e o run
+        segue para o próximo (o envio, etc.). Um step tool_call aprovado
+        executa a ferramenta com binding validado.
+        """
+        if s_def.action_type == "approval_request":
+            resumed_gate = WorkflowStepRun(
+                run_id=run.id,
+                step_id=s_def.id,
+                step_name=s_def.name,
+            )
+            resumed_gate.complete({"approved": True})
+            self._step_history.append(resumed_gate)
+            self._inc_metric("steps_completed", run.tenant_id)
+            return s_def.next_step_on_success
+
+        # Step tool_call aprovado — executa a ferramenta com binding validado.
+        result = self._execute_tool(s_def.tool_name, s_def.arguments)
+        resumed = WorkflowStepRun(
+            run_id=run.id,
+            step_id=s_def.id,
+            step_name=s_def.name,
+        )
+        resumed.start()
+        if result.get("success"):
+            resumed.complete(result.get("data"))
+            self._step_history.append(resumed)
+            self._inc_metric("steps_completed", run.tenant_id)
+            if resumed.result:
+                run.context.update(resumed.result)
+            return s_def.next_step_on_success
+
+        resumed.fail(result.get("error", "Tool execution failed"))
+        self._step_history.append(resumed)
+        self._inc_metric("steps_failed", run.tenant_id)
+        run.fail(f"Step '{s_def.name}' failed: {resumed.error}")
+        self._inc_metric("workflows_failed", run.tenant_id)
+        return None
+
+    def _advance_step(
+        self,
+        run: WorkflowRun,
+        step_def,
+        current_step_id: str,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[str], bool]:
+        """Executa um step e devolve ``(próximo_step_id, pausou)``."""
+        step_run = self._execute_step(run, step_def, dry_run)
+        self._step_history.append(step_run)
+
+        if step_run.status == StepStatus.COMPLETED:
+            self._inc_metric("steps_completed", run.tenant_id)
+            # Merge result into context
+            if step_run.result:
+                run.context.update(step_run.result)
+            return step_def.next_step_on_success, False
+
+        if step_run.status == StepStatus.WAITING_APPROVAL:
+            # Step waiting for approval — workflow pauses
+            run.current_step_id = current_step_id
+            return None, True
+
+        if step_run.status == StepStatus.FAILED:
+            self._inc_metric("steps_failed", run.tenant_id)
+            if step_def.next_step_on_failure:
+                return step_def.next_step_on_failure, False
+            run.fail(f"Step '{step_def.name}' failed: {step_run.error}")
+            self._inc_metric("workflows_failed", run.tenant_id)
+            return None, False
+
+        # SKIPPED or unknown
+        return step_def.next_step_on_success, False
 
     def _execute_step(self, run: WorkflowRun, step_def, dry_run: bool = False) -> WorkflowStepRun:
         """Execute a single workflow step."""

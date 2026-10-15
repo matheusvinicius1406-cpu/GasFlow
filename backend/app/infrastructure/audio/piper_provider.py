@@ -25,7 +25,7 @@ class PiperTTSProvider(TextToSpeechProvider):
     def provider_name(self) -> str:
         return f"piper-{self._voice}"
 
-    def synthesize(self, text: str, language: str = "pt-BR") -> SpeechResult:
+    def synthesize(self, text: str, language: str = "pt-BR") -> SpeechResult:  # noqa: ARG002  # contrato do TTSProvider: language declarado na interface
         if not text:
             return SpeechResult(error="TTS_EMPTY_TEXT", provider=self.provider_name)
         if not self.health_check():

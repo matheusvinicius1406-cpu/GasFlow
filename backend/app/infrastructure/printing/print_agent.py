@@ -192,7 +192,7 @@ class PrintAgent:
         """Set printer status to offline."""
         self._printer_status = PrinterStatus.OFFLINE
 
-    def set_printer_error(self, error: str = ""):
+    def set_printer_error(self, _error: str = ""):
         """Set printer status to error."""
         self._printer_status = PrinterStatus.ERROR
 

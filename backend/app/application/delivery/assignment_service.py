@@ -69,28 +69,10 @@ class AssignmentService:
         """
         try:
             # 1. Find driver
-            driver = self.driver_repo.find_by_id_as_model(driver_codigo)
-            if not driver:
-                raise ValueError("DRIVER_NOT_FOUND")
-            if driver.tenant_id != tenant_id:
-                raise ValueError("TENANT_MISMATCH")
-            if not driver.ativo:
-                raise ValueError("DRIVER_INACTIVE")
-            if driver.status not in ("AVAILABLE",):
-                raise ValueError(f"DRIVER_NOT_AVAILABLE: status={driver.status}")
+            driver = self._load_driver(tenant_id, driver_codigo)
 
-            # 2. Validate vehicle capacity if items provided
-            if vehicle_id and order_items:
-                for product_codigo, quantity in order_items.items():
-                    if not self.vehicle_repo.can_carry(vehicle_id, product_codigo, quantity):
-                        raise ValueError(f"INSUFFICIENT_CAPACITY: {product_codigo} needs {quantity}")
-
-            # 3. Reserve vehicle load if vehicle and items provided
-            if vehicle_id and order_items:
-                for product_codigo, quantity in order_items.items():
-                    ok = self.vehicle_repo.reserve_load(vehicle_id, product_codigo, quantity)
-                    if not ok:
-                        raise ValueError(f"RESERVE_FAILED: {product_codigo} {quantity}")
+            # 2/3. Validate vehicle capacity and reserve load if items provided
+            self._reserve_vehicle_capacity(vehicle_id, order_items)
 
             # 4. Update driver status to BUSY
             driver.status = "BUSY"
@@ -134,6 +116,32 @@ class AssignmentService:
             self.db.rollback()
             raise
 
+    def _load_driver(self, tenant_id: str, driver_codigo: str):
+        """Busca o entregador e valida tenant/ativo/disponibilidade."""
+        driver = self.driver_repo.find_by_id_as_model(driver_codigo)
+        if not driver:
+            raise ValueError("DRIVER_NOT_FOUND")
+        if driver.tenant_id != tenant_id:
+            raise ValueError("TENANT_MISMATCH")
+        if not driver.ativo:
+            raise ValueError("DRIVER_INACTIVE")
+        if driver.status not in ("AVAILABLE",):
+            raise ValueError(f"DRIVER_NOT_AVAILABLE: status={driver.status}")
+        return driver
+
+    def _reserve_vehicle_capacity(self, vehicle_id: Optional[int], order_items: Optional[Dict[str, int]]) -> None:
+        """Valida a capacidade do veículo e reserva a carga (se itens informados)."""
+        if vehicle_id and order_items:
+            for product_codigo, quantity in order_items.items():
+                if not self.vehicle_repo.can_carry(vehicle_id, product_codigo, quantity):
+                    raise ValueError(f"INSUFFICIENT_CAPACITY: {product_codigo} needs {quantity}")
+
+        if vehicle_id and order_items:
+            for product_codigo, quantity in order_items.items():
+                ok = self.vehicle_repo.reserve_load(vehicle_id, product_codigo, quantity)
+                if not ok:
+                    raise ValueError(f"RESERVE_FAILED: {product_codigo} {quantity}")
+
     def _notify_driver(self, delivery_id: str, tenant_id: str, driver, driver_codigo: str) -> None:
         """
         Enfileira o zap do entregador na atribuição (F3).
@@ -160,6 +168,7 @@ class AssignmentService:
             try:
                 template = SettingsService(session).get_value("driver.assignment_notification_template", None)
             except Exception:
+                logger.debug("assignment.template_unavailable", exc_info=True)
                 template = None  # sem settings, usa o template default
             notifier = DriverAssignmentNotifier(SQLAlchemyAutomationRepository(session, tenant_id))
             result = notifier.notify_assignment(

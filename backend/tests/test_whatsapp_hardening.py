@@ -430,19 +430,19 @@ class TestCustomerOwnership:
 
 class TestConfirmationHardening:
     def test_ambiguous_confirmation_rejected(self, gateway, sample_data, repos):
-        conv_id = _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
+        _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
         result = gateway.process_incoming(_make_msg(text="talvez"))
         assert result["status"] == "processed"
         assert "confirmação clara" in result["outbound_text"].lower() or "sim" in result["outbound_text"].lower()
 
     def test_positive_confirmation(self, gateway, sample_data, repos):
-        conv_id = _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
+        _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
         result = gateway.process_incoming(_make_msg(text="sim"))
         # Should create order
         assert result["outbound_text"] is not None
 
     def test_negative_confirmation_cancels(self, gateway, sample_data, repos):
-        conv_id = _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
+        _create_conversation_with_draft(repos, ConversationState.AWAITING_CONFIRMATION)
         result = gateway.process_incoming(_make_msg(text="não"))
         assert "cancelado" in result["outbound_text"].lower()
 
@@ -455,7 +455,7 @@ class TestConfirmationHardening:
 class TestStockRecheck:
     def test_insufficient_stock_rejected(self, gateway, sample_data, repos):
         """AGUA20 has only 1 in stock. Order for 2 should fail recheck."""
-        conv = repos["conv_repo"].create(
+        repos["conv_repo"].create(
             Conversation(
                 account_id="primary",
                 customer_phone="5511999887766",

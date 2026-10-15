@@ -18,7 +18,7 @@ concurrency:
 jobs:
 
   backend:
-    name: Backend (ruff + pytest)
+    name: Backend (ruff + vulture + pytest)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -40,6 +40,8 @@ jobs:
         run: ruff check app tests
       - name: Type check (mypy baseline — novos arquivos nascem verificados)
         run: python -m mypy app
+      - name: Dead code (vulture — zero findings desde a Onda A/E4)
+        run: python -m vulture app --min-confidence 80
       - name: Test (pytest)
         run: python -m pytest tests/ -q
 

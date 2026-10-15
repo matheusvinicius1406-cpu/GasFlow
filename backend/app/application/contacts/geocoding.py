@@ -483,6 +483,7 @@ class GeocodingService:
 
             return str(SettingsService(self.db).get_value(chave, "") or "")
         except Exception:
+            logger.debug("geocoding.settings_unavailable", exc_info=True)
             return ""
 
 

@@ -75,10 +75,10 @@ class MockPixProvider(PspProvider):
         amount: float,
         txid: str,
         description: str = "",
-        key: str = "",
-        merchant_name: str = "GasFlow",
-        merchant_city: str = "SAO PAULO",
-        webhook_url: str = "",
+        key: str = "",  # noqa: ARG002  # assinatura do PspProvider: mock nao persiste chave/loja/webhook
+        merchant_name: str = "GasFlow",  # noqa: ARG002  # assinatura do PspProvider: mock nao persiste chave/loja/webhook
+        merchant_city: str = "SAO PAULO",  # noqa: ARG002  # assinatura do PspProvider: mock nao persiste chave/loja/webhook
+        webhook_url: str = "",  # noqa: ARG002  # assinatura do PspProvider: mock nao persiste chave/loja/webhook
     ) -> Dict[str, Any]:
         record = {
             "psp_txid": txid,

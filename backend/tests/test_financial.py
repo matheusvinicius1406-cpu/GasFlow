@@ -359,7 +359,7 @@ class TestReceivable:
         _seed_order(db)
         repo = SQLAlchemyReceivableRepository(db)
         ledger = SQLAlchemyFinancialLedgerRepository(db)
-        r = CreateReceivableUseCase(repo, ledger).execute(
+        CreateReceivableUseCase(repo, ledger).execute(
             "ORD001", "000001", Decimal("100.00"), due_date=datetime.utcnow() - timedelta(days=5)
         )
         # Update overdue
@@ -450,7 +450,7 @@ class TestExpense:
 class TestCashMovement:
     def test_receipt_increases_balance(self, db):
         repo = SQLAlchemyCashMovementRepository(db)
-        m = repo.create(
+        repo.create(
             CashMovement(
                 type=CashMovementType.RECEIPT,
                 amount=Decimal("100.00"),
@@ -542,7 +542,7 @@ class TestCashMovement:
 class TestLedger:
     def test_ledger_immutable(self, db):
         repo = SQLAlchemyFinancialLedgerRepository(db)
-        entry = repo.create(
+        repo.create(
             FinancialLedgerEntry(
                 event_type=LedgerEventType.PAYMENT_CREATED,
                 amount=Decimal("100.00"),
@@ -632,7 +632,7 @@ class TestTransactions:
             SQLAlchemyCashMovementRepository(db),
             SQLAlchemyFinancialLedgerRepository(db),
         )
-        result = uc.execute({"description": "Test", "amount": Decimal("50.00")})
+        uc.execute({"description": "Test", "amount": Decimal("50.00")})
         assert db.query(ExpenseModel).count() == 1
         assert db.query(CashMovementModel).count() == 1
 

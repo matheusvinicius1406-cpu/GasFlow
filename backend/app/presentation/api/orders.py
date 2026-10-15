@@ -121,7 +121,7 @@ def create_order(
 def list_orders(
     status: Optional[str] = Query(default=None),
     repos: dict = Depends(_get_repositories),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListOrdersUseCase(repos["order"])
     return use_case.execute(status=status)
@@ -131,7 +131,7 @@ def list_orders(
 def get_order(
     codigo: str,
     repos: dict = Depends(_get_repositories),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = GetOrderUseCase(
         order_repo=repos["order"],

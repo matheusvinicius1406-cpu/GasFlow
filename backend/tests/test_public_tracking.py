@@ -67,7 +67,7 @@ class TestToken:
         assert verify_public_tracking_token(f"{other}.{signature}") is None
 
     def test_token_expirado_e_recusado(self):
-        token = issue_public_tracking_token(tenant_id="t1", driver_id="d1", ttl_seconds=60)
+        issue_public_tracking_token(tenant_id="t1", driver_id="d1", ttl_seconds=60)
         # reemite com exp no passado assinando com o mesmo segredo
         from app.application.tracking import public_tracking as pt
 

@@ -196,7 +196,7 @@ class TestLivePerformance:
         times = []
         for _ in range(100):
             start = time.perf_counter()
-            adapter = WhatsAppWebAdapter("primary")
+            WhatsAppWebAdapter("primary")
             elapsed = (time.perf_counter() - start) * 1000
             times.append(elapsed)
 
@@ -235,7 +235,7 @@ class TestLivePerformance:
         times = []
         for _ in range(10):
             start = time.perf_counter()
-            resp = httpx.get("http://localhost:3000/api/whatsapp/accounts", timeout=5)
+            httpx.get("http://localhost:3000/api/whatsapp/accounts", timeout=5)
             elapsed = (time.perf_counter() - start) * 1000
             times.append(elapsed)
 

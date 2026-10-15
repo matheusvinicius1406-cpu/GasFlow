@@ -21,7 +21,7 @@ class MockLLMProvider(LLMProvider):
     def model_name(self) -> str:
         return "mock-model-v1"
 
-    def generate(self, messages: List[LLMMessage], temperature: float = 0.3, max_tokens: int = 2048) -> LLMResponse:
+    def generate(self, messages: List[LLMMessage], temperature: float = 0.3, max_tokens: int = 2048) -> LLMResponse:  # noqa: ARG002  # contrato do LLMProvider: temperature/max_tokens declarados na interface
         self._call_count += 1
         if not self._available:
             return LLMResponse(content="", error="AI_PROVIDER_UNAVAILABLE")
@@ -49,7 +49,11 @@ class MockLLMProvider(LLMProvider):
         )
 
     def generate_structured(
-        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+        self,
+        messages: List[LLMMessage],
+        schema: Dict[str, Any],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
     ) -> LLMResponse:
         return self.generate(messages, temperature, max_tokens)
 
@@ -96,13 +100,13 @@ class MockLLMProvider(LLMProvider):
             usage=LLMUsage(input_tokens=100, output_tokens=50, model=self.model_name),
         )
 
-    def _default_tool_selection(self, text: str) -> LLMResponse:
+    def _default_tool_selection(self, _text: str) -> LLMResponse:
         return LLMResponse(
             content=json.dumps({"tool": "get_customer", "arguments": {}, "requires_confirmation": False}),
             usage=LLMUsage(input_tokens=100, output_tokens=30, model=self.model_name),
         )
 
-    def _default_format_response(self, text: str) -> LLMResponse:
+    def _default_format_response(self, _text: str) -> LLMResponse:
         # Try to extract data from the text and format it
         return LLMResponse(
             content="Aqui estão os dados encontrados.",

@@ -34,18 +34,15 @@ class ExecutionProcessor:
         self.whatsapp_bridge = whatsapp_bridge or WhatsAppSendBridge()
         self._audit_log: list = []
 
-    async def process_execution(self, execution_id: int) -> Dict[str, Any]:
-        """Process a single execution: validate → send → track → audit."""
-        execution = self.automation_repo.list_executions(limit=500)
-        exec_entity = None
-        for e in execution:
+    def _find_execution(self, execution_id: int) -> Optional[Any]:
+        """Localiza a execução pelo id (varre as 500 mais recentes)."""
+        for e in self.automation_repo.list_executions(limit=500):
             if e.id == execution_id:
-                exec_entity = e
-                break
+                return e
+        return None
 
-        if not exec_entity:
-            return {"success": False, "error": "Execution not found"}
-
+    def _preflight_failure(self, execution_id: int, exec_entity: Any) -> Optional[Dict[str, Any]]:
+        """Falha prévia (status inválido, sem telefone ou sem texto) ou None."""
         # Only process APPROVED or PENDING executions
         if exec_entity.status not in (ExecutionStatus.PENDING, ExecutionStatus.APPROVED):
             return {"success": False, "error": f"Execution status is {exec_entity.status.value}, cannot process"}
@@ -68,6 +65,18 @@ class ExecutionProcessor:
                 error_message="Empty message",
             )
             return {"success": False, "error": "Empty message"}
+        return None
+
+    async def process_execution(self, execution_id: int) -> Dict[str, Any]:
+        """Process a single execution: validate → send → track → audit."""
+        exec_entity = self._find_execution(execution_id)
+
+        if not exec_entity:
+            return {"success": False, "error": "Execution not found"}
+
+        preflight = self._preflight_failure(execution_id, exec_entity)
+        if preflight is not None:
+            return preflight
 
         # Get the rule to check account_id
         rule = self.automation_repo.get_rule(exec_entity.rule_id)

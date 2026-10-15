@@ -35,7 +35,7 @@ def _get_repository(db: Session = Depends(get_db), ctx: TenantContext = Depends(
 def create_driver(
     driver: DeliveryDriverCreate,
     repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     data = driver.model_dump()
     # Check username uniqueness
@@ -53,7 +53,7 @@ def create_driver(
 @router.get("/", response_model=list[DeliveryDriverResponse])
 def list_drivers(
     repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     use_case = ListDriversUseCase(repository)
     return use_case.execute()
@@ -63,7 +63,7 @@ def list_drivers(
 def get_driver(
     codigo: str,
     repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Retrato do entregador — mesmos campos que o `PUT` devolve.
 
@@ -82,7 +82,7 @@ def update_driver(
     codigo: str,
     body: DeliveryDriverUpdate,
     repository: SQLAlchemyDeliveryDriverRepository = Depends(_get_repository),
-    ctx: TenantContext = Depends(require_admin),
+    _ctx: TenantContext = Depends(require_admin),
 ):
     """Edita os campos editáveis do entregador (\u00e1rea admin).
 

@@ -450,13 +450,10 @@ def _limite_endereco(texto: str) -> int:
     return fim
 
 
-def _run_nome_com_fim(texto: str) -> Tuple[Optional[str], int, int]:
-    """Run de tokens "nome de pessoa" no começo de ``texto``.
+def _coleta_run_nome(texto: str) -> Tuple[List[str], List[int], int]:
+    """Coleta o run de tokens "nome de pessoa" no começo de ``texto``.
 
-    Devolve ``(nome, início, fim)`` com os offsets em ``texto``: é o que permite
-    reaproveitar o resto da cauda sem descartar nada (idempotência) — um simples
-    ``texto.find(nome)`` falharia quando o run normaliza pontuação ("Esqui:" x
-    "Esqui") e aí a cauda inteira seria duplicada.
+    Devolve ``(coletados, fins, inicio)`` com os offsets em ``texto``.
     """
     coletados: List[str] = []
     fins: List[int] = []
@@ -486,6 +483,18 @@ def _run_nome_com_fim(texto: str) -> Tuple[Optional[str], int, int]:
             fins.append(match.end())
             continue
         break
+    return coletados, fins, inicio
+
+
+def _run_nome_com_fim(texto: str) -> Tuple[Optional[str], int, int]:
+    """Run de tokens "nome de pessoa" no começo de ``texto``.
+
+    Devolve ``(nome, início, fim)`` com os offsets em ``texto``: é o que permite
+    reaproveitar o resto da cauda sem descartar nada (idempotência) — um simples
+    ``texto.find(nome)`` falharia quando o run normaliza pontuação ("Esqui:" x
+    "Esqui") e aí a cauda inteira seria duplicada.
+    """
+    coletados, fins, inicio = _coleta_run_nome(texto)
     # Um conector solto no fim ("Dona e") não é nome.
     while coletados and _road_key(coletados[-1]) in _CONECTORES:
         coletados.pop()
@@ -603,6 +612,74 @@ def formatar_nome_final(
     return corpo or (nome or "")
 
 
+def _separar_entre(texto: str) -> Tuple[Optional[str], Optional[str], str]:
+    """1) entre ruas — parênteses primeiro, depois o solto. Devolve (entre, nome_paren, texto)."""
+    entre, nome_paren, texto = _classificar_parenteses(texto)
+    if not entre:
+        m = _ENTRE_SOLTO.search(texto)
+        if m:
+            entre = f"Entre {_normaliza_lado(_limpa_pontas(m.group(1)))} e {_normaliza_lado(_limpa_pontas(m.group(2)))}"
+            texto = texto[: m.start()].strip()
+        else:
+            m = _ESQ_COM.search(texto)
+            if m:
+                entre = f"Esquina com {_limpa_pontas(m.group(1))}"
+                texto = texto[: m.start()].strip()
+    return entre, nome_paren, texto
+
+
+def _nome_da_cauda(cauda: str, nome: Optional[str]) -> Tuple[Optional[str], str, str, bool]:
+    """4) nome da pessoa na cauda (texto DEPOIS do endereço).
+
+    Devolve ``(nome, antes, depois, da_cauda)``. O run devolve os offsets
+    justamente para reaproveitar o resto da cauda.
+    """
+    antes = ""
+    depois = ""
+    da_cauda = False
+    if cauda and not nome:
+        desloc = 2 if cauda.startswith("- ") else 0
+        alvo = cauda[desloc:]
+        nome, ini, fim = _run_nome_com_fim(alvo)
+        if not nome:
+            # "Parque Guajará - Luis Klaus": o run começa numa palavra de via e
+            # para; o nome está DEPOIS do travessão.
+            sep = alvo.find(" - ")
+            if sep >= 0:
+                pos = sep + 3
+                nome, ini2, fim2 = _run_nome_com_fim(alvo[pos:])
+                if nome:
+                    ini, fim = pos + ini2, pos + fim2
+        if nome:
+            da_cauda = True
+            antes = _normaliza_espacos(cauda[: desloc + ini]).strip(" \t-.,;:()")
+            depois = _normaliza_espacos(cauda[desloc + fim :]).strip(" \t-.,;:()")
+    return nome, antes, depois, da_cauda
+
+
+def _nome_tratamento(texto: str, endereco_bruto: str, cauda: str, nome: Optional[str]) -> Tuple[Optional[str], str]:
+    """4) nome por tratamento final ("... Dona Josi") + remoção do nome repetido.
+
+    Devolve ``(nome, endereco_bruto)``.
+    """
+    nome_texto = None
+    if not nome:
+        trat = _TRATAMENTO_NOME.search(texto)
+        if trat:
+            candidato = _normaliza_espacos(trat.group(0))
+            # Só aceita se o texto existir de verdade onde ainda há texto: em
+            # "... Dona Josi N°5" o Nº do imóvel já saiu como número, e o "º"
+            # é letra em Unicode (\w) — o match casaria contra um endereço já
+            # cortado e o nome sairia DUPLICADO no final.
+            if candidato in endereco_bruto or (cauda and candidato in cauda):
+                nome_texto = candidato
+                nome = nome_texto
+    # O nome não pode ficar repetido no endereço ("... Dona Socorro - Dona Socorro").
+    if nome_texto:
+        endereco_bruto = _normaliza_espacos(endereco_bruto.replace(nome_texto, " "))
+    return nome, endereco_bruto
+
+
 def renomear(nome_bruto: Optional[str]) -> Dict[str, Any]:
     """Transforma UM nome bruto no objeto estruturado do renomeador.
 
@@ -635,17 +712,7 @@ def renomear(nome_bruto: Optional[str]) -> Dict[str, Any]:
     texto = _split_legacy(bruto)
 
     # 1) entre ruas — parênteses primeiro, depois o solto.
-    entre, nome_paren, texto = _classificar_parenteses(texto)
-    if not entre:
-        m = _ENTRE_SOLTO.search(texto)
-        if m:
-            entre = f"Entre {_normaliza_lado(_limpa_pontas(m.group(1)))} e {_normaliza_lado(_limpa_pontas(m.group(2)))}"
-            texto = texto[: m.start()].strip()
-        else:
-            m = _ESQ_COM.search(texto)
-            if m:
-                entre = f"Esquina com {_limpa_pontas(m.group(1))}"
-                texto = texto[: m.start()].strip()
+    entre, nome_paren, texto = _separar_entre(texto)
 
     # 2) nome à esquerda (antes do endereço) — "Dona Fulana Rua X…".
     nome_esquerda, texto = _extrair_nome_esquerda(texto)
@@ -669,42 +736,8 @@ def renomear(nome_bruto: Optional[str]) -> Dict[str, Any]:
     # 4) nome da pessoa: parêntese humano > run após o endereço > tratamento.
     # O run devolve os offsets justamente para reaproveitar o resto da cauda.
     nome = nome_paren or nome_esquerda
-    antes = ""
-    depois = ""
-    da_cauda = False
-    if cauda and not nome:
-        desloc = 2 if cauda.startswith("- ") else 0
-        alvo = cauda[desloc:]
-        nome, ini, fim = _run_nome_com_fim(alvo)
-        if not nome:
-            # "Parque Guajará - Luis Klaus": o run começa numa palavra de via e
-            # para; o nome está DEPOIS do travessão.
-            sep = alvo.find(" - ")
-            if sep >= 0:
-                pos = sep + 3
-                nome, ini2, fim2 = _run_nome_com_fim(alvo[pos:])
-                if nome:
-                    ini, fim = pos + ini2, pos + fim2
-        if nome:
-            da_cauda = True
-            antes = _normaliza_espacos(cauda[: desloc + ini]).strip(" \t-.,;:()")
-            depois = _normaliza_espacos(cauda[desloc + fim :]).strip(" \t-.,;:()")
-
-    nome_texto = None
-    if not nome:
-        trat = _TRATAMENTO_NOME.search(texto)
-        if trat:
-            candidato = _normaliza_espacos(trat.group(0))
-            # Só aceita se o texto existir de verdade onde ainda há texto: em
-            # "... Dona Josi N°5" o Nº do imóvel já saiu como número, e o "º"
-            # é letra em Unicode (\w) — o match casaria contra um endereço já
-            # cortado e o nome sairia DUPLICADO no final.
-            if candidato in endereco_bruto or (cauda and candidato in cauda):
-                nome_texto = candidato
-                nome = nome_texto
-    # O nome não pode ficar repetido no endereço ("... Dona Socorro - Dona Socorro").
-    if nome_texto:
-        endereco_bruto = _normaliza_espacos(endereco_bruto.replace(nome_texto, " "))
+    nome, antes, depois, da_cauda = _nome_da_cauda(cauda, nome)
+    nome, endereco_bruto = _nome_tratamento(texto, endereco_bruto, cauda, nome)
 
     # 4b) nada da cauda é descartado: o que não virou nome vira referência (fica
     #     antes de " - " no nome final); o que vem DEPOIS do nome é reapostado.

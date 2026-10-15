@@ -991,7 +991,7 @@ def test_adversarial_06_movement_without_stock_change(db):
     seed_product(db)
     repo = SQLAlchemyInventoryRepository(db)
     repo.add_stock_atomic("P00001", 50, reason="Initial")
-    inv = db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
+    db.query(InventoryModel).filter(InventoryModel.product_codigo == "P00001").first()
     movements = db.query(StockMovementModel).filter(StockMovementModel.product_codigo == "P00001").count()
     assert movements == 1
 

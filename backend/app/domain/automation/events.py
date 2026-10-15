@@ -9,8 +9,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 from enum import Enum
+import logging
 import uuid
 import threading
+
+logger = logging.getLogger("gasflow.automation.events")
 
 
 # ── Event Types ─────────────────────────────────────────
@@ -106,6 +109,11 @@ class EventBus:
             try:
                 handler(event)
             except Exception:
+                logger.warning(
+                    "automation.event_handler_failed",
+                    extra={"event": event.event_type.value, "handler": getattr(handler, "__name__", repr(handler))},
+                    exc_info=True,
+                )
                 success = False
         return success
 

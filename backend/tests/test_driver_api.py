@@ -171,7 +171,7 @@ class TestDriverAuth:
 class TestDriverDeliveries:
     def test_list_own_deliveries(self, store, setup_data):
         """Driver A sees only their deliveries."""
-        token = _login_driver(store, "drv-a")
+        _login_driver(store, "drv-a")
         # drv-a has no assigned deliveries yet
         own = [
             d for d in store["deliveries"].values() if d.get("driver_id") == "drv-a" and d.get("tenant_id") == "default"
@@ -179,7 +179,7 @@ class TestDriverDeliveries:
         assert len(own) == 0  # del-a has no driver yet
 
     def test_driver_b_sees_own(self, store, setup_data):
-        token = _login_driver(store, "drv-b")
+        _login_driver(store, "drv-b")
         own = [
             d for d in store["deliveries"].values() if d.get("driver_id") == "drv-b" and d.get("tenant_id") == "default"
         ]
@@ -725,7 +725,7 @@ class TestAdversarial:
     def test_37_mass_assignment(self, store, setup_data):
         from app.presentation.api.logistics.driver_api import ActionRequest
 
-        d = store["deliveries"]["del-a"]
+        store["deliveries"]["del-a"]
         # Driver API doesn't expose tenant_id/user_id mutation
         # ActionRequest only has safe fields
         req_fields = set(ActionRequest().model_dump().keys())

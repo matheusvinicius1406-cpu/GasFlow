@@ -166,6 +166,41 @@ class OverpassProvider(RateLimitedHttp):
         res: PasseIntersecoes,
     ) -> PasseIntersecoes:
         # ── âncoras ───────────────────────────────────────
+        ancoras = self._coletar_ancoras(nome, eixo, nos)
+
+        if len(ancoras) < 2:
+            # §8.3.3: menos de duas âncoras não dá reta para interpolar.
+            res.ancoras = len(ancoras)
+            res.motivo = "poucas_ancoras"
+            return res
+
+        res.ancoras = len(ancoras)
+        ancoras.sort()
+        res.cobertura_eixo = round(ancoras[-1][0] - ancoras[0][0], 4)
+        res.inversoes_numero = sum(1 for (_, a), (_, b) in zip(ancoras, ancoras[1:]) if b < a)
+
+        # ── cruzamentos ───────────────────────────────────
+        por_nome = self._coletar_cruzamentos(eixo, ids_rua, vias)
+
+        res.cruzamentos = len(por_nome)
+        if res.cruzamentos < 2:
+            res.motivo = "poucos_cruzamentos"
+            return res
+
+        # ── contrato ──────────────────────────────────────
+        intersecoes = _montar_intersecoes(por_nome, ancoras)
+
+        if len(intersecoes) < 2:
+            # §8.3.6
+            res.intersecoes = []
+            res.motivo = "menos_de_duas_intersecoes"
+            return res
+
+        res.intersecoes = intersecoes
+        res.motivo = "ok"
+        return res
+
+    def _coletar_ancoras(self, nome: str, eixo: List[Tuple[float, float]], nos: List[dict]) -> List[Tuple[float, int]]:
         ancoras: List[Tuple[float, int]] = []
         for no in nos:
             tags = no.get("tags") or {}
@@ -189,19 +224,11 @@ class OverpassProvider(RateLimitedHttp):
             if perpendicular > self._tolerancia:
                 continue
             ancoras.append((posicao, numero))
+        return ancoras
 
-        if len(ancoras) < 2:
-            # §8.3.3: menos de duas âncoras não dá reta para interpolar.
-            res.ancoras = len(ancoras)
-            res.motivo = "poucas_ancoras"
-            return res
-
-        res.ancoras = len(ancoras)
-        ancoras.sort()
-        res.cobertura_eixo = round(ancoras[-1][0] - ancoras[0][0], 4)
-        res.inversoes_numero = sum(1 for (_, a), (_, b) in zip(ancoras, ancoras[1:]) if b < a)
-
-        # ── cruzamentos ───────────────────────────────────
+    def _coletar_cruzamentos(
+        self, eixo: List[Tuple[float, float]], ids_rua: set, vias: List[dict]
+    ) -> Dict[str, List[float]]:
         pontos_rua = set(eixo)
         por_nome: Dict[str, List[float]] = {}
         for via in vias:
@@ -215,7 +242,7 @@ class OverpassProvider(RateLimitedHttp):
             # Só "estar por perto" não conta: rua paralela entraria na lista.
             # `_ponto` valida a coordenada antes de comparar: nó sem lat/lon não
             # compartilha nó nenhum (e não pode virar cruzamento).
-            compartilhados = [ponto for ponto in (_ponto(g) for g in geom) if ponto is not None and ponto in pontos_rua]
+            compartilhados = _pontos_compartilhados(pontos_rua, geom)
             if not compartilhados:
                 continue
             for ponto_cruz in compartilhados:
@@ -223,32 +250,7 @@ class OverpassProvider(RateLimitedHttp):
                 if projetado is None:
                     continue
                 por_nome.setdefault(str(nome_via).strip(), []).append(projetado[0])
-
-        res.cruzamentos = len(por_nome)
-        if res.cruzamentos < 2:
-            res.motivo = "poucos_cruzamentos"
-            return res
-
-        # ── contrato ──────────────────────────────────────
-        intersecoes: List[Dict[str, Any]] = []
-        for nome_via, posicoes in por_nome.items():
-            for posicao in posicoes:
-                numero = estimar_numero(posicao, ancoras)
-                if numero is None:
-                    continue  # fora da faixa das âncoras ⇒ fora da lista (D2)
-                intersecoes.append({"nome": nome_via, "numero": int(numero)})
-                break  # um item por via: dedup por nome (§8.8.3)
-        intersecoes.sort(key=lambda item: item["numero"])
-
-        if len(intersecoes) < 2:
-            # §8.3.6
-            res.intersecoes = []
-            res.motivo = "menos_de_duas_intersecoes"
-            return res
-
-        res.intersecoes = intersecoes
-        res.motivo = "ok"
-        return res
+        return por_nome
 
     # ── Queries (três, separadas — §8.8.1) ───────────────
 
@@ -342,6 +344,24 @@ def _mesma_via(a: str, b: str) -> bool:
     if not a or not b:
         return False
     return a == b or a in b or b in a
+
+
+def _pontos_compartilhados(pontos_rua: set, geom: Sequence[Any]) -> List[Tuple[float, float]]:
+    """Geometria da via cujos pontos compartilham nó com o logradouro."""
+    return [ponto for ponto in (_ponto(g) for g in geom) if ponto is not None and ponto in pontos_rua]
+
+
+def _montar_intersecoes(por_nome: Dict[str, List[float]], ancoras: List[Tuple[float, int]]) -> List[Dict[str, Any]]:
+    intersecoes: List[Dict[str, Any]] = []
+    for nome_via, posicoes in por_nome.items():
+        for posicao in posicoes:
+            numero = estimar_numero(posicao, ancoras)
+            if numero is None:
+                continue  # fora da faixa das âncoras ⇒ fora da lista (D2)
+            intersecoes.append({"nome": nome_via, "numero": int(numero)})
+            break  # um item por via: dedup por nome (§8.8.3)
+    intersecoes.sort(key=lambda item: item["numero"])
+    return intersecoes
 
 
 def _ponto(elemento: Any) -> Optional[Tuple[float, float]]:

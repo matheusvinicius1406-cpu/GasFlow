@@ -201,6 +201,7 @@ def _backup_before_migration() -> None:
     except Exception:
         # Tabela ausente/ilegível = banco pré-versionamento: tem migration a
         # fazer (a _ensure_schema_version criará a tabela) → backupear.
+        logging.getLogger("gasflow.init_db").debug("init_db.schema_version_unreadable", exc_info=True)
         pending = True
     if not pending:
         return
@@ -545,6 +546,7 @@ def _reorg_cleanup() -> None:
         try:
             row = conn.execute(text("SELECT value FROM system_settings WHERE id = :k"), {"k": MARKER}).fetchone()
         except Exception:
+            logger.debug("reorg.marker_unreadable", exc_info=True)
             row = None  # tabela ainda não existe — segue e cria via INSERT
         if row:
             return  # já executada
@@ -571,6 +573,7 @@ def _reorg_cleanup() -> None:
                 conn.execute(text(f"DELETE FROM {table}"))
             except Exception:
                 # Tabela pode não existir em bases novas — seguir.
+                logger.debug("reorg.table_missing", extra={"table": table}, exc_info=True)
                 pass
 
         # ── Catálogo REAL informado pelo dono ──
@@ -650,6 +653,9 @@ def _run_alembic_upgrade(url: str, backend_dir=None) -> bool:
         from alembic import command
         from alembic.config import Config
     except Exception:  # pragma: no cover — alembic é dependência do projeto
+        import logging
+
+        logging.getLogger("gasflow.init_db").warning("init_db.alembic_unavailable", exc_info=True)
         return False
 
     cfg = Config(str(ini))

@@ -330,6 +330,22 @@ def _build_contact(card: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return data
 
 
+def _apply_field(card: Dict[str, Any], tag: str, params: Dict[str, str], value: str) -> None:
+    """Preenche o card atual com um campo (``FN``/``N``/``ADR``/``NOTE``/``TEL``)."""
+    if tag == "FN":
+        card["fn"] = _decode_value(value, params) or None
+    elif tag == "N":
+        card["n"] = _decode_value(value, params) or None
+    elif tag == "ADR":
+        card["adr"].append(_decode_value(value, params))
+    elif tag == "NOTE":
+        card["note"] = _decode_value(value, params) or None
+    elif tag == "TEL":
+        decoded = _decode_value(value, params)
+        if decoded:
+            card["tel"].append(decoded)
+
+
 def parse_vcf(raw: str) -> List[Dict[str, Any]]:
     """Extrai contatos de um vCard 2.1/3.0/4.0 — **um item por card**.
 
@@ -352,17 +368,6 @@ def parse_vcf(raw: str) -> List[Dict[str, Any]]:
                 contacts.append(contact)
             card = _new_card()
             continue
-        if tag == "FN":
-            card["fn"] = _decode_value(value, params) or None
-        elif tag == "N":
-            card["n"] = _decode_value(value, params) or None
-        elif tag == "ADR":
-            card["adr"].append(_decode_value(value, params))
-        elif tag == "NOTE":
-            card["note"] = _decode_value(value, params) or None
-        elif tag == "TEL":
-            decoded = _decode_value(value, params)
-            if decoded:
-                card["tel"].append(decoded)
+        _apply_field(card, tag, params, value)
 
     return contacts

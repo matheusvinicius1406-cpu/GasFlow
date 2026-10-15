@@ -224,62 +224,62 @@ class TestRetryPolicy:
 # ── Session Manager Tests ───────────────────────────────
 
 
+class _MockProvider(WhatsAppProvider):
+    @property
+    def provider_type(self):
+        return ProviderType.CURRENT
+
+    @property
+    def account_id(self):
+        return "test"
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    async def logout(self):
+        pass
+
+    async def get_connection_state(self):
+        return ConnectionState.DISCONNECTED
+
+    async def get_connection_info(self):
+        return ConnectionInfo()
+
+    def is_connected(self):
+        return False
+
+    async def get_qr_code(self):
+        return None
+
+    async def send_text(self, opts):
+        return SendResult(success=False)
+
+    async def send_media(self, opts):
+        return SendResult(success=False)
+
+    async def send_typing(self, r):
+        return False
+
+    async def mark_as_read(self, m):
+        return False
+
+    async def get_contacts(self):
+        return []
+
+    async def get_contact(self, j):
+        return None
+
+    async def get_session_info(self):
+        return {}
+
+
 class TestSessionManager:
     def test_register_provider(self):
         mgr = WhatsAppSessionManager()
-
-        class MockProvider(WhatsAppProvider):
-            @property
-            def provider_type(self):
-                return ProviderType.CURRENT
-
-            @property
-            def account_id(self):
-                return "test"
-
-            async def start(self):
-                pass
-
-            async def stop(self):
-                pass
-
-            async def logout(self):
-                pass
-
-            async def get_connection_state(self):
-                return ConnectionState.DISCONNECTED
-
-            async def get_connection_info(self):
-                return ConnectionInfo()
-
-            def is_connected(self):
-                return False
-
-            async def get_qr_code(self):
-                return None
-
-            async def send_text(self, opts):
-                return SendResult(success=False)
-
-            async def send_media(self, opts):
-                return SendResult(success=False)
-
-            async def send_typing(self, r):
-                return False
-
-            async def mark_as_read(self, m):
-                return False
-
-            async def get_contacts(self):
-                return []
-
-            async def get_contact(self, j):
-                return None
-
-            async def get_session_info(self):
-                return {}
-
-        provider = MockProvider()
+        provider = _MockProvider()
         mgr.register_provider("primary", provider)
         assert mgr.get_provider_count() == 1
         assert mgr.get_provider("primary") is provider

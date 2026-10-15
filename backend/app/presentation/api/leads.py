@@ -108,7 +108,7 @@ from app.domain.security.models import TenantContext  # noqa: E402
 
 
 @router.get("/leads")
-def list_leads(limit: int = 100, ctx: TenantContext = Depends(require_admin)):
+def list_leads(limit: int = 100, _ctx: TenantContext = Depends(require_admin)):
     db = _db()
     try:
         rows = db.query(LeadModel).order_by(LeadModel.created_at.desc()).limit(min(limit, 500)).all()

@@ -21,6 +21,7 @@ Ollama local não responde, a IA degrada com mensagem controlada.
 
 import hashlib
 import json
+import logging
 import threading
 import time
 import uuid
@@ -39,6 +40,8 @@ from app.infrastructure.ai.repositories import SQLAlchemyConversationRepository,
 from app.application.ai.engine import AIEngine
 from app.application.ai.tools_impl import AIToolsFactory
 from app.domain.ai.tools import ToolRegistry, ToolDefinition, ToolType, ToolPermission
+
+logger = logging.getLogger("gasflow.ai.api")
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -483,7 +486,7 @@ def list_conversations(db: Session = Depends(get_db), ctx: TenantContext = Depen
 
 
 @router.get("/audit")
-def get_audit_log(limit: int = 50, ctx: TenantContext = Depends(get_tenant_context)):
+def get_audit_log(limit: int = 50, _ctx: TenantContext = Depends(get_tenant_context)):
     """Get AI audit log."""
     engine = _get_engine()
     return engine.get_audit_log(limit=limit)
@@ -533,6 +536,7 @@ def _ai_audit(
         )
         db.commit()
     except Exception:  # pragma: no cover — audit nunca derruba a operação
+        logger.warning("ai.audit_failed", exc_info=True)
         db.rollback()
 
 
@@ -590,7 +594,7 @@ def _ai_settings_from_db(db: Session) -> AiSettingsOut:
 @router.get("/status", response_model=AiStatus)
 def ai_status(
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(require_permission("ai.use")),
+    _ctx: TenantContext = Depends(require_permission("ai.use")),
 ):
     """Status da IA para o dono do depósito — sem termos técnicos.
 
@@ -659,7 +663,7 @@ def ai_test(
 @router.get("/settings", response_model=AiSettingsOut)
 def get_ai_settings(
     db: Session = Depends(get_db),
-    ctx: TenantContext = Depends(require_permission("ai.configure")),
+    _ctx: TenantContext = Depends(require_permission("ai.configure")),
 ):
     """Config completa da IA (tela Admin → Inteligência)."""
     return _ai_settings_from_db(db)
@@ -748,6 +752,6 @@ def download_model(
 
 
 @router.get("/model/download-progress")
-def download_progress(ctx: TenantContext = Depends(require_permission("ai.configure"))):
+def download_progress(_ctx: TenantContext = Depends(require_permission("ai.configure"))):
     """Progresso do pull (polling JSON — simples e suficiente p/ Electron)."""
     return dict(_download_state)

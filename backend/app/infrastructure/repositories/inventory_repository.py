@@ -73,7 +73,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         self.db.flush()
         return self._to_entity(model)
 
-    def list_all(self, stock_status: Optional[str] = None, product_type: Optional[str] = None) -> List[Inventory]:
+    def list_all(self, stock_status: Optional[str] = None, product_type: Optional[str] = None) -> List[Inventory]:  # noqa: ARG002  # filtro de tipo aplicado na API apos join com o produto
         q = self._filter_by_tenant(InventoryModel)
         models = q.all()
         entities = [self._to_entity(m) for m in models]

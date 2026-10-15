@@ -6,7 +6,7 @@ Conditions: deterministic, no eval/exec.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 
 
@@ -56,52 +56,61 @@ class Condition:
     value: Any = None
 
 
+def _resolve_field(field: str, context: Dict[str, Any]) -> Any:
+    parts = field.split(".")
+    current = context
+    for part in parts:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+    return current
+
+
+def _coerce_types(current: Any, val: Any) -> Tuple[Any, Any]:
+    if isinstance(current, (int, float)) and isinstance(val, str):
+        val = float(val)
+    elif isinstance(current, str) and isinstance(val, (int, float)):
+        current = str(current)
+    return current, val
+
+
+def _apply_operator(op: ConditionOperator, current: Any, val: Any) -> bool:
+    if op == ConditionOperator.LT:
+        return current < val
+    elif op == ConditionOperator.LE:
+        return current <= val
+    elif op == ConditionOperator.GT:
+        return current > val
+    elif op == ConditionOperator.GE:
+        return current >= val
+    elif op == ConditionOperator.EQ:
+        return current == val
+    elif op == ConditionOperator.NE:
+        return current != val
+    elif op == ConditionOperator.CONTAINS:
+        return str(val) in str(current)
+    elif op == ConditionOperator.IN:
+        return current in val if isinstance(val, (list, set, dict)) else False
+    return False
+
+
 def evaluate_condition(condition: Condition, context: Dict[str, Any]) -> bool:
     """
     Evaluate a condition against context data.
     Deterministic — no LLM, no eval, no arbitrary code.
     """
     # Navigate nested fields with dot notation
-    parts = condition.field.split(".")
-    current = context
-    for part in parts:
-        if isinstance(current, dict):
-            current = current.get(part)
-        else:
-            return False
+    current = _resolve_field(condition.field, context)
 
     if current is None:
         return False
 
     try:
-        val = condition.value
         # Type coercion for comparison
-        if isinstance(current, (int, float)) and isinstance(val, str):
-            val = float(val)
-        elif isinstance(current, str) and isinstance(val, (int, float)):
-            current = str(current)
-
-        op = condition.operator
-        if op == ConditionOperator.LT:
-            return current < val
-        elif op == ConditionOperator.LE:
-            return current <= val
-        elif op == ConditionOperator.GT:
-            return current > val
-        elif op == ConditionOperator.GE:
-            return current >= val
-        elif op == ConditionOperator.EQ:
-            return current == val
-        elif op == ConditionOperator.NE:
-            return current != val
-        elif op == ConditionOperator.CONTAINS:
-            return str(val) in str(current)
-        elif op == ConditionOperator.IN:
-            return current in val if isinstance(val, (list, set, dict)) else False
+        current, val = _coerce_types(current, condition.value)
+        return _apply_operator(condition.operator, current, val)
     except (TypeError, ValueError):
         return False
-
-    return False
 
 
 def evaluate_conditions(conditions: List[Condition], context: Dict[str, Any]) -> bool:

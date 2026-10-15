@@ -156,7 +156,7 @@ class TestWorkflowResumeBinding:
 
         class _Tools:
             def get(self, name):
-                tool = ToolDefinition(
+                ToolDefinition(
                     name=name,
                     description="",
                     tool_type=ToolType.WRITE,

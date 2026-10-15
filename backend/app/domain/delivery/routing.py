@@ -116,7 +116,7 @@ class MockRoutingProvider(RoutingProvider):
         self._eta = default_eta_minutes
         self._distance = default_distance_km
 
-    def geocode(self, address: str) -> Optional[GeoPoint]:
+    def geocode(self, _address: str) -> Optional[GeoPoint]:
         return GeoPoint(lat=-23.5505, lng=-46.6333)  # São Paulo
 
     def calculate_route(self, _origin: GeoPoint, _destination: GeoPoint) -> Optional[RouteInfo]:

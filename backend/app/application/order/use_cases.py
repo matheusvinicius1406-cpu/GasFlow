@@ -91,6 +91,32 @@ class CreateOrderUseCase:
             subtotal += item_subtotal
         return order_items, subtotal
 
+    def _build_address_snapshot(self, client, data: dict) -> str:
+        address = data.get("address_snapshot") or f"{client.rua}, {client.numero} - {client.bairro}"
+        if client.complemento:
+            address += f" ({client.complemento})"
+        if client.referencia:
+            address += f" - Ref: {client.referencia}"
+        return address
+
+    def _build_totals(self, data: dict, subtotal: float) -> tuple:
+        delivery_fee = data.get("delivery_fee", 0.0)
+        if delivery_fee < 0:
+            delivery_fee = 0.0
+
+        discount = data.get("discount", 0.0)
+        if discount < 0:
+            discount = 0.0
+
+        if discount > subtotal:
+            raise ValueError(f"Desconto (R$ {discount:.2f}) não pode exceder subtotal (R$ {subtotal:.2f})")
+
+        total = subtotal + delivery_fee - discount
+        if total < 0:
+            raise ValueError(f"Total (R$ {total:.2f}) não pode ser negativo")
+
+        return delivery_fee, discount, total
+
     def execute(self, data: dict) -> Order:
         # 1. Validate client
         client = self.client_repo.buscar_por_codigo(data["client_codigo"])
@@ -108,30 +134,13 @@ class CreateOrderUseCase:
         codigo = self.order_repo.proximo_codigo()
 
         # 4. Address snapshot
-        address = data.get("address_snapshot") or f"{client.rua}, {client.numero} - {client.bairro}"
-        if client.complemento:
-            address += f" ({client.complemento})"
-        if client.referencia:
-            address += f" - Ref: {client.referencia}"
+        address = self._build_address_snapshot(client, data)
 
         # 5. Create items with frozen price (validação de estoque + preço congelado)
         order_items, subtotal = self._build_items(items_data, codigo)
 
         # 6. Financial calculation
-        delivery_fee = data.get("delivery_fee", 0.0)
-        if delivery_fee < 0:
-            delivery_fee = 0.0
-
-        discount = data.get("discount", 0.0)
-        if discount < 0:
-            discount = 0.0
-
-        if discount > subtotal:
-            raise ValueError(f"Desconto (R$ {discount:.2f}) não pode exceder subtotal (R$ {subtotal:.2f})")
-
-        total = subtotal + delivery_fee - discount
-        if total < 0:
-            raise ValueError(f"Total (R$ {total:.2f}) não pode ser negativo")
+        delivery_fee, discount, total = self._build_totals(data, subtotal)
 
         # 7. Create order
         order = Order(

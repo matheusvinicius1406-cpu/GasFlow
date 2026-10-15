@@ -73,6 +73,7 @@ async def receive_event(request: Request):
     try:
         payload = await request.json()
     except Exception:  # noqa: BLE001
+        logger.warning("cloud_api.webhook.invalid_json", exc_info=True)
         return PlainTextResponse("invalid json", status_code=400)
 
     statuses = CloudApiAdapter.parse_status_event(payload)

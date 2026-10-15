@@ -215,6 +215,7 @@ class PermissionPolicyLoader:
         try:
             return _load_all_permission_codes(session)
         except Exception:
+            logger.warning("policy.load.all_codes_failed", exc_info=True)
             return set()
 
 

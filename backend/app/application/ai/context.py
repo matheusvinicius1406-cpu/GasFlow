@@ -16,7 +16,7 @@ class ContextBuilder:
 
     def build(
         self,
-        intent_type: IntentType,
+        _intent_type: IntentType,
         entities: Dict[str, Any],
         tool_results: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,

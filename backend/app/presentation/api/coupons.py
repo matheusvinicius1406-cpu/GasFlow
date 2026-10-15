@@ -17,6 +17,8 @@ Rotas sem prefixo: /orders/apply-coupon e /orders/{codigo}/remove-coupon
 também expostas aqui (mesma implementação) para compatibilidade com o plano.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -32,6 +34,8 @@ from app.presentation.dependencies import (
     require_permission,
 )
 from app.domain.security.models import TenantContext
+
+logger = logging.getLogger("gasflow.coupons")
 
 # Sem prefixo no router: os paths abaixo são absolutos dentro do app.
 router = APIRouter(tags=["Coupons"])
@@ -116,7 +120,7 @@ class GenerateInviteRequest(BaseModel):
 def list_coupons(
     active_only: bool = Query(default=False),
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.read")),
+    _ctx: TenantContext = Depends(require_permission("coupon.read")),
 ):
     coupons = svc.list_coupons(include_inactive=not active_only)
     return {"coupons": [_coupon_dict(c) for c in coupons]}
@@ -125,7 +129,7 @@ def list_coupons(
 @router.get("/coupons/reports/usage")
 def usage_report(
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.read")),
+    _ctx: TenantContext = Depends(require_permission("coupon.read")),
 ):
     return {"report": svc.usage_report()}
 
@@ -135,7 +139,7 @@ def redemptions(
     coupon_id: Optional[str] = Query(default=None),
     limit: int = Query(default=200, le=500),
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.read")),
+    _ctx: TenantContext = Depends(require_permission("coupon.read")),
 ):
     return {"redemptions": svc.list_redemptions(coupon_id, limit)}
 
@@ -225,7 +229,7 @@ def create_coupon(
 def get_coupon(
     coupon_id: str,
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.read")),
+    _ctx: TenantContext = Depends(require_permission("coupon.read")),
 ):
     coupon = svc.get_coupon(coupon_id)
     if not coupon:
@@ -238,7 +242,7 @@ def update_coupon(
     coupon_id: str,
     body: CouponUpdate,
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.write")),
+    _ctx: TenantContext = Depends(require_permission("coupon.write")),
 ):
     try:
         coupon = svc.update_coupon(coupon_id, body.model_dump(exclude_none=True))
@@ -251,7 +255,7 @@ def update_coupon(
 def delete_coupon(
     coupon_id: str,
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("coupon.write")),
+    _ctx: TenantContext = Depends(require_permission("coupon.write")),
 ):
     try:
         coupon = svc.deactivate(coupon_id)
@@ -286,7 +290,7 @@ def apply_coupon(
 def remove_coupon(
     body: RemoveCoupon,
     svc: CouponService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("order.update")),
+    _ctx: TenantContext = Depends(require_permission("order.update")),
 ):
     try:
         result = svc.remove_from_order(body.order_codigo)
@@ -346,6 +350,7 @@ def generate_invite_token(
 
             base = str(SettingsService(db).get_value("referral.signup_base_url", "") or "").rstrip("/")
         except Exception:
+            logger.debug("referral.signup_base_unavailable", exc_info=True)
             base = ""
         signup_url = f"{base}/cadastro?token={referral.invite_token}" if base else None
         return {"invite_token": referral.invite_token, "signup_url": signup_url}

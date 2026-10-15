@@ -147,10 +147,8 @@ def test_access_token_rejects_garbage_and_wrong_scope(client, driver_credentials
     assert payload["sub"] == "654321"
 
     # escopo desktop → rejeitado
-    desktop_token = issue_access_token("654321", "default", expires_minutes=5)
-    from app.presentation.api.logistics import driver_mobile_auth as mod
+    issue_access_token("654321", "default", expires_minutes=5)
 
-    original = mod.verify_access_token
     import hmac as _hmac
     import hashlib as _hashlib
     import json as _json

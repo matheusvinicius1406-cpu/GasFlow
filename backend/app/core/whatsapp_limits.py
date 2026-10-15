@@ -46,6 +46,7 @@ def _get_redis_backend():
 
         return _limiter if getattr(_limiter, "available", False) else None
     except Exception:
+        logger.debug("whatsapp_limits.limiter_unavailable", exc_info=True)
         return None
 
 
@@ -74,7 +75,7 @@ class _MemoryTTLStore:
             bucket = self._events.get(key, [])
             return any(now - t < window_seconds for t in bucket)
 
-    def mark(self, key: str, window_seconds: int) -> None:
+    def mark(self, key: str, _window_seconds: int) -> None:
         now = time.time()
         with self._lock:
             self._events[key].append(now)

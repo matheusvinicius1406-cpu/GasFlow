@@ -89,7 +89,7 @@ class TestDeliveryCRUD:
     def test_list_deliveries_by_status(self, db):
         repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
         r1 = repo.create_delivery(delivery_id="del-010", order_id="ord-010")
-        r2 = repo.create_delivery(delivery_id="del-011", order_id="ord-011")
+        repo.create_delivery(delivery_id="del-011", order_id="ord-011")
         repo.assign_delivery("del-010", "driver1", None, r1.version)
         pending = repo.list_deliveries(status="PENDING")
         assigned = repo.list_deliveries(status="ASSIGNED")
@@ -110,7 +110,7 @@ class TestDeliveryCRUD:
     def test_count_by_status(self, db):
         repo = SQLAlchemyDeliveryPersistenceRepository(db, "default")
         r1 = repo.create_delivery(delivery_id="del-030", order_id="ord-030")
-        r2 = repo.create_delivery(delivery_id="del-031", order_id="ord-031")
+        repo.create_delivery(delivery_id="del-031", order_id="ord-031")
         repo.assign_delivery("del-030", "driver1", None, r1.version)
         counts = repo.count_by_status()
         assert counts.get("PENDING", 0) == 1

@@ -92,7 +92,11 @@ class OllamaProvider(LLMProvider):
             return LLMResponse(content="", error=f"LLM_UNAVAILABLE:{type(exc).__name__}")
 
     def generate_structured(
-        self, messages: List[LLMMessage], schema: Dict[str, Any], temperature: float = 0.1, max_tokens: int = 1024
+        self,
+        messages: List[LLMMessage],
+        schema: Dict[str, Any],  # noqa: ARG002
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
     ) -> LLMResponse:
         # O Ollama não tem schema-enforcement nativo na API /chat; o JSON de
         # schema é injetado no prompt pelo chamador (AIEngine). Aqui apenas

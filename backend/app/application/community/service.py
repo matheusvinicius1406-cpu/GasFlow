@@ -30,6 +30,7 @@ def _get_setting(key: str, default: str = "") -> str:
         finally:
             session.close()
     except Exception:
+        logger.debug("community.settings_unavailable", exc_info=True)
         return default
 
 
@@ -51,6 +52,57 @@ def is_already_invited(client_codigo: str) -> bool:
 def mark_invited(client_codigo: str) -> None:
     """Marca cliente como já convidado."""
     _invite_sent[client_codigo] = time.time()
+
+
+def _send_invite(client_codigo: str, client_phone: str, message: str) -> Optional[dict]:
+    """Tenta enviar o convite via bridge (se disponível).
+
+    Devolve o dict de status; ``None`` quando o telefone é inválido (skip).
+    """
+    from app.application.whatsapp_automation.whatsapp_bridge import WhatsAppSendBridge
+
+    bridge = WhatsAppSendBridge()
+    # Normaliza telefone
+    phone_digits = "".join(c for c in client_phone if c.isdigit())
+    if len(phone_digits) < 8:
+        logger.warning("community_invite.skip", extra={"reason": "invalid_phone", "client": client_codigo})
+        return None
+
+    # Envia via bridge async (send_message). Chamadores são use cases
+    # síncronos rodando em threadpool (endpoints `def` do FastAPI —
+    # sem event loop na thread), então o caminho comum é asyncio.run;
+    # dentro de um loop rodando, agenda como task fire-and-forget com
+    # callback de erro (nunca derruba o cadastro).
+    # F9.1 (bugfix): antes chamava `send_text`, método que nunca existiu
+    # no bridge — a exceção era engolida pelo `except Exception` e o
+    # convite nunca partia.
+    import asyncio
+
+    async def _send() -> Dict[str, Any]:
+        return await bridge.send_message(phone_digits, message)
+
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+
+    if running is not None:
+
+        def _log_task_error(task: "asyncio.Task[Any]") -> None:
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    "community_invite.failed",
+                    extra={"client": client_codigo, "error": str(exc)},
+                )
+
+        running.create_task(_send()).add_done_callback(_log_task_error)
+    else:
+        asyncio.run(_send())
+
+    mark_invited(client_codigo)
+    logger.info("community_invite.sent", extra={"client": client_codigo, "phone": phone_digits})
+    return {"status": "sent", "client_codigo": client_codigo}
 
 
 def queue_community_invite(
@@ -81,50 +133,7 @@ def queue_community_invite(
 
     # Tenta enviar via bridge (se disponível)
     try:
-        from app.application.whatsapp_automation.whatsapp_bridge import WhatsAppSendBridge
-
-        bridge = WhatsAppSendBridge()
-        # Normaliza telefone
-        phone_digits = "".join(c for c in client_phone if c.isdigit())
-        if len(phone_digits) < 8:
-            logger.warning("community_invite.skip", extra={"reason": "invalid_phone", "client": client_codigo})
-            return None
-
-        # Envia via bridge async (send_message). Chamadores são use cases
-        # síncronos rodando em threadpool (endpoints `def` do FastAPI —
-        # sem event loop na thread), então o caminho comum é asyncio.run;
-        # dentro de um loop rodando, agenda como task fire-and-forget com
-        # callback de erro (nunca derruba o cadastro).
-        # F9.1 (bugfix): antes chamava `send_text`, método que nunca existiu
-        # no bridge — a exceção era engolida pelo `except Exception` e o
-        # convite nunca partia.
-        import asyncio
-
-        async def _send() -> Dict[str, Any]:
-            return await bridge.send_message(phone_digits, message)
-
-        try:
-            running = asyncio.get_running_loop()
-        except RuntimeError:
-            running = None
-
-        if running is not None:
-
-            def _log_task_error(task: "asyncio.Task[Any]") -> None:
-                exc = task.exception()
-                if exc is not None:
-                    logger.error(
-                        "community_invite.failed",
-                        extra={"client": client_codigo, "error": str(exc)},
-                    )
-
-            running.create_task(_send()).add_done_callback(_log_task_error)
-        else:
-            asyncio.run(_send())
-
-        mark_invited(client_codigo)
-        logger.info("community_invite.sent", extra={"client": client_codigo, "phone": phone_digits})
-        return {"status": "sent", "client_codigo": client_codigo}
+        return _send_invite(client_codigo, client_phone, message)
 
     except ImportError:
         # Bridge não disponível (dev/test) — log e skip

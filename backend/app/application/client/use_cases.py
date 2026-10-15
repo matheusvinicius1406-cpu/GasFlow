@@ -4,10 +4,13 @@ Client Use Cases — Casos de uso do Cliente.
 FASE 6: Adicionado search, pagination, Customer 360 e CRM metrics.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 from app.domain.client.entity import Client, normalize_phone
 from app.domain.client.repository import ClientRepository
+
+logger = logging.getLogger("gasflow.client")
 
 
 class CreateClientUseCase:
@@ -53,6 +56,7 @@ class CreateClientUseCase:
 
             queue_community_invite(created.codigo, created.nome, created.telefone)
         except Exception:
+            logger.warning("client.invite_failed", extra={"client": created.codigo}, exc_info=True)
             pass  # falha no convite não deve impedir o cadastro
 
         return created

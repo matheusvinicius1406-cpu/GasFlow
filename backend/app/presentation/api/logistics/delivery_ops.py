@@ -401,7 +401,7 @@ def _get_vehicle_repo():
 
 
 @router.post("/vehicles")
-async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends(require_admin)):
+async def create_vehicle(req: CreateVehicleRequest, _ctx: TenantContext = Depends(require_admin)):
     repo, db = _get_vehicle_repo()
     try:
         vehicle = repo.create_vehicle(
@@ -427,7 +427,7 @@ async def create_vehicle(req: CreateVehicleRequest, ctx: TenantContext = Depends
 
 
 @router.get("/vehicles")
-async def list_vehicles(status: Optional[str] = None, ctx: TenantContext = Depends(get_tenant_context)):
+async def list_vehicles(status: Optional[str] = None, _ctx: TenantContext = Depends(get_tenant_context)):
     repo, db = _get_vehicle_repo()
     try:
         vehicles = repo.list_vehicles(status=status)
@@ -817,6 +817,143 @@ async def unblock_driver_stock(driver_id: str, ctx: TenantContext = Depends(requ
         db.close()
 
 
+def _demanda_itens(db, delivery) -> dict:
+    """Itens do pedido → demandas por produto."""
+    from app.infrastructure.repositories.order_item_model import OrderItemModel
+
+    items = db.query(OrderItemModel).filter(OrderItemModel.order_codigo == delivery.order_id).all()
+    demand: dict = {}
+    for it in items:
+        demand[it.product_codigo] = demand.get(it.product_codigo, 0) + it.quantity
+    return demand
+
+
+def _construir_candidatos(drv_repo, stock_svc) -> list:
+    """Candidatos ativos com capacidade elegível de cheios."""
+    from app.domain.delivery.dispatch_engine import DriverCandidate
+
+    candidates: list = []
+    for d in drv_repo.listar_todos():
+        if not d.ativo:
+            continue
+        model = drv_repo.find_by_id_as_model(d.codigo)
+        capacity = stock_svc.eligible_capacity(d.codigo)
+        candidates.append(
+            DriverCandidate(
+                driver_id=d.codigo,
+                driver_name=d.nome,
+                vehicle_id=model.vehicle_id if model else None,
+                status=model.status if model else "AVAILABLE",
+                is_active=bool(d.ativo),
+                capacity=capacity,
+            )
+        )
+    return candidates
+
+
+def _anexar_posicoes(db, tenant_id: str, candidates: list) -> None:
+    """Posição GPS mais recente por entregador (mapa do operador)."""
+    from app.infrastructure.repositories.delivery_persistence_model import DriverLocationRecord
+
+    locs = (
+        db.query(DriverLocationRecord)
+        .filter(DriverLocationRecord.tenant_id == tenant_id)
+        .order_by(DriverLocationRecord.timestamp.desc())
+        .limit(200)
+        .all()
+    )
+    seen = set()
+    loc_by_driver = {}
+    for loc in locs:
+        if loc.driver_id in seen:
+            continue
+        seen.add(loc.driver_id)
+        loc_by_driver[loc.driver_id] = loc
+    for c in candidates:
+        loc = loc_by_driver.get(c.driver_id)
+        if loc:
+            c.latitude, c.longitude = loc.latitude, loc.longitude
+
+
+def _sugestao_smart_dispatch(db, ctx: TenantContext, req, delivery, candidates: list, order) -> dict:
+    """Ranking pelo DispatchScorer (Fase 9) + publicação de dispatch.scored."""
+    from app.application.dispatch.scorer import DispatchScorer
+    from app.domain.delivery.dispatch_engine import filter_candidate
+    from app.domain.events.event_bus import EventType, publish_delivery_event
+
+    verdicts = [(c, filter_candidate(c, order)) for c in candidates]
+    eligible = [c.driver_id for c, verdict in verdicts if verdict.valid]
+    scored = DispatchScorer(db, ctx.tenant_id).score(delivery_id=req.delivery_id, candidate_driver_ids=eligible)
+
+    by_id = {c.driver_id: c for c in candidates}
+    recommendations = []
+    for scored_driver in scored[:3]:
+        candidate = by_id.get(scored_driver.driver_id)
+        capacity_fit: dict = {}
+        if candidate is not None:
+            for item in order.items:
+                available = candidate.capacity.get(item.product_codigo, 0)
+                capacity_fit[item.product_codigo] = {
+                    "product": item.product_name,
+                    "needed": item.quantity,
+                    "available": available,
+                    "fits": available >= item.quantity,
+                }
+        recommendations.append(
+            {
+                "driver_id": scored_driver.driver_id,
+                "driver_name": scored_driver.driver_name,
+                "vehicle_id": candidate.vehicle_id if candidate else None,
+                "vehicle_plate": candidate.vehicle_plate if candidate else None,
+                "score": scored_driver.total,
+                "distance_km": scored_driver.distance_km,
+                "capacity_fit": capacity_fit,
+                "explanation": scored_driver.reasons,
+            }
+        )
+
+    # Fase 9: publica dispatch.scored para auditoria (só quando o scorer
+    # decidiu — flag ligada, fluxo real). Não é publicado pelo preview
+    # read-only (decisão 6).
+    if scored:
+        publish_delivery_event(
+            EventType.DISPATCH_SCORED,
+            req.delivery_id,
+            ctx.tenant_id,
+            data={
+                "delivery_id": req.delivery_id,
+                "candidates": [
+                    {
+                        "driver_id": s.driver_id,
+                        "total": s.total,
+                        "breakdown": s.breakdown,
+                    }
+                    for s in scored
+                ],
+            },
+        )
+
+    return {
+        "success": True,
+        "order_id": delivery.order_id,
+        "total_candidates": len(candidates),
+        "eligible": len(scored),
+        "rejected_count": len(candidates) - len(scored),
+        "rejected": [
+            {
+                "driver_id": c.driver_id,
+                "driver_name": c.driver_name,
+                "reason": verdict.reason.value if verdict.reason else "UNKNOWN",
+                "details": verdict.details,
+            }
+            for c, verdict in verdicts
+            if not verdict.valid
+        ],
+        "recommendations": recommendations,
+        "source": "dispatch-scorer",
+    }
+
+
 @router.post("/dispatch/suggest")
 async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantContext = Depends(get_tenant_context)):
     """Sugestão inteligente de entregador para a entrega (F7, C3).
@@ -832,7 +969,8 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         SQLAlchemyDeliveryDriverRepository,
     )
     from app.application.delivery.driver_stock_service import DriverStockService
-    from app.domain.delivery.dispatch_engine import DispatchEngine, DispatchMode, OrderRequest, DriverCandidate
+    from app.domain.delivery.dispatch_engine import DispatchEngine, DispatchMode, OrderRequest
+    from app.core.config import settings
 
     db = DBSession(bind=engine)
     try:
@@ -844,54 +982,11 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         if delivery.driver_id is not None and delivery.status != "PENDING":
             pass  # sugestão permitida para reatribuição também
 
-        # Itens do pedido → demandas por produto
-        from app.infrastructure.repositories.order_item_model import OrderItemModel
-
-        items = db.query(OrderItemModel).filter(OrderItemModel.order_codigo == delivery.order_id).all()
-        demand: dict = {}
-        for it in items:
-            demand[it.product_codigo] = demand.get(it.product_codigo, 0) + it.quantity
+        demand = _demanda_itens(db, delivery)
 
         stock_svc = DriverStockService(db, ctx.tenant_id)
-        drivers = drv_repo.listar_todos()
-        candidates: list = []
-        for d in drivers:
-            if not d.ativo:
-                continue
-            model = drv_repo.find_by_id_as_model(d.codigo)
-            capacity = stock_svc.eligible_capacity(d.codigo)
-            candidates.append(
-                DriverCandidate(
-                    driver_id=d.codigo,
-                    driver_name=d.nome,
-                    vehicle_id=model.vehicle_id if model else None,
-                    status=model.status if model else "AVAILABLE",
-                    is_active=bool(d.ativo),
-                    capacity=capacity,
-                )
-            )
-
-        # Posição GPS mais recente por entregador (mapa do operador)
-        from app.infrastructure.repositories.delivery_persistence_model import DriverLocationRecord
-
-        locs = (
-            db.query(DriverLocationRecord)
-            .filter(DriverLocationRecord.tenant_id == ctx.tenant_id)
-            .order_by(DriverLocationRecord.timestamp.desc())
-            .limit(200)
-            .all()
-        )
-        seen = set()
-        loc_by_driver = {}
-        for loc in locs:
-            if loc.driver_id in seen:
-                continue
-            seen.add(loc.driver_id)
-            loc_by_driver[loc.driver_id] = loc
-        for c in candidates:
-            loc = loc_by_driver.get(c.driver_id)
-            if loc:
-                c.latitude, c.longitude = loc.latitude, loc.longitude
+        candidates = _construir_candidatos(drv_repo, stock_svc)
+        _anexar_posicoes(db, ctx.tenant_id, candidates)
 
         order = OrderRequest(
             order_id=delivery.order_id,
@@ -910,85 +1005,8 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         # do histórico, prazo e fairness), mas o GATE de elegibilidade continua o
         # mesmo — `filter_candidate` segue decidindo quem pode receber a entrega.
         # Score não é elegibilidade: capacidade física não se negocia por ponto.
-        from app.core.config import settings
-
         if settings.delivery_smart_dispatch_enabled:
-            from app.application.dispatch.scorer import DispatchScorer
-            from app.domain.delivery.dispatch_engine import filter_candidate
-
-            verdicts = [(c, filter_candidate(c, order)) for c in candidates]
-            eligible = [c.driver_id for c, verdict in verdicts if verdict.valid]
-            scored = DispatchScorer(db, ctx.tenant_id).score(delivery_id=req.delivery_id, candidate_driver_ids=eligible)
-
-            by_id = {c.driver_id: c for c in candidates}
-            recommendations = []
-            for scored_driver in scored[:3]:
-                candidate = by_id.get(scored_driver.driver_id)
-                capacity_fit: dict = {}
-                if candidate is not None:
-                    for item in order.items:
-                        available = candidate.capacity.get(item.product_codigo, 0)
-                        capacity_fit[item.product_codigo] = {
-                            "product": item.product_name,
-                            "needed": item.quantity,
-                            "available": available,
-                            "fits": available >= item.quantity,
-                        }
-                recommendations.append(
-                    {
-                        "driver_id": scored_driver.driver_id,
-                        "driver_name": scored_driver.driver_name,
-                        "vehicle_id": candidate.vehicle_id if candidate else None,
-                        "vehicle_plate": candidate.vehicle_plate if candidate else None,
-                        "score": scored_driver.total,
-                        "distance_km": scored_driver.distance_km,
-                        "capacity_fit": capacity_fit,
-                        "explanation": scored_driver.reasons,
-                    }
-                )
-
-            # Fase 9: publica dispatch.scored para auditoria (só quando o scorer
-            # decidiu — flag ligada, fluxo real). Não é publicado pelo preview
-            # read-only (decisão 6).
-            if scored:
-                from app.domain.events.event_bus import EventType, publish_delivery_event
-
-                publish_delivery_event(
-                    EventType.DISPATCH_SCORED,
-                    req.delivery_id,
-                    ctx.tenant_id,
-                    data={
-                        "delivery_id": req.delivery_id,
-                        "candidates": [
-                            {
-                                "driver_id": s.driver_id,
-                                "total": s.total,
-                                "breakdown": s.breakdown,
-                            }
-                            for s in scored
-                        ],
-                    },
-                )
-
-            return {
-                "success": True,
-                "order_id": delivery.order_id,
-                "total_candidates": len(candidates),
-                "eligible": len(scored),
-                "rejected_count": len(candidates) - len(scored),
-                "rejected": [
-                    {
-                        "driver_id": c.driver_id,
-                        "driver_name": c.driver_name,
-                        "reason": verdict.reason.value if verdict.reason else "UNKNOWN",
-                        "details": verdict.details,
-                    }
-                    for c, verdict in verdicts
-                    if not verdict.valid
-                ],
-                "recommendations": recommendations,
-                "source": "dispatch-scorer",
-            }
+            return _sugestao_smart_dispatch(db, ctx, req, delivery, candidates, order)
 
         engine = DispatchEngine(mode=DispatchMode.ASSISTED)
         return engine.recommend(order, candidates)
@@ -1188,7 +1206,6 @@ def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
         from app.domain.events.event_bus import EventType, publish_driver_event
         from app.infrastructure.database.init_db import engine
         from app.infrastructure.repositories.delivery_persistence_repository import (
-            SQLAlchemyDeliveryPersistenceRepository,
             SQLAlchemyDriverLocationRepository,
         )
         from app.infrastructure.routing.factory import get_routing_provider
@@ -1196,7 +1213,6 @@ def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
 
         db = DBSession(bind=engine)
         try:
-            del_repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
             # Busca todas as entregas atribuídas a este entregador.
             from app.infrastructure.repositories.delivery_persistence_model import DeliveryRecord
 

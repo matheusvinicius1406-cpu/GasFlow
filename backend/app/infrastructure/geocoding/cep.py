@@ -23,12 +23,15 @@ o contato segue para triagem (D3).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import List, Optional
 
 from app.core.config import settings
 from app.infrastructure.geocoding.http_provider import RateLimitedHttp
+
+logger = logging.getLogger("gasflow.geocoding.cep")
 
 _NAO_DIGITO = re.compile(r"\D+")
 
@@ -172,6 +175,9 @@ class CepFallback:
             try:
                 endereco = cliente.buscar(cep)
             except Exception:  # provedor é plugável: não se assume que é total
+                logger.debug(
+                    "cep.provider_failed", extra={"cep": cep, "provider": type(cliente).__name__}, exc_info=True
+                )
                 endereco = None
             if endereco is not None and endereco.tem_coordenada:
                 return endereco

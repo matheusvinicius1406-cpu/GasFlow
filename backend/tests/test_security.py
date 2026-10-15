@@ -781,7 +781,7 @@ class TestAdversarial:
 
     def test_22_context_leakage(self, auth_service):
         ctx_a = auth_service.get_user_context("admin-001", "default")
-        ctx_b = auth_service.get_user_context("admin-001", "nonexistent")
+        auth_service.get_user_context("admin-001", "nonexistent")
         # Different tenants → different contexts
         assert ctx_a.tenant_id == "default"
 

@@ -126,6 +126,7 @@ class WhatsAppSessionManager:
             try:
                 results[account_id] = await provider.health_check()
             except Exception:
+                logger.debug("session.health_check_failed", extra={"account": account_id}, exc_info=True)
                 results[account_id] = False
         return results
 

@@ -71,9 +71,47 @@ def _local_day_start_utc(now_utc: datetime, tz_name: str = DEFAULT_TRACKING_TZ) 
     try:
         start_local = now_utc.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
     except Exception:  # pragma: no cover - tz desconhecida → UTC
+        logger.debug("delivery.tz_invalid", extra={"tz": tz_name}, exc_info=True)
         start_local = now_utc.replace(tzinfo=timezone.utc)
     start_local = start_local.replace(hour=0, minute=0, second=0, microsecond=0)
     return start_local.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _stamp_status_time(record: DeliveryRecord, new_status: str, now: datetime) -> None:
+    if new_status == "ASSIGNED":
+        record.assigned_at = now
+    elif new_status == "EN_ROUTE":
+        record.started_at = now
+    elif new_status == "ARRIVED":
+        record.arrived_at = now
+    elif new_status == "DELIVERED":
+        record.delivered_at = now
+    elif new_status == "FAILED":
+        record.failed_at = now
+
+
+def _apply_extra_fields(record: DeliveryRecord, extra_fields: Optional[Dict]) -> None:
+    if not extra_fields:
+        return
+    for key, value in extra_fields.items():
+        if hasattr(record, key):
+            setattr(record, key, value)
+
+
+def _append_timeline_entry(record: DeliveryRecord, new_status: str, actor_type: str, now: datetime) -> None:
+    new_entry = {
+        "status": new_status,
+        "timestamp": now.isoformat(),
+        "actor_type": actor_type,
+    }
+    if record.timeline:
+        record.timeline = record.timeline + [new_entry]
+    else:
+        record.timeline = [new_entry]
+    # Force SQLAlchemy to detect JSON change
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(record, "timeline")
 
 
 class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
@@ -158,12 +196,18 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
         driver_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
     ) -> List[DeliveryRecord]:
         q = self._filter_by_tenant(DeliveryRecord)
         if status:
             q = q.filter(DeliveryRecord.status == status)
         if driver_id:
             q = q.filter(DeliveryRecord.driver_id == driver_id)
+        if created_after:
+            q = q.filter(DeliveryRecord.created_at >= created_after)
+        if created_before:
+            q = q.filter(DeliveryRecord.created_at < created_before)
         return q.order_by(DeliveryRecord.created_at.desc()).offset(offset).limit(limit).all()
 
     def count_by_status(self) -> Dict[str, int]:
@@ -237,35 +281,9 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
         record.updated_at = datetime.utcnow()
 
         now = datetime.utcnow()
-        if new_status == "ASSIGNED":
-            record.assigned_at = now
-        elif new_status == "EN_ROUTE":
-            record.started_at = now
-        elif new_status == "ARRIVED":
-            record.arrived_at = now
-        elif new_status == "DELIVERED":
-            record.delivered_at = now
-        elif new_status == "FAILED":
-            record.failed_at = now
-
-        if extra_fields:
-            for key, value in extra_fields.items():
-                if hasattr(record, key):
-                    setattr(record, key, value)
-
-        new_entry = {
-            "status": new_status,
-            "timestamp": now.isoformat(),
-            "actor_type": actor_type,
-        }
-        if record.timeline:
-            record.timeline = record.timeline + [new_entry]
-        else:
-            record.timeline = [new_entry]
-        # Force SQLAlchemy to detect JSON change
-        from sqlalchemy.orm.attributes import flag_modified
-
-        flag_modified(record, "timeline")
+        _stamp_status_time(record, new_status, now)
+        _apply_extra_fields(record, extra_fields)
+        _append_timeline_entry(record, new_status, actor_type, now)
 
         self.db.commit()
         self.db.refresh(record)
@@ -312,31 +330,13 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
 
         if new_status == "DELIVERED":
             # Idempotência: o débito já foi aplicado para esta entrega?
-            existing = (
-                self._filter_by_tenant(StockMovementModel)
-                .filter(
-                    StockMovementModel.reference_type == "DELIVERY",
-                    StockMovementModel.reference_id == record.delivery_id,
-                    StockMovementModel.type == "SALE",
-                )
-                .first()
-            )
-            if existing:
+            if self._delivery_stock_already_applied(record, "SALE"):
                 return
         else:  # CANCELLED
             # Só reverte se a entrega estava DELIVERED antes do cancelamento.
             if not was_delivered_before:
                 return
-            existing_reversal = (
-                self._filter_by_tenant(StockMovementModel)
-                .filter(
-                    StockMovementModel.reference_type == "DELIVERY",
-                    StockMovementModel.reference_id == record.delivery_id,
-                    StockMovementModel.type == "RETURN",
-                )
-                .first()
-            )
-            if existing_reversal:
+            if self._delivery_stock_already_applied(record, "RETURN"):
                 return
 
         # Itens do pedido vinculado — sem pedido/itens, nada a debitar.
@@ -346,6 +346,22 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
 
         repo = SQLAlchemyInventoryRepository(self.db, self.tenant_id)
         quantities = Counter({i.product_codigo: i.quantity for i in items})
+        self._apply_delivery_quantities(repo, record, new_status, quantities)
+        self._mirror_driver_stock(record, new_status, quantities)
+
+    def _delivery_stock_already_applied(self, record: DeliveryRecord, movement_type: str) -> bool:
+        existing = (
+            self._filter_by_tenant(StockMovementModel)
+            .filter(
+                StockMovementModel.reference_type == "DELIVERY",
+                StockMovementModel.reference_id == record.delivery_id,
+                StockMovementModel.type == movement_type,
+            )
+            .first()
+        )
+        return existing is not None
+
+    def _apply_delivery_quantities(self, repo: Any, record: DeliveryRecord, new_status: str, quantities: Any) -> None:
         for product_codigo, qty in quantities.items():
             if new_status == "DELIVERED":
                 repo.deliver_stock_atomic(
@@ -366,27 +382,29 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
                     reference_id=record.delivery_id,
                 )
 
+    def _mirror_driver_stock(self, record: DeliveryRecord, new_status: str, quantities: Any) -> None:
         # ── F7: espelho no estoque do ENTREGADOR ────────────
         # DELIVERED: decrementa full_tanks_loaded do entregador (a base
         # já foi debitada acima — única vez). CANCELLED pós-DELIVERED:
         # devolve ao entregador o que a entrega consumiu. Best-effort:
         # nunca reverte/derruba a transição da entrega.
-        if record.driver_id:
-            try:
-                from app.application.delivery.driver_stock_service import DriverStockService
+        if not record.driver_id:
+            return
+        try:
+            from app.application.delivery.driver_stock_service import DriverStockService
 
-                svc = DriverStockService(self.db, self.tenant_id)
-                if new_status == "DELIVERED":
-                    svc.apply_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
-                else:
-                    svc.reverse_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
-            except Exception as exc:  # pragma: no cover — nunca derruba a transição
-                logger.error(
-                    "falha ao espelhar estoque do entregador (delivery=%s driver=%s): %s",
-                    record.delivery_id,
-                    record.driver_id,
-                    exc,
-                )
+            svc = DriverStockService(self.db, self.tenant_id)
+            if new_status == "DELIVERED":
+                svc.apply_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
+            else:
+                svc.reverse_delivery_debit(record.driver_id, dict(quantities), record.delivery_id)
+        except Exception as exc:  # pragma: no cover — nunca derruba a transição
+            logger.error(
+                "falha ao espelhar estoque do entregador (delivery=%s driver=%s): %s",
+                record.delivery_id,
+                record.driver_id,
+                exc,
+            )
 
     def assign_delivery(
         self, delivery_id: str, driver_id: str, vehicle_id: Optional[str], version: int
@@ -399,7 +417,7 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
             self.db.commit()
         return record
 
-    def start_delivery(self, delivery_id: str, version: int, driver_id: str) -> Optional[DeliveryRecord]:
+    def start_delivery(self, delivery_id: str, version: int, driver_id: str) -> Optional[DeliveryRecord]:  # noqa: ARG002  # repo e chamado com driver_id=; transicao guarda apenas actor_type=DRIVER
         return self._transition(delivery_id, "EN_ROUTE", version, actor_type="DRIVER")
 
     def arrive_delivery(self, delivery_id: str, version: int) -> Optional[DeliveryRecord]:

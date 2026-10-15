@@ -150,31 +150,9 @@ class MessageGateway:
         if not message:
             return {"status": "error", "error": "MESSAGE_INVALID", "outbound": None}
 
-        # 2. Anti-loop: skip messages from ourselves
-        if message.from_me:
-            self._inc_metric("messages_received")
-            return {"status": "skipped", "error": "FROM_ME", "outbound": None}
-
-        # 3. Skip non-text messages for now
-        if message.message_type != MessageType.TEXT:
-            self._inc_metric("messages_received")
-            return self._handle_media_message(message)
-
-        # 4. Skip empty messages
-        if not message.text or not message.text.strip():
-            self._inc_metric("messages_received")
-            return {"status": "skipped", "error": "EMPTY_MESSAGE", "outbound": None}
-
-        self._inc_metric("messages_received")
-
-        # 4.1. CRM: última interação do cliente (reativação usa este campo).
-        # Tolerante a falhas: problema de CRM nunca bloqueia a conversa.
-        self._touch_last_interaction(message.sender_phone)
-
-        # 5. Rate limiting
-        if self._is_rate_limited(message.sender_phone):
-            self._inc_metric("rate_limited")
-            return {"status": "skipped", "error": "RATE_LIMITED", "outbound": None}
+        early = self._pre_route_filters(message)
+        if early is not None:
+            return early
 
         # 6. Find or create conversation
         conversation = self._get_or_create_conversation(message)
@@ -191,13 +169,7 @@ class MessageGateway:
 
         # 6.6 CRM: garante cliente cadastrado (auto-cadastro + upgrade de nome
         # com o pushName do WhatsApp). Tolerante a falhas.
-        try:
-            customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
-            if customer and not conversation.customer_codigo:
-                conversation.customer_codigo = customer["codigo"]
-                self.conversation_repo.update_customer(conversation.id, customer["codigo"])
-        except Exception:
-            logger.debug("wa.gateway.ensure_customer_failed", exc_info=True)
+        self._link_customer_to_conversation(conversation, message)
 
         # 7. Idempotency check
         if self.conversation_repo.find_duplicate_message(message.provider_message_id):
@@ -221,6 +193,52 @@ class MessageGateway:
             extra={"sender": "customer", "preview": (message.text or "")[:80]},
         )
 
+        return self._route_conversation(conversation, message)
+
+    def _pre_route_filters(self, message: WhatsAppMessage) -> Optional[Dict[str, Any]]:
+        """Filtros antes de abrir/conversar: eco, mídia, vazio e rate limit.
+
+        Devolve a resposta de skip pronta (None = seguir o pipeline).
+        """
+        # Anti-loop: skip messages from ourselves
+        if message.from_me:
+            self._inc_metric("messages_received")
+            return {"status": "skipped", "error": "FROM_ME", "outbound": None}
+
+        # Skip non-text messages for now
+        if message.message_type != MessageType.TEXT:
+            self._inc_metric("messages_received")
+            return self._handle_media_message(message)
+
+        # Skip empty messages
+        if not message.text or not message.text.strip():
+            self._inc_metric("messages_received")
+            return {"status": "skipped", "error": "EMPTY_MESSAGE", "outbound": None}
+
+        self._inc_metric("messages_received")
+
+        # CRM: última interação do cliente (reativação usa este campo).
+        # Tolerante a falhas: problema de CRM nunca bloqueia a conversa.
+        self._touch_last_interaction(message.sender_phone)
+
+        # Rate limiting
+        if self._is_rate_limited(message.sender_phone):
+            self._inc_metric("rate_limited")
+            return {"status": "skipped", "error": "RATE_LIMITED", "outbound": None}
+        return None
+
+    def _link_customer_to_conversation(self, conversation: Conversation, message: WhatsAppMessage) -> None:
+        """Auto-cadastro + upgrade de nome com o pushName do WhatsApp. Tolerante a falhas."""
+        try:
+            customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
+            if customer and not conversation.customer_codigo:
+                conversation.customer_codigo = customer["codigo"]
+                self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+        except Exception:
+            logger.debug("wa.gateway.ensure_customer_failed", exc_info=True)
+
+    def _route_conversation(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
+        """Decide o destino da mensagem já salva: humano, FAQ, draft ou IA."""
         # 9. Check if human operator is active
         if conversation.state == ConversationState.HUMAN_ACTIVE:
             return {"status": "human_active", "conversation_id": conversation.id, "outbound": None}
@@ -303,6 +321,7 @@ class MessageGateway:
                 raw=raw,
             )
         except Exception:
+            logger.warning("wa.gateway.parse_failed", exc_info=True)
             return None
 
     def _normalize_phone(self, phone: str) -> Optional[str]:
@@ -503,6 +522,7 @@ class MessageGateway:
         try:
             products = [p for p in self.product_repo.listar_todos() if getattr(p, "ativo", True)]
         except Exception:
+            logger.debug("wa.gateway.answer_price_failed", exc_info=True)
             return None
         if not products:
             return None
@@ -619,6 +639,26 @@ class MessageGateway:
         return v
 
     @classmethod
+    def _quantity_before(cls, tokens: List[str], idx: int, variants: set) -> tuple:
+        """Olha até 3 tokens atrás por quantidade (dígito ou palavra)."""
+        connectives = {"de", "do", "da", "para", "pra"}
+        qty = 1
+        explicit = False
+        for j in range(idx - 1, max(idx - 4, -1), -1):
+            prev = tokens[j]
+            if prev.isdigit():
+                qty = int(prev)
+                explicit = True
+                break
+            if prev in cls._QTY_WORDS:
+                qty = cls._QTY_WORDS[prev]
+                break
+            if prev in connectives or prev in variants:
+                continue
+            break
+        return qty, explicit
+
+    @classmethod
     def _detect_order(cls, text: str) -> Optional[List[Dict[str, Any]]]:
         """Extrai itens de pedido de linguagem natural simples.
 
@@ -629,7 +669,6 @@ class MessageGateway:
         if not text or cls._NEGATION_RE.search(text):
             return None
         tokens = re.findall(r"[a-zà-ú0-9]+", text.lower())
-        connectives = {"de", "do", "da", "para", "pra"}
         items: List[Dict[str, Any]] = []
         explicit_qty = False
         for prod_key, words in cls._PRODUCT_WORDS:
@@ -639,20 +678,8 @@ class MessageGateway:
             for idx, tok in enumerate(tokens):
                 if tok not in variants:
                     continue
-                qty = 1
-                # olha até 3 tokens atrás por quantidade (dígito ou palavra)
-                for j in range(idx - 1, max(idx - 4, -1), -1):
-                    prev = tokens[j]
-                    if prev.isdigit():
-                        qty = int(prev)
-                        explicit_qty = True
-                        break
-                    if prev in cls._QTY_WORDS:
-                        qty = cls._QTY_WORDS[prev]
-                        break
-                    if prev in connectives or prev in variants:
-                        continue
-                    break
+                qty, explicit = cls._quantity_before(tokens, idx, variants)
+                explicit_qty = explicit_qty or explicit
                 items.append({"product_term": prod_key, "quantity": max(1, min(qty, 50))})
                 break
         # pede com verbo ("quero gás") OU quantidade explícita ("2 galões de água")
@@ -895,28 +922,7 @@ class MessageGateway:
         # Build AI context (truncated to prevent context overflow)
         # RAG-lite: conhecimento do negócio (catálogo com preços reais + regras
         # de atendimento) injetado no prompt — a IA responde com dado verdadeiro.
-        context_prefix = ""
-        catalog = self._catalog_lines()
-        if catalog:
-            context_prefix += "[Catalogo real com precos]:\n" + "\n".join(catalog) + "\n"
-        context_prefix += (
-            "[Regras do negocio]: entrega em ate 40min na regiao; pagamento em dinheiro, "
-            "PIX ou cartao na entrega; aceitamos troco (pergunte 'troco pra quanto?'); "
-            "horario 7h as 19h; para pedir, confirme item, quantidade, endereco completo "
-            "(rua, numero, bairro, referencia) e forma de pagamento.\n"
-        )
-        if customer:
-            context_prefix += f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
-        # F4: flag de cupom já oferecido nesta conversa (cap 1/conversa)
-        if customer:
-            conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
-            if self._limit_store.is_marked(f"coupon_offer:{conv_key}", self._COUPON_OFFER_TTL):
-                context_prefix += "[Cupom já oferecido nesta conversa: SIM]\n"
-            else:
-                context_prefix += "[Cupom já oferecido nesta conversa: NÃO]\n"
-        if conversation.draft:
-            draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]
-            context_prefix += f"[Draft atual: {draft_json}]\n"
+        context_prefix = self._build_ai_context(conversation, customer)
 
         # Call AI engine
         self._inc_metric("ai_calls")
@@ -927,6 +933,7 @@ class MessageGateway:
                 permission_level="OPERATOR",
             )
         except Exception:
+            logger.warning("wa.gateway.ai_chat_failed", exc_info=True)
             self._inc_metric("ai_failures")
             return self._build_outbound(
                 conversation.id,
@@ -977,6 +984,32 @@ class MessageGateway:
             conversation.account_id,
             reply,
         )
+
+    def _build_ai_context(self, conversation: Conversation, customer: Optional[Dict[str, Any]]) -> str:
+        """Monta o prefixo de contexto (catálogo, regras, cliente, cupom e draft)."""
+        context_prefix = ""
+        catalog = self._catalog_lines()
+        if catalog:
+            context_prefix += "[Catalogo real com precos]:\n" + "\n".join(catalog) + "\n"
+        context_prefix += (
+            "[Regras do negocio]: entrega em ate 40min na regiao; pagamento em dinheiro, "
+            "PIX ou cartao na entrega; aceitamos troco (pergunte 'troco pra quanto?'); "
+            "horario 7h as 19h; para pedir, confirme item, quantidade, endereco completo "
+            "(rua, numero, bairro, referencia) e forma de pagamento.\n"
+        )
+        if customer:
+            context_prefix += f"[Cliente: {customer['nome']} ({customer['codigo']})]\n"
+        # F4: flag de cupom já oferecido nesta conversa (cap 1/conversa)
+        if customer:
+            conv_key = f"wa_{conversation.account_id}_{conversation.customer_phone}"
+            if self._limit_store.is_marked(f"coupon_offer:{conv_key}", self._COUPON_OFFER_TTL):
+                context_prefix += "[Cupom já oferecido nesta conversa: SIM]\n"
+            else:
+                context_prefix += "[Cupom já oferecido nesta conversa: NÃO]\n"
+        if conversation.draft:
+            draft_json = json.dumps(conversation.draft.to_dict(), ensure_ascii=False)[:500]
+            context_prefix += f"[Draft atual: {draft_json}]\n"
+        return context_prefix
 
     # ── Pedido detectado deterministicamente ─────────────
     def _handle_detected_order(
@@ -1211,7 +1244,7 @@ class OperatorGateway:
             return {"success": True}
         return {"success": False, "error": "RELEASE_FAILED"}
 
-    def send_manual_reply(self, conversation_id: int, operator: str, text: str) -> Dict[str, Any]:
+    def send_manual_reply(self, conversation_id: int, _operator: str, text: str) -> Dict[str, Any]:
         """Operator sends a manual reply."""
         conv = self.conversation_repo.find_by_id(conversation_id)
         if not conv:

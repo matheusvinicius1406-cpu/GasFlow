@@ -169,12 +169,7 @@ def filter_candidate(candidate: DriverCandidate, order: OrderRequest) -> FilterR
 # ═══════════════════════════════════════════════════════════
 
 
-def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreResult:
-    """Score a valid candidate. Higher = better fit."""
-
-    explanation = []
-
-    # ── Distance (40% weight) ────────────────────────────
+def _score_distance(candidate: DriverCandidate, order: OrderRequest, explanation: List[str]) -> Tuple[float, float]:
     distance_km = 0.0
     if order.latitude and order.longitude and candidate.latitude and candidate.longitude:
         distance_km = _haversine_km(
@@ -192,8 +187,10 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
         explanation.append(f"✓ Near: {distance_km:.1f} km")
     else:
         explanation.append(f"Distan: {distance_km:.1f} km")
+    return distance_km, proximity_score
 
-    # ── Capacity (30% weight) ────────────────────────────
+
+def _score_capacity(candidate: DriverCandidate, order: OrderRequest, explanation: List[str]) -> float:
     capacity_scores = []
     for item in order.items:
         available = candidate.capacity.get(item.product_codigo, 0)
@@ -209,8 +206,10 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
         explanation.append("Adequate capacity")
     else:
         explanation.append("⚠ Limited capacity")
+    return capacity_score
 
-    # ── Route synergy (20% weight) ───────────────────────
+
+def _score_route(candidate: DriverCandidate, order: OrderRequest, explanation: List[str]) -> float:
     route_score = 0.0
     if candidate.current_route_lat and candidate.current_route_lng and order.latitude and order.longitude:
         route_deviation = _haversine_km(
@@ -224,8 +223,10 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
             explanation.append(f"✓ On route (deviation: {route_deviation:.1f} km)")
         elif route_deviation < 5:
             explanation.append(f"Near route (deviation: {route_deviation:.1f} km)")
+    return route_score
 
-    # ── Workload (10% weight) ────────────────────────────
+
+def _score_workload(candidate: DriverCandidate, explanation: List[str]) -> float:
     # Fewer active deliveries = better
     workload_score = max(0, 100 - (candidate.active_deliveries * 25))
     if candidate.active_deliveries == 0:
@@ -234,6 +235,25 @@ def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreRes
         explanation.append(f"{candidate.active_deliveries} active deliveries")
     else:
         explanation.append(f"⚠ {candidate.active_deliveries} active deliveries")
+    return workload_score
+
+
+def score_candidate(candidate: DriverCandidate, order: OrderRequest) -> ScoreResult:
+    """Score a valid candidate. Higher = better fit."""
+
+    explanation: List[str] = []
+
+    # ── Distance (40% weight) ────────────────────────────
+    distance_km, proximity_score = _score_distance(candidate, order, explanation)
+
+    # ── Capacity (30% weight) ────────────────────────────
+    capacity_score = _score_capacity(candidate, order, explanation)
+
+    # ── Route synergy (20% weight) ───────────────────────
+    route_score = _score_route(candidate, order, explanation)
+
+    # ── Workload (10% weight) ────────────────────────────
+    workload_score = _score_workload(candidate, explanation)
 
     # ── Composite score ──────────────────────────────────
     score = proximity_score * 0.40 + capacity_score * 0.30 + route_score * 0.20 + workload_score * 0.10

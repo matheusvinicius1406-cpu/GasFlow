@@ -381,6 +381,54 @@ def hourly(db: Session, tenant_id: str, start: datetime, end: datetime) -> Dict[
 _CONCILIATION_ITEM_CAP = 200
 
 
+def _conciliation_lookups(
+    db: Session, tenant_id: str, payments: List[PaymentModel]
+) -> Tuple[set, Dict[str, ReceivableModel], Dict[str, Decimal]]:
+    """Referências de caixa, recebíveis e somas já pagas dos pedidos do período."""
+    payment_ids = [str(p.id) for p in payments]
+    cash_refs: set = set()
+    if payment_ids:
+        rows: List[Any] = (
+            db.query(CashMovementModel.reference_type, CashMovementModel.reference_id)
+            .filter(
+                CashMovementModel.tenant_id == tenant_id,
+                CashMovementModel.reference_type.in_(["PAYMENT", "REFUND"]),
+                CashMovementModel.reference_id.in_(payment_ids),
+            )
+            .all()
+        )
+        for row in rows:
+            cash_refs.add((row[0], row[1]))
+
+    order_codigos = {str(p.order_codigo) for p in payments}
+    receivables: Dict[str, ReceivableModel] = {}
+    paid_sums: Dict[str, Decimal] = {}
+    if order_codigos:
+        for r in (
+            db.query(ReceivableModel)
+            .filter(
+                ReceivableModel.tenant_id == tenant_id,
+                ReceivableModel.order_codigo.in_(order_codigos),
+            )
+            .all()
+        ):
+            receivables[str(r.order_codigo)] = r
+        paid_rows: List[Any] = (
+            db.query(PaymentModel.order_codigo, func.coalesce(func.sum(PaymentModel.amount), 0))
+            .filter(
+                PaymentModel.tenant_id == tenant_id,
+                PaymentModel.status.in_(["PAID", "PARTIAL"]),
+                PaymentModel.order_codigo.in_(order_codigos),
+            )
+            .group_by(PaymentModel.order_codigo)
+            .all()
+        )
+        for row in paid_rows:
+            paid_sums[str(row[0])] = _q(row[1])
+
+    return cash_refs, receivables, paid_sums
+
+
 def conciliation(db: Session, tenant_id: str, start: datetime, end: datetime) -> Dict[str, Any]:
     """Cruza pagamento ↔ movimento de caixa ↔ recebível no período.
 
@@ -398,45 +446,7 @@ def conciliation(db: Session, tenant_id: str, start: datetime, end: datetime) ->
         .order_by(PaymentModel.id)
         .all()
     )
-    payment_ids = [str(p.id) for p in payments]
-    cash_refs: set = set()
-    if payment_ids:
-        cash_rows = (
-            db.query(CashMovementModel.reference_type, CashMovementModel.reference_id)
-            .filter(
-                CashMovementModel.tenant_id == tenant_id,
-                CashMovementModel.reference_type.in_(["PAYMENT", "REFUND"]),
-                CashMovementModel.reference_id.in_(payment_ids),
-            )
-            .all()
-        )
-        cash_refs = {(ref_type, ref_id) for ref_type, ref_id in cash_rows}
-
-    order_codigos = {str(p.order_codigo) for p in payments}
-    receivables: Dict[str, ReceivableModel] = {}
-    paid_sums: Dict[str, Decimal] = {}
-    if order_codigos:
-        for r in (
-            db.query(ReceivableModel)
-            .filter(
-                ReceivableModel.tenant_id == tenant_id,
-                ReceivableModel.order_codigo.in_(order_codigos),
-            )
-            .all()
-        ):
-            receivables[str(r.order_codigo)] = r
-        paid_rows = (
-            db.query(PaymentModel.order_codigo, func.coalesce(func.sum(PaymentModel.amount), 0))
-            .filter(
-                PaymentModel.tenant_id == tenant_id,
-                PaymentModel.status.in_(["PAID", "PARTIAL"]),
-                PaymentModel.order_codigo.in_(order_codigos),
-            )
-            .group_by(PaymentModel.order_codigo)
-            .all()
-        )
-        for codigo, total in paid_rows:
-            paid_sums[str(codigo)] = _q(total)
+    cash_refs, receivables, paid_sums = _conciliation_lookups(db, tenant_id, payments)
 
     matched = 0
     review_items: List[Dict[str, Any]] = []

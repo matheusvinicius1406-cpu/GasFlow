@@ -106,11 +106,12 @@ class DriverStockService:
             value = SettingsService(Session(bind=self.db.get_bind())).get_value("driver.stock.tolerance", 2)
             return max(int(value), 0)
         except Exception:
+            logger.debug("driver_stock.tolerance_unavailable", exc_info=True)
             return 2
 
     # ── Carga (empréstimo) ────────────────────────────────
 
-    def load_tanks(self, driver_id: str, product_codigo: str, quantity: int, actor_id: str = "") -> Dict[str, Any]:
+    def load_tanks(self, driver_id: str, product_codigo: str, quantity: int, actor_id: str = "") -> Dict[str, Any]:  # noqa: ARG002  # audit trail: movimentacao registra o driver, nao o operador
         """Operador registra N cheios carregados pelo entregador (C1: manual).
 
         Bloqueada quando o entregador está com divergência pendente
@@ -212,7 +213,12 @@ class DriverStockService:
     # ── Avaria ────────────────────────────────────────────
 
     def register_damage(
-        self, driver_id: str, product_codigo: str, quantity: int, reason: str, actor_id: str = ""
+        self,
+        driver_id: str,
+        product_codigo: str,
+        quantity: int,
+        reason: str,
+        actor_id: str = "",  # noqa: ARG002  # audit trail: movimentacao registra o driver, nao o operador
     ) -> Dict[str, Any]:
         """Avaria: motivo OBRIGATÓRIO; debita o carregado do entregador e
         o estoque da base (o cilindro quebrou na rota — sai dos dois).
@@ -391,7 +397,7 @@ class DriverStockService:
         self.db.commit()
         return {"driver_id": driver_id, "tolerance": tolerance, "results": results, "any_blocked": any_blocked}
 
-    def unblock(self, driver_id: str, product_codigo: Optional[str] = None, actor_id: str = "") -> Dict[str, Any]:
+    def unblock(self, driver_id: str, product_codigo: Optional[str] = None, actor_id: str = "") -> Dict[str, Any]:  # noqa: ARG002  # audit trail: desbloqueio registra o motorista, nao o operador
         """Desbloqueia após reconciliação manual fora do fluxo (operador decide)."""
         q = self.db.query(DriverStockModel).filter(
             DriverStockModel.tenant_id == self.tenant_id,

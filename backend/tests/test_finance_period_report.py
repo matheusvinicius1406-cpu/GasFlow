@@ -98,7 +98,7 @@ def test_to_antes_de_from_e_rejeitado(client, admin_token):
 
 
 def test_periodo_com_totais_serie_diaria_e_comparacao(client, admin_token):
-    janela = datetime(2026, 5, 1)
+    datetime(2026, 5, 1)
     # Período anterior: 1-3/mai com 100 de receita
     _seed(datetime(2026, 5, 1, 12, 0), receita="100.00")
     # Período atual: 4-6/mai com 150 de receita e 50 de despesa

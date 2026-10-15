@@ -27,11 +27,14 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+import logging
 import uuid
 import bcrypt
 from app.domain.events.event_bus import publish_delivery_event, publish_driver_event, EventType
 from sqlalchemy.orm import Session as DBSession
 from app.infrastructure.database.init_db import engine
+
+logger = logging.getLogger("gasflow.driver.api")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -439,6 +442,7 @@ async def handle_driver_me(ctx: Dict) -> DriverMeResponse:
             if wh_start and wh_end:
                 work_hours = f"{wh_start}-{wh_end}"
         except Exception:
+            logger.debug("driver.settings_unavailable", exc_info=True)
             pass
 
         return DriverMeResponse(
@@ -963,6 +967,104 @@ async def handle_upload_proof(ctx: Dict, delivery_id: str, proof_type: str, note
 # ═══════════════════════════════════════════════════════════
 
 
+def _validar_acao_sync(
+    action: Dict,
+    delivery_repo,
+    idem_repo,
+    driver_id: str,
+    accepted: List,
+    rejected: List,
+    conflicts: List,
+):
+    """Pré-validação da ação: idempotência, existência, ownership e versão.
+
+    Retorna o registro quando a ação pode ser aplicada; None quando a ação já
+    foi aceita ou rejeitada (os resultados entram nas listas).
+    """
+    action_type = action.get("type", "")
+    delivery_id = action.get("delivery_id", "")
+    idempotency_key = action.get("idempotency_key")
+    client_version = action.get("client_version", 0)
+
+    if idempotency_key and idem_repo.exists(idempotency_key):
+        accepted.append(idempotency_key)
+        return None
+
+    record = delivery_repo.get_delivery(delivery_id)
+    if not record:
+        rejected.append({"action": action_type, "delivery_id": delivery_id, "error": "DELIVERY_NOT_FOUND"})
+        return None
+    if record.driver_id != driver_id:
+        rejected.append({"action": action_type, "delivery_id": delivery_id, "error": "FORBIDDEN"})
+        return None
+
+    if client_version and client_version < record.version:
+        conflicts.append(
+            {
+                "action": action_type,
+                "delivery_id": delivery_id,
+                "current_version": record.version,
+                "current_status": record.status,
+                "client_version": client_version,
+            }
+        )
+        return None
+    return record
+
+
+def _aplicar_acao_sync(
+    action: Dict,
+    record,
+    delivery_repo,
+    idem_repo,
+    tenant_id: str,
+    driver_id: str,
+    accepted: List,
+    rejected: List,
+) -> None:
+    """Máquina de estados do sync: aplica a ação e publica o evento correspondente."""
+    action_type = action.get("type", "")
+    delivery_id = action.get("delivery_id", "")
+    idempotency_key = action.get("idempotency_key")
+    server_version = record.version
+
+    result_record = None
+    if action_type == "start" and record.status in ("ASSIGNED", "DISPATCHED"):
+        result_record = delivery_repo.start_delivery(delivery_id, server_version, driver_id)
+    elif action_type == "arrive" and record.status == "EN_ROUTE":
+        result_record = delivery_repo.arrive_delivery(delivery_id, server_version)
+    elif action_type == "complete" and record.status == "ARRIVED":
+        result_record = delivery_repo.complete_delivery(delivery_id, server_version)
+    elif action_type == "fail" and record.status in ("EN_ROUTE", "ARRIVED"):
+        result_record = delivery_repo.fail_delivery(
+            delivery_id,
+            server_version,
+            reason=action.get("failure_reason", "OTHER"),
+            notes=(action.get("failure_notes", "") or "").replace("<", "").replace(">", ""),
+        )
+
+    if result_record:
+        if idempotency_key:
+            idem_repo.record(idempotency_key)
+        accepted.append(idempotency_key or action_type)
+        _sync_event_map = {
+            "start": EventType.DELIVERY_STARTED,
+            "arrive": EventType.DELIVERY_ARRIVED,
+            "complete": EventType.DELIVERY_COMPLETED,
+            "fail": EventType.DELIVERY_FAILED,
+        }
+        if action_type in _sync_event_map:
+            publish_delivery_event(
+                _sync_event_map[action_type],
+                delivery_id,
+                tenant_id,
+                driver_id=driver_id,
+                data={"source": "sync"},
+            )
+    else:
+        rejected.append({"action": action_type, "delivery_id": delivery_id, "error": f"INVALID_STATE: {record.status}"})
+
+
 async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
     """Offline sync. Uses database as single source of truth."""
     driver_id = ctx["driver_id"]
@@ -983,73 +1085,10 @@ async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
         idem_repo = SQLAlchemyIdempotencyRepository(db)
 
         for action in req.actions:
-            action_type = action.get("type", "")
-            delivery_id = action.get("delivery_id", "")
-            idempotency_key = action.get("idempotency_key")
-            client_version = action.get("client_version", 0)
-
-            if idempotency_key and idem_repo.exists(idempotency_key):
-                accepted.append(idempotency_key)
+            record = _validar_acao_sync(action, delivery_repo, idem_repo, driver_id, accepted, rejected, conflicts)
+            if record is None:
                 continue
-
-            record = delivery_repo.get_delivery(delivery_id)
-            if not record:
-                rejected.append({"action": action_type, "delivery_id": delivery_id, "error": "DELIVERY_NOT_FOUND"})
-                continue
-            if record.driver_id != driver_id:
-                rejected.append({"action": action_type, "delivery_id": delivery_id, "error": "FORBIDDEN"})
-                continue
-
-            server_version = record.version
-            if client_version and client_version < server_version:
-                conflicts.append(
-                    {
-                        "action": action_type,
-                        "delivery_id": delivery_id,
-                        "current_version": server_version,
-                        "current_status": record.status,
-                        "client_version": client_version,
-                    }
-                )
-                continue
-
-            result_record = None
-            if action_type == "start" and record.status in ("ASSIGNED", "DISPATCHED"):
-                result_record = delivery_repo.start_delivery(delivery_id, server_version, driver_id)
-            elif action_type == "arrive" and record.status == "EN_ROUTE":
-                result_record = delivery_repo.arrive_delivery(delivery_id, server_version)
-            elif action_type == "complete" and record.status == "ARRIVED":
-                result_record = delivery_repo.complete_delivery(delivery_id, server_version)
-            elif action_type == "fail" and record.status in ("EN_ROUTE", "ARRIVED"):
-                result_record = delivery_repo.fail_delivery(
-                    delivery_id,
-                    server_version,
-                    reason=action.get("failure_reason", "OTHER"),
-                    notes=(action.get("failure_notes", "") or "").replace("<", "").replace(">", ""),
-                )
-
-            if result_record:
-                if idempotency_key:
-                    idem_repo.record(idempotency_key)
-                accepted.append(idempotency_key or action_type)
-                _sync_event_map = {
-                    "start": EventType.DELIVERY_STARTED,
-                    "arrive": EventType.DELIVERY_ARRIVED,
-                    "complete": EventType.DELIVERY_COMPLETED,
-                    "fail": EventType.DELIVERY_FAILED,
-                }
-                if action_type in _sync_event_map:
-                    publish_delivery_event(
-                        _sync_event_map[action_type],
-                        delivery_id,
-                        tenant_id,
-                        driver_id=driver_id,
-                        data={"source": "sync"},
-                    )
-            else:
-                rejected.append(
-                    {"action": action_type, "delivery_id": delivery_id, "error": f"INVALID_STATE: {record.status}"}
-                )
+            _aplicar_acao_sync(action, record, delivery_repo, idem_repo, tenant_id, driver_id, accepted, rejected)
     finally:
         db.close()
 

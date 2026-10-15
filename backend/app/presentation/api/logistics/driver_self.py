@@ -14,6 +14,7 @@ caminho antigo — ver `# LEGACY` lá. Não estenda aquele fluxo.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -34,6 +35,8 @@ from app.presentation.api.logistics.driver_api import (
     handle_start_delivery,
     handle_update_location,
 )
+
+logger = logging.getLogger("gasflow.driver.self")
 
 router = APIRouter(prefix="/driver", tags=["driver-self"])
 
@@ -104,6 +107,7 @@ async def get_my_profile(ctx: TenantContext = Depends(require_driver)):
             if start and end:
                 work_hours = f"{start}-{end}"
         except Exception:
+            logger.debug("driver.settings_unavailable", exc_info=True)
             pass
 
         # Fase 3.3: distância do dia calculada do histórico (antes era sempre 0).

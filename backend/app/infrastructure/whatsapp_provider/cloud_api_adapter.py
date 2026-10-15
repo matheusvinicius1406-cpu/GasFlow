@@ -426,7 +426,7 @@ class CloudApiAdapter(WhatsAppProvider):
             )
         return list(resp.json().get("data", []))
 
-    async def send_typing(self, recipient: str) -> bool:
+    async def send_typing(self, recipient: str) -> bool:  # noqa: ARG002  # contrato do WhatsAppProvider: recipient declarado na interface
         """Cloud API não expõe typing indicator — no-op."""
         return False
 
@@ -442,6 +442,7 @@ class CloudApiAdapter(WhatsAppProvider):
             )
             return resp.status_code == 200
         except Exception:  # noqa: BLE001
+            logger.debug("cloud_api.mark_read_failed", extra={"message_id": message_id}, exc_info=True)
             return False
 
     # ── Contacts ─────────────────────────────────────────
@@ -548,6 +549,7 @@ def _error_detail(resp: httpx.Response) -> tuple:
         err = resp.json().get("error", {})
         return err.get("message", f"HTTP {resp.status_code}"), err.get("code")
     except Exception:  # noqa: BLE001
+        logger.debug("cloud_api.error_body_unreadable", extra={"status": resp.status_code}, exc_info=True)
         return f"HTTP {resp.status_code}", None
 
 

@@ -159,7 +159,7 @@ class AIEngine:
 
         return response
 
-    def _classify_intent(self, message: str, conversation_history: Optional[List[Dict]] = None) -> Intent:
+    def _classify_intent(self, message: str, _conversation_history: Optional[List[Dict]] = None) -> Intent:
         """Classify user message into an intent using LLM."""
         from app.domain.ai.intent import IntentType
 

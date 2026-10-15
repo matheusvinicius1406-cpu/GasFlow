@@ -12,6 +12,7 @@ dependencias aninhadas, ex. `Depends(_svc)` cujo `_svc` usa
 `require_permission`). Nao ha middleware global de auth — ver app/main.py.
 """
 
+import inspect
 import json
 import os
 import sys
@@ -82,40 +83,41 @@ def walk(routes, prefix="", extra_deps=()):
     return out
 
 
+def _add_dep(names, seen, dep, depth):
+    """Desce numa dependencia e nas dependencias da propria assinatura (ate 4 niveis)."""
+    call = getattr(dep, "dependency", None) or getattr(dep, "call", None)
+    if call is None:
+        return
+    name = getattr(call, "__name__", str(call))
+    qual = getattr(call, "__qualname__", "")
+    # factories (require_permission("x"), require_role(...)) devolvem um
+    # closure interno (_check); o qualname carrega o nome da fabrica
+    if ".<locals>." in qual:
+        factory = qual.split(".<locals>.")[0]
+        if factory.startswith("require_") or factory.startswith("get_"):
+            name = factory
+    names.add(name)
+    # desce na assinatura da propria dependencia (ate 4 niveis)
+    if depth >= 4 or name in seen:
+        return
+    seen.add(name)
+    try:
+        sig = inspect.signature(call)
+    except (ValueError, TypeError):
+        return
+    for p in sig.parameters.values():
+        _add_dep(names, seen, p.default, depth + 1)
+
+
 def dep_names(route, extra_deps=(), _depth=0, _seen=None):
     """Coleta nomes de dependencias; segue dependencias aninhadas (ex.:
     `svc = Depends(_svc)` onde `_svc` internamente usa require_permission)."""
     if _seen is None:
         _seen = set()
     names = set()
-    import inspect
-
-    def add(dep, depth):
-        call = getattr(dep, "dependency", None) or getattr(dep, "call", None)
-        if call is None:
-            return
-        name = getattr(call, "__name__", str(call))
-        qual = getattr(call, "__qualname__", "")
-        # factories (require_permission("x"), require_role(...)) devolvem um
-        # closure interno (_check); o qualname carrega o nome da fabrica
-        if ".<locals>." in qual:
-            factory = qual.split(".<locals>.")[0]
-            if factory.startswith("require_") or factory.startswith("get_"):
-                name = factory
-        names.add(name)
-        # desce na assinatura da propria dependencia (ate 4 niveis)
-        if depth >= 4 or name in _seen:
-            return
-        _seen.add(name)
-        try:
-            sig = inspect.signature(call)
-        except (ValueError, TypeError):
-            return
-        for p in sig.parameters.values():
-            add(p.default, depth + 1)
 
     for d in list(getattr(route, "dependencies", []) or []) + list(extra_deps or ()):
-        add(d, _depth)
+        _add_dep(names, _seen, d, _depth)
     endpoint = getattr(route, "endpoint", None)
     if endpoint is not None:
         try:
@@ -123,7 +125,7 @@ def dep_names(route, extra_deps=(), _depth=0, _seen=None):
         except (ValueError, TypeError):
             return names
         for p in sig.parameters.values():
-            add(p.default, _depth + 1)
+            _add_dep(names, _seen, p.default, _depth + 1)
             anno = str(p.annotation)
             for key in AUTH_DEPS:
                 if key in anno:

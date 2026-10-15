@@ -146,7 +146,7 @@ async def refresh(req: RefreshRequest, request: Request):
 
 
 @router.post("/logout")
-async def logout(request: Request, ctx: TenantContext = Depends(get_tenant_context)):
+async def logout(request: Request, _ctx: TenantContext = Depends(get_tenant_context)):
     """Revoga a sessão do caller (funciona com access JWT ou token opaco).
 
     Antes isto chamava `revoke()` num modelo ORM que não tem esse método: em
@@ -239,7 +239,7 @@ async def create_user(req: CreateUserRequest, ctx: TenantContext = Depends(requi
 
 
 @router.get("/roles")
-async def list_roles(ctx: TenantContext = Depends(get_tenant_context)):
+async def list_roles(_ctx: TenantContext = Depends(get_tenant_context)):
     auth = get_auth_service()
     roles = auth.get_roles()
     return {
@@ -270,7 +270,7 @@ async def get_audit(ctx: TenantContext = Depends(require_admin), limit: int = 50
 
 
 @router.get("/tenants")
-async def list_tenants(ctx: TenantContext = Depends(require_admin)):
+async def list_tenants(_ctx: TenantContext = Depends(require_admin)):
     """List all tenants (admin only)."""
     auth = get_auth_service()
     tenants = auth.get_tenants()

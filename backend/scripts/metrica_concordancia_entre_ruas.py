@@ -228,45 +228,18 @@ def _nome_cruzamento(item: Dict[str, Any]) -> str:
     return normalizar(str(item.get("nome") or ""))
 
 
-def _comparar(
+def _cobertura(resultados: List[Dict[str, Any]]) -> Tuple[int, int]:
+    """Ruas com passe completo (>= 2 interseções) e total da amostra."""
+    validos = sum(1 for r in resultados if len(r["passe"].intersecoes or []) >= 2)
+    return validos, len(resultados)
+
+
+def _cruzamentos(
     ruas: List[Dict[str, Any]],
     ibge: List[Dict[str, Any]],
-    overpass: Optional[List[Dict[str, Any]]],
+    overpass: List[Dict[str, Any]],
+    interseccional: List[int],
 ) -> Dict[str, Any]:
-    def cobertura(resultados: List[Dict[str, Any]]) -> Tuple[int, int]:
-        validos = sum(1 for r in resultados if len(r["passe"].intersecoes or []) >= 2)
-        return validos, len(resultados)
-
-    n_ibge, total = cobertura(ibge)
-    relatorio: Dict[str, Any] = {
-        "amostra": total,
-        "cobertura_ibge": round(100.0 * n_ibge / total, 1) if total else 0.0,
-        # Diagnóstico da cobertura: sem isto "70%" é um número sem explicação.
-        "motivos_ibge": _contar(r["motivo"] for r in ibge),
-    }
-    if overpass is None:
-        return relatorio
-
-    n_over, _ = cobertura(overpass)
-    relatorio["cobertura_overpass"] = round(100.0 * n_over / total, 1) if total else 0.0
-    relatorio["motivos_overpass"] = _contar(r["motivo"] for r in overpass)
-
-    # Rede ≠ dado: rua que o Overpass não respondeu (504/429) não é rua sem
-    # dado no OSM. Sobre-responder em cima de uma rede caída inflaria a folga
-    # do CNEFE, então o veredito usa a cobertura **entre as respondidas** —
-    # número maior = critério mais duro para quem quer passar.
-    indisponivel = int(relatorio["motivos_overpass"].get("overpass_indisponivel", 0))
-    respondidas = total - indisponivel
-    relatorio["overpass_respondidas"] = respondidas
-    relatorio["cobertura_overpass_respondidas"] = round(100.0 * n_over / respondidas, 1) if respondidas else 0.0
-
-    interseccional = [
-        i
-        for i in range(total)
-        if len(ibge[i]["passe"].intersecoes or []) >= 2 and len(overpass[i]["passe"].intersecoes or []) >= 2
-    ]
-    relatorio["interseccional"] = len(interseccional)
-
     # ── A régua do gate: cruzamentos, não par na grade ────
     # Nas ruas em que os DOIS têm passe, qual fração dos cruzamentos que o
     # Overpass enxerga o CNEFE também traz? É a pergunta de risco de trocar de
@@ -300,16 +273,68 @@ def _comparar(
                     "cruzamentos_comuns": len(comuns),
                 }
             )
-    relatorio["cruzamentos_overpass"] = cruz_over
-    relatorio["cruzamentos_ibge"] = cruz_ibge
-    relatorio["cruzamentos_comuns"] = cruz_comum
-    relatorio["concordancia_cruzamentos"] = round(100.0 * cruz_comum / cruz_over, 1) if cruz_over else 0.0
-    relatorio["concordancia_cruzamentos_cru"] = round(100.0 * cruz_comum_cru / cruz_over, 1) if cruz_over else 0.0
-    relatorio["concordancia_cruzamentos_inversa"] = round(100.0 * cruz_comum / cruz_ibge, 1) if cruz_ibge else 0.0
-    relatorio["divergencias_cruzamentos"] = divergencias_cruz
+    return {
+        "cruzamentos_overpass": cruz_over,
+        "cruzamentos_ibge": cruz_ibge,
+        "cruzamentos_comuns": cruz_comum,
+        "concordancia_cruzamentos": round(100.0 * cruz_comum / cruz_over, 1) if cruz_over else 0.0,
+        "concordancia_cruzamentos_cru": round(100.0 * cruz_comum_cru / cruz_over, 1) if cruz_over else 0.0,
+        "concordancia_cruzamentos_inversa": round(100.0 * cruz_comum / cruz_ibge, 1) if cruz_ibge else 0.0,
+        "divergencias_cruzamentos": divergencias_cruz,
+    }
 
+
+def _grade_rua(
+    ruas: List[Dict[str, Any]],
+    ibge: List[Dict[str, Any]],
+    overpass: List[Dict[str, Any]],
+    i: int,
+) -> Dict[str, Any]:
     # ── diagnóstico: par na grade (não decide mais nada) ──
+    a, b = ibge[i]["passe"].intersecoes, overpass[i]["passe"].intersecoes
+    comparacoes = 0  # pontos com pelo menos um lado com par
+    abstencoes = 0  # pontos em que os DOIS ficaram sem par (sem informação)
+    iguais = 0  # par igual no texto crudo
+    iguais_norm = 0  # par igual depois de normalizar (critério do gate)
+    pontos_par = 0  # pontos comparáveis desta rua
+    pontos_iguais = 0  # rua: todos os pontos precisam bater
+    exemplo = None
+    for numero in _GRADE_NUMEROS:
+        par_ibge, par_over = _par(a, numero), _par(b, numero)
+        if par_ibge is None and par_over is None:
+            abstencoes += 1
+            continue
+        comparacoes += 1
+        pontos_par += 1
+        if par_ibge == par_over:
+            iguais += 1
+        if _par_normalizado(par_ibge) == _par_normalizado(par_over):
+            pontos_iguais += 1  # rua: todos os pontos precisam bater
+            iguais_norm += 1  # diagnostico: a régua do gate é a de cruzamentos
+        elif exemplo is None:
+            exemplo = {
+                "rua": ruas[i]["nome_logradouro"],
+                "numero": numero,
+                "ibge": par_ibge,
+                "overpass": par_over,
+            }
+    return {
+        "comparacoes": comparacoes,
+        "abstencoes": abstencoes,
+        "iguais": iguais,
+        "iguais_norm": iguais_norm,
+        "pontos_par": pontos_par,
+        "pontos_iguais": pontos_iguais,
+        "exemplo": exemplo,
+    }
 
+
+def _grade(
+    ruas: List[Dict[str, Any]],
+    ibge: List[Dict[str, Any]],
+    overpass: List[Dict[str, Any]],
+    interseccional: List[int],
+) -> Dict[str, Any]:
     comparacoes = 0  # pontos com pelo menos um lado com par
     abstencoes = 0  # pontos em que os DOIS ficaram sem par (sem informação)
     iguais = 0  # par igual no texto crudo
@@ -318,43 +343,65 @@ def _comparar(
     ruas_inteiras = 0  # ruas em que TODOS os pontos comparáveis batem
     divergentes: List[Dict[str, Any]] = []
     for i in interseccional:
-        a, b = ibge[i]["passe"].intersecoes, overpass[i]["passe"].intersecoes
-        pontos_par = 0
-        pontos_iguais = 0
-        exemplo = None
-        for numero in _GRADE_NUMEROS:
-            par_ibge, par_over = _par(a, numero), _par(b, numero)
-            if par_ibge is None and par_over is None:
-                abstencoes += 1
-                continue
-            comparacoes += 1
-            pontos_par += 1
-            if par_ibge == par_over:
-                iguais += 1
-            if _par_normalizado(par_ibge) == _par_normalizado(par_over):
-                pontos_iguais += 1  # rua: todos os pontos precisam bater
-                iguais_norm += 1  # diagnostico: a régua do gate é a de cruzamentos
-            elif exemplo is None:
-                exemplo = {
-                    "rua": ruas[i]["nome_logradouro"],
-                    "numero": numero,
-                    "ibge": par_ibge,
-                    "overpass": par_over,
-                }
-        if pontos_par:
+        parcial = _grade_rua(ruas, ibge, overpass, i)
+        comparacoes += parcial["comparacoes"]
+        abstencoes += parcial["abstencoes"]
+        iguais += parcial["iguais"]
+        iguais_norm += parcial["iguais_norm"]
+        if parcial["pontos_par"]:
             ruas_com_par += 1
-            if pontos_iguais == pontos_par:
+            if parcial["pontos_iguais"] == parcial["pontos_par"]:
                 ruas_inteiras += 1
-            if exemplo is not None and len(divergentes) < 10:
-                divergentes.append(exemplo)
+            if parcial["exemplo"] is not None and len(divergentes) < 10:
+                divergentes.append(parcial["exemplo"])
+    return {
+        "pontos_comparaveis": comparacoes,
+        "pontos_abstidos": abstencoes,
+        "ruas_com_par": ruas_com_par,
+        "concordancia_pontos": round(100.0 * iguais / comparacoes, 1) if comparacoes else 0.0,
+        "concordancia_pontos_normalizada": round(100.0 * iguais_norm / comparacoes, 1) if comparacoes else 0.0,
+        "concordancia_ruas": round(100.0 * ruas_inteiras / ruas_com_par, 1) if ruas_com_par else 0.0,
+        "divergencias_exemplo": divergentes,
+    }
 
-    relatorio["pontos_comparaveis"] = comparacoes
-    relatorio["pontos_abstidos"] = abstencoes
-    relatorio["ruas_com_par"] = ruas_com_par
-    relatorio["concordancia_pontos"] = round(100.0 * iguais / comparacoes, 1) if comparacoes else 0.0
-    relatorio["concordancia_pontos_normalizada"] = round(100.0 * iguais_norm / comparacoes, 1) if comparacoes else 0.0
-    relatorio["concordancia_ruas"] = round(100.0 * ruas_inteiras / ruas_com_par, 1) if ruas_com_par else 0.0
-    relatorio["divergencias_exemplo"] = divergentes
+
+def _comparar(
+    ruas: List[Dict[str, Any]],
+    ibge: List[Dict[str, Any]],
+    overpass: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    n_ibge, total = _cobertura(ibge)
+    relatorio: Dict[str, Any] = {
+        "amostra": total,
+        "cobertura_ibge": round(100.0 * n_ibge / total, 1) if total else 0.0,
+        # Diagnóstico da cobertura: sem isto "70%" é um número sem explicação.
+        "motivos_ibge": _contar(r["motivo"] for r in ibge),
+    }
+    if overpass is None:
+        return relatorio
+
+    n_over, _ = _cobertura(overpass)
+    relatorio["cobertura_overpass"] = round(100.0 * n_over / total, 1) if total else 0.0
+    relatorio["motivos_overpass"] = _contar(r["motivo"] for r in overpass)
+
+    # Rede ≠ dado: rua que o Overpass não respondeu (504/429) não é rua sem
+    # dado no OSM. Sobre-responder em cima de uma rede caída inflaria a folga
+    # do CNEFE, então o veredito usa a cobertura **entre as respondidas** —
+    # número maior = critério mais duro para quem quer passar.
+    indisponivel = int(relatorio["motivos_overpass"].get("overpass_indisponivel", 0))
+    respondidas = total - indisponivel
+    relatorio["overpass_respondidas"] = respondidas
+    relatorio["cobertura_overpass_respondidas"] = round(100.0 * n_over / respondidas, 1) if respondidas else 0.0
+
+    interseccional = [
+        i
+        for i in range(total)
+        if len(ibge[i]["passe"].intersecoes or []) >= 2 and len(overpass[i]["passe"].intersecoes or []) >= 2
+    ]
+    relatorio["interseccional"] = len(interseccional)
+
+    relatorio.update(_cruzamentos(ruas, ibge, overpass, interseccional))
+    relatorio.update(_grade(ruas, ibge, overpass, interseccional))
     relatorio["veredito"] = _veredito(relatorio)
     return relatorio
 

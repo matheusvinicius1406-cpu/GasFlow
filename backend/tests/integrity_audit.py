@@ -346,15 +346,9 @@ def _frontend_references(name: str) -> int:
 # ── Checagens ─────────────────────────────────────────────────────────────
 
 
-def collect_findings() -> list[Finding]:
+def _nav_link_findings(routes: set[str], hrefs: set[str], linked: set[str]) -> list[Finding]:
+    """Rota ↔ navegação e links."""
     findings: list[Finding] = []
-    routes = frontend_routes()
-    hrefs = nav_hrefs()
-    targets = link_targets()
-    linked = {path for paths in targets.values() for path in paths}
-    backend = backend_routes()
-
-    # 1. Rota ↔ navegação e links
     for href in sorted(hrefs):
         if href not in routes:
             findings.append(Finding("rota-nao-existe", href, "href da navegação aponta para rota inexistente"))
@@ -366,15 +360,23 @@ def collect_findings() -> list[Finding]:
         ):
             continue
         findings.append(Finding("tela-sem-link", route, "rota sem entrada na navegação e sem link no app"))
+    return findings
 
-    # 2. Chamada de API do front ↔ rota do backend
+
+def _frontend_api_findings(backend: set[str]) -> list[Finding]:
+    """Chamada de API do front ↔ rota do backend."""
+    findings: list[Finding] = []
     for file, method, path in frontend_api_calls():
         if path not in backend:
             findings.append(
                 Finding("tela-sem-endpoint", f"{method} {path}", f"chamada sem endpoint no backend ({file})")
             )
+    return findings
 
-    # 3. IPC do desktop: renderer → preload → main
+
+def _desktop_ipc_findings() -> list[Finding]:
+    """IPC do desktop: renderer → preload → main."""
+    findings: list[Finding] = []
     preload = desktop_preload()
     handlers = desktop_handlers()
     emitted = desktop_emitted()
@@ -392,35 +394,63 @@ def collect_findings() -> list[Finding]:
     for channel in sorted(handlers):
         if channel not in bridged:
             findings.append(Finding("ipc-orfao", channel, "handler no main sem ponte no preload"))
+    return findings
 
-    # 4. Rotas do WhatsApp ↔ consumidores
+
+def _whatsapp_consumer_findings() -> list[Finding]:
+    """Rotas do WhatsApp ↔ consumidores."""
+    findings: list[Finding] = []
     consumers = _consumer_text()
     for route in sorted(whatsapp_routes()):
         if not _route_regex(route).search(consumers):
             findings.append(
                 Finding("whatsapp-sem-consumidor", route, "rota do serviço WhatsApp sem consumidor no repo")
             )
+    return findings
 
-    # 5. Mobile ↔ backend
+
+def _mobile_api_findings(backend: set[str]) -> list[Finding]:
+    """Mobile ↔ backend."""
+    findings: list[Finding] = []
     for path in sorted(mobile_api_paths()):
         if path not in backend and normalize_path(strip_prefix(path)) not in backend:
             findings.append(Finding("mobile-sem-endpoint", path, "chamada do app mobile sem endpoint no backend"))
+    return findings
 
-    # 6. Tabelas ↔ superfície (dado invisível)
+
+def _invisible_data_findings() -> list[Finding]:
+    """Tabelas ↔ superfície (dado invisível)."""
+    findings: list[Finding] = []
     app_source = _app_source_without_models()
     exposed = _source_text(FRONTEND, MOBILE)
     for table, cls in sorted(model_tables().items()):
         if cls in app_source or table in app_source or table in exposed:
             continue
         findings.append(Finding("dado-invisivel", table, f"tabela sem uso fora da própria camada ({cls})"))
+    return findings
 
-    # 7. Componentes órfãos (feature fantasma)
+
+def _orphan_component_findings() -> list[Finding]:
+    """Componentes órfãos (feature fantasma)."""
+    findings: list[Finding] = []
     for name, index in sorted(feature_exports().items()):
         if _frontend_references(name) == 0:
             findings.append(
                 Finding("componente-orfao", name, f"exportado em {index} e não renderizado em lugar nenhum")
             )
+    return findings
 
+
+def collect_findings() -> list[Finding]:
+    linked = {path for paths in link_targets().values() for path in paths}
+    backend = backend_routes()
+    findings = _nav_link_findings(frontend_routes(), nav_hrefs(), linked)
+    findings += _frontend_api_findings(backend)
+    findings += _desktop_ipc_findings()
+    findings += _whatsapp_consumer_findings()
+    findings += _mobile_api_findings(backend)
+    findings += _invisible_data_findings()
+    findings += _orphan_component_findings()
     return findings
 
 

@@ -13,14 +13,33 @@
 # ficam em `backend/ruff.toml`, que estende este — são opções de formatação e
 # valem só onde já valiam (o resto do repo segue o default do ruff, como antes).
 #
-# Select: E4 (imports), E7 (statements), E9 (runtime), F (pyflakes), B904.
+# Select: E4 (imports), E7 (statements), E9 (runtime), F (pyflakes), B904 (raise from),
+# ARG (argumentos declarados e não usados — guardas FastAPI/contratos ficam `_x` ou `# noqa`),
+# C901 (complexidade ciclomática ≤ 10 — Onda A/E3 zerou as 44 ocorrências).
 [lint]
-select = ["E4", "E7", "E9", "F", "B904"]
+select = ["E4", "E7", "E9", "F", "B904", "ARG", "C901"]
 # Ignorados com justificativa:
 # - E402: imports tardios intencionais para evitar import circular (ex.: realtime em main.py)
 # - E702: múltiplos statements na mesma linha em código legado/testes
 # - E712: `col == True/False` em filtros SQLAlchemy é o padrão correto (coluna não é bool Python;
 #         `col:` trataria NULL como False, mudando semântica de queries)
-# - F841: variáveis "atribuídas e não usadas" — muitas preservam chamadas com efeito;
-#         autofix unsafe removeria calls com side effects
-ignore = ["E402", "E702", "E712", "F841"]
+# (F841 saiu da lista em 10/2026 — Onda A/E4 zerou as 36 ocorrências do repo mantendo as
+#  chamadas com efeito, e agora o gate impede reabertura.)
+ignore = ["E402", "E702", "E712"]
+
+[lint.mccabe]
+max-complexity = 10
+
+# Exceções por arquivo:
+# - backend/tests: ARG não se resolve em teste — o pytest injeta fixtures pelo NOME exato do
+#   parâmetro (`def test_x(client, db)`) e os doubles/mocks precisam declarar a assinatura
+#   completa do protocolo. Os 336 ARG do repo estão todos aqui (app/ e scripts/ = 0).
+[lint.per-file-ignores]
+"backend/tests/**" = ["ARG"]
+# Provedores implementam a MESMA assinatura do protocolo (LLMProvider.generate_structured,
+# STTProvider.transcribe). `schema`/`mime_type` são obrigatórios na interface e ficam
+# ignorados na implementação concreta. `# noqa` inline não serve aqui: o `ruff format`
+# do hook reflowa o comentário para a linha errada e o ruff deixa de reconhecê-lo.
+# Escopo restrito aos 2 arquivos de mock (o resto de ai/ e audio/ segue ARG normal).
+"backend/app/infrastructure/ai/mock_provider.py" = ["ARG"]
+"backend/app/infrastructure/audio/mock_providers.py" = ["ARG"]

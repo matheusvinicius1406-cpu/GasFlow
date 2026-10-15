@@ -64,146 +64,158 @@ from app.core.metrics import MetricsMiddleware, render_metrics
 logger = setup_logging(settings.log_level)
 
 
+def _iniciar_ws_listener():
+    if settings.realtime_backend != "redis":
+        return None
+    from app.infrastructure.realtime.websocket import start_cross_worker_listener
+
+    task, _ = start_cross_worker_listener(url=settings.realtime_redis_url)
+    return task
+
+
+# ── Snapshot diário de estoque (P0 3.7) ─────────────────
+# Garante o snapshot do dia no boot (idempotente) e agenda o job
+# diário. Usa o mesmo intervalo do poller de automação (o job é
+# no-op se já existir snapshot do dia). Desligado em TESTING.
+def _inicializar_snapshot_diario() -> None:
+    if os.getenv("TESTING"):
+        return
+    try:
+        import sqlalchemy.orm
+
+        from app.application.inventory.snapshot_service import StockDailySnapshotService
+        from app.infrastructure.database.init_db import engine as _snap_engine
+
+        _snap_session = sqlalchemy.orm.Session(bind=_snap_engine)
+        try:
+            _snap_count = StockDailySnapshotService(_snap_session, "default").ensure_initial_snapshot()
+            if _snap_count:
+                logger.info(
+                    f"snapshot diário de estoque criado ({_snap_count} produtos)",
+                    extra={"service": "gasflow-backend"},
+                )
+        finally:
+            _snap_session.close()
+    except Exception as exc:  # pragma: no cover — nunca derruba a API
+        logger.warning(f"snapshot diário de estoque falhou no boot: {exc}")
+
+
+# ── LGPD: purge de localizações antigas (App do Entregador) ──
+# Retenção de 90 dias (driver_locations + offline_sync_log). Idempotente,
+# roda no boot e depois 1x/dia junto do loop de snapshots.
+def _inicializar_purge_lgpd() -> None:
+    if os.getenv("TESTING"):
+        return
+    try:
+        import sqlalchemy.orm
+
+        from app.application.delivery.driver_location_service import purge_old_locations
+        from app.infrastructure.database.init_db import engine as _purge_engine
+
+        _purge_session = sqlalchemy.orm.Session(bind=_purge_engine)
+        try:
+            _purged = purge_old_locations(_purge_session)
+            if _purged:
+                logger.info(f"LGPD purge: {_purged} localizações antigas removidas")
+        finally:
+            _purge_session.close()
+    except Exception as exc:  # pragma: no cover — nunca derruba a API
+        logger.warning(f"purge de localizações falhou no boot: {exc}")
+
+
+async def _snapshot_poller(poll_seconds: int) -> None:
+    import sqlalchemy.orm
+
+    from app.application.inventory.snapshot_service import StockDailySnapshotService
+    from app.infrastructure.database.init_db import engine as _snap_engine
+
+    while True:
+        try:
+            session = sqlalchemy.orm.Session(bind=_snap_engine)
+            try:
+                StockDailySnapshotService(session, "default").run_daily_snapshot()
+            finally:
+                session.close()
+        except Exception as exc:  # pragma: no cover — nunca derruba a API
+            logger.warning(f"snapshot poller falhou: {exc}")
+        await asyncio.sleep(poll_seconds)
+
+
+def _criar_poller_snapshot(poll_seconds: int):
+    if poll_seconds <= 0 or os.getenv("TESTING"):
+        return None
+    task = asyncio.create_task(_snapshot_poller(poll_seconds))
+    logger.info(
+        f"snapshot poller iniciado (intervalo={poll_seconds}s)",
+        extra={"service": "gasflow-backend"},
+    )
+    return task
+
+
+# ── Executor de automações em background (opt-in) ────────
+# Processa executions PENDING/APPROVED (incl. reativação) sem depender de
+# chamada manual a POST /whatsapp-automation/process-pending. Desligado
+# por padrão (AUTOMATION_POLL_SECONDS=0) — compose/cron externo continua
+# sendo alternativa. Em multi-worker, qualquer worker pode processar:
+# as executions são marcadas antes do envio (sem duplo envio).
+async def _automation_poller(poll_seconds: int) -> None:
+    import sqlalchemy.orm
+
+    from app.infrastructure.database.init_db import engine as _poll_engine
+    from app.infrastructure.repositories.whatsapp_automation_repository import (
+        SQLAlchemyAutomationRepository,
+    )
+    from app.application.whatsapp_automation.executor import ExecutionProcessor
+
+    while True:
+        try:
+            session = sqlalchemy.orm.Session(bind=_poll_engine)
+            try:
+                repo = SQLAlchemyAutomationRepository(session, "default")
+                processor = ExecutionProcessor(repo)
+                await processor.process_pending_executions(limit=10)
+            finally:
+                session.close()
+        except Exception as exc:  # pragma: no cover — nunca derruba a API
+            logger.warning(f"automation poller falhou: {exc}")
+        await asyncio.sleep(poll_seconds)
+
+
+def _criar_poller_automacao(poll_seconds: int):
+    if poll_seconds <= 0 or os.getenv("TESTING"):
+        return None
+    task = asyncio.create_task(_automation_poller(poll_seconds))
+    logger.info(
+        f"automation poller iniciado (intervalo={poll_seconds}s)",
+        extra={"service": "gasflow-backend"},
+    )
+    return task
+
+
+async def _encerrar_tarefa(task) -> None:
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """Application lifespan: startup and shutdown."""
     setup_realtime_bridge()
-    _ws_listener_task = None
-    if settings.realtime_backend == "redis":
-        from app.infrastructure.realtime.websocket import (
-            start_cross_worker_listener,
-        )
-
-        _ws_listener_task, _ = start_cross_worker_listener(url=settings.realtime_redis_url)
-
-    # ── Executor de automações em background (opt-in) ────────
-    # Processa executions PENDING/APPROVED (incl. reativação) sem depender de
-    # chamada manual a POST /whatsapp-automation/process-pending. Desligado
-    # por padrão (AUTOMATION_POLL_SECONDS=0) — compose/cron externo continua
-    # sendo alternativa. Em multi-worker, qualquer worker pode processar:
-    # as executions são marcadas antes do envio (sem duplo envio).
-    _automation_poll_task = None
+    _ws_listener_task = _iniciar_ws_listener()
     _automation_poll_seconds = int(os.getenv("AUTOMATION_POLL_SECONDS", "0"))
-
-    # ── Snapshot diário de estoque (P0 3.7) ─────────────────
-    # Garante o snapshot do dia no boot (idempotente) e agenda o job
-    # diário. Usa o mesmo intervalo do poller de automação (o job é
-    # no-op se já existir snapshot do dia). Desligado em TESTING.
-    if not os.getenv("TESTING"):
-        try:
-            import sqlalchemy.orm
-
-            from app.application.inventory.snapshot_service import StockDailySnapshotService
-            from app.infrastructure.database.init_db import engine as _snap_engine
-
-            _snap_session = sqlalchemy.orm.Session(bind=_snap_engine)
-            try:
-                _snap_count = StockDailySnapshotService(_snap_session, "default").ensure_initial_snapshot()
-                if _snap_count:
-                    logger.info(
-                        f"snapshot diário de estoque criado ({_snap_count} produtos)",
-                        extra={"service": "gasflow-backend"},
-                    )
-            finally:
-                _snap_session.close()
-        except Exception as exc:  # pragma: no cover — nunca derruba a API
-            logger.warning(f"snapshot diário de estoque falhou no boot: {exc}")
-
-    # ── LGPD: purge de localizações antigas (App do Entregador) ──
-    # Retenção de 90 dias (driver_locations + offline_sync_log). Idempotente,
-    # roda no boot e depois 1x/dia junto do loop de snapshots.
-    if not os.getenv("TESTING"):
-        try:
-            import sqlalchemy.orm
-
-            from app.application.delivery.driver_location_service import purge_old_locations
-            from app.infrastructure.database.init_db import engine as _purge_engine
-
-            _purge_session = sqlalchemy.orm.Session(bind=_purge_engine)
-            try:
-                _purged = purge_old_locations(_purge_session)
-                if _purged:
-                    logger.info(f"LGPD purge: {_purged} localizações antigas removidas")
-            finally:
-                _purge_session.close()
-        except Exception as exc:  # pragma: no cover — nunca derruba a API
-            logger.warning(f"purge de localizações falhou no boot: {exc}")
-
-    _snapshot_poll_task = None
-    if _automation_poll_seconds > 0 and not os.getenv("TESTING"):
-
-        async def _snapshot_poller():
-            import sqlalchemy.orm
-
-            from app.application.inventory.snapshot_service import StockDailySnapshotService
-            from app.infrastructure.database.init_db import engine as _snap_engine
-
-            while True:
-                try:
-                    session = sqlalchemy.orm.Session(bind=_snap_engine)
-                    try:
-                        StockDailySnapshotService(session, "default").run_daily_snapshot()
-                    finally:
-                        session.close()
-                except Exception as exc:  # pragma: no cover — nunca derruba a API
-                    logger.warning(f"snapshot poller falhou: {exc}")
-                await asyncio.sleep(_automation_poll_seconds)
-
-        _snapshot_poll_task = asyncio.create_task(_snapshot_poller())
-        logger.info(
-            f"snapshot poller iniciado (intervalo={_automation_poll_seconds}s)",
-            extra={"service": "gasflow-backend"},
-        )
-
-    if _automation_poll_seconds > 0 and not os.getenv("TESTING"):
-
-        async def _automation_poller():
-            import sqlalchemy.orm
-
-            from app.infrastructure.database.init_db import engine as _poll_engine
-            from app.infrastructure.repositories.whatsapp_automation_repository import (
-                SQLAlchemyAutomationRepository,
-            )
-            from app.application.whatsapp_automation.executor import ExecutionProcessor
-
-            while True:
-                try:
-                    session = sqlalchemy.orm.Session(bind=_poll_engine)
-                    try:
-                        repo = SQLAlchemyAutomationRepository(session, "default")
-                        processor = ExecutionProcessor(repo)
-                        await processor.process_pending_executions(limit=10)
-                    finally:
-                        session.close()
-                except Exception as exc:  # pragma: no cover — nunca derruba a API
-                    logger.warning(f"automation poller falhou: {exc}")
-                await asyncio.sleep(_automation_poll_seconds)
-
-        _automation_poll_task = asyncio.create_task(_automation_poller())
-        logger.info(
-            f"automation poller iniciado (intervalo={_automation_poll_seconds}s)",
-            extra={"service": "gasflow-backend"},
-        )
-
+    _inicializar_snapshot_diario()
+    _inicializar_purge_lgpd()
+    _snapshot_poll_task = _criar_poller_snapshot(_automation_poll_seconds)
+    _automation_poll_task = _criar_poller_automacao(_automation_poll_seconds)
     yield
-    if _ws_listener_task is not None:
-        _ws_listener_task.cancel()
-        try:
-            await _ws_listener_task
-        except asyncio.CancelledError:
-            pass
-    if _automation_poll_task is not None:
-        _automation_poll_task.cancel()
-        try:
-            await _automation_poll_task
-        except asyncio.CancelledError:
-            pass
-    if _snapshot_poll_task is not None:
-        _snapshot_poll_task.cancel()
-        try:
-            await _snapshot_poll_task
-        except asyncio.CancelledError:
-            pass
+    await _encerrar_tarefa(_ws_listener_task)
+    await _encerrar_tarefa(_automation_poll_task)
+    await _encerrar_tarefa(_snapshot_poll_task)
 
 
 app = FastAPI(

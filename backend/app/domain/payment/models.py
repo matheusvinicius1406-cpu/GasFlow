@@ -187,7 +187,7 @@ class Payment:
         self.updated_at = datetime.utcnow().isoformat()
         return True
 
-    def cancel(self, reason: str = "") -> bool:
+    def cancel(self, _reason: str = "") -> bool:
         """Cancel payment."""
         if self.status in (PaymentStatus.CONFIRMED, PaymentStatus.REFUNDED):
             return False

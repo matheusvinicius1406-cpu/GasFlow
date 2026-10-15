@@ -212,7 +212,7 @@ def _issue_refresh(db: Session, driver_id: str, tenant_id: str) -> str:
 #   driver.work_hours.start / driver.work_hours.end ("HH:MM")
 
 
-def _work_hours(db: Session, tenant_id: str) -> tuple:
+def _work_hours(db: Session, _tenant_id: str) -> tuple:
     from app.application.settings.settings_service import SettingsService
 
     start = str(SettingsService(db).get_value("driver.work_hours.start", "06:00"))

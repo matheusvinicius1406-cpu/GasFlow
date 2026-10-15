@@ -441,7 +441,7 @@ class TestLastInteractionBump:
 class TestStateMachine:
     def test_initial_state_is_idle(self, gateway, sample_data):
         result = gateway.process_incoming(_make_msg(text="Olá"))
-        repos_conv = SQLAlchemyConversationRepository.__new__(SQLAlchemyConversationRepository)
+        SQLAlchemyConversationRepository.__new__(SQLAlchemyConversationRepository)
         conv = gateway.conversation_repo.find_by_id(result["conversation_id"])
         assert conv.state in (ConversationState.IDLE, ConversationState.BROWSING)
 

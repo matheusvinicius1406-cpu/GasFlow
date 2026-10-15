@@ -120,7 +120,7 @@ def _err(e: IntegrationError) -> HTTPException:
 def list_integrations(
     include_inactive: bool = Query(default=True),
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.read")),
+    _ctx: TenantContext = Depends(require_permission("integration.read")),
 ):
     rows = svc.list_integrations(include_inactive=include_inactive)
     return {"integrations": [_to_dict(r) for r in rows], "total": len(rows)}
@@ -130,7 +130,7 @@ def list_integrations(
 def create_integration(
     body: IntegrationCreateRequest,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     model = IntegrationModel(
         id=str(uuid.uuid4()),
@@ -157,7 +157,7 @@ def create_integration(
 def get_integration(
     integration_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.read")),
+    _ctx: TenantContext = Depends(require_permission("integration.read")),
 ):
     return _to_dict(_or_404(svc, integration_id))
 
@@ -167,7 +167,7 @@ def update_integration(
     integration_id: str,
     body: IntegrationUpdateRequest,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     model = _or_404(svc, integration_id)
     data = body.model_dump(exclude_unset=True)
@@ -182,7 +182,7 @@ def update_integration(
 def delete_integration(
     integration_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     """Soft delete — desativa a integração (histórico de sync é preservado)."""
     model = _or_404(svc, integration_id)
@@ -195,7 +195,7 @@ def delete_integration(
 def rotate_token(
     integration_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     model = _or_404(svc, integration_id)
     model.import_token = IntegrationModel.generate_import_token()
@@ -210,7 +210,7 @@ def rotate_token(
 async def test_connection(
     integration_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     """Dry-run: acessa o site e devolve cabeçalhos candidatos a tabela de pedidos."""
     model = _or_404(svc, integration_id)
@@ -224,7 +224,7 @@ async def test_connection(
 def sync_manual(
     integration_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     """Dispara sincronização manual. O scraping roda no AGENTE — isso enfileira
     a execução consultando o agente via /agent/dispatch (pull model). Sem agente
@@ -246,7 +246,7 @@ def sync_manual(
 @router.post("/sync-all")
 def sync_all(
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     """Marca todas as integrações ativas para sincronização pelo agente.
 
@@ -339,7 +339,7 @@ def list_logs(
     integration_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.read")),
+    _ctx: TenantContext = Depends(require_permission("integration.read")),
 ):
     _or_404(svc, integration_id)
     logs = svc.list_sync_logs(integration_id, limit=limit)
@@ -367,7 +367,7 @@ def list_imported(
     status: Optional[str] = Query(default=None, pattern="^(pending|success|error)$"),
     limit: int = Query(default=200, ge=1, le=500),
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.read")),
+    _ctx: TenantContext = Depends(require_permission("integration.read")),
 ):
     _or_404(svc, integration_id)
     rows = svc.list_imported_orders(integration_id, status=status, limit=limit)
@@ -392,7 +392,7 @@ def get_imported(
     integration_id: str,
     imported_order_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.read")),
+    _ctx: TenantContext = Depends(require_permission("integration.read")),
 ):
     row = svc.get_imported_order(imported_order_id)
     if not row or row.integration_id != integration_id:
@@ -414,7 +414,7 @@ def reprocess_imported(
     integration_id: str,
     imported_order_id: str,
     svc: IntegrationImportService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("integration.write")),
+    _ctx: TenantContext = Depends(require_permission("integration.write")),
 ):
     """Reimporta um pedido com erro (ex.: estoque reposto no backend)."""
     _or_404(svc, integration_id)

@@ -67,12 +67,7 @@ class RegisterPaymentUseCase:
         if not receivable:
             receivable = self._recebivel_do_pedido(order_codigo)
 
-        if receivable.status in (ReceivableStatus.PAID, ReceivableStatus.CANCELLED):
-            raise ValueError(f"Order {order_codigo} is already {receivable.status.value}")
-
-        # 3. Check overpayment
-        if amount > receivable.remaining_amount:
-            raise ValueError(f"Payment R${amount} exceeds remaining R${receivable.remaining_amount}")
+        self._validar_recebivel_do_pagamento(order_codigo, receivable, amount)
 
         # 4. Create payment
         now = datetime.utcnow()
@@ -99,15 +94,7 @@ class RegisterPaymentUseCase:
         receivable = self.receivable_repo.update(receivable)
 
         # 6. Sync order.payment_status
-        if self.order_repo:
-            order = self.order_repo.buscar_por_codigo(order_codigo)
-            if order:
-                if new_paid >= receivable.original_amount:
-                    order.payment_status = OrderPaymentStatus.PAID
-                elif new_paid > 0:
-                    order.payment_status = OrderPaymentStatus.PARTIAL
-                order.updated_at = now
-                self.order_repo.criar(order)  # _to_model handles update via entity.id
+        self._sincronizar_status_pedido(order_codigo, new_paid, receivable, now)
 
         # 7. Cash movement (receipt)
         current_balance = self.cash_repo.current_balance()
@@ -140,6 +127,29 @@ class RegisterPaymentUseCase:
             "cash_movement": cash_movement,
             "status": "created",
         }
+
+    def _validar_recebivel_do_pagamento(self, order_codigo: str, receivable: Receivable, amount: Decimal) -> None:
+        if receivable.status in (ReceivableStatus.PAID, ReceivableStatus.CANCELLED):
+            raise ValueError(f"Order {order_codigo} is already {receivable.status.value}")
+
+        # Check overpayment
+        if amount > receivable.remaining_amount:
+            raise ValueError(f"Payment R${amount} exceeds remaining R${receivable.remaining_amount}")
+
+    def _sincronizar_status_pedido(
+        self, order_codigo: str, new_paid: Decimal, receivable: Receivable, now: datetime
+    ) -> None:
+        if not self.order_repo:
+            return
+        order = self.order_repo.buscar_por_codigo(order_codigo)
+        if not order:
+            return
+        if new_paid >= receivable.original_amount:
+            order.payment_status = OrderPaymentStatus.PAID
+        elif new_paid > 0:
+            order.payment_status = OrderPaymentStatus.PARTIAL
+        order.updated_at = now
+        self.order_repo.criar(order)  # _to_model handles update via entity.id
 
     def _recebivel_do_pedido(self, order_codigo: str) -> Receivable:
         """Materializa o recebível de um pedido confirmado que não tem um.

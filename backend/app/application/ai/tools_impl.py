@@ -180,7 +180,7 @@ class AIToolsFactory:
         finally:
             self._close_session(session)
 
-    def get_low_stock(self, args: Dict[str, Any]) -> ToolResult:
+    def get_low_stock(self, _args: Dict[str, Any]) -> ToolResult:
         """Get products with low or zero stock."""
         session = self._get_session()
         try:
@@ -207,7 +207,7 @@ class AIToolsFactory:
         finally:
             self._close_session(session)
 
-    def get_inventory_summary(self, args: Dict[str, Any]) -> ToolResult:
+    def get_inventory_summary(self, _args: Dict[str, Any]) -> ToolResult:
         """Get inventory summary."""
         session = self._get_session()
         try:
@@ -287,7 +287,7 @@ class AIToolsFactory:
         finally:
             self._close_session(session)
 
-    def get_financial_summary(self, args: Dict[str, Any]) -> ToolResult:
+    def get_financial_summary(self, _args: Dict[str, Any]) -> ToolResult:
         """Get financial summary."""
         session = self._get_session()
         try:
@@ -312,7 +312,7 @@ class AIToolsFactory:
         finally:
             self._close_session(session)
 
-    def get_sales_summary(self, args: Dict[str, Any]) -> ToolResult:
+    def get_sales_summary(self, _args: Dict[str, Any]) -> ToolResult:
         """Get sales summary."""
         session = self._get_session()
         try:

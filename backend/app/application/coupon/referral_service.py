@@ -73,6 +73,7 @@ class ReferralService:
                 session.close()
             return int(value)
         except Exception:
+            logger.debug("referral.settings_unavailable", exc_info=True)
             return default
 
     def max_per_month(self) -> int:
@@ -381,6 +382,7 @@ class ReferralService:
             incoming = normalize_phone(phone or "")
             original = normalize_phone(referral.referred_phone or "")
         except Exception:
+            logger.debug("referral.phone_compare_failed", exc_info=True)
             return False
         return bool(incoming) and incoming == original
 

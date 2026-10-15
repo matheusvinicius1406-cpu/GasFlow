@@ -137,6 +137,7 @@ class EvolutionAdapter(WhatsAppProvider):
             }
             return mapping.get(state, ConnectionState.DISCONNECTED)
         except Exception:
+            logger.debug("evolution.status_failed", exc_info=True)
             return ConnectionState.DISCONNECTED
 
     async def get_connection_info(self) -> ConnectionInfo:
@@ -264,6 +265,7 @@ class EvolutionAdapter(WhatsAppProvider):
                 )
                 return True
         except Exception:
+            logger.debug("evolution.presence_failed", extra={"recipient": recipient}, exc_info=True)
             return False
 
     async def mark_as_read(self, message_id: str) -> bool:
@@ -276,6 +278,7 @@ class EvolutionAdapter(WhatsAppProvider):
                 )
                 return True
         except Exception:
+            logger.debug("evolution.mark_read_failed", extra={"message_id": message_id}, exc_info=True)
             return False
 
     # ── Contacts ─────────────────────────────────────────
@@ -334,6 +337,7 @@ class EvolutionAdapter(WhatsAppProvider):
                 )
                 return resp.status_code == 200
         except Exception:
+            logger.debug("evolution.health_check_failed", exc_info=True)
             return False
 
     # ── Private helpers ──────────────────────────────────

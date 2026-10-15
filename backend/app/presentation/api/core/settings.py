@@ -42,7 +42,7 @@ class SeedResult(BaseModel):
 @router.get("")
 def get_all_settings(
     svc: SettingsService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("settings.read")),
+    _ctx: TenantContext = Depends(require_permission("settings.read")),
 ):
     return {"categories": svc.grouped()}
 
@@ -51,7 +51,7 @@ def get_all_settings(
 def get_category(
     category: str,
     svc: SettingsService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("settings.read")),
+    _ctx: TenantContext = Depends(require_permission("settings.read")),
 ):
     rows = svc.list_by_category(category)
     if not rows:
@@ -63,7 +63,7 @@ def get_category(
 def get_key(
     key: str,
     svc: SettingsService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("settings.read")),
+    _ctx: TenantContext = Depends(require_permission("settings.read")),
 ):
     row = svc.get(key)
     if not row:
@@ -88,7 +88,7 @@ def update_key(
 @router.post("/seed", response_model=SeedResult)
 def seed(
     svc: SettingsService = Depends(_svc),
-    ctx: TenantContext = Depends(require_permission("settings.write")),
+    _ctx: TenantContext = Depends(require_permission("settings.write")),
 ):
     return SeedResult(created=svc.seed_defaults())
 

@@ -89,6 +89,7 @@ def _operator_timezone() -> str:
         if isinstance(raw, str) and raw.strip():
             name = raw.strip()
     except Exception:  # noqa: BLE001 — sem settings, o default serve
+        logger.debug("print_queue.timezone_unavailable", exc_info=True)
         name = DEFAULT_TZ
     _tz_cache["tz"] = (now, name)
     return name
@@ -114,6 +115,7 @@ def _local_date(utc_naive: datetime, tz_name: str) -> Any:
     try:
         tz = ZoneInfo(tz_name)
     except Exception:  # noqa: BLE001
+        logger.debug("print_queue.tz_invalid", extra={"tz": tz_name}, exc_info=True)
         tz = ZoneInfo(DEFAULT_TZ)
     return utc_naive.replace(tzinfo=timezone.utc).astimezone(tz).date()
 

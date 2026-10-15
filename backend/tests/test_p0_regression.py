@@ -56,7 +56,7 @@ def _create_operator(client, admin_headers) -> tuple[str, str]:
 
     db = Session(bind=engine)
     try:
-        role_id = db.execute(text("SELECT id FROM auth_roles WHERE name = 'OPERATOR'")).scalar_one()
+        db.execute(text("SELECT id FROM auth_roles WHERE name = 'OPERATOR'")).scalar_one()
     finally:
         db.close()
 

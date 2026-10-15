@@ -109,7 +109,7 @@ async def get_communication_history(
 
 @router.get("/templates")
 async def list_templates(
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """List all available communication templates."""
     return {"templates": {e.value: t.to_dict() for e, t in DEFAULT_TEMPLATES.items()}}

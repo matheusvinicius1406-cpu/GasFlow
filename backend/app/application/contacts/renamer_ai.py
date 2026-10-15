@@ -158,19 +158,8 @@ def _sem_digitos_novos(campo: str, bruto: str) -> bool:
     return not (_digitos(campo) - _digitos(bruto))
 
 
-def validar(bruto: str, dados: Any) -> Optional[Dict[str, Any]]:
-    """Valida estritamente um objeto de saída da IA; ``None`` se falhar.
-
-    Rejeita: JSON com chaves erradas, tipos errados, número fora do padrão,
-    dígitos inexistentes no original (alucinação) e final absurdamente longo.
-    """
-    if not isinstance(dados, dict):
-        return None
-    if any(chave not in dados for chave in _CHAVAS):
-        return None
-    if not isinstance(dados.get("excluir"), bool):
-        return None
-
+def _validar_campos(bruto: str, dados: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normaliza/valida cada campo de texto; ``None`` se algum rejeitar."""
     saida: Dict[str, Any] = {"excluir": dados["excluir"]}
     for campo in _CHAVAS:
         if campo == "excluir":
@@ -190,6 +179,25 @@ def validar(bruto: str, dados: Any) -> Optional[Dict[str, Any]]:
         if not _sem_digitos_novos(valor, bruto):
             return None
         saida[campo] = valor
+    return saida
+
+
+def validar(bruto: str, dados: Any) -> Optional[Dict[str, Any]]:
+    """Valida estritamente um objeto de saída da IA; ``None`` se falhar.
+
+    Rejeita: JSON com chaves erradas, tipos errados, número fora do padrão,
+    dígitos inexistentes no original (alucinação) e final absurdamente longo.
+    """
+    if not isinstance(dados, dict):
+        return None
+    if any(chave not in dados for chave in _CHAVAS):
+        return None
+    if not isinstance(dados.get("excluir"), bool):
+        return None
+
+    saida = _validar_campos(bruto, dados)
+    if saida is None:
+        return None
 
     # Formato do número já passou pelo corte de dígitos novos no laço acima;
     # aqui só garante o padrão "N" + símbolo de grau + dígitos.

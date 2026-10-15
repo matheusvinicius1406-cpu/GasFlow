@@ -150,14 +150,14 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | D7 | Validações manuais V.1/V.2/V.3 | Execução em ambiente/credenciais — **checklist em 0/3** |
 | D8 | LGPD export/delete de dados | Implementação (M) + política |
 
-### E. Dívida técnica diferível (sem prazo, não bloqueia release)
+### E. Dívida técnica diferível — **Onda A concluída em 2026-10-15 (E1–E4 fechadas)**
 
-| # | Item |
-|---|---|
-| E1 | `except Exception:` silenciosos — triagem + log contextual (25 blocos) |
-| E2 | `console.log` → `pino` no serviço WhatsApp (24 ocorrências) |
-| E3 | 19 funções com complexidade ciclomática > 10 (16 ainda restantes) |
-| E4 | F841/ARG/vulture — parâmetros de interface |
+| # | Item | Status |
+|---|---|---|
+| E1 | `except Exception:` silenciosos | ✅ **fechada 2026-10-15** — os **46** blocos do `backend/app` ganharam log contextual (`logger.error/warning(..., exc_info=True)` para problema real, `debug` para fallback benigno); detector de `except` silencioso em `app/` = **0**. O único restante do repo é `scripts/renomear_agenda_local.py:236` (`reconfigure` best-effort de CLI), mantido de propósito |
+| E2 | `console.log` → `pino` no serviço WhatsApp | ✅ fechada 2026-10-14 (`e3c8f48`) — 0 `console.*` em `whatsapp/src`, regra `no-console` no lint, `pino@^10.3.1` no `whatsapp/package.json`. Restam `console.*` fora do serviço: `agent/debug2.ts`(2), `agent/src/index.ts`(3), `e2e/scripts/fase5-pdf-electron.spec.ts`(1), `mobile/src/containers/wired.tsx`(5) |
+| E3 | Funções com complexidade ciclomática > 10 | ✅ **fechada 2026-10-15** — **44 → 0** (36 em `app/`, 6 em `scripts/`, 2 em `tests/`), sempre por extração de helpers privados (sem mudança de comportamento). Maiores: `db_integrity_check.check_integrity` 23→1, `integrity_audit.collect_findings` 22→2, `main.lifespan` 22→1, `renamer.renomear` 20→8, `workflow_engine.resume_after_approval` 19→6, `whatsapp/gateway.process_incoming` 17→5, `overpass._conta` 19→≤10. Travada no gate: `C901` + `max-complexity = 10` no `ruff.toml` da raiz |
+| E4 | F841/ARG/vulture — parâmetros de interface | ✅ **fechada 2026-10-15** — **F841 36 → 0** (saiu do `ignore` do ruff; 1 em `app/`, 35 em `tests/`, sempre mantendo a chamada com efeito). **ARG 119 → 0** em `app/`: 70 guardas FastAPI `ctx`→`_ctx` (padrão já usado em `whatsapp/accounts.py`; `Depends` mantido, só o nome vira `_ctx`), 17 renomes de helpers privados, 29 `# noqa` documentado em contratos (provedores LLM/STT/TTS/WhatsApp, PSP, repo), Query `community_member` morta removida e `_get_order_data_for_date` passou a filtrar por data (bug: relatório diário listava todas as entregas). **vulture 1 → 0** (`raise` duplicado após `raise ... from` em `client_repository.py`). `ARG` entrou no `select` com `per-file-ignores` só para `backend/tests/**` (336 — o pytest exige o nome exato do parâmetro para injetar fixture) e vulture entrou no CI (`--min-confidence 80`) |
 
 ### F. Documentação
 
@@ -225,7 +225,7 @@ Regra: **uma onda por vez, cada uma termina com suíte verde + commit.**
 
 | Onda | Escopo | Esforço | Pré-requisito |
 |---|---|---|---|
-| **A** | **Dívida E1–E4** (except silenciosos, pino, complexidade, F841) | ~1 dia | nenhum |
+| **A** | **Dívida E1–E4** (except silenciosos, pino, complexidade, F841) — ✅ **concluída 2026-10-15**, gate completo verde (§9) | ~~~1 dia~~ ✅ | nenhum |
 | **B** | **CI**: ✅ **concluída 2026-10-14** — B1 ✅ (E2E medido 2:12, não >45 min) · B3 ✅ (`gh` instalado e autenticado) · B2 ✅ (11 mergeados / 2 fechados) · I2 ✅ (lint no job do whatsapp) · B5 ⏳ nova (migração TS7, deliberada) | ~~2–3 h~~ ✅ | `gh` |
 | **C** | **Decisões de produto**: C1, C3, C2 | a definir | **§4 nº 1–3** |
 | **D** | **Segurança residual**: H1 metrics, H2 token→JWT/Argon2id, H3 guard GETs, H4 mypy strict | ~1 dia | — |
@@ -346,28 +346,30 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 
 ## 9. Gate de verificação
 
-**Rodado e verde em 2026-10-14** (Fase 1 desta sessão — ver §8.8/§8.9 para as duas correções de comando):
+**Última execução completa: 2026-10-15 (Onda A — E1–E4)**, sobre o baseline verde de 2026-10-14 (§8.8/§8.9):
 
 | Check | Resultado |
 |---|---|
-| `ruff check app tests scripts` | All checks passed |
+| `ruff check app tests scripts` (agora com `C901` ≤ 10, `ARG` e `F841` no `select`) | All checks passed — **C901 44→0, ARG 119→0, F841 36→0** |
 | `mypy app` | Success: 0 issues in 337 files |
+| `python -m vulture app --min-confidence 80` | **0 findings** (era 1: `raise` duplicado em `client_repository.py`) |
+| `pytest -q -p no:randomly` | **2291 passed / 30 skipped / 0 failed** (859 s, re-medido 2026-10-15 no gate final da Onda A sobre a árvore já refatorada) |
 | `alembic heads` | head único `c1a2b3d4e5f6` |
-| `pytest -q -p no:randomly` | **2291 passed / 30 skipped / 0 failed** (3648 s) |
-| `frontend: vitest run --maxWorkers=2` | **452 passed / 74 files / 0 errors** |
-| `whatsapp: npm test` | **106 passed / 0 failed** |
-| `desktop: npm run typecheck` | exit 0 |
-| `desktop: npm test` | **71 passed / 0 failed** |
+| `frontend: vitest run --maxWorkers=2` | **463 passed / 76 files / 0 errors** (209 s) — medido 2026-10-15 (subiu de 452/74 com os testes das 12 rotas do C1) |
+| `whatsapp: npm test` | **106 passed / 0 failed** (45 s) — medido 2026-10-15 |
+| `desktop: npm run typecheck` (baseline 2026-10-14) | exit 0 |
+| `desktop: npm test` (baseline 2026-10-14) | **71 passed / 0 failed** |
 | `tests.integrity_audit` | findings=9 / **pendentes=0** |
 | CI no `main` (run `bb4f26d`, 2026-10-14) | **6/6 jobs verdes em 8 min 36 s** (E2E 2:12, Backend 5:51) — ver §8.16 |
-| CI no `main` combinado (run `991db31`, 2026-10-14, após 11 merges de deps) | **6/6 jobs verdes em 14 min 46 s** — baseline vigente; ver §8.17 |
+| CI no `main` combinado (run `991db31`, 2026-10-14, após 11 merges de deps) | **6/6 jobs verdes em 14 min 46 s** — ver §8.17 |
 
 ```bash
 cd backend
-.venv-ci/Scripts/python.exe -m ruff check app tests scripts
+.venv-ci/Scripts/python.exe -m ruff check app tests scripts   # inclui C901<=10, ARG, F841
 .venv-ci/Scripts/python.exe -m mypy app
+.venv-ci/Scripts/python.exe -m vulture app --min-confidence 80
 .venv-ci/Scripts/python.exe -m alembic heads                   # head único c1a2b3d4e5f6
-.venv-ci/Scripts/python.exe -m pytest -q -p no:randomly        # ~61 min
+.venv-ci/Scripts/python.exe -m pytest -q -p no:randomly        # ~20 min
 ADMIN_PASSWORD='<sua>' .venv-ci/Scripts/python.exe -m tests.integrity_audit   # espera 9/0
 cd ../frontend && npx vitest run --maxWorkers=2                # OBRIGATÓRIO nesta máquina
 cd ../whatsapp && npm test

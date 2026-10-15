@@ -72,7 +72,7 @@ class IbgeEntreRuasProvider:
 
     # ── API ──────────────────────────────────────────────
 
-    def buscar_intersecoes(self, rua: str, lat: Any = None, lng: Any = None) -> PasseIntersecoes:
+    def buscar_intersecoes(self, rua: str, lat: Any = None, lng: Any = None) -> PasseIntersecoes:  # noqa: ARG002  # assinatura compartilhada com OverpassProvider: lat/lng opcionais sem geometria na API do IBGE
         """Passe de uma rua. Nunca levanta: sem dado é lista vazia (D2)."""
         res = PasseIntersecoes()
         chave = normalizar(rua)
@@ -87,6 +87,32 @@ class IbgeEntreRuasProvider:
         res.encontrou_rua = True
 
         chaves_proprias = {f.chave_logradouro for f in faces}
+        itens, ancoras_rua, cobertura_pond, comprimento_total, inversoes, cruzamentos = self._processar_faces(
+            faces, chaves_proprias
+        )
+
+        res.ancoras = len(ancoras_rua)
+        res.cruzamentos = len(cruzamentos)
+        res.cobertura_eixo = (cobertura_pond / comprimento_total) if comprimento_total > 0 else 0.0
+        res.inversoes_numero = inversoes
+
+        if not itens:
+            res.motivo = "sem_ancora_util"
+            return res
+
+        intersecoes = _finalizar_intersecoes(itens, ancoras_rua)
+
+        if len(intersecoes) < 2:
+            res.motivo = "menos_de_duas_intersecoes"
+            return res
+
+        res.intersecoes = intersecoes
+        res.motivo = "ok"
+        return res
+
+    def _processar_faces(
+        self, faces: List[LogradouroFaceModel], chaves_proprias: set
+    ) -> Tuple[List[Dict[str, Any]], List[int], float, float, int, Dict[str, None]]:
         itens: List[Dict[str, Any]] = []
         ancoras_rua: List[int] = []
         cobertura_pond = 0.0
@@ -125,39 +151,7 @@ class IbgeEntreRuasProvider:
                 cruzamentos[nome] = None
                 itens.append({"nome": nome, "numero": int(numero_fim)})
 
-        res.ancoras = len(ancoras_rua)
-        res.cruzamentos = len(cruzamentos)
-        res.cobertura_eixo = (cobertura_pond / comprimento_total) if comprimento_total > 0 else 0.0
-        res.inversoes_numero = inversoes
-
-        if not itens:
-            res.motivo = "sem_ancora_util"
-            return res
-
-        # §8.8.3: dedup por NOME antes de ordenar; retém o menor número.
-        por_nome: Dict[str, int] = {}
-        for item in itens:
-            nome, numero = item["nome"], item["numero"]
-            if nome not in por_nome or numero < por_nome[nome]:
-                por_nome[nome] = numero
-
-        if ancoras_rua:
-            # §6.7: manter só o trecho coberto pelas âncoras do logradouro.
-            primeiro, ultimo = min(ancoras_rua), max(ancoras_rua)
-            por_nome = {n: v for n, v in por_nome.items() if primeiro <= v <= ultimo}
-
-        intersecoes: List[Dict[str, Any]] = [{"nome": n, "numero": v} for n, v in por_nome.items()]
-        # Sem a anotação o literal unifica `nome`/`numero` em object e o sort
-        # não aceita a chave; `int()` mantém a ordem real (int sobre int).
-        intersecoes.sort(key=lambda item: int(item["numero"]))
-
-        if len(intersecoes) < 2:
-            res.motivo = "menos_de_duas_intersecoes"
-            return res
-
-        res.intersecoes = intersecoes
-        res.motivo = "ok"
-        return res
+        return itens, ancoras_rua, cobertura_pond, comprimento_total, inversoes, cruzamentos
 
     # ── Consultas ────────────────────────────────────────
 
@@ -280,3 +274,23 @@ def _inversoes(ancoras: Sequence[Tuple[float, int]]) -> int:
         if delta and (1 if delta > 0 else -1) != direcao:
             total += 1
     return total
+
+
+def _finalizar_intersecoes(itens: List[Dict[str, Any]], ancoras_rua: List[int]) -> List[Dict[str, Any]]:
+    # §8.8.3: dedup por NOME antes de ordenar; retém o menor número.
+    por_nome: Dict[str, int] = {}
+    for item in itens:
+        nome, numero = item["nome"], item["numero"]
+        if nome not in por_nome or numero < por_nome[nome]:
+            por_nome[nome] = numero
+
+    if ancoras_rua:
+        # §6.7: manter só o trecho coberto pelas âncoras do logradouro.
+        primeiro, ultimo = min(ancoras_rua), max(ancoras_rua)
+        por_nome = {n: v for n, v in por_nome.items() if primeiro <= v <= ultimo}
+
+    intersecoes: List[Dict[str, Any]] = [{"nome": n, "numero": v} for n, v in por_nome.items()]
+    # Sem a anotação o literal unifica `nome`/`numero` em object e o sort
+    # não aceita a chave; `int()` mantém a ordem real (int sobre int).
+    intersecoes.sort(key=lambda item: int(item["numero"]))
+    return intersecoes

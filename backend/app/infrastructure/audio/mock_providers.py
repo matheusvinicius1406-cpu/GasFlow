@@ -29,7 +29,10 @@ class MockSTTProvider(SpeechToTextProvider):
         return "mock-stt-v1"
 
     def transcribe(
-        self, audio_bytes: bytes, mime_type: str = "audio/ogg", language: str = "pt-BR"
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/ogg",
+        language: str = "pt-BR",
     ) -> TranscriptionResult:
         start = time.time()
         self._call_count += 1
@@ -115,7 +118,7 @@ class MockTTSProvider(TextToSpeechProvider):
     def provider_name(self) -> str:
         return "mock-tts-v1"
 
-    def synthesize(self, text: str, language: str = "pt-BR") -> SpeechResult:
+    def synthesize(self, text: str, language: str = "pt-BR") -> SpeechResult:  # noqa: ARG002  # contrato do TTSProvider: language declarado na interface
         self._call_count += 1
 
         if self._fail:

@@ -68,7 +68,7 @@ class DailyReportPDF:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
 
@@ -102,132 +102,17 @@ class DailyReportPDF:
         # Summary section
         summary = report_data.get("summary", {})
         if summary:
-            elements.append(Paragraph("RESUMO", heading_style))
-
-            summary_data = [
-                ["Metrica", "Valor"],
-                ["Total de Pedidos", str(summary.get("total_orders", 0))],
-                ["Pedidos Entregues", str(summary.get("delivered", 0))],
-                ["Pedidos Cancelados", str(summary.get("cancelled", 0))],
-                ["Faturamento", _format_money(summary.get("revenue", 0))],
-                ["Recebimentos", _format_money(summary.get("received", 0))],
-                ["Valores Pendentes", _format_money(summary.get("pending_amount", 0))],
-            ]
-
-            if summary.get("expenses"):
-                summary_data.append(["Despesas", _format_money(summary["expenses"])])
-
-            if summary.get("quantity_p13"):
-                summary_data.append(["Quantidade P13", str(summary["quantity_p13"])])
-
-            if summary.get("quantity_water"):
-                summary_data.append(["Quantidade Agua", str(summary["quantity_water"])])
-
-            table = Table(summary_data, colWidths=[120, 120])
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 10),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                        ("TOPPADDING", (0, 0), (-1, -1), 8),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
-                    ]
-                )
-            )
-            elements.append(table)
+            elements.extend(self._summary_section(summary, heading_style))
 
         # Orders section
         orders = report_data.get("orders", [])
         if orders:
-            elements.append(Spacer(1, 20))
-            elements.append(Paragraph("PEDIDOS DO DIA", heading_style))
-
-            orders_header = ["#", "Horario", "Cliente", "Itens", "Total", "Pgto", "Status"]
-            orders_table_data = [orders_header]
-
-            for order in orders[:50]:  # Limit to 50 orders per page
-                created = order.get("created_at", "")
-                time_str = ""
-                if created:
-                    try:
-                        dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%H:%M")
-                    except (ValueError, AttributeError):
-                        time_str = "--:--"
-
-                items_count = len(order.get("items", []))
-                items_str = str(items_count) if items_count else "-"
-
-                orders_table_data.append(
-                    [
-                        str(order.get("codigo", order.get("order_id", "???"))),
-                        time_str,
-                        str(order.get("client_name", order.get("customer_name", "")))[:20],
-                        items_str,
-                        _format_money(order.get("total", 0)),
-                        str(order.get("payment_method", order.get("payment", "")))[:8],
-                        str(order.get("status", ""))[:10],
-                    ]
-                )
-
-            col_widths = [40, 40, 100, 30, 60, 50, 60]
-            table = Table(orders_table_data, colWidths=col_widths)
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#059669")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("ALIGN", (3, 0), (4, -1), "RIGHT"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 8),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                        ("TOPPADDING", (0, 0), (-1, -1), 6),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0fdf4")]),
-                    ]
-                )
-            )
-            elements.append(table)
+            elements.extend(self._orders_section(orders, heading_style))
 
         # Financial section
         financial = report_data.get("financial", {})
         if financial:
-            elements.append(Spacer(1, 20))
-            elements.append(Paragraph("FINANCEIRO", heading_style))
-
-            fin_data = [
-                ["Categoria", "Valor"],
-                ["Recebido", _format_money(financial.get("received", 0))],
-                ["Pendente", _format_money(financial.get("pending", 0))],
-            ]
-
-            if financial.get("overdue"):
-                fin_data.append(["Vencido", _format_money(financial["overdue"])])
-
-            if financial.get("expenses"):
-                fin_data.append(["Despesas", _format_money(financial["expenses"])])
-
-            table = Table(fin_data, colWidths=[120, 120])
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dc2626")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
-                        ("FONTSIZE", (0, 0), (-1, -1), 10),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                        ("TOPPADDING", (0, 0), (-1, -1), 8),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ]
-                )
-            )
-            elements.append(table)
+            elements.extend(self._financial_section(financial, heading_style))
 
         # Footer
         elements.append(Spacer(1, 30))
@@ -244,6 +129,140 @@ class DailyReportPDF:
         # Build PDF
         doc.build(elements)
         return buffer.getvalue()
+
+    def _summary_section(self, summary: Dict[str, Any], heading_style: Any) -> List[Any]:
+        from reportlab.lib import colors
+        from reportlab.platypus import Paragraph, Table, TableStyle
+
+        elements = [Paragraph("RESUMO", heading_style)]
+
+        summary_data = [
+            ["Metrica", "Valor"],
+            ["Total de Pedidos", str(summary.get("total_orders", 0))],
+            ["Pedidos Entregues", str(summary.get("delivered", 0))],
+            ["Pedidos Cancelados", str(summary.get("cancelled", 0))],
+            ["Faturamento", _format_money(summary.get("revenue", 0))],
+            ["Recebimentos", _format_money(summary.get("received", 0))],
+            ["Valores Pendentes", _format_money(summary.get("pending_amount", 0))],
+        ]
+
+        if summary.get("expenses"):
+            summary_data.append(["Despesas", _format_money(summary["expenses"])])
+
+        if summary.get("quantity_p13"):
+            summary_data.append(["Quantidade P13", str(summary["quantity_p13"])])
+
+        if summary.get("quantity_water"):
+            summary_data.append(["Quantidade Agua", str(summary["quantity_water"])])
+
+        table = Table(summary_data, colWidths=[120, 120])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
+                ]
+            )
+        )
+        elements.append(table)
+        return elements
+
+    def _orders_section(self, orders: List[Dict[str, Any]], heading_style: Any) -> List[Any]:
+        from reportlab.lib import colors
+        from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+        elements = [Spacer(1, 20), Paragraph("PEDIDOS DO DIA", heading_style)]
+
+        orders_header = ["#", "Horario", "Cliente", "Itens", "Total", "Pgto", "Status"]
+        orders_table_data = [orders_header]
+
+        for order in orders[:50]:  # Limit to 50 orders per page
+            created = order.get("created_at", "")
+            time_str = ""
+            if created:
+                try:
+                    dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    time_str = dt.strftime("%H:%M")
+                except (ValueError, AttributeError):
+                    time_str = "--:--"
+
+            items_count = len(order.get("items", []))
+            items_str = str(items_count) if items_count else "-"
+
+            orders_table_data.append(
+                [
+                    str(order.get("codigo", order.get("order_id", "???"))),
+                    time_str,
+                    str(order.get("client_name", order.get("customer_name", "")))[:20],
+                    items_str,
+                    _format_money(order.get("total", 0)),
+                    str(order.get("payment_method", order.get("payment", "")))[:8],
+                    str(order.get("status", ""))[:10],
+                ]
+            )
+
+        col_widths = [40, 40, 100, 30, 60, 50, 60]
+        table = Table(orders_table_data, colWidths=col_widths)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#059669")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0fdf4")]),
+                ]
+            )
+        )
+        elements.append(table)
+        return elements
+
+    def _financial_section(self, financial: Dict[str, Any], heading_style: Any) -> List[Any]:
+        from reportlab.lib import colors
+        from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+        elements = [Spacer(1, 20), Paragraph("FINANCEIRO", heading_style)]
+
+        fin_data = [
+            ["Categoria", "Valor"],
+            ["Recebido", _format_money(financial.get("received", 0))],
+            ["Pendente", _format_money(financial.get("pending", 0))],
+        ]
+
+        if financial.get("overdue"):
+            fin_data.append(["Vencido", _format_money(financial["overdue"])])
+
+        if financial.get("expenses"):
+            fin_data.append(["Despesas", _format_money(financial["expenses"])])
+
+        table = Table(fin_data, colWidths=[120, 120])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dc2626")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ]
+            )
+        )
+        elements.append(table)
+        return elements
 
     def _generate_simple(self, report_data: Dict[str, Any], date: str) -> bytes:
         """

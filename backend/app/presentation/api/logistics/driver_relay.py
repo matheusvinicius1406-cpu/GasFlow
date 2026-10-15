@@ -22,6 +22,7 @@ deste endpoint:
 """
 
 import hmac
+import logging
 import uuid
 from datetime import datetime
 from typing import List, Optional
@@ -34,6 +35,8 @@ from app.presentation.api.logistics.driver_api import (
     _get_db_session,
     handle_update_location,
 )
+
+logger = logging.getLogger("gasflow.driver.relay")
 
 # Montado sob /api/v1 (api/v1/router.py) — caminho final:
 # /api/v1/internal/driver/location/relay
@@ -104,6 +107,7 @@ def _audit_relay_ingest(db, driver_id: str, tenant_id: str, details: dict, resul
         )
         db.commit()
     except Exception:  # pragma: no cover — audit é best-effort
+        logger.debug("driver.relay_audit_failed", exc_info=True)
         db.rollback()
 
 

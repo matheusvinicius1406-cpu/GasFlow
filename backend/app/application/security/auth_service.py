@@ -338,13 +338,7 @@ class AuthService:
             return {"success": False, "error": "Too many login attempts. Try again later."}
 
         # Find user
-        if self._use_db:
-            user_repo = self._get_user_repo()
-            user_model = user_repo.get_by_username(username)
-            user = self._db_user_to_domain(user_model) if user_model else None
-        else:
-            user_id = self._users_by_username.get(username)
-            user = self._users.get(user_id) if user_id else None
+        user = self._resolve_login_user(username)
 
         if not user:
             self._audit(
@@ -364,21 +358,7 @@ class AuthService:
 
         # Verify password
         if not verify_password(password, user.password_hash):
-            user.failed_login_attempts += 1
-            if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS:
-                user.status = UserStatus.LOCKED
-                user.locked_until = datetime.utcnow() + timedelta(minutes=self.LOCKOUT_MINUTES)
-                self._audit(user.id, "default", AuditAction.AUTH_LOCKOUT.value, result="LOCKED", ip=ip_address)
-            self._audit(user.id, "default", AuditAction.AUTH_FAILURE.value, result="WRONG_PASSWORD", ip=ip_address)
-            # Persist failed attempts to DB
-            if self._use_db:
-                self._get_user_repo().update(
-                    user.id,
-                    failed_login_attempts=user.failed_login_attempts,
-                    status=user.status.value,
-                    locked_until=user.locked_until,
-                )
-            return {"success": False, "error": GENERIC_ERROR}
+            return self._handle_wrong_password(user, ip_address, GENERIC_ERROR)
 
         # Reset failed attempts
         user.failed_login_attempts = 0
@@ -405,6 +385,79 @@ class AuthService:
             user_agent=user_agent,
         )
 
+        self._persist_session(user, session, tenant_id, token, ip_address, user_agent)
+
+        # B5: emite o par access (JWT curto, preso ao `sid`) + refresh rotativo.
+        # O token opaco continua sendo gravado na sessão: ele é o `sid` e segue
+        # como caminho de compatibilidade de quem já tinha token.
+        refresh_token = self._issue_refresh_token(session)
+        access_token = operator_token.issue_access_token(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            session_id=session.id,
+            role=system_role.value,
+            platform=platform if platform in operator_token.VALID_PLATFORMS else operator_token.PLATFORM_DESKTOP,
+        )
+
+        self._audit(user.id, tenant_id, AuditAction.AUTH_SUCCESS.value, result="SUCCESS", ip=ip_address)
+
+        return {
+            "success": True,
+            "token": token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "Bearer",
+            "expires_in": operator_token.ACCESS_TTL_MINUTES * 60,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name,
+                # P0: cliente usa para forçar a troca de senha no próximo acesso
+                "must_change_password": bool(user.must_change_password),
+            },
+            "tenant_id": tenant_id,
+            "role": system_role.value,
+            "expires_at": session.expires_at.isoformat(),
+        }
+
+    def _resolve_login_user(self, username: str) -> Optional[User]:
+        """Localiza o usuário para o login (DB ou memória)."""
+        if self._use_db:
+            user_repo = self._get_user_repo()
+            user_model = user_repo.get_by_username(username)
+            return self._db_user_to_domain(user_model) if user_model else None
+        user_id = self._users_by_username.get(username)
+        return self._users.get(user_id) if user_id else None
+
+    def _handle_wrong_password(self, user: User, ip_address: str, error: str) -> Dict[str, Any]:
+        """Conta a falha, aplica lockout quando cabível e registra o audit."""
+        user.failed_login_attempts += 1
+        if user.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS:
+            user.status = UserStatus.LOCKED
+            user.locked_until = datetime.utcnow() + timedelta(minutes=self.LOCKOUT_MINUTES)
+            self._audit(user.id, "default", AuditAction.AUTH_LOCKOUT.value, result="LOCKED", ip=ip_address)
+        self._audit(user.id, "default", AuditAction.AUTH_FAILURE.value, result="WRONG_PASSWORD", ip=ip_address)
+        # Persist failed attempts to DB
+        if self._use_db:
+            self._get_user_repo().update(
+                user.id,
+                failed_login_attempts=user.failed_login_attempts,
+                status=user.status.value,
+                locked_until=user.locked_until,
+            )
+        return {"success": False, "error": error}
+
+    def _persist_session(
+        self,
+        user: User,
+        session: Session,
+        tenant_id: str,
+        token: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """Grava a sessão nova (DB ou memória) e zera as tentativas falhas."""
         if self._use_db:
             session_repo = self._get_session_repo()
             session_repo.enforce_max_sessions(user.id, self.MAX_SESSIONS_PER_USER)
@@ -435,9 +488,8 @@ class AuthService:
                 self._sessions[session.id] = session
                 self._sessions_by_token[token] = session.id
 
-        # B5: emite o par access (JWT curto, preso ao `sid`) + refresh rotativo.
-        # O token opaco continua sendo gravado na sessão: ele é o `sid` e segue
-        # como caminho de compatibilidade de quem já tinha token.
+    def _issue_refresh_token(self, session: Session) -> str:
+        """Gera o refresh rotativo e (em DB) grava o hash na sessão."""
         refresh_token = operator_token.generate_refresh_token()
         if self._use_db:
             self._get_session_repo().set_refresh(
@@ -445,35 +497,7 @@ class AuthService:
                 operator_token.hash_refresh_token(refresh_token),
                 operator_token.refresh_expiry(),
             )
-        access_token = operator_token.issue_access_token(
-            user_id=user.id,
-            tenant_id=tenant_id,
-            session_id=session.id,
-            role=system_role.value,
-            platform=platform if platform in operator_token.VALID_PLATFORMS else operator_token.PLATFORM_DESKTOP,
-        )
-
-        self._audit(user.id, tenant_id, AuditAction.AUTH_SUCCESS.value, result="SUCCESS", ip=ip_address)
-
-        return {
-            "success": True,
-            "token": token,
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "Bearer",
-            "expires_in": operator_token.ACCESS_TTL_MINUTES * 60,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "display_name": user.display_name,
-                # P0: cliente usa para forçar a troca de senha no próximo acesso
-                "must_change_password": bool(user.must_change_password),
-            },
-            "tenant_id": tenant_id,
-            "role": system_role.value,
-            "expires_at": session.expires_at.isoformat(),
-        }
+        return refresh_token
 
     @_db_synchronized
     def refresh_session(self, refresh_token: str, *, ip_address: str = "") -> Optional[Dict[str, Any]]:
@@ -595,72 +619,79 @@ class AuthService:
             return None
 
         if self._use_db:
-            session_repo = self._get_session_repo()
-            session_model = session_repo.get_by_token(token)
-            if not session_model:
-                return None
-            # Check expiry
-            if session_model.expires_at and datetime.utcnow() > session_model.expires_at:
-                return None
+            return self._validate_token_db(token)
+        return self._validate_token_memory(token)
 
-            user_repo = self._get_user_repo()
-            user_model = user_repo.get_by_id(session_model.user_id)
-            if not user_model:
-                return None
-            user = self._db_user_to_domain(user_model)
-            if not user.is_active:
-                return None
+    def _validate_token_db(self, token: str) -> Optional[TenantContext]:
+        """Valida o token contra a linha de sessão no DB (fonte de verdade)."""
+        session_repo = self._get_session_repo()
+        session_model = session_repo.get_by_token(token)
+        if not session_model:
+            return None
+        # Check expiry
+        if session_model.expires_at and datetime.utcnow() > session_model.expires_at:
+            return None
 
-            # Get role and permissions
-            membership = self._get_membership(user.id, session_model.tenant_id)
-            role = self._get_role(membership.role_id) if membership else None
-            system_role = role.system_role if role else SystemRole.OPERATOR
-            # P0 3.2: permissões do DB (catálogo + matriz + overrides) com
-            # fallback para o JSON/dict legado quando o DB não tem catálogo.
-            try:
-                from app.application.security.permission_policy_loader import get_policy_loader
+        user_repo = self._get_user_repo()
+        user_model = user_repo.get_by_id(session_model.user_id)
+        if not user_model:
+            return None
+        user = self._db_user_to_domain(user_model)
+        if not user.is_active:
+            return None
 
-                permissions = get_policy_loader().load_for_user(user.id, membership.role_id if membership else None)
-            except Exception:
-                logger.exception("policy.loader.unavailable — usando permissões do role JSON")
-                permissions = set(role.permissions) if role else set()
+        # Get role and permissions
+        membership = self._get_membership(user.id, session_model.tenant_id)
+        role = self._get_role(membership.role_id) if membership else None
+        system_role = role.system_role if role else SystemRole.OPERATOR
+        # P0 3.2: permissões do DB (catálogo + matriz + overrides) com
+        # fallback para o JSON/dict legado quando o DB não tem catálogo.
+        try:
+            from app.application.security.permission_policy_loader import get_policy_loader
 
-            # Update last seen
-            session_repo.update_last_seen(session_model.id)
-
-            return TenantContext(
-                user_id=user.id,
-                tenant_id=session_model.tenant_id,
-                role=system_role,
-                permissions=permissions,
-                session_id=session_model.id,
-                must_change_password=bool(getattr(user, "must_change_password", False)),
-                driver_id=getattr(user_model, "driver_id", None),
-            )
-        else:
-            session_id = self._sessions_by_token.get(token)
-            if not session_id:
-                return None
-            session = self._sessions.get(session_id)
-            if not session or not session.is_valid:
-                return None
-            user = self._users.get(session.user_id)
-            if not user or not user.is_active:
-                return None
-            membership = self._get_membership(user.id, session.tenant_id)
-            role = self._get_role(membership.role_id) if membership else None
-            system_role = role.system_role if role else SystemRole.OPERATOR
+            permissions = get_policy_loader().load_for_user(user.id, membership.role_id if membership else None)
+        except Exception:
+            logger.exception("policy.loader.unavailable — usando permissões do role JSON")
             permissions = set(role.permissions) if role else set()
-            session.last_seen_at = datetime.utcnow()
-            return TenantContext(
-                user_id=user.id,
-                tenant_id=session.tenant_id,
-                role=system_role,
-                permissions=permissions,
-                session_id=session.id,
-                must_change_password=bool(getattr(user, "must_change_password", False)),
-                driver_id=getattr(user, "driver_id", None),
-            )
+
+        # Update last seen
+        session_repo.update_last_seen(session_model.id)
+
+        return TenantContext(
+            user_id=user.id,
+            tenant_id=session_model.tenant_id,
+            role=system_role,
+            permissions=permissions,
+            session_id=session_model.id,
+            must_change_password=bool(getattr(user, "must_change_password", False)),
+            driver_id=getattr(user_model, "driver_id", None),
+        )
+
+    def _validate_token_memory(self, token: str) -> Optional[TenantContext]:
+        """Valida o token contra as sessões em memória (fallback/testes)."""
+        session_id = self._sessions_by_token.get(token)
+        if not session_id:
+            return None
+        session = self._sessions.get(session_id)
+        if not session or not session.is_valid:
+            return None
+        user = self._users.get(session.user_id)
+        if not user or not user.is_active:
+            return None
+        membership = self._get_membership(user.id, session.tenant_id)
+        role = self._get_role(membership.role_id) if membership else None
+        system_role = role.system_role if role else SystemRole.OPERATOR
+        permissions = set(role.permissions) if role else set()
+        session.last_seen_at = datetime.utcnow()
+        return TenantContext(
+            user_id=user.id,
+            tenant_id=session.tenant_id,
+            role=system_role,
+            permissions=permissions,
+            session_id=session.id,
+            must_change_password=bool(getattr(user, "must_change_password", False)),
+            driver_id=getattr(user, "driver_id", None),
+        )
 
     # ── RBAC ─────────────────────────────────────────────
 

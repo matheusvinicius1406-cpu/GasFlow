@@ -23,11 +23,14 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import time
 from typing import Any, Dict, Optional
 
 from app.application.security.jwt_crypto import resolve_jwt_secret
 from app.core.config import settings
+
+logger = logging.getLogger("gasflow.tracking")
 
 PUBLIC_TRACKING_SCOPE = "public_tracking"
 DEFAULT_TTL_S = 6 * 3600
@@ -97,6 +100,7 @@ def verify_public_tracking_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = json.loads(_b64d(body))
     except Exception:
+        logger.debug("tracking.token_payload_invalid", exc_info=True)
         return None
     if not isinstance(payload, dict):
         return None

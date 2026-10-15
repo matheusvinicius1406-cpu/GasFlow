@@ -94,7 +94,7 @@ class AudioProcessResponse(BaseModel):
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe_audio(req: TranscribeRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def transcribe_audio(req: TranscribeRequest, _ctx: TenantContext = Depends(get_tenant_context)):
     """Transcribe audio to text using STT provider."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
@@ -114,7 +114,7 @@ async def transcribe_audio(req: TranscribeRequest, ctx: TenantContext = Depends(
 
 
 @router.post("/process", response_model=AudioProcessResponse)
-async def process_audio(req: AudioProcessRequest, ctx: TenantContext = Depends(get_tenant_context)):
+async def process_audio(req: AudioProcessRequest, _ctx: TenantContext = Depends(get_tenant_context)):
     """Process audio through full pipeline: STT → Conversation Gateway → AI."""
     try:
         audio_bytes = base64.b64decode(req.audio_base64)
@@ -144,7 +144,7 @@ async def process_audio(req: AudioProcessRequest, ctx: TenantContext = Depends(g
 
 
 @router.get("/metrics")
-async def get_audio_metrics(ctx: TenantContext = Depends(get_tenant_context)):
+async def get_audio_metrics(_ctx: TenantContext = Depends(get_tenant_context)):
     """Get audio processing metrics."""
     gateway = _get_gateway()
     return gateway.get_metrics()

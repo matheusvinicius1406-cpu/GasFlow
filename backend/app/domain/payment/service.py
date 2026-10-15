@@ -10,6 +10,7 @@ Architecture:
 
 from typing import Dict, List, Optional
 from datetime import datetime
+import logging
 import threading
 import time
 
@@ -25,6 +26,8 @@ from app.domain.payment.pix_service import (
     PixService,
     _sanitize_txid,
 )
+
+logger = logging.getLogger("gasflow.payment")
 
 
 class PaymentService:
@@ -588,5 +591,6 @@ def get_payment_service() -> PaymentService:
                 db = DBSession(bind=engine)
                 _payment_service = PaymentService(db=db)
             except Exception:
+                logger.debug("payment.service_fallback", exc_info=True)
                 _payment_service = PaymentService()
         return _payment_service

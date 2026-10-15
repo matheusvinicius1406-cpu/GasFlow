@@ -9,16 +9,30 @@ Endpoints:
     GET /reports/summary — Business summary
 """
 
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
 from app.presentation.dependencies import require_permission
 from app.domain.security.models import TenantContext
-from typing import Optional
-from datetime import datetime
 
 from app.infrastructure.pdf.daily_report import DailyReportPDF, build_daily_report_data
+from app.infrastructure.repositories.delivery_persistence_repository import DEFAULT_TRACKING_TZ
+
+logger = logging.getLogger("gasflow.reports")
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+def _day_window_utc(date: str) -> tuple:
+    """Janela [início, fim) do dia local de `date` (YYYY-MM-DD), em UTC naive."""
+    day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=ZoneInfo(DEFAULT_TRACKING_TZ))
+    start = day.astimezone(timezone.utc).replace(tzinfo=None)
+    end = (day + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None)
+    return start, end
 
 
 def _get_order_data_for_date(tenant_id: str, date: str):
@@ -37,7 +51,8 @@ def _get_order_data_for_date(tenant_id: str, date: str):
         db = DBSession(bind=engine)
         try:
             repo = SQLAlchemyDeliveryPersistenceRepository(db, tenant_id)
-            deliveries = repo.list_deliveries(limit=1000)
+            day_start, day_end = _day_window_utc(date)
+            deliveries = repo.list_deliveries(limit=1000, created_after=day_start, created_before=day_end)
 
             for delivery in deliveries:
                 order_data = {
@@ -56,6 +71,7 @@ def _get_order_data_for_date(tenant_id: str, date: str):
 
         return orders, payments, expenses
     except Exception:
+        logger.error("reports.order_data_failed", exc_info=True)
         return [], [], []
 
 
@@ -201,6 +217,7 @@ async def get_business_summary(
         finally:
             db.close()
     except Exception:
+        logger.error("reports.summary_failed", exc_info=True)
         return {
             "total_deliveries": 0,
             "delivered": 0,

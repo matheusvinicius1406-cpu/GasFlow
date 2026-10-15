@@ -104,7 +104,7 @@ class TestReferralService:
         # Cria 10 referrals no mês corrente
         month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         for i in range(10):
-            referred = _create_client(db, f"11{i:04d}", f"Referred {i}", f"1199999{1000 + i}")
+            _create_client(db, f"11{i:04d}", f"Referred {i}", f"1199999{1000 + i}")
             referral = ReferralModel(
                 id=f"test-ref-11-{i:02d}",
                 tenant_id="default",
@@ -128,7 +128,7 @@ class TestReferralService:
         # Cria 9 referrals no mês corrente
         month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         for i in range(9):
-            referred = _create_client(db, f"10{i:04d}", f"Referred {i}", f"1199999{2000 + i}")
+            _create_client(db, f"10{i:04d}", f"Referred {i}", f"1199999{2000 + i}")
             referral = ReferralModel(
                 id=f"test-ref-10-{i:02d}",
                 tenant_id="default",

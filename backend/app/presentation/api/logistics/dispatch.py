@@ -79,7 +79,7 @@ class AssignRequest(BaseModel):
 @router.post("/recommend")
 async def get_dispatch_recommendations(
     req: DispatchRecommendRequest,
-    ctx: TenantContext = Depends(get_tenant_context),
+    _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """
     Get intelligent dispatch recommendations.

@@ -95,10 +95,18 @@ class ContactService:
 
                 queue_community_invite(codigo, nome, telefone)
             except Exception:
+                logger.warning("contacts.invite_failed", extra={"client": codigo}, exc_info=True)
                 pass  # falha no convite não deve impedir o cadastro
 
     def _apply_update(self, client: Client, data: Dict[str, Any]) -> bool:
         """Atualiza campos quando o novo valor é mais rico. True se mudou."""
+        changed = self._apply_identity_fields(client, data)
+        if self._apply_detail_fields(client, data):
+            changed = True
+        return changed
+
+    def _apply_identity_fields(self, client: Client, data: Dict[str, Any]) -> bool:
+        """Nome/whatsapp/marketing. True se algum campo mudou."""
         changed = False
         # Nome: só preenche se o CRM ainda tem o placeholder.
         nome = (data.get("nome") or "").strip()
@@ -112,7 +120,14 @@ class ContactService:
         if data.get("marketing_status") and not client.marketing_status:
             client.marketing_status = data["marketing_status"]
             changed = True
-        # Geocoding do renomeador (ADR-0001): preenche só o que está vazio.
+        return changed
+
+    def _apply_detail_fields(self, client: Client, data: Dict[str, Any]) -> bool:
+        """Campos de geocoding/contato secundário. True se algum campo mudou.
+
+        Geocoding do renomeador (ADR-0001): preenche só o que está vazio.
+        """
+        changed = False
         if data.get("cep") and not client.cep:
             client.cep = data["cep"]
             changed = True
