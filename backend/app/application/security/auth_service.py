@@ -418,7 +418,9 @@ class AuthService:
             },
             "tenant_id": tenant_id,
             "role": system_role.value,
-            "expires_at": session.expires_at.isoformat(),
+            # `expires_at` é Optional no domínio (sessão sem TTL); sem o guard o
+            # login levantava AttributeError em None.
+            "expires_at": session.expires_at.isoformat() if session.expires_at else None,
         }
 
     def _resolve_login_user(self, username: str) -> Optional[User]:
@@ -579,9 +581,10 @@ class AuthService:
     @_db_synchronized
     def logout(self, token: str) -> bool:
         """Revoke a session. Aceita o access JWT ou o token opaco da sessão."""
-        token = self._resolve_access_token(token)
-        if not token:
+        resolved = self._resolve_access_token(token)
+        if not resolved:
             return False
+        token = resolved
         if self._use_db:
             session_repo = self._get_session_repo()
             session_model = session_repo.get_by_token(token)
@@ -614,9 +617,10 @@ class AuthService:
         if not token:
             return None
 
-        token = self._resolve_access_token(token)
-        if not token:
+        resolved = self._resolve_access_token(token)
+        if not resolved:
             return None
+        token = resolved
 
         if self._use_db:
             return self._validate_token_db(token)

@@ -9,6 +9,7 @@ Supports:
 import os
 import sqlite3
 from datetime import datetime
+from typing import Any, Dict
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -35,7 +36,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./gasflow.db")
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 
-engine_kwargs = {
+# Anotado: sem isso o mypy infere dict[str, bool] pelo primeiro valor e acusa
+# as chaves de pool (int) como atribuição inválida.
+engine_kwargs: Dict[str, Any] = {
     "pool_pre_ping": True,  # Verify connections before use
 }
 

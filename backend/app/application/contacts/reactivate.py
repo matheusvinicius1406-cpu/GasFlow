@@ -142,7 +142,7 @@ class ReactivationService:
             .all()
         )
         for row in rows:
-            context = row.trigger_context or {}
+            context: Any = row.trigger_context or {}
             if isinstance(context, dict) and context.get("trigger_type") == "REACTIVATION":
                 return True
         return False

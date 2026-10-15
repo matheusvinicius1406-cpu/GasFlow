@@ -456,7 +456,7 @@ class PaymentService:
             return [self._payment_model_to_domain(m) for m in models]
         return [p for p in self._payments.values() if p.order_id == order_id and p.tenant_id == tenant_id]
 
-    def get_payments_for_tenant(self, tenant_id: str, status: str = None, limit: int = 50) -> List[Payment]:
+    def get_payments_for_tenant(self, tenant_id: str, status: Optional[str] = None, limit: int = 50) -> List[Payment]:
         """Get payments for a tenant."""
         if self._use_db:
             models = self._get_payment_repo().list_by_tenant(tenant_id, status, limit)
@@ -558,7 +558,7 @@ class PaymentService:
         pending = [p for p in payments if p.status == PaymentStatus.PENDING]
         total_received = sum(p.amount for p in confirmed)
         total_pending = sum(p.amount for p in pending)
-        by_method = {}
+        by_method: Dict[str, Dict[str, float]] = {}
         for p in confirmed:
             method = p.method_code or "UNKNOWN"
             if method not in by_method:

@@ -48,8 +48,8 @@ class ConnectionManager:
     def __init__(self):
         # channel_name → set of WebSocket connections
         self._channels: Dict[str, Set[WebSocket]] = {}
-        # connection_id → metadata
-        self._connections: Dict[str, dict] = {}
+        # connection_id (id() do WebSocket, um int) → metadata
+        self._connections: Dict[int, dict] = {}
         # Stats
         self._total_connected = 0
         self._total_events_sent = 0

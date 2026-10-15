@@ -31,7 +31,7 @@ class AgentEngine:
         self,
         policy_engine: PolicyEngine,
         approval_engine: ApprovalEngine,
-        tool_registry: ToolRegistry,
+        tool_registry: Optional[ToolRegistry] = None,
     ):
         self.policy = policy_engine
         self.approvals = approval_engine

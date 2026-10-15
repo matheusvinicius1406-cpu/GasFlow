@@ -12,6 +12,7 @@ ENTREGA é finalizada (DELIVERED) — ver delivery_persistence_repository.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, List
 from app.domain.order.entity import Order, OrderStatus, PaymentStatus, OrderSource
 from app.domain.order.repository import OrderRepository
@@ -264,7 +265,7 @@ class UpdateOrderStatusUseCase:
         CreateReceivableUseCase(
             receivable_repo=self.receivable_repo,
             ledger_repo=self.ledger_repo,
-        ).execute(order.codigo, order.client_codigo, order.total)
+        ).execute(order.codigo, order.client_codigo, Decimal(str(order.total)))
 
     def _deduct_stock(self, order: Order):
         """Deprecated (Decisão B3a): débito movido para a entrega DELIVERED.

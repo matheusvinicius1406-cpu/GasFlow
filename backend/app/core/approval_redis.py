@@ -87,12 +87,16 @@ def _deserialize(raw: str) -> Optional[Approval]:
         return None
 
 
-class RedisApprovalEngine:
+class RedisApprovalEngine(ApprovalEngine):
     """Approval lifecycle backed by Redis (shared across workers).
 
     Mesma interface do ``ApprovalEngine`` — os motores (WorkflowEngine,
     AgentEngine) e os endpoints (/automation/approvals) funcionam com
     qualquer backend sem mudança de call-site.
+
+    Herda de ``ApprovalEngine`` só para o TIPO da união dos backends: os 9
+    métodos do ciclo de aprovação são todos reimplementados aqui (nenhum
+    comportamento do motor em memória vaza), e ``__init__`` não chama super.
     """
 
     def __init__(

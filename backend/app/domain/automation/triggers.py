@@ -58,7 +58,7 @@ class Condition:
 
 def _resolve_field(field: str, context: Dict[str, Any]) -> Any:
     parts = field.split(".")
-    current = context
+    current: Any = context
     for part in parts:
         if not isinstance(current, dict):
             return None

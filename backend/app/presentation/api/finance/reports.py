@@ -11,7 +11,7 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -44,9 +44,9 @@ def _get_order_data_for_date(tenant_id: str, date: str):
             SQLAlchemyDeliveryPersistenceRepository,
         )
 
-        orders = []
-        payments = []
-        expenses = []
+        orders: List[Dict[str, Any]] = []
+        payments: List[Dict[str, Any]] = []
+        expenses: List[Dict[str, Any]] = []
 
         db = DBSession(bind=engine)
         try:
@@ -55,7 +55,7 @@ def _get_order_data_for_date(tenant_id: str, date: str):
             deliveries = repo.list_deliveries(limit=1000, created_after=day_start, created_before=day_end)
 
             for delivery in deliveries:
-                order_data = {
+                order_data: Dict[str, Any] = {
                     "codigo": delivery.order_id or "???",
                     "client_name": delivery.customer_name or "",
                     "customer_codigo": delivery.customer_codigo or "",

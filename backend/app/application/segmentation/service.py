@@ -60,11 +60,11 @@ class SegmentService:
             metrics["favorite_product"] = order_metrics.get("favorite_product", "")
 
             # Calculate order frequency (orders per month)
-            if order_metrics.get("first_order_at") and metrics["total_orders"] > 0:
-                first = order_metrics["first_order_at"]
-                now = datetime.utcnow()
-                months = max((now - first).days / 30.0, 1.0)
-                metrics["order_frequency"] = round(metrics["total_orders"] / months, 2)
+            first_order_at = order_metrics.get("first_order_at")
+            total_orders = int(order_metrics.get("total_orders") or 0)
+            if isinstance(first_order_at, datetime) and total_orders > 0:
+                months = max((datetime.utcnow() - first_order_at).days / 30.0, 1.0)
+                metrics["order_frequency"] = round(total_orders / months, 2)
 
         # Get payment status
         if self.receivable_repo:

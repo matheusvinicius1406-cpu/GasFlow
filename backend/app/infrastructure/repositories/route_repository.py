@@ -20,7 +20,9 @@ class SQLAlchemyRouteRepository:
     def get_by_id(self, route_id: str) -> Optional[RouteRecord]:
         return self.db.query(RouteRecord).filter(RouteRecord.id == route_id).first()
 
-    def list_by_tenant(self, tenant_id: str, status: str = None, driver_id: str = None) -> List[RouteRecord]:
+    def list_by_tenant(
+        self, tenant_id: str, status: Optional[str] = None, driver_id: Optional[str] = None
+    ) -> List[RouteRecord]:
         q = self.db.query(RouteRecord).filter(RouteRecord.tenant_id == tenant_id)
         if status:
             q = q.filter(RouteRecord.status == status)

@@ -38,6 +38,16 @@ class SlidingWindowRateLimiter:
         self._buckets: Dict[str, list] = {}
         self._lock = threading.Lock()
 
+    @property
+    def available(self) -> bool:
+        """Contrato comum ao backend Redis: o in-memory nunca fica indisponível.
+
+        Sem esta propriedade o `not _limiter.available` do middleware só
+        tipava para o backend Redis (união dos dois backends) e o gate mypy
+        acusava union-attr.
+        """
+        return True
+
     def check(self, key: str, max_requests: int, window_seconds: int) -> Tuple[bool, Dict]:
         """Check rate limit. Returns (allowed, info_dict)."""
         now = time.time()

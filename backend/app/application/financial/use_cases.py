@@ -11,7 +11,7 @@ Atomic transactions for all financial operations.
 
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
@@ -166,7 +166,7 @@ class RegisterPaymentUseCase:
         return CreateReceivableUseCase(
             receivable_repo=self.receivable_repo,
             ledger_repo=self.ledger_repo,
-        ).execute(order_codigo, order.client_codigo, order.total)
+        ).execute(order_codigo, order.client_codigo, Decimal(str(order.total)))
 
 
 class CreateReceivableUseCase:
@@ -288,6 +288,8 @@ class RefundPaymentUseCase:
 
         # Mark payment as refunded
         notes = f"REFUNDED: {reason}" if reason else "REFUNDED"
+        if payment.id is None:
+            raise ValueError(f"Payment {payment_id} sem id persistido — não dá para estornar")
         payment = self.payment_repo.update_status(payment.id, PaymentStatus.REFUNDED, notes=notes)
 
         # Update receivable
@@ -490,7 +492,7 @@ class FinancialReportsUseCase:
         today = now.date()
 
         open_items = self.receivable_repo.list_open_all()
-        buckets: Dict[str, Dict[str, object]] = {
+        buckets: Dict[str, Dict[str, Any]] = {
             "0-30": {"count": 0, "total": Decimal("0.00")},
             "31-60": {"count": 0, "total": Decimal("0.00")},
             "61-90": {"count": 0, "total": Decimal("0.00")},

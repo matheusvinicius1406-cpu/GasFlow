@@ -28,6 +28,7 @@ from app.domain.automation.triggers import (
     evaluate_condition,
 )
 from app.domain.automation.policy import PolicyEngine, ApprovalEngine
+from app.domain.ai.tools import ToolRegistry
 
 
 class WorkflowEngine:
@@ -37,7 +38,7 @@ class WorkflowEngine:
         self,
         policy_engine: PolicyEngine,
         approval_engine: ApprovalEngine,
-        tool_registry=None,
+        tool_registry: Optional[ToolRegistry] = None,
     ):
         self.policy = policy_engine
         self.approvals = approval_engine
@@ -411,7 +412,9 @@ class WorkflowEngine:
                 }
                 op = op_map.get(op_str)
                 if op:
-                    # Try numeric conversion
+                    # Try numeric conversion (`object`: o valor pode voltar a ser
+                    # a string original quando não é numérico).
+                    val: object
                     try:
                         val = float(value)
                     except ValueError:

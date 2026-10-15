@@ -12,7 +12,7 @@ Report sections:
 - Footer (page numbers, generation time)
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from io import BytesIO
 
@@ -370,8 +370,8 @@ startxref
 
 def build_daily_report_data(
     orders: List[Dict[str, Any]],
-    payments: List[Dict[str, Any]] = None,
-    expenses: List[Dict[str, Any]] = None,
+    payments: Optional[List[Dict[str, Any]]] = None,
+    expenses: Optional[List[Dict[str, Any]]] = None,
     date: str = "",
 ) -> Dict[str, Any]:
     """

@@ -63,8 +63,10 @@ def _verify_origin(request: Request) -> tuple[bool, int | None]:
     return False, 401
 
 
-@router.post("/alerts")
-async def receive_alert(request: Request) -> dict:
+# `response_model=None`: a rota responde 200 com dict e os erros com
+# JSONResponse — sem isso o FastAPI tentaria derivar um response field da união.
+@router.post("/alerts", response_model=None)
+async def receive_alert(request: Request) -> dict | JSONResponse:
     """Recebe webhooks do Alertmanager e loga cada alerta ativo/resolvido."""
     allowed, denied_status = _verify_origin(request)
     if not allowed:

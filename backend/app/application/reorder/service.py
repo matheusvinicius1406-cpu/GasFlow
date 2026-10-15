@@ -64,7 +64,9 @@ class ReorderService:
 
         orders = self.order_repo.listar_todos()
         customer_orders = [o for o in orders if o.client_codigo == client_codigo]
-        customer_orders.sort(key=lambda o: o.created_at)
+        # `created_at` pode vir ausente em registro legado; sem o fallback o
+        # sort levantava TypeError (None e datetime não são comparáveis).
+        customer_orders.sort(key=lambda o: o.created_at or datetime.min)
 
         # Calculate intervals between orders
         intervals = self._calculate_intervals(customer_orders)
