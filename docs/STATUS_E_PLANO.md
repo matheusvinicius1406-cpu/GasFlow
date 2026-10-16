@@ -370,6 +370,7 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 | `tests.integrity_audit` | findings=9 / **pendentes=0** |
 | CI no `main` (run `bb4f26d`, 2026-10-14) | **6/6 jobs verdes em 8 min 36 s** (E2E 2:12, Backend 5:51) — ver §8.16 |
 | CI no `main` combinado (run `991db31`, 2026-10-14, após 11 merges de deps) | **6/6 jobs verdes em 14 min 46 s** — ver §8.17 |
+| CI no `main` (run `38914204555`, 2026-10-16 — mypy strict + onda de consumidores) | **6/6 jobs verdes em 9 min 48 s** (Backend 7:11, Trivy 2:31, Frontend 1:26, Migrations 0:54, WhatsApp 0:27, Agent 0:12); `E2E` 2:06 e `Build & Push Images` 1:45 verdes |
 
 ```bash
 cd backend
