@@ -6,33 +6,39 @@ Extended models supporting:
 - Conversation state machine
 - Order draft persistence
 - Message idempotency
+
+Estilo SQLAlchemy 2.0 tipado (`Mapped[...]`): a nullability da anotação
+reproduz a do modelo legado/Alembic e os relacionamentos ganham anotação.
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, UniqueConstraint
-from sqlalchemy.orm import relationship
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.infrastructure.database.base import Base
 
 
 class WhatsAppConversationModel(Base):
     __tablename__ = "whatsapp_conversations"
 
-    tenant_id = Column(String, default="default", index=True)
-    id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(String(50), nullable=False, default="primary", index=True)
-    phone_number = Column(String(20), nullable=False, index=True)
-    client_codigo = Column(String(20), nullable=True, index=True)
-    status = Column(
+    tenant_id: Mapped[Optional[str]] = mapped_column(String, default="default", index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    account_id: Mapped[str] = mapped_column(String(50), nullable=False, default="primary", index=True)
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    client_codigo: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    status: Mapped[Optional[str]] = mapped_column(
         String(30), default="IDLE"
     )  # IDLE, BROWSING, BUILDING_ORDER, AWAITING_CONFIRMATION, ORDER_CREATED, HUMAN_PENDING, HUMAN_ACTIVE, CLOSED
-    human_operator = Column(String(100), nullable=True)
-    draft_json = Column(Text, nullable=True)  # JSON-serialized order draft
-    last_message = Column(Text, nullable=True)
-    last_message_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    human_operator: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    draft_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON-serialized order draft
+    last_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    messages = relationship("WhatsAppMessageModel", back_populates="conversation")
+    messages: Mapped[list["WhatsAppMessageModel"]] = relationship("WhatsAppMessageModel", back_populates="conversation")
 
     __table_args__ = (
         # Unicidade por tenant: duas empresas podem ter conversa com o mesmo
@@ -45,17 +51,25 @@ class WhatsAppConversationModel(Base):
 class WhatsAppMessageModel(Base):
     __tablename__ = "whatsapp_messages"
 
-    id = Column(Integer, primary_key=True, index=True)
-    conversation_id = Column(Integer, ForeignKey("whatsapp_conversations.id"), nullable=False, index=True)
-    provider_message_id = Column(String(200), nullable=True, unique=True)  # Idempotency key
-    direction = Column(String(10), nullable=False)  # INCOMING / OUTGOING
-    sender = Column(String(20), nullable=False, default="customer")  # customer / assistant / system / human
-    content = Column(Text, nullable=True)
-    message_type = Column(String(20), default="TEXT")
-    status = Column(String(20), default="received")
-    raw_payload = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("whatsapp_conversations.id"), nullable=False, index=True
+    )
+    provider_message_id: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True, unique=True
+    )  # Idempotency key
+    direction: Mapped[str] = mapped_column(String(10), nullable=False)  # INCOMING / OUTGOING
+    sender: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="customer"
+    )  # customer / assistant / system / human
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    message_type: Mapped[Optional[str]] = mapped_column(String(20), default="TEXT")
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="received")
+    raw_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
 
-    conversation = relationship("WhatsAppConversationModel", back_populates="messages")
+    conversation: Mapped["WhatsAppConversationModel"] = relationship(
+        "WhatsAppConversationModel", back_populates="messages"
+    )
 
     __table_args__ = (Index("ix_wa_message_conversation_created", "conversation_id", "created_at"),)

@@ -9,10 +9,16 @@ Complementa auth_model.py (AuthUserModel/AuthRoleModel já existentes):
 
 Convenção de permissão: `resource.action` (padrão existente do domínio
 de segurança — ex.: user.create, inventory.adjust, admin.*).
+
+Estilo SQLAlchemy 2.0 tipado (`Mapped[...]`): a nullability da anotação
+reproduz a do modelo legado/Alembic.
 """
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, UniqueConstraint, Index
-from datetime import datetime
+from datetime import date, datetime
+from typing import Optional
+
+from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base
 
@@ -27,11 +33,11 @@ class PermissionModel(Base):
         Index("ix_permissions_module", "module"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(100), nullable=False)
-    description = Column(String(200), nullable=False, default="")
-    module = Column(String(50), nullable=False, default="")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    module: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class RolePermissionModel(Base):
@@ -44,8 +50,8 @@ class RolePermissionModel(Base):
         Index("ix_role_permissions_role", "role_id"),
     )
 
-    role_id = Column(String(36), primary_key=True)  # → auth_roles.id
-    permission_id = Column(Integer, primary_key=True)  # → permissions.id
+    role_id: Mapped[str] = mapped_column(String(36), primary_key=True)  # → auth_roles.id
+    permission_id: Mapped[int] = mapped_column(Integer, primary_key=True)  # → permissions.id
 
 
 class UserPermissionOverrideModel(Base):
@@ -59,12 +65,12 @@ class UserPermissionOverrideModel(Base):
         Index("ix_user_perm_override_user", "user_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), nullable=False)  # → auth_users.id
-    permission_id = Column(Integer, nullable=False)  # → permissions.id
-    granted = Column(Boolean, nullable=False, default=True)
-    created_by = Column(String(36), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)  # → auth_users.id
+    permission_id: Mapped[int] = mapped_column(Integer, nullable=False)  # → permissions.id
+    granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class StockDailySnapshotModel(Base):
@@ -81,13 +87,13 @@ class StockDailySnapshotModel(Base):
         Index("ix_stock_snapshot_product", "product_codigo"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String(100), nullable=False, default="default")
-    snapshot_date = Column(Date, nullable=False)
-    product_codigo = Column(String(100), nullable=False)
-    initial_full = Column(Integer, nullable=False, default=0)
-    initial_empty = Column(Integer, nullable=False, default=0)
-    closing_full = Column(Integer, nullable=False, default=0)
-    closing_empty = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), nullable=False, default="default")
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    product_codigo: Mapped[str] = mapped_column(String(100), nullable=False)
+    initial_full: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    initial_empty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    closing_full: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    closing_empty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

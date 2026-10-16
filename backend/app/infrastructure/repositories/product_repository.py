@@ -19,15 +19,15 @@ class SQLAlchemyProductRepository(TenantMixin, ProductRepository):
     def _to_entity(self, model: ProductModel) -> Product:
         return Product(
             id=model.id,
-            codigo=model.codigo,
+            codigo=model.codigo or "",
             nome=model.nome,
             tipo=model.tipo,
             preco=model.preco,
             cartao_habilitado=bool(model.cartao_habilitado),
             preco_cartao_1x=model.preco_cartao_1x,
             preco_cartao_2x=model.preco_cartao_2x,
-            estoque=model.estoque,
-            ativo=model.ativo,
+            estoque=model.estoque or 0,
+            ativo=bool(model.ativo),
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -9,12 +9,17 @@ Includes:
 - Driver assignment
 - GPS locations
 - Outbox entries for event delivery
+
+Estilo SQLAlchemy 2.0 tipado (`Mapped[...]`): a nullability da anotação
+reproduz a do modelo legado/Alembic.
 """
+
+from datetime import datetime
+from typing import Any, Optional
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    Column,
     DateTime,
     Float,
     Index,
@@ -24,7 +29,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from datetime import datetime
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.infrastructure.database.base import Base
 
 
@@ -40,63 +46,63 @@ class DeliveryRecord(Base):
         Index("ix_delivery_order", "order_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    delivery_id = Column(String(36), unique=True, nullable=False, index=True)
-    tenant_id = Column(String, default="default", nullable=False, index=True)
-    order_id = Column(String(36), nullable=False, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    delivery_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False, index=True)
+    order_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # State machine
-    status = Column(String(20), default="PENDING", nullable=False)
-    version = Column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # Customer
-    customer_codigo = Column(String(10), default="")
-    customer_name = Column(String(200), default="")
+    customer_codigo: Mapped[Optional[str]] = mapped_column(String(10), default="")
+    customer_name: Mapped[Optional[str]] = mapped_column(String(200), default="")
 
     # Address snapshot
-    address_street = Column(String(200), default="")
-    address_number = Column(String(20), default="")
-    address_complement = Column(String(100), default="")
-    address_neighborhood = Column(String(100), default="")
-    address_city = Column(String(100), default="")
-    address_state = Column(String(2), default="")
-    address_zip_code = Column(String(10), default="")
-    address_reference = Column(String(200), default="")
-    address_lat = Column(Float, nullable=True)
-    address_lng = Column(Float, nullable=True)
+    address_street: Mapped[Optional[str]] = mapped_column(String(200), default="")
+    address_number: Mapped[Optional[str]] = mapped_column(String(20), default="")
+    address_complement: Mapped[Optional[str]] = mapped_column(String(100), default="")
+    address_neighborhood: Mapped[Optional[str]] = mapped_column(String(100), default="")
+    address_city: Mapped[Optional[str]] = mapped_column(String(100), default="")
+    address_state: Mapped[Optional[str]] = mapped_column(String(2), default="")
+    address_zip_code: Mapped[Optional[str]] = mapped_column(String(10), default="")
+    address_reference: Mapped[Optional[str]] = mapped_column(String(200), default="")
+    address_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    address_lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Assignment
-    driver_id = Column(String(36), nullable=True, index=True)
-    vehicle_id = Column(String(36), nullable=True)
-    route_id = Column(String(36), nullable=True)
+    driver_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    vehicle_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    route_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Timestamps
-    scheduled_at = Column(DateTime, nullable=True)
-    assigned_at = Column(DateTime, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    arrived_at = Column(DateTime, nullable=True)
-    delivered_at = Column(DateTime, nullable=True)
-    failed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    arrived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Failure
-    failed_reason = Column(String(50), nullable=True)
-    failure_notes = Column(Text, default="")
+    failed_reason: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    failure_notes: Mapped[Optional[str]] = mapped_column(Text, default="")
 
     # Proof
-    proof_type = Column(String(30), nullable=True)
-    proof_data = Column(JSON, nullable=True)
+    proof_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    proof_data: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
 
     # Notes
-    notes = Column(Text, default="")
-    driver_notes = Column(Text, default="")
+    notes: Mapped[Optional[str]] = mapped_column(Text, default="")
+    driver_notes: Mapped[Optional[str]] = mapped_column(Text, default="")
 
     # Idempotency
-    idempotency_key = Column(String(100), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Timeline as JSON array
-    timeline = Column(JSON, default=list)
+    timeline: Mapped[Optional[Any]] = mapped_column(JSON, default=list)
 
     def to_dict(self) -> dict:
         return {
@@ -129,7 +135,7 @@ class DeliveryRecord(Base):
             "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
             "failed_at": self.failed_at.isoformat() if self.failed_at else None,
             "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "failed_reason": self.failed_reason,
             "failure_notes": self.failure_notes,
             "proof_type": self.proof_type,
@@ -146,16 +152,16 @@ class DriverLocationRecord(Base):
 
     __table_args__ = (Index("ix_driver_loc_tenant_driver", "tenant_id", "driver_id"),)
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String, default="default", nullable=False)
-    driver_id = Column(String(36), nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    accuracy = Column(Float, nullable=True)
-    speed = Column(Float, nullable=True)
-    bearing = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
-    is_stale = Column(Boolean, default=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    bearing: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    is_stale: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
 
 class DriverLocationHistoryRecord(Base):
@@ -179,22 +185,22 @@ class DriverLocationHistoryRecord(Base):
 
     # BigInteger com variante Integer p/ SQLite (só INTEGER PRIMARY KEY
     # autoincrementa no SQLite; BIGINT não é alias de rowid).
-    id = Column(
+    id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"),
         primary_key=True,
         autoincrement=True,
     )
-    tenant_id = Column(String, default="default", nullable=False, index=True)
-    driver_id = Column(String(36), nullable=False, index=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    accuracy_m = Column(Float, nullable=True)
-    speed_kmh = Column(Float, nullable=True)
-    heading_deg = Column(Float, nullable=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy_m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    speed_kmh: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    heading_deg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # Naive UTC na coluna (convenção do repo, compatível com SQLite); o
     # tz-aware fica na borda (API/UI).
-    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class TrackingAlertStateRecord(Base):
@@ -209,11 +215,11 @@ class TrackingAlertStateRecord(Base):
 
     __table_args__ = (UniqueConstraint("tenant_id", "driver_id", "kind", name="uq_tracking_alert_state"),)
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String, default="default", nullable=False, index=True)
-    driver_id = Column(String(36), nullable=False, index=True)
-    kind = Column(String(20), nullable=False)
-    last_sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    last_sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class OutboxEntry(Base):
@@ -226,19 +232,19 @@ class OutboxEntry(Base):
         Index("ix_outbox_tenant", "tenant_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    event_type = Column(String(100), nullable=False)
-    tenant_id = Column(String, default="default", nullable=False)
-    aggregate_id = Column(String(36), nullable=False)
-    actor_id = Column(String(36), default="")
-    actor_type = Column(String(20), default="SYSTEM")
-    payload = Column(JSON, nullable=False)
-    status = Column(String(20), default="PENDING")  # PENDING, PROCESSED, FAILED
-    retry_count = Column(Integer, default=0)
-    max_retries = Column(Integer, default=3)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    processed_at = Column(DateTime, nullable=True)
-    error_message = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    aggregate_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    actor_id: Mapped[Optional[str]] = mapped_column(String(36), default="")
+    actor_type: Mapped[Optional[str]] = mapped_column(String(20), default="SYSTEM")
+    payload: Mapped[Any] = mapped_column(JSON, nullable=False)
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="PENDING")  # PENDING, PROCESSED, FAILED
+    retry_count: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    max_retries: Mapped[Optional[int]] = mapped_column(Integer, default=3)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class DriverRefreshTokenRecord(Base):
@@ -257,16 +263,16 @@ class DriverRefreshTokenRecord(Base):
         Index("ix_driver_refresh_driver", "driver_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Hash SHA-256 do refresh token — o token literal NUNCA toca o banco
     # (auditoria de segurança: vazamento do DB não compromete sessões).
-    token = Column(String(64), nullable=False)
-    family_id = Column(String(36), nullable=False)  # rotação mantém a família
-    driver_id = Column(String(36), nullable=False)
-    tenant_id = Column(String, default="default", nullable=False)
-    status = Column(String(20), default="ACTIVE")  # ACTIVE | ROTATED | REVOKED
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    family_id: Mapped[str] = mapped_column(String(36), nullable=False)  # rotação mantém a família
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="ACTIVE")  # ACTIVE | ROTATED | REVOKED
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class OfflineSyncLogRecord(Base):
@@ -280,12 +286,12 @@ class OfflineSyncLogRecord(Base):
 
     __table_args__ = (Index("ix_sync_log_tenant_time", "tenant_id", "changed_at"),)
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tenant_id = Column(String, default="default", nullable=False)
-    entity_type = Column(String(50), nullable=False)  # delivery | route | driver
-    entity_id = Column(String(36), nullable=False)
-    action = Column(String(20), nullable=False)  # CREATED | UPDATED | DELETED
-    changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)  # delivery | route | driver
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)  # CREATED | UPDATED | DELETED
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class DriverSessionRecord(Base):
@@ -299,18 +305,18 @@ class DriverSessionRecord(Base):
         Index("ix_driver_session_tenant", "tenant_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    token = Column(String(200), nullable=False)
-    driver_id = Column(String(36), nullable=False)
-    tenant_id = Column(String, default="default", nullable=False)
-    role = Column(String(20), default="DRIVER")
-    device_id = Column(String(100), nullable=True)
-    device_name = Column(String(100), nullable=True)
-    platform = Column(String(50), nullable=True)
-    status = Column(String(20), default="ACTIVE")  # ACTIVE, REVOKED, EXPIRED
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    expires_at = Column(DateTime, nullable=True)
-    last_seen_at = Column(DateTime, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(200), nullable=False)
+    driver_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    role: Mapped[Optional[str]] = mapped_column(String(20), default="DRIVER")
+    device_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    device_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    platform: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String(20), default="ACTIVE")  # ACTIVE, REVOKED, EXPIRED
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def to_dict(self) -> dict:
         return {
@@ -336,9 +342,9 @@ class IdempotencyKeyRecord(Base):
         Index("ix_idempotency_tenant", "tenant_id"),
     )
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    key = Column(String(200), nullable=False)
-    tenant_id = Column(String, default="default", nullable=False)
-    result_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    expires_at = Column(DateTime, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(200), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String, default="default", nullable=False)
+    result_json: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

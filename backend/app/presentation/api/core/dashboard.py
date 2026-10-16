@@ -92,7 +92,7 @@ def _resumo_despesas(db: Any, tid: str, today: date) -> dict[str, Any]:
 def _saldo_caixa(db: Any, tid: str) -> float:
     from app.infrastructure.repositories.financial_models import CashMovementModel
 
-    cash_balance = 0
+    cash_balance: float = 0
     try:
         last_cash = (
             db.query(CashMovementModel)

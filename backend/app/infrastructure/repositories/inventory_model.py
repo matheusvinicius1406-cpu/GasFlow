@@ -3,10 +3,16 @@ Inventory SQLAlchemy Models — FASE 7.1
 
 CRITICAL: UNIQUE(reference_type, reference_id, product_codigo, type) prevents duplicate movements.
 Supports multi-item orders and order lifecycle (SALE + RETURN).
+Estilo SQLAlchemy 2.0 tipado (`Mapped[...]`): a nullability da anotação
+reproduz a do modelo legado/Alembic.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Index, UniqueConstraint, Text
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.infrastructure.database.base import Base
 
 
@@ -21,21 +27,17 @@ class InventoryModel(Base):
 
     __tablename__ = "inventory"
 
-    tenant_id = Column(String, default="default", index=True)
-    id = Column(Integer, primary_key=True, index=True)
-    product_codigo = Column(
-        String,
-        nullable=False,
-        index=True,
-    )
+    tenant_id: Mapped[Optional[str]] = mapped_column(String, default="default", index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    product_codigo: Mapped[str] = mapped_column(String, nullable=False, index=True)
 
     __table_args__ = (UniqueConstraint("tenant_id", "product_codigo", name="uq_inventory_tenant_product"),)
-    quantity = Column(Integer, nullable=False, default=0)
-    quantity_full = Column(Integer, nullable=False, default=0)  # P0: cilindros cheios
-    quantity_empty = Column(Integer, nullable=False, default=0)  # P0: cilindros vazios (devolução)
-    minimum_quantity = Column(Integer, nullable=False, default=0)
-    maximum_quantity = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quantity_full: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # P0: cilindros cheios
+    quantity_empty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # P0: cilindros vazios (devolução)
+    minimum_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    maximum_quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class StockMovementModel(Base):
@@ -43,28 +45,26 @@ class StockMovementModel(Base):
 
     __tablename__ = "stock_movements"
 
-    id = Column(Integer, primary_key=True, index=True)
-    product_codigo = Column(
-        String,
-        nullable=False,
-        index=True,
-    )
-    type = Column(String, nullable=False)  # ENTRY, SALE, ADJUSTMENT, LOSS, RETURN, INITIAL_BALANCE
-    quantity = Column(Integer, nullable=False)  # Always positive
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    product_codigo: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String, nullable=False)  # ENTRY, SALE, ADJUSTMENT, LOSS, RETURN, INITIAL_BALANCE
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)  # Always positive
     # P0 (Decisão B2): detalhe cheio/vazio do movimento — a entrega DELIVERED
     # faz a troca física (1 cheio sai, 1 vazio entra) via DELIVERY_EXCHANGE.
-    quantity_full_delta = Column(Integer, nullable=False, default=0)
-    quantity_empty_delta = Column(Integer, nullable=False, default=0)
-    reason = Column(Text, nullable=False)
+    quantity_full_delta: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quantity_empty_delta: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
 
-    reference_type = Column(String, nullable=True)  # "ORDER", "ORDER_RETURN", "ADJUSTMENT"
-    reference_id = Column(String, nullable=True)  # order.codigo, etc.
+    reference_type: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True
+    )  # "ORDER", "ORDER_RETURN", "ADJUSTMENT"
+    reference_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # order.codigo, etc.
 
-    balance_before = Column(Integer, nullable=False, default=0)
-    balance_after = Column(Integer, nullable=False, default=0)
+    balance_before: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    created_by = Column(String, nullable=True)  # Placeholder — auth not implemented
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # Placeholder — auth not implemented
 
     __table_args__ = (
         Index("ix_stock_movements_product", "product_codigo"),

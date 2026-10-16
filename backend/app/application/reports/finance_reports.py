@@ -250,8 +250,10 @@ def projection(db: Session, tenant_id: str, horizon: int, now: Optional[datetime
         if remaining <= 0:
             continue
         # Vencido entra no 1º dia do horizonte (recebimento imediato),
-        # senão o saldo diário não bate com expected_in.
-        due = r.due_date.date()
+        # senão o saldo diário não bate com expected_in. Recebível sem
+        # `due_date` (NULL) também cai no 1º dia — antes, `.date()` sem guarda
+        # estourava com AttributeError no relatório de fluxo de caixa.
+        due = r.due_date.date() if r.due_date else first_day
         if due < first_day:
             due = first_day
         inflows_by_day[due] = _q(inflows_by_day.get(due, ZERO) + remaining)

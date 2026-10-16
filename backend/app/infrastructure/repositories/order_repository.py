@@ -19,8 +19,8 @@ class SQLAlchemyOrderRepository(TenantMixin, OrderRepository):
     def _to_entity(self, model: OrderModel) -> Order:
         return Order(
             id=model.id,
-            codigo=model.codigo,
-            client_codigo=model.client_codigo,
+            codigo=model.codigo or "",
+            client_codigo=model.client_codigo or "",
             address_snapshot=model.address_snapshot or "",
             status=OrderStatus(model.status),
             subtotal=model.subtotal or 0.0,

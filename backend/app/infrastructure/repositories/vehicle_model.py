@@ -1,9 +1,15 @@
 """
 Vehicle SQLAlchemy Models — Persistent vehicle, capacity, and load data.
+Estilo SQLAlchemy 2.0 tipado (`Mapped[...]`): a nullability da anotação
+reproduz a do modelo legado/Alembic.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.infrastructure.database.base import Base
 
 
@@ -12,17 +18,17 @@ class VehicleModel(Base):
 
     __table_args__ = (UniqueConstraint("tenant_id", "plate", name="uq_vehicle_tenant_plate"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, default="default", index=True)
-    plate = Column(String, nullable=False)
-    model = Column(String, nullable=False)
-    vehicle_type = Column(String, default="VAN")
-    capacity_total = Column(Integer, default=0)
-    status = Column(String, default="AVAILABLE")
-    assigned_driver_id = Column(String, nullable=True)
-    active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String, default="default", index=True)
+    plate: Mapped[str] = mapped_column(String, nullable=False)
+    model: Mapped[str] = mapped_column(String, nullable=False)
+    vehicle_type: Mapped[Optional[str]] = mapped_column(String, default="VAN")
+    capacity_total: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    status: Mapped[Optional[str]] = mapped_column(String, default="AVAILABLE")
+    assigned_driver_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class VehicleCapacityModel(Base):
@@ -30,14 +36,14 @@ class VehicleCapacityModel(Base):
 
     __table_args__ = (UniqueConstraint("vehicle_id", "product_codigo", name="uq_capacity_vehicle_product"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, default="default", index=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False)
-    product_codigo = Column(String, nullable=False)
-    product_name = Column(String, default="")
-    max_capacity = Column(Integer, default=0)
-    unit = Column(String, default="UNITS")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String, default="default", index=True)
+    vehicle_id: Mapped[int] = mapped_column(Integer, ForeignKey("vehicles.id"), nullable=False)
+    product_codigo: Mapped[str] = mapped_column(String, nullable=False)
+    product_name: Mapped[Optional[str]] = mapped_column(String, default="")
+    max_capacity: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    unit: Mapped[Optional[str]] = mapped_column(String, default="UNITS")
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class VehicleLoadModel(Base):
@@ -45,11 +51,11 @@ class VehicleLoadModel(Base):
 
     __table_args__ = (UniqueConstraint("vehicle_id", "product_codigo", name="uq_load_vehicle_product"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, default="default", index=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=False)
-    product_codigo = Column(String, nullable=False)
-    loaded = Column(Integer, default=0)
-    reserved = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String, default="default", index=True)
+    vehicle_id: Mapped[int] = mapped_column(Integer, ForeignKey("vehicles.id"), nullable=False)
+    product_codigo: Mapped[str] = mapped_column(String, nullable=False)
+    loaded: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    reserved: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
