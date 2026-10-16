@@ -28,8 +28,18 @@ describe('realtimeQueryKeys', () => {
     expect(realtimeQueryKeys('order.updated')).toContainEqual(['orders'])
   })
 
+  it('maps payment events to orders/dashboard and the finance caches', () => {
+    const keys = realtimeQueryKeys('payment.confirmed')
+    expect(keys).toContainEqual(['orders'])
+    expect(keys).toContainEqual(['dashboard'])
+    expect(keys).toContainEqual(['finance-payments'])
+    expect(keys).toContainEqual(['finance-receivables'])
+    expect(keys).toContainEqual(['finance-cash'])
+    expect(keys).toContainEqual(['finance-balance'])
+    expect(realtimeQueryKeys('payment.pending')).toContainEqual(['finance-payments'])
+  })
+
   it('ignores unrelated events', () => {
-    expect(realtimeQueryKeys('payment.confirmed')).toEqual([])
     expect(realtimeQueryKeys('')).toEqual([])
   })
 })

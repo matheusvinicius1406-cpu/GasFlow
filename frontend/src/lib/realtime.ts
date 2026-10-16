@@ -32,6 +32,9 @@ export interface RealtimeServerMessage {
  *   and no current screen renders live positions (would cause refetch storms).
  * - order.* events (new order / status change / driver assignment) refresh
  *   the order list and dashboard KPIs.
+ * - payment.* events (payment.pending on creation, payment.confirmed on
+ *   confirmation) change the order's payment_status and the finance screens,
+ *   so they refresh the orders list, the dashboard and every finance cache.
  */
 export function realtimeQueryKeys(eventType: string): string[][] {
   if (eventType.startsWith('delivery.')) {
@@ -42,6 +45,16 @@ export function realtimeQueryKeys(eventType: string): string[][] {
   }
   if (eventType.startsWith('order.')) {
     return [['orders'], ['dashboard']]
+  }
+  if (eventType.startsWith('payment.')) {
+    return [
+      ['orders'],
+      ['dashboard'],
+      ['finance-payments'],
+      ['finance-receivables'],
+      ['finance-cash'],
+      ['finance-balance'],
+    ]
   }
   if (eventType.startsWith('whatsapp.')) {
     return [['whatsapp-conversations'], ['orders'], ['dashboard'], ['customers']]
