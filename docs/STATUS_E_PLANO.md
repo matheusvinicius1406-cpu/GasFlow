@@ -103,7 +103,7 @@ Cada linha substitui um arquivo que foi removido. Detalhe: `git show fdd2129:doc
 
 ## 3. Pendências consolidadas
 
-**Total: 47 itens** — 8 resolvidos, 5 parciais, 26 abertos, 8 externos.
+**Total: 47 itens** — recontagem de **2026-10-16** (as Ondas A/D/E fecharam vários depois do número antigo, que era 8 resolvidos / 5 parciais / 26 abertos / 8 externos): **23 resolvidos · 1 parcial (I1 — só falta o transversal permissão/offline) · 5 abertos** (A4, B4, B5, C2, C3 — destes, A4/C2/C3 dependem de decisão de produto, §4 nº 2–4) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
 Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta auditoria.
 
 ### A. Segurança / authz
