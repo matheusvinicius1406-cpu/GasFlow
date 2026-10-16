@@ -34,6 +34,7 @@ from app.core.config import settings
 from app.domain.payment.service import get_payment_service
 from app.domain.payment.models import PaymentStatus
 from app.infrastructure.payment.psp_gateway import verify_webhook_signature
+from app.domain.events.event_bus import EventType, publish_payment_event
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -371,6 +372,14 @@ async def create_payment(req: CreatePaymentRequest, ctx: TenantContext = Depends
         amount=req.amount,
         method_code=req.method_code,
     )
+    # Realtime (Onda E/I4): pagamento criado entra como PENDING no painel.
+    publish_payment_event(
+        EventType.PAYMENT_PENDING,
+        payment.id or req.order_codigo,
+        ctx.tenant_id,
+        order_codigo=req.order_codigo,
+        data={"amount": str(req.amount), "method": str(payment.method_code), "status": str(payment.status.value)},
+    )
     return {"success": True, "payment": payment.to_dict()}
 
 
@@ -393,6 +402,13 @@ async def confirm_payment(
     payment = service.confirm_payment(payment_id, ctx.tenant_id, confirmed_by=ctx.user_id, notes=req.notes)
     if not payment:
         raise HTTPException(404, "Payment not found or cannot be confirmed")
+    publish_payment_event(
+        EventType.PAYMENT_CONFIRMED,
+        payment.id or payment.order_id,
+        ctx.tenant_id,
+        order_codigo=payment.order_id or "",
+        data={"amount": str(payment.amount), "method": str(payment.method_code), "status": str(payment.status.value)},
+    )
     _audit_payment(ctx, "payment.confirmed", payment)
     return {"success": True, "payment": payment.to_dict()}
 

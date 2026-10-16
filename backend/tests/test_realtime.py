@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app.domain.events.event_bus import DomainEvent, EventType
+from app.domain.events.event_bus import DomainEvent, EventType, publish_payment_event
 from app.infrastructure.realtime.websocket import (
     ConnectionManager,
     get_ws_manager,
@@ -316,7 +316,7 @@ def test_realtime_stats_endpoint(client, admin_token):
 
 
 def test_bridge_subscribes_delivery_and_driver_events(monkeypatch):
-    """setup_realtime_bridge() subscribes the WS bridge to delivery/driver events.
+    """setup_realtime_bridge() subscribes the WS bridge to delivery/driver/order/payment events.
 
     Deterministic version of the end-to-end path: we assert the wiring
     (bus subscription) rather than crossing event loops between the sync
@@ -339,8 +339,35 @@ def test_bridge_subscribes_delivery_and_driver_events(monkeypatch):
     # Order events (RT-01 pendência) are bridged too
     assert EventType.ORDER_CREATED in subscribed
     assert EventType.ORDER_UPDATED in subscribed
+    # Payment events entravam na lista de NÃO assinados (RT-01); a Onda E/I4
+    # fechou a lacuna: o `payment.*` existia no EventType sem publisher e sem
+    # assinatura, então confirmar pagamento não acendia nada no painel.
+    assert EventType.PAYMENT_CONFIRMED in subscribed
+    assert EventType.PAYMENT_PENDING in subscribed
     # Unrelated events are NOT bridged to WS
-    assert EventType.PAYMENT_CONFIRMED not in subscribed
+    assert EventType.DISPATCH_ASSIGNED not in subscribed
+
+
+@pytest.mark.asyncio
+async def test_payment_confirmed_routes_to_tenant_channel():
+    """I4: pagamento confirmado chega ao canal do tenant com o pedido no payload."""
+    manager = ConnectionManager()
+    ws_tenant = FakeWS(21)
+    await manager.connect(ws_tenant, "tenant:t1", {"user_id": "u1"})
+
+    event = publish_payment_event(
+        EventType.PAYMENT_CONFIRMED,
+        42,
+        "t1",
+        order_codigo="ORD-1",
+        data={"amount": "100.00", "method": "CASH", "status": "PAID"},
+    )
+    await manager.broadcast_event(event)
+
+    msgs = [json.loads(m) for m in ws_tenant.sent]
+    assert msgs[0]["event"]["type"] == "payment.confirmed"
+    assert msgs[0]["event"]["aggregate_id"] == "42"
+    assert msgs[0]["event"]["data"]["order_codigo"] == "ORD-1"
 
 
 def test_manager_singleton_is_shared():

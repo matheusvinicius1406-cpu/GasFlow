@@ -202,10 +202,13 @@ def setup_realtime_bridge():
     """Subscribe the WebSocket manager to the Event Bus."""
     bus = get_event_bus()
 
-    # Subscribe to delivery, driver, order and whatsapp events
+    # Subscribe to delivery, driver, order, whatsapp and payment events.
+    # `payment` entrou na Onda E/I4: os eventos existiam no EventType sem
+    # publisher e sem assinatura, então confirmar pagamento não acendia nada
+    # no painel em tempo real.
     for event_type in EventType:
         prefix = event_type.value.split(".", 1)[0]
-        if prefix in ("delivery", "driver", "order", "whatsapp"):
+        if prefix in ("delivery", "driver", "order", "whatsapp", "payment"):
             bus.subscribe(event_type, _event_to_ws)
 
     logger.info("Realtime bridge: Event Bus → WebSocket connected")

@@ -30,6 +30,7 @@ from app.infrastructure.repositories.financial_repositories import (
 )
 from app.infrastructure.repositories.order_repository import SQLAlchemyOrderRepository
 from app.application.financial.audit import log_finance_audit
+from app.domain.events.event_bus import EventType, publish_payment_event
 from app.application.financial.use_cases import (
     RegisterPaymentUseCase,
     RegisterExpenseUseCase,
@@ -227,6 +228,19 @@ def register_payment(
         raise HTTPException(status_code=400, detail=str(e)) from e
     payment = result["payment"]
     if result["status"] == "created":
+        # Realtime (Onda E/I4): o painel acende o pagamento sem refetch.
+        # Só no caminho "created" — a chamada idempotente não re-publica.
+        publish_payment_event(
+            EventType.PAYMENT_CONFIRMED,
+            payment.id,
+            ctx.tenant_id,
+            order_codigo=payment.order_codigo,
+            data={
+                "amount": str(payment.amount),
+                "method": str(payment.method),
+                "status": str(payment.status),
+            },
+        )
         log_finance_audit(
             db,
             tenant_id=ctx.tenant_id,

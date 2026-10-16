@@ -257,3 +257,30 @@ def publish_order_event(
     )
     _global_bus.publish(event)
     return event
+
+
+def publish_payment_event(
+    event_type: EventType,
+    payment_id: Any,
+    tenant_id: str,
+    order_codigo: str = "",
+    data: Optional[Dict] = None,
+):
+    """Publish a payment lifecycle event (confirmed, pending).
+
+    `payment_id` vai como string em `aggregate_id` (a linha de pagamento pode
+    ser id persistido ou chave de idempotência) e `order_codigo` entra em
+    `data`, porque é o elo que a tela de pedidos usa para reconciliar em
+    realtime. O `delivery.*` já era publicado; `payment.*` estava definido no
+    EventType sem nenhum publisher (lacuna fechada na Onda E/I4).
+    """
+    event = DomainEvent(
+        type=event_type,
+        tenant_id=tenant_id,
+        aggregate_id=str(payment_id),
+        actor_id="",
+        actor_type="OPERATOR",
+        data={"order_codigo": order_codigo, **(data or {})},
+    )
+    _global_bus.publish(event)
+    return event
