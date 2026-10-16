@@ -119,7 +119,7 @@ class WhatsAppAutomationService:
 
             # Create execution
             execution = AutomationExecution(
-                rule_id=rule.id,
+                rule_id=rule.id or 0,
                 customer_codigo=customer["codigo"],
                 customer_nome=customer.get("nome", ""),
                 customer_phone=customer.get("telefone", ""),
@@ -278,7 +278,9 @@ class WhatsAppAutomationService:
 
         seg_repo = SQLAlchemySegmentRepository(self.client_repo.db, self.client_repo.tenant_id)
 
-        segment = seg_repo.get_segment(rule.segment_id)
+        if rule.segment_id is None:
+            return []
+        segment = seg_repo.find_by_id(rule.segment_id)
         if not segment:
             return []
 
@@ -287,6 +289,7 @@ class WhatsAppAutomationService:
         customers = self.client_repo.listar_todos()
         for customer in customers:
             metrics = self.order_repo.get_customer_metrics(customer.codigo)
+            last_order_at = metrics.get("last_order_at")
             if segment.evaluate_customer(metrics):
                 eligible.append(
                     {
@@ -294,9 +297,7 @@ class WhatsAppAutomationService:
                         "nome": customer.nome,
                         "telefone": customer.telefone,
                         "favorite_product": metrics.get("favorite_product"),
-                        "last_order_date": metrics.get("last_order_at").strftime("%d/%m/%Y")
-                        if metrics.get("last_order_at")
-                        else "",
+                        "last_order_date": last_order_at.strftime("%d/%m/%Y") if last_order_at else "",
                         "total_orders": metrics.get("total_orders", 0),
                         "average_ticket": f"R$ {metrics.get('average_ticket', 0):.2f}",
                         "days_since_last_order": metrics.get("days_since_last_order", 0),
@@ -327,7 +328,7 @@ class WhatsAppAutomationService:
             return False
 
         # Check daily limit
-        recent_count = self.automation_repo.count_recent_sends(customer_codigo, rule.id, days=1)
+        recent_count = self.automation_repo.count_recent_sends(customer_codigo, rule.id or 0, days=1)
         if recent_count >= rule.max_messages_per_day:
             return False
 
@@ -381,14 +382,13 @@ class WhatsAppAutomationService:
             return None
 
         metrics = self.order_repo.get_customer_metrics(customer_codigo)
+        last_order_at = metrics.get("last_order_at")
         return {
             "codigo": client.codigo,
             "nome": client.nome,
             "telefone": client.telefone,
             "favorite_product": metrics.get("favorite_product"),
-            "last_order_date": metrics.get("last_order_at").strftime("%d/%m/%Y")
-            if metrics.get("last_order_at")
-            else "",
+            "last_order_date": last_order_at.strftime("%d/%m/%Y") if last_order_at else "",
             "total_orders": metrics.get("total_orders", 0),
             "average_ticket": f"R$ {metrics.get('average_ticket', 0):.2f}",
             "days_since_last_order": metrics.get("days_since_last_order", 0),

@@ -27,7 +27,7 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
         """Converte modelo SQLAlchemy para entidade de domínio."""
         return Client(
             id=model.id,
-            codigo=model.codigo,
+            codigo=model.codigo or "",
             nome=model.nome,
             telefone=model.telefone,
             telefone_secundario=model.telefone_secundario,
@@ -37,7 +37,7 @@ class SQLAlchemyClientRepository(TenantMixin, ClientRepository):
             referencia=model.referencia,
             bairro=model.bairro,
             observacoes=model.observacoes,
-            ativo=model.ativo,
+            ativo=bool(model.ativo),
             tipo=model.tipo,
             email=model.email,
             has_name=model.has_name,

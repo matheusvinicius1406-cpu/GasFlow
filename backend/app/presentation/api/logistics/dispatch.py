@@ -185,8 +185,9 @@ async def dispatch_status(
 
         drivers = drv_repo.listar_todos()
         total_drivers = len(drivers)
-        available_drivers = sum(1 for d in drivers if d.is_available)
-        online_drivers = sum(1 for d in drivers if d.status.value not in ("OFFLINE", "INACTIVE"))
+        driver_status = {d.codigo: (drv_repo.snapshot(d.codigo) or {}).get("status") or "AVAILABLE" for d in drivers}
+        available_drivers = sum(1 for d in drivers if driver_status[d.codigo] == "AVAILABLE")
+        online_drivers = sum(1 for d in drivers if driver_status[d.codigo] not in ("OFFLINE", "INACTIVE"))
 
         return {
             "deliveries": {

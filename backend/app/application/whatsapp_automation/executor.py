@@ -111,7 +111,7 @@ class ExecutionProcessor:
                 )
 
                 # Update rule metrics
-                if rule:
+                if rule and rule.id is not None:
                     self.automation_repo.update_rule(
                         rule.id,
                         successful_sends=(rule.successful_sends or 0) + 1,
@@ -132,7 +132,7 @@ class ExecutionProcessor:
                 self._audit("SEND_FAILED", execution_id, f"Error: {error}")
 
                 # Update rule metrics
-                if rule:
+                if rule and rule.id is not None:
                     self.automation_repo.update_rule(
                         rule.id,
                         failed_sends=(rule.failed_sends or 0) + 1,
@@ -155,9 +155,11 @@ class ExecutionProcessor:
         approved = self.automation_repo.list_executions(status="APPROVED", limit=limit)
         to_process = pending + approved
 
-        results = {"processed": 0, "sent": 0, "failed": 0, "errors": []}
+        results: Dict[str, Any] = {"processed": 0, "sent": 0, "failed": 0, "errors": []}
 
         for exec_entity in to_process:
+            if exec_entity.id is None:
+                continue
             result = await self.process_execution(exec_entity.id)
             results["processed"] += 1
             if result["success"]:

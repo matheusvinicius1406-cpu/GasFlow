@@ -288,7 +288,9 @@ class SQLAlchemyRoleRepository:
     def get_by_name(self, name: str) -> Optional[AuthRoleModel]:
         return self.db.query(AuthRoleModel).filter(AuthRoleModel.name == name).first()
 
-    def create(self, role_id: str, name: str, system_role: str, permissions: List[str] = None) -> AuthRoleModel:
+    def create(
+        self, role_id: str, name: str, system_role: str, permissions: Optional[List[str]] = None
+    ) -> AuthRoleModel:
         model = AuthRoleModel(
             id=role_id,
             name=name,

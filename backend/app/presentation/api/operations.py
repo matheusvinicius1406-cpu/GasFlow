@@ -102,19 +102,21 @@ async def get_driver_locations(
         for d in drivers:
             active_deliveries = len(del_repo.list_by_driver(d.codigo))
             location = loc_repo.get_location(ctx.tenant_id, d.codigo)
+            snap = drv_repo.snapshot(d.codigo) or {}
+            driver_status = snap.get("status") or "AVAILABLE"
 
             result.append(
                 DriverLocationResponse(
                     driver_id=d.codigo,
-                    driver_name=d.name or "",
-                    status=d.status.value,
+                    driver_name=d.nome,
+                    status=driver_status,
                     lat=location.latitude if location else None,
                     lng=location.longitude if location else None,
-                    last_seen=location.recorded_at.isoformat() if location and location.recorded_at else None,
-                    vehicle_id=d.vehicle_id,
+                    last_seen=location.timestamp.isoformat() if location and location.timestamp else None,
+                    vehicle_id=snap.get("vehicle_id"),
                     vehicle_plate=None,
                     active_deliveries=active_deliveries,
-                    is_paused=d.status.value == "PAUSED",
+                    is_paused=driver_status == "PAUSED",
                     pause_reason=None,
                 )
             )
@@ -150,7 +152,7 @@ async def get_active_deliveries(
             if d.driver_id:
                 driver = drv_repo.buscar_por_codigo(d.driver_id)
                 if driver:
-                    driver_name = driver.name
+                    driver_name = driver.nome
 
             addr_str = d.address_street or ""
             if d.address_number:
@@ -194,11 +196,12 @@ async def get_operational_dashboard(
 
         drivers = drv_repo.listar_todos()
         status_counts = del_repo.count_by_status()
-        drivers_online = sum(1 for d in drivers if d.status.value not in ("OFFLINE", "INACTIVE"))
-        drivers_available = sum(1 for d in drivers if d.is_available)
-        drivers_busy = sum(1 for d in drivers if d.status.value == "BUSY")
-        drivers_paused = sum(1 for d in drivers if d.status.value == "PAUSED")
-        drivers_offline = sum(1 for d in drivers if d.status.value in ("OFFLINE", "INACTIVE"))
+        driver_status = {d.codigo: (drv_repo.snapshot(d.codigo) or {}).get("status") or "AVAILABLE" for d in drivers}
+        drivers_online = sum(1 for d in drivers if driver_status[d.codigo] not in ("OFFLINE", "INACTIVE"))
+        drivers_available = sum(1 for d in drivers if driver_status[d.codigo] == "AVAILABLE")
+        drivers_busy = sum(1 for d in drivers if driver_status[d.codigo] == "BUSY")
+        drivers_paused = sum(1 for d in drivers if driver_status[d.codigo] == "PAUSED")
+        drivers_offline = sum(1 for d in drivers if driver_status[d.codigo] in ("OFFLINE", "INACTIVE"))
 
         # Delivery stats from DB counts
         deliveries_pending = status_counts.get("PENDING", 0)

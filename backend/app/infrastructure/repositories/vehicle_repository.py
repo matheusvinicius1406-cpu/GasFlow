@@ -122,8 +122,8 @@ class VehicleRepository(TenantMixin):
             return False
 
         load = self.get_load(vehicle_id, product_codigo)
-        current_loaded = load.loaded if load else 0
-        current_reserved = load.reserved if load else 0
+        current_loaded = (load.loaded or 0) if load else 0
+        current_reserved = (load.reserved or 0) if load else 0
         available = cap.max_capacity - current_loaded - current_reserved
         return available >= quantity
 
@@ -134,7 +134,7 @@ class VehicleRepository(TenantMixin):
 
         load = self.get_load(vehicle_id, product_codigo)
         if load:
-            load.reserved += quantity
+            load.reserved = (load.reserved or 0) + quantity
         else:
             load = VehicleLoadModel(
                 tenant_id=self.tenant_id,
@@ -151,22 +151,22 @@ class VehicleRepository(TenantMixin):
         """Move reserved to loaded (delivery started)."""
         load = self.get_load(vehicle_id, product_codigo)
         if load:
-            load.reserved = max(0, load.reserved - quantity)
-            load.loaded += quantity
+            load.reserved = max(0, (load.reserved or 0) - quantity)
+            load.loaded = (load.loaded or 0) + quantity
             self.db.commit()
 
     def release_reserved(self, vehicle_id: int, product_codigo: str, quantity: int):
         """Release reserved capacity (delivery cancelled)."""
         load = self.get_load(vehicle_id, product_codigo)
         if load:
-            load.reserved = max(0, load.reserved - quantity)
+            load.reserved = max(0, (load.reserved or 0) - quantity)
             self.db.commit()
 
     def unload(self, vehicle_id: int, product_codigo: str, quantity: int):
         """Reduce loaded count (delivery completed)."""
         load = self.get_load(vehicle_id, product_codigo)
         if load:
-            load.loaded = max(0, load.loaded - quantity)
+            load.loaded = max(0, (load.loaded or 0) - quantity)
             self.db.commit()
 
     def get_load_summary(self, vehicle_id: int) -> dict:
@@ -178,14 +178,14 @@ class VehicleRepository(TenantMixin):
         summary = {}
         for cap in capacities:
             ld = load_map.get(cap.product_codigo)
-            loaded = ld.loaded if ld else 0
-            reserved = ld.reserved if ld else 0
+            loaded = (ld.loaded or 0) if ld else 0
+            reserved = (ld.reserved or 0) if ld else 0
             summary[cap.product_codigo] = {
                 "product": cap.product_name or cap.product_codigo,
                 "max_capacity": cap.max_capacity,
                 "loaded": loaded,
                 "reserved": reserved,
-                "available": cap.max_capacity - loaded - reserved,
+                "available": (cap.max_capacity or 0) - loaded - reserved,
                 "unit": cap.unit,
             }
         return summary

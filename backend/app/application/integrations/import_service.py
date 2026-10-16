@@ -207,7 +207,7 @@ def normalize_order(raw: Dict[str, Any]) -> NormalizedOrder:
                 continue
             qty_raw = it.get("quantity", it.get("quantidade", it.get("qty", 1)))
             try:
-                qty = int(float(qty_raw))
+                qty = int(float(qty_raw if qty_raw is not None else 1))
             except (TypeError, ValueError):
                 qty = 1
             order.items.append(

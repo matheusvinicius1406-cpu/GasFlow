@@ -97,6 +97,18 @@ class Conversation:
             self.updated_at = now
 
     @property
+    def persisted_id(self) -> int:
+        """ID da conversa já persistida.
+
+        O repositório devolve conversas carregadas/criadas (sempre com id); usar
+        esta propriedade documenta a invariante e evita passar `None`
+        silenciosamente para queries que esperam `int`.
+        """
+        if self.id is None:
+            raise ValueError("Conversa ainda não persistida (id ausente)")
+        return self.id
+
+    @property
     def is_ai_active(self) -> bool:
         return self.state not in (
             ConversationState.HUMAN_ACTIVE,

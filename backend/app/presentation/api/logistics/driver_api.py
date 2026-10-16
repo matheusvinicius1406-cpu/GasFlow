@@ -492,7 +492,7 @@ async def handle_list_deliveries(
                 DriverDeliverySummary(
                     delivery_id=r.delivery_id,
                     order_reference=r.order_id,
-                    customer_name=r.customer_name,
+                    customer_name=r.customer_name or "",
                     address=addr_str,
                     status=r.status,
                     scheduled_at=r.scheduled_at.isoformat() if r.scheduled_at else None,
@@ -532,7 +532,7 @@ async def handle_get_delivery(ctx: Dict, delivery_id: str) -> DriverDeliveryDeta
         return DriverDeliveryDetail(
             delivery_id=record.delivery_id,
             order_reference=record.order_id,
-            customer_name=record.customer_name,
+            customer_name=record.customer_name or "",
             address=addr_str,
             address_reference=record.address_reference,
             status=record.status,
@@ -809,8 +809,8 @@ async def handle_current_route(ctx: Dict) -> DriverRouteDetail:
                         delivery_id=s.delivery_id,
                         sequence=s.sequence,
                         status=s.status,
-                        customer_name=s.customer_name,
-                        address_snapshot=s.address_snapshot,
+                        customer_name=s.customer_name or "",
+                        address=s.address_snapshot or "",
                     )
                     for s in stops
                 ]
@@ -1070,9 +1070,9 @@ async def handle_sync(ctx: Dict, req: SyncRequest) -> SyncResponse:
     driver_id = ctx["driver_id"]
     tenant_id = ctx["tenant_id"]
 
-    accepted = []
-    rejected = []
-    conflicts = []
+    accepted: List[str] = []
+    rejected: List[Dict[str, Any]] = []
+    conflicts: List[Dict[str, Any]] = []
 
     db = _get_db_session()
     try:

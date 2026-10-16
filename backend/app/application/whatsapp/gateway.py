@@ -163,7 +163,7 @@ class MessageGateway:
             return {
                 "status": "skipped",
                 "error": "BOT_ECHO",
-                "conversation_id": conversation.id,
+                "conversation_id": conversation.persisted_id,
                 "outbound": None,
             }
 
@@ -174,11 +174,11 @@ class MessageGateway:
         # 7. Idempotency check
         if self.conversation_repo.find_duplicate_message(message.provider_message_id):
             self._inc_metric("duplicate_messages")
-            return {"status": "skipped", "error": "DUPLICATE_MESSAGE", "conversation_id": conversation.id}
+            return {"status": "skipped", "error": "DUPLICATE_MESSAGE", "conversation_id": conversation.persisted_id}
 
         # 8. Save incoming message
         incoming_msg = ConversationMessage(
-            conversation_id=conversation.id,
+            conversation_id=conversation.persisted_id,
             direction="INCOMING",
             sender="customer",
             content=message.text,
@@ -233,7 +233,7 @@ class MessageGateway:
             customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
             if customer and not conversation.customer_codigo:
                 conversation.customer_codigo = customer["codigo"]
-                self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+                self.conversation_repo.update_customer(conversation.persisted_id, customer["codigo"])
         except Exception:
             logger.debug("wa.gateway.ensure_customer_failed", exc_info=True)
 
@@ -241,7 +241,7 @@ class MessageGateway:
         """Decide o destino da mensagem já salva: humano, FAQ, draft ou IA."""
         # 9. Check if human operator is active
         if conversation.state == ConversationState.HUMAN_ACTIVE:
-            return {"status": "human_active", "conversation_id": conversation.id, "outbound": None}
+            return {"status": "human_active", "conversation_id": conversation.persisted_id, "outbound": None}
 
         # 10. Check for human handoff request
         if HUMAN_REQUEST.search(message.text):
@@ -252,7 +252,12 @@ class MessageGateway:
         # sem resposta — a IA só fala quando tem algo útil a dizer.
         if self._is_ack(message.text) and not conversation.draft:
             self._inc_metric("acks_skipped")
-            return {"status": "skipped", "error": "ACK_NO_REPLY", "conversation_id": conversation.id, "outbound": None}
+            return {
+                "status": "skipped",
+                "error": "ACK_NO_REPLY",
+                "conversation_id": conversation.persisted_id,
+                "outbound": None,
+            }
 
         # 10.6 FAQ determinístico: preço/entrega/pagamento/horário com resposta
         # correta e direta (nunca "não entendi" para pergunta direta).
@@ -260,7 +265,7 @@ class MessageGateway:
         if faq:
             self._inc_metric("faq_answered")
             self._notify_new_message(conversation)
-            return self._build_outbound(conversation.id, message.sender_phone, message.account_id, faq)
+            return self._build_outbound(conversation.persisted_id, message.sender_phone, message.account_id, faq)
 
         # 11. Expire stale drafts
         self._expire_draft(conversation)
@@ -408,7 +413,7 @@ class MessageGateway:
     # essa conversa, ignora (não processa, não responde).
     def _is_own_echo(self, conversation: Conversation, text: str) -> bool:
         try:
-            recent = self.message_repo.list_by_conversation(conversation.id, limit=5)
+            recent = self.message_repo.list_by_conversation(conversation.persisted_id, limit=5)
             for m in reversed(recent):
                 if m.direction == "OUTGOING":
                     return (m.content or "").strip() == (text or "").strip()
@@ -567,10 +572,10 @@ class MessageGateway:
 
             publish_whatsapp_event(
                 EventType.WHATSAPP_MESSAGE_RECEIVED,
-                conversation.id,
+                conversation.persisted_id,
                 tenant_id=conversation.tenant_id or "default",
                 data={
-                    "conversation_id": conversation.id,
+                    "conversation_id": conversation.persisted_id,
                     "customer_phone": conversation.customer_phone,
                     **(extra or {}),
                 },
@@ -691,16 +696,16 @@ class MessageGateway:
         """Handle non-text messages with a safe fallback."""
         conversation = self._get_or_create_conversation(message)
         reply = "Desculpe, no momento só consigo processar mensagens de texto. Pode digitar sua mensagem?"
-        return self._build_outbound(conversation.id, message.sender_phone, message.account_id, reply)
+        return self._build_outbound(conversation.persisted_id, message.sender_phone, message.account_id, reply)
 
     def _request_human_handoff(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
         """Transition to human handoff state."""
         conversation.transition_to(ConversationState.HUMAN_PENDING)
-        self.conversation_repo.update_state(conversation.id, ConversationState.HUMAN_PENDING)
+        self.conversation_repo.update_state(conversation.persisted_id, ConversationState.HUMAN_PENDING)
         reply = "Vou transferir para um atendente. Aguarde um momento."
         return {
             "status": "human_handoff",
-            "conversation_id": conversation.id,
+            "conversation_id": conversation.persisted_id,
             "outbound": WhatsAppOutbound(
                 recipient_phone=message.sender_phone,
                 text=reply,
@@ -717,7 +722,7 @@ class MessageGateway:
         if AMBIGUOUS_CONFIRMATION.search(message.text):
             reply = "Preciso de uma confirmação clara. Digite 'sim' para confirmar ou 'não' para cancelar."
             return self._build_outbound(
-                conversation.id,
+                conversation.persisted_id,
                 message.sender_phone,
                 message.account_id,
                 reply,
@@ -728,7 +733,7 @@ class MessageGateway:
             recheck = self._recheck_draft(conversation)
             if not recheck["ok"]:
                 return self._build_outbound(
-                    conversation.id,
+                    conversation.persisted_id,
                     conversation.customer_phone,
                     conversation.account_id,
                     recheck["message"],
@@ -739,7 +744,7 @@ class MessageGateway:
             if result["success"]:
                 self._inc_metric("orders_created")
             return self._build_outbound(
-                conversation.id,
+                conversation.persisted_id,
                 conversation.customer_phone,
                 conversation.account_id,
                 result["message"],
@@ -749,7 +754,7 @@ class MessageGateway:
         else:
             reply = "Não entendi se você confirma ou cancela. Pode digitar 'sim' ou 'não'?"
             return self._build_outbound(
-                conversation.id,
+                conversation.persisted_id,
                 message.sender_phone,
                 message.account_id,
                 reply,
@@ -767,6 +772,8 @@ class MessageGateway:
         # Recheck each item
         for item in draft.items:
             product_codigo = item.get("product_codigo")
+            if not product_codigo:
+                continue
             quantity = item.get("quantity", 1)
 
             # Recheck stock
@@ -795,7 +802,7 @@ class MessageGateway:
                     # Update draft with new price
                     item["unit_price"] = new_price
                     item["subtotal"] = round(new_price * quantity, 2)
-                    self.conversation_repo.update_draft(conversation.id, draft)
+                    self.conversation_repo.update_draft(conversation.persisted_id, draft)
 
         return {"ok": True, "message": ""}
 
@@ -830,8 +837,8 @@ class MessageGateway:
                 if result.success:
                     # Transition state
                     conversation.transition_to(ConversationState.ORDER_CREATED)
-                    self.conversation_repo.update_state(conversation.id, ConversationState.ORDER_CREATED)
-                    self.conversation_repo.update_draft(conversation.id, None)
+                    self.conversation_repo.update_state(conversation.persisted_id, ConversationState.ORDER_CREATED)
+                    self.conversation_repo.update_draft(conversation.persisted_id, None)
                     order_data = result.data
                     # Evento realtime: pedido criado via WhatsApp (o módulo de
                     # Pedidos atualiza na hora via invalidação de query).
@@ -842,7 +849,7 @@ class MessageGateway:
                             EventType.ORDER_CREATED,
                             str(order_data.get("order_codigo", "")),
                             tenant_id=conversation.tenant_id or "default",
-                            data={"source": "WHATSAPP", "conversation_id": conversation.id},
+                            data={"source": "WHATSAPP", "conversation_id": conversation.persisted_id},
                         )
                     except Exception:
                         logger.debug("wa.gateway.order_event_failed", exc_info=True)
@@ -865,12 +872,12 @@ class MessageGateway:
     def _cancel_draft(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
         """Cancel current order draft."""
         conversation.draft = None
-        self.conversation_repo.update_draft(conversation.id, None)
+        self.conversation_repo.update_draft(conversation.persisted_id, None)
         conversation.transition_to(ConversationState.BROWSING)
-        self.conversation_repo.update_state(conversation.id, ConversationState.BROWSING)
+        self.conversation_repo.update_state(conversation.persisted_id, ConversationState.BROWSING)
         reply = "Pedido cancelado. Posso ajudar com mais alguma coisa?"
         return self._build_outbound(
-            conversation.id,
+            conversation.persisted_id,
             message.sender_phone,
             message.account_id,
             reply,
@@ -879,12 +886,12 @@ class MessageGateway:
     def _reset_conversation(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
         """Reset conversation state."""
         conversation.draft = None
-        self.conversation_repo.update_draft(conversation.id, None)
+        self.conversation_repo.update_draft(conversation.persisted_id, None)
         conversation.transition_to(ConversationState.IDLE)
-        self.conversation_repo.update_state(conversation.id, ConversationState.IDLE)
+        self.conversation_repo.update_state(conversation.persisted_id, ConversationState.IDLE)
         reply = "OK, recomeçamos. O que você precisa?"
         return self._build_outbound(
-            conversation.id,
+            conversation.persisted_id,
             message.sender_phone,
             message.account_id,
             reply,
@@ -896,11 +903,11 @@ class MessageGateway:
             age = datetime.utcnow() - conversation.updated_at
             if age > timedelta(minutes=DRAFT_TTL_MINUTES):
                 conversation.draft = None
-                self.conversation_repo.update_draft(conversation.id, None)
+                self.conversation_repo.update_draft(conversation.persisted_id, None)
                 # Transition back to BROWSING if we were in confirmation
                 if conversation.state == ConversationState.AWAITING_CONFIRMATION:
                     conversation.transition_to(ConversationState.BROWSING)
-                    self.conversation_repo.update_state(conversation.id, ConversationState.BROWSING)
+                    self.conversation_repo.update_state(conversation.persisted_id, ConversationState.BROWSING)
                 self._inc_metric("drafts_expired")
 
     def _route_to_ai(self, conversation: Conversation, message: WhatsAppMessage) -> Dict[str, Any]:
@@ -917,7 +924,7 @@ class MessageGateway:
         # Link customer to conversation if found
         if customer and not conversation.customer_codigo:
             conversation.customer_codigo = customer["codigo"]
-            self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+            self.conversation_repo.update_customer(conversation.persisted_id, customer["codigo"])
 
         # Build AI context (truncated to prevent context overflow)
         # RAG-lite: conhecimento do negócio (catálogo com preços reais + regras
@@ -936,7 +943,7 @@ class MessageGateway:
             logger.warning("wa.gateway.ai_chat_failed", exc_info=True)
             self._inc_metric("ai_failures")
             return self._build_outbound(
-                conversation.id,
+                conversation.persisted_id,
                 message.sender_phone,
                 message.account_id,
                 "Desculpe, tive um problema ao processar sua mensagem. Pode tentar novamente?",
@@ -952,13 +959,13 @@ class MessageGateway:
             if draft:
                 conversation.draft = draft
                 conversation.transition_to(ConversationState.AWAITING_CONFIRMATION)
-                self.conversation_repo.update_draft(conversation.id, draft)
-                self.conversation_repo.update_state(conversation.id, ConversationState.AWAITING_CONFIRMATION)
+                self.conversation_repo.update_draft(conversation.persisted_id, draft)
+                self.conversation_repo.update_state(conversation.persisted_id, ConversationState.AWAITING_CONFIRMATION)
 
                 # Format confirmation message
                 reply = self._format_draft_confirmation(draft)
                 return self._build_outbound(
-                    conversation.id,
+                    conversation.persisted_id,
                     message.sender_phone,
                     conversation.account_id,
                     reply,
@@ -968,7 +975,7 @@ class MessageGateway:
         if intent and intent != "GENERAL_QUESTION":
             if conversation.state == ConversationState.IDLE:
                 conversation.transition_to(ConversationState.BROWSING)
-                self.conversation_repo.update_state(conversation.id, ConversationState.BROWSING)
+                self.conversation_repo.update_state(conversation.persisted_id, ConversationState.BROWSING)
 
         # Normal AI response
         reply = ai_result.get("message", "Posso ajudar com consultas sobre clientes, pedidos, estoque e financeiro.")
@@ -979,7 +986,7 @@ class MessageGateway:
             self._limit_store.mark(f"coupon_offer:{conv_key}", self._COUPON_OFFER_TTL)
 
         return self._build_outbound(
-            conversation.id,
+            conversation.persisted_id,
             message.sender_phone,
             conversation.account_id,
             reply,
@@ -1021,23 +1028,23 @@ class MessageGateway:
         customer = self._ensure_customer(message.sender_phone, self._wa_name_from(message))
         if customer and not conversation.customer_codigo:
             conversation.customer_codigo = customer["codigo"]
-            self.conversation_repo.update_customer(conversation.id, customer["codigo"])
+            self.conversation_repo.update_customer(conversation.persisted_id, customer["codigo"])
 
         draft = self._build_order_draft(conversation, {"items": items}, message)
         if not draft:
             # Não achou produto correspondente — mostra catálogo com preços reais
             return self._build_outbound(
-                conversation.id,
+                conversation.persisted_id,
                 message.sender_phone,
                 message.account_id,
                 self._catalog_menu(),
             )
         conversation.draft = draft
         conversation.transition_to(ConversationState.AWAITING_CONFIRMATION)
-        self.conversation_repo.update_draft(conversation.id, draft)
-        self.conversation_repo.update_state(conversation.id, ConversationState.AWAITING_CONFIRMATION)
+        self.conversation_repo.update_draft(conversation.persisted_id, draft)
+        self.conversation_repo.update_state(conversation.persisted_id, ConversationState.AWAITING_CONFIRMATION)
         return self._build_outbound(
-            conversation.id,
+            conversation.persisted_id,
             message.sender_phone,
             conversation.account_id,
             self._format_draft_confirmation(draft),

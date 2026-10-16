@@ -6,7 +6,12 @@ Interfaces for conversation and message persistence.
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Tuple
-from app.domain.whatsapp.conversation import Conversation, ConversationMessage, ConversationState
+from app.domain.whatsapp.conversation import (
+    Conversation,
+    ConversationDraft,
+    ConversationMessage,
+    ConversationState,
+)
 
 
 class ConversationRepository(ABC):
@@ -35,6 +40,11 @@ class ConversationRepository(ABC):
     @abstractmethod
     def update_customer(self, conversation_id: int, customer_codigo: str) -> bool:
         """Link a customer to a conversation."""
+        pass
+
+    @abstractmethod
+    def update_draft(self, conversation_id: int, draft: Optional[ConversationDraft]) -> bool:
+        """Persist (or clear) the in-progress order draft of a conversation."""
         pass
 
     @abstractmethod

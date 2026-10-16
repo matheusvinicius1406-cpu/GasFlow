@@ -10,7 +10,7 @@ from app.presentation.dependencies import get_tenant_context, require_admin
 from app.domain.security.models import TenantContext
 from app.presentation.schemas.delivery import CreateDriverResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Optional, List, Tuple
 
 router = APIRouter(prefix="/delivery", tags=["delivery-ops"])
 
@@ -306,9 +306,10 @@ async def list_drivers(status: Optional[str] = None, ctx: TenantContext = Depend
     try:
         repo = SQLAlchemyDeliveryDriverRepository(db, tenant_id=ctx.tenant_id)
         drivers = repo.listar_todos()
+        snapshots = [s for s in (repo.snapshot(d.codigo) for d in drivers) if s]
         if status:
-            drivers = [d for d in drivers if d.status.value == status]
-        return {"drivers": [d.to_dict() for d in drivers], "count": len(drivers)}
+            snapshots = [s for s in snapshots if (s.get("status") or "AVAILABLE") == status]
+        return {"drivers": snapshots, "count": len(snapshots)}
     finally:
         db.close()
 
@@ -345,10 +346,6 @@ async def update_driver_location(
         driver = drv_repo.buscar_por_codigo(driver_id)
         if not driver:
             raise HTTPException(404, "Driver not found")
-
-        # Update domain object
-        driver.update_location(req.lat, req.lng, req.accuracy)
-        drv_repo.db.commit()
 
         # Persist to GPS table
         loc_repo = SQLAlchemyDriverLocationRepository(db)
@@ -966,8 +963,8 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
     from app.infrastructure.database.init_db import engine
     from app.infrastructure.repositories.delivery_persistence_repository import (
         SQLAlchemyDeliveryPersistenceRepository,
-        SQLAlchemyDeliveryDriverRepository,
     )
+    from app.infrastructure.repositories.delivery_repository import SQLAlchemyDeliveryDriverRepository
     from app.application.delivery.driver_stock_service import DriverStockService
     from app.domain.delivery.dispatch_engine import DispatchEngine, DispatchMode, OrderRequest
     from app.core.config import settings
@@ -991,8 +988,8 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         order = OrderRequest(
             order_id=delivery.order_id,
             tenant_id=ctx.tenant_id,
-            customer_codigo=delivery.customer_codigo,
-            customer_name=delivery.customer_name,
+            customer_codigo=delivery.customer_codigo or "",
+            customer_name=delivery.customer_name or "",
             latitude=delivery.address_lat,
             longitude=delivery.address_lng,
         )
@@ -1008,8 +1005,8 @@ async def suggest_driver_for_delivery(req: DriverSuggestRequest, ctx: TenantCont
         if settings.delivery_smart_dispatch_enabled:
             return _sugestao_smart_dispatch(db, ctx, req, delivery, candidates, order)
 
-        engine = DispatchEngine(mode=DispatchMode.ASSISTED)
-        return engine.recommend(order, candidates)
+        dispatcher = DispatchEngine(mode=DispatchMode.ASSISTED)
+        return dispatcher.recommend(order, candidates)
     finally:
         db.close()
 
@@ -1095,10 +1092,8 @@ async def optimize_delivery_route(req: RouteOptimizeRequest, ctx: TenantContext 
             raise HTTPException(404, "Entregador não encontrado")
 
         loc_repo = SQLAlchemyDriverLocationRepository(db)
-        latest = loc_repo.latest_history_point(ctx.tenant_id, req.driver_id)
-        if latest is None:
-            latest = loc_repo.get_location(ctx.tenant_id, req.driver_id)
-        if latest is None or latest.latitude is None or latest.longitude is None:
+        position = _latest_driver_position(loc_repo, ctx.tenant_id, req.driver_id)
+        if position is None:
             raise HTTPException(422, "Entregador sem posição conhecida")
 
         del_repo = SQLAlchemyDeliveryPersistenceRepository(db, ctx.tenant_id)
@@ -1114,7 +1109,7 @@ async def optimize_delivery_route(req: RouteOptimizeRequest, ctx: TenantContext 
             raise HTTPException(422, "Nenhuma entrega para otimizar")
 
         payload = DeliveryRouteOptimizer(get_routing_provider()).optimize(
-            origin=(float(latest.latitude), float(latest.longitude)),
+            origin=position,
             deliveries=points,
         )
         result = {
@@ -1190,6 +1185,26 @@ async def dispatch_candidates(delivery_id: str, ctx: TenantContext = Depends(get
 # ── Gatilho automático pós-atribuição (Fase 8) ──────────
 
 
+def _latest_driver_position(loc_repo: Any, tenant_id: str, driver_id: str) -> Optional[Tuple[float, float]]:
+    """Posição mais recente do entregador: histórico e, se faltar, o ping atual.
+
+    O histórico é a fonte preferida (mais preciso); o `get_location` cobre o
+    entregador que só tem o último ping. Devolve `(lat, lng)` ou None quando
+    não há posição conhecida — o chamador decide o que fazer.
+    """
+    latest = loc_repo.latest_history_point(tenant_id, driver_id)
+    latitude = latest.latitude if latest is not None else None
+    longitude = latest.longitude if latest is not None else None
+    if latitude is None or longitude is None:
+        fallback = loc_repo.get_location(tenant_id, driver_id)
+        if fallback is not None:
+            latitude = fallback.latitude
+            longitude = fallback.longitude
+    if latitude is None or longitude is None:
+        return None
+    return float(latitude), float(longitude)
+
+
 def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
     """Otimização best-effort da rota do entregador após atribuição.
 
@@ -1248,10 +1263,8 @@ def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
 
             # Posição do entregador.
             loc_repo = SQLAlchemyDriverLocationRepository(db)
-            latest = loc_repo.latest_history_point(tenant_id, driver_id)
-            if latest is None:
-                latest = loc_repo.get_location(tenant_id, driver_id)
-            if latest is None or latest.latitude is None or latest.longitude is None:
+            position = _latest_driver_position(loc_repo, tenant_id, driver_id)
+            if position is None:
                 return  # sem posição: nada a otimizar
 
             points = []
@@ -1262,7 +1275,7 @@ def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
                 return
 
             result = DeliveryRouteOptimizer(get_routing_provider()).optimize(
-                origin=(float(latest.latitude), float(latest.longitude)),
+                origin=position,
                 deliveries=points,
             )
             changed = result.ordered_delivery_ids != [d.delivery_id for d in deliveries]

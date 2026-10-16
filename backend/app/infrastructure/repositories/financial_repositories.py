@@ -7,10 +7,10 @@ Atomic transactions for financial operations.
 
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict, cast
 from sqlalchemy.orm import Session
 from app.infrastructure.repositories.tenant_mixin import TenantMixin
-from sqlalchemy import func, text, or_
+from sqlalchemy import CursorResult, func, text, or_
 
 from app.domain.financial.payment import Payment, PaymentStatus, PaymentMethod
 from app.domain.financial.receivable import Receivable, ReceivableStatus
@@ -426,7 +426,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
             {"now": current_date, "tenant_id": self.tenant_id},
         )
         self.db.commit()
-        return result.rowcount
+        return cast("CursorResult[Any]", result).rowcount
 
 
 class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):

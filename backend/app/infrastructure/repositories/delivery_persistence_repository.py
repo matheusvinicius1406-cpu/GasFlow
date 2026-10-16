@@ -431,7 +431,7 @@ class SQLAlchemyDeliveryPersistenceRepository(TenantMixin):
         proof_data: Optional[Dict] = None,
         driver_notes: str = "",
     ) -> Optional[DeliveryRecord]:
-        extras = {}
+        extras: Dict[str, Any] = {}
         if proof_type:
             extras["proof_type"] = proof_type
         if proof_data:
@@ -821,8 +821,8 @@ class SQLAlchemyOutboxRepository:
     def mark_failed(self, entry_id: int, error_message: str):
         entry = self.db.query(OutboxEntry).filter(OutboxEntry.id == entry_id).first()
         if entry:
-            entry.retry_count += 1
-            if entry.retry_count >= entry.max_retries:
+            entry.retry_count = (entry.retry_count or 0) + 1
+            if entry.retry_count >= (entry.max_retries or 0):
                 entry.status = "FAILED"
             entry.error_message = error_message
             self.db.commit()

@@ -172,7 +172,7 @@ class Customer360UseCase:
             return None
 
         # Client data
-        result = {
+        result: Dict[str, Any] = {
             "codigo": client.codigo,
             "nome": client.nome,
             "telefone": client.telefone,

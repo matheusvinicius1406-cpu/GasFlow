@@ -38,7 +38,7 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check app tests
-      - name: Type check (mypy baseline — novos arquivos nascem verificados)
+      - name: Type check (mypy strict — sem baseline desde 2026-10-16)
         run: python -m mypy app
       - name: Dead code (vulture — zero findings desde a Onda A/E4)
         run: python -m vulture app --min-confidence 80

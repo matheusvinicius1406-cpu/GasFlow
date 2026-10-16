@@ -444,12 +444,12 @@ async def list_conversations(
 
     items = []
     for conv in conversations:
-        messages = msg_repo.list_by_conversation(conv.id, limit=1, offset=0)
+        messages = msg_repo.list_by_conversation(conv.persisted_id, limit=1, offset=0)
         last_msg = messages[-1].content if messages else None
-        msg_count = msg_repo.count_by_conversation(conv.id)
+        msg_count = msg_repo.count_by_conversation(conv.persisted_id)
         items.append(
             ConversationInfo(
-                id=conv.id,
+                id=conv.persisted_id,
                 account_id=conv.account_id,
                 customer_phone=conv.customer_phone,
                 customer_codigo=conv.customer_codigo,
@@ -499,7 +499,7 @@ async def get_conversation(
     ]
 
     return ConversationDetail(
-        id=conv.id,
+        id=conv.persisted_id,
         account_id=conv.account_id,
         customer_phone=conv.customer_phone,
         customer_codigo=conv.customer_codigo,

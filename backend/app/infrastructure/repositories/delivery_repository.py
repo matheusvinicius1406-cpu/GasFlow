@@ -21,7 +21,9 @@ def _is_valid_codigo(codigo: Optional[str]) -> bool:
     drivers de teste/integração semeados direto no banco (ex.: tokens de
     rastreio público usam códigos alfanuméricos) — ver _to_entity.
     """
-    return bool(codigo) and len(codigo) == 6 and codigo.isdigit()
+    if not codigo:
+        return False
+    return len(codigo) == 6 and codigo.isdigit()
 
 
 class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
@@ -33,11 +35,11 @@ class SQLAlchemyDeliveryDriverRepository(TenantMixin, DeliveryDriverRepository):
     def _to_entity(self, model: DeliveryDriverModel) -> DeliveryDriver:
         return DeliveryDriver(
             id=model.id,
-            codigo=model.codigo,
+            codigo=model.codigo or "",
             nome=model.nome,
             telefone=model.telefone,
             placa=model.placa,
-            ativo=model.ativo,
+            ativo=bool(model.ativo),
             created_at=model.created_at,
         )
 

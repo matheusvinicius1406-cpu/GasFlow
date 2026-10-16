@@ -262,7 +262,7 @@ class SQLAlchemyConversationMessageRepository(ConversationMessageRepository):
             direction=model.direction,
             sender=model.sender,
             content=model.content or "",
-            message_type=model.message_type,
+            message_type=model.message_type or "",
             metadata=metadata,
             created_at=model.created_at,
         )

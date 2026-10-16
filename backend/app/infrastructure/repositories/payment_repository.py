@@ -132,7 +132,9 @@ class SQLAlchemyServicePaymentRepository:
     def get_by_id(self, payment_id: str) -> Optional[PaymentServiceRecord]:
         return self.db.query(PaymentServiceRecord).filter(PaymentServiceRecord.id == payment_id).first()
 
-    def list_by_tenant(self, tenant_id: str, status: str = None, limit: int = 50) -> List[PaymentServiceRecord]:
+    def list_by_tenant(
+        self, tenant_id: str, status: Optional[str] = None, limit: int = 50
+    ) -> List[PaymentServiceRecord]:
         q = self.db.query(PaymentServiceRecord).filter(PaymentServiceRecord.tenant_id == tenant_id)
         if status:
             q = q.filter(PaymentServiceRecord.status == status)
@@ -205,11 +207,11 @@ class SQLAlchemyServicePaymentRepository:
         total_received = sum(p.amount for p in confirmed)
         total_pending = sum(p.amount for p in pending)
 
-        by_method = {}
+        by_method: Dict[str, Dict[str, float]] = {}
         for p in confirmed:
             method = p.method_code or "UNKNOWN"
             if method not in by_method:
-                by_method[method] = {"count": 0, "total": 0}
+                by_method[method] = {"count": 0, "total": 0.0}
             by_method[method]["count"] += 1
             by_method[method]["total"] += p.amount
 

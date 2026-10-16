@@ -10,9 +10,9 @@ Concurrency: Atomic UPDATE with WHERE quantity >= N prevents negative stock.
 """
 
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple, cast
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import CursorResult, text
 from app.domain.inventory.entity import Inventory
 from app.domain.inventory.stock_movement import StockMovement, MovementType
 from app.domain.inventory.repository import InventoryRepository
@@ -251,11 +251,11 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             {"qty": quantity, "now": now, "code": product_codigo},
         )
 
-        if result.rowcount == 0:
+        if cast("CursorResult[Any]", result).rowcount == 0:
             # Either product doesn't exist or insufficient stock
             self.db.rollback()
             inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
-            if not inv:
+            if inv is None:
                 raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
             raise ValueError(f"Estoque insuficiente. Disponível: {inv.quantity}, solicitado: {quantity}")
 
@@ -263,6 +263,8 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         inv_model = (
             self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         )
+        if inv_model is None:
+            raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
         balance_before = inv_model.quantity + quantity  # reverse the update
         balance_after = inv_model.quantity
 
@@ -347,10 +349,10 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             {"qty": quantity, "now": now, "code": product_codigo},
         )
 
-        if result.rowcount == 0:
+        if cast("CursorResult[Any]", result).rowcount == 0:
             self.db.rollback()
             inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
-            if not inv:
+            if inv is None:
                 raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
             raise ValueError(f"Estoque insuficiente. Disponível: {inv.quantity}, solicitado: {quantity}")
 
@@ -358,6 +360,8 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
         inv_model = (
             self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         )
+        if inv_model is None:
+            raise ValueError(f"Inventário não encontrado para produto {product_codigo}")
         balance_before = inv_model.quantity + quantity  # reverse the update
         balance_after = inv_model.quantity
 
