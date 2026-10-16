@@ -251,7 +251,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             {"qty": quantity, "now": now, "code": product_codigo},
         )
 
-        if cast("CursorResult[Any]", result).rowcount == 0:
+        if cast(CursorResult[Any], result).rowcount == 0:
             # Either product doesn't exist or insufficient stock
             self.db.rollback()
             inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
@@ -349,7 +349,7 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             {"qty": quantity, "now": now, "code": product_codigo},
         )
 
-        if cast("CursorResult[Any]", result).rowcount == 0:
+        if cast(CursorResult[Any], result).rowcount == 0:
             self.db.rollback()
             inv = self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
             if inv is None:

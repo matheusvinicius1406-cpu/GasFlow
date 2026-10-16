@@ -426,7 +426,7 @@ class SQLAlchemyReceivableRepository(TenantMixin, ReceivableRepository):
             {"now": current_date, "tenant_id": self.tenant_id},
         )
         self.db.commit()
-        return cast("CursorResult[Any]", result).rowcount
+        return cast(CursorResult[Any], result).rowcount
 
 
 class SQLAlchemyExpenseRepository(TenantMixin, ExpenseRepository):
