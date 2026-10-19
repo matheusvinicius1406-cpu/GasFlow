@@ -106,7 +106,7 @@ Cada linha substitui um arquivo que foi removido. Detalhe: `git show fdd2129:doc
 
 ## 3. Pendências consolidadas
 
-**Total: 47 itens** — recontagem de **2026-10-16**, atualizada em **2026-10-19** (o I1 fechou com o transversal de permissão/offline, §8.26): **24 resolvidos · 0 parciais · 5 abertos** (A4, B4, B5, C2, C3 — destes, A4/C2/C3 dependem de decisão de produto, §4 nº 2–4) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
+**Total: 47 itens** — recontagem de **2026-10-16**, atualizada em **2026-10-19** (o I1 fechou com o transversal de permissão/offline, §8.26, e **C3 fechou com a renomeação do lote**, §6.2): **25 resolvidos · 0 parciais · 4 abertos** (A4, B4, B5, C2 — destes, A4/C2 dependem de decisão de produto, §4 nº 3–4) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
 Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta auditoria.
 
 ### A. Segurança / authz
@@ -134,7 +134,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 |---|---|---|---|
 | C1 | 12 rotas do serviço WhatsApp sem consumidor — expor tela ou remover? | ✅ **fechada 2026-10-14: EXPOR** e **implementada** — as 12 têm tela. `ListsPage` (listas + membros + sync + seed) e `WhatsAppCustomersPage` (base + consentimento LGPD + promote) em `/whatsapp/lists` e `/whatsapp/customers`; preview no `CampaignWizardPage`; mídia no `WhatsAppAccountsPage`; dedupe no `ContactsCrmPage`. Gate 9/0 preservado — ver §8.18 | §8.18 |
 | C2 | Escopo do renomeador Fase 3/4: cidades além de Belém · CNEFE 2022 sem endereço pós-censo · Faces "versão preliminar" · alvo 10k→20k · PontoFato desligável | ⏳ aberta | `prompts/renomeador-contatos-fase3` §12 |
-| C3 | Lote de **744 contatos** com nome "antes" pendente de renomeação | ⚠️ dry-run `qwen3:1.7b` OK; **aplicação/arquivar/descartar não decidido** | §4 |
+| C3 | Lote de **744 contatos** com nome "antes" pendente de renomeação | ✅ **fechada 2026-10-19** — mapping gerado manualmente (sem Ollama), 711 nomes distintos: 20 descartados (teste), 92 reestruturados com endereço, 174 só limpeza, 425 já limpos (sem mudança). Aplicado via `--from-file`: **275 contatos renomeados**, 0 falhas, backup em `export/renomear-agenda-backup-*.json` | §6.2 |
 
 > **Correção de C3**: o PLANO_MASTER dizia "8.601 contatos". 8.601 é o **maior ID**,
 > não a contagem. O lote tem **744 entradas**, reconciliadas 744/744 contra
@@ -212,7 +212,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | # | Decisão | Opções |
 |---|---|---|
 | **1** | ~~**C1** — 10 rotas WhatsApp sem consumidor~~ | ✅ **DECIDIDO 2026-10-14: EXPOR** (12 rotas, não 10). Manter a arquitetura de 3 camadas |
-| **2** | **C3** — lote de 744 contatos | rodar a camada de IA **ou** arquivar **ou** descartar |
+| **2** | ~~**C3** — lote de 744 contatos~~ | ✅ **DECIDIDO/EXECUTADO 2026-10-19: RENOMEAR** (mapeamento manual, sem Ollama) — 275 aplicados, §6.2 |
 | **3** | **C2** — escopo do renomeador Fase 3/4 | o que entra da lista de §3-C2 |
 | **4** | **A4** — persistir `routes` | fazer só quando a Fase 21 for aprovada? |
 | **5** | **D7** — validações V.1/V.2/V.3 | quando/executar em que máquina (VM + celular real) |
@@ -230,7 +230,7 @@ Regra: **uma onda por vez, cada uma termina com suíte verde + commit.**
 |---|---|---|---|
 | **A** | **Dívida E1–E4** (except silenciosos, pino, complexidade, F841) — ✅ **concluída 2026-10-15**, gate completo verde (§9) | ~~~1 dia~~ ✅ | nenhum |
 | **B** | **CI**: ✅ **concluída 2026-10-14** — B1 ✅ (E2E medido 2:12, não >45 min) · B3 ✅ (`gh` instalado e autenticado) · B2 ✅ (11 mergeados / 2 fechados) · I2 ✅ (lint no job do whatsapp) · B5 ⏳ nova (migração TS7, deliberada) | ~~2–3 h~~ ✅ | `gh` |
-| **C** | **Decisões de produto**: C1, C3, C2 | a definir | **§4 nº 1–3** |
+| **C** | **Decisões de produto**: C1 ✅, C3 ✅, C2 ⏳ | só C2 restou | **§4 nº 3** |
 | **D** | **Segurança residual** (H1–H4) — ✅ **executada 2026-10-15**: H1/H2/H3 **já estavam no código** (verificação com evidência em §3-H); H4 apertado de **53 → 31 módulos** no baseline mypy (610 → 566 erros strict, 17 módulos corrigidos de fato + 5 que já estavam em 0). **Modelos migrados em 2026-10-16** (Onda D/H4 — §8.24): strict 566 → 165; **consumidores fechados na sequência (§8.25): 165 → 0 e o baseline apagado** — `mypy app` strict total, 0 seções | ~~~1 dia~~ ✅ | — |
 | **E** | **Qualidade FE**: I1 telas sem teste, I3 favorite_product, I4 Event Bus — ✅ **concluída 2026-10-19**: I3 **já estava implementado** (medido, §3-I); I4 **fechado** no backend **e** no consumidor frontend (§3-I); **I1 telas fechado** (8 testes dedicados, 463→499); **I1 transversal permissão/offline fechado** (§8.26, 499→520) | ~~~1 dia~~ ✅ | — |
 | **F** | **Validações live**: G1–G9 + D7 | imprevisível | **credenciais/VM/celular (§4 nº 5)** |
@@ -264,15 +264,17 @@ A raiz `automação zap/` **não é um repo git** — tudo foi movido para dentr
 
 **Docs:** 119 arquivos de `docs/` removidos via `git rm`; sobrou apenas este.
 
-### 6.2 Pendência C3 — como está agora
+### 6.2 Pendência C3 — **fechada em 2026-10-19**
 
 | | |
 |---|---|
 | Lote | **744 contatos** (não 8.601), todos reconciliados 744/744 contra o DB |
-| Status dos nomes | **744/744 ainda com o nome original** — nada foi renomeado |
-| Ruído no lote | ~15–20 entradas de teste ("Inválido", "Fluxo Teste", "Idem", "Grupo Teste", "Fulano", "Beltrano"…) → descartar antes de rodar |
-| Duplicatas | **19 nomes repetidos em 52 IDs** (ex.: "Surper Gas ( Wagner )" ×4, "= Gas Amigo" ×3) → investigar duplicidade real **antes** de renomear |
-| Dry-run | OK com `qwen3:1.7b`: 0 alterações pendentes no determinístico, 744 elegíveis à IA |
+| Decisão | **Renomear** — sem Ollama: mapeamento antes→depois gerado manualmente (regras conservadoras: só reestrutura com logradouro do lexicon + número real; sem endereço → mantém o nome limpo) |
+| Artefato | `data/renomeador-ia-c3.json` — 711 nomes distintos `{excluir, nome, nome_final_contato, …}` |
+| Resultado | 20 descartados (sujeira de teste) · 92 com endereço reestruturado · 174 só limpeza (prefixo legado/emoji/espaço) · 425 já limpos (sem mudança) — 275 alterados + 469 já com nome final igual ao atual |
+| Aplicação | `renomear_agenda_local.py --from-file` (modo novo): **275 contatos renomeados**, 0 sem resposta, 32 excluídos pela §4 |
+| Verificação | 0 contatos ainda com nome antigo no DB; backup + relatório em `export/renomear-agenda-*-{backup-,}20261019-*.json` |
+| Testes | `backend/tests/test_renamer_from_file.py` (5 testes) — verde |
 
 ### 6.3 Limpeza restante — situação em 2026-10-19
 

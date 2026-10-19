@@ -4,6 +4,29 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### C3 — Lote de 744 contatos renomeado (19/10/2026)
+
+Fecha o item C3 de `docs/STATUS_E_PLANO.md` (§6.2): o lote de 744 contatos
+com nome "antes" pendente foi renomeado **sem Ollama** — o mapeamento
+antes→depois foi gerado manualmente com regras conservadoras (logradouro do
+lexicon + número real para reestruturar; sem endereço → só limpeza de prefixo
+legado/emoji/espaço; nenhum dígito inventado).
+
+- **`data/renomeador-ia-c3.json`**: 711 nomes distintos com
+  `{excluir, nome, nome_curto, endereco, numero, complemento, entre_ruas,
+  referencia, nome_final_contato}` — 20 descartados (sujeira de teste), 92
+  reestruturados com endereço, 174 só limpeza, 425 já limpos (sem mudança).
+- **`renomear_agenda_local.py --from-file`**: novo modo que aplica um mapping
+  gerado fora de linha (substitui `--ia`); reaproveita backup, transação e
+  relatório do fluxo existente. Dry-run permanece o default.
+- **Aplicação**: 275 contatos renomeados em `data/prototype-contacts/app.db`
+  (744 do lote = 275 alterados + 469 já com nome final igual ao atual),
+  0 sem resposta; 32 excluídos pela regra §4. Backup em
+  `export/renomear-agenda-backup-20261019-165034.json` (275 registros
+  `{id, phone, antes, depois}`); verificação: 0 contatos ainda com nome antigo.
+- **Testes:** `backend/tests/test_renamer_from_file.py` (5 testes) cobrindo o
+  modo `--from-file`.
+
 ### Onda E/I1 — Estados de permissão/offline unificados no frontend (19/10/2026)
 
 Fecha o item transversal I1/P2 de `docs/STATUS_E_PLANO.md` (§8.26): os 41 sites

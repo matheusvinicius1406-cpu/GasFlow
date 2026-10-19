@@ -20,6 +20,10 @@ Uso:
     # 3) com a camada de IA só nos casos que o parser não resolveu (dry-run):
     python scripts/renomear_agenda_local.py --ia
 
+    # 4) com um mapping de IA gerado FORA de linha (revisado à mão, salvo em
+    #    JSON no contrato de ``renomear_com_ia``) — nada chama provider:
+    python scripts/renomear_agenda_local.py --from-file ../data/renomeador-ia-c3.json
+
     # apontar para outro SQLite (default: <raiz do projeto>/data/app.db):
     python scripts/renomear_agenda_local.py --db ../data/app.db
 
@@ -28,6 +32,12 @@ continua obrigatório e faz a maioria). O provider vem de
 ``RENOMEADOR_IA_PROVIDER`` (default ``ollama`` = local, nada sai do PC). Para
 usar a Hugging Face é preciso ``--ia-provider hf --confirmar-hf`` — sem a
 confirmação o script avisa e não envia nada.
+
+Sobre ``--from-file``: mesma ideia, mas a resposta de cada nome bruto veio de
+um provider offline (um modelo rodado antes, ou um humano revisando lote a
+lote) e está gravada em JSON ``{nome_bruto: {excluir, nome, ...,
+nome_final_contato}}``. A trava do ``excluir: true`` (pix/portaria/trote…)
+vale igual: o contato é sinalizado e **não** é renomeado.
 
 Saída: relatório JSON em ``export/renomear-agenda-<timestamp>.json`` com a
 amostra, os contadores e (no apply) a lista ``antes → depois`` por id.
@@ -240,6 +250,33 @@ def _rodar_ia(args: argparse.Namespace, dados: Dict[str, Any]) -> Dict[str, Any]
     return stats
 
 
+def _rodar_ia_de_arquivo(args: argparse.Namespace, dados: Dict[str, Any]) -> Dict[str, Any]:
+    """Camada de IA fora de linha: mapping revisado salvo em JSON.
+
+    Mesmo contrato de ``renomear_com_ia`` (``{bruto: {excluir, ...,
+    nome_final_contato}}``), mas sem provider no momento da operação — o lote
+    pode ser revisado com calma antes de gravar. A trava do ``excluir`` e o
+    "novo == atual => ignora" continuam valendo, pelo ``_aplicar_respostas``.
+    """
+    stats: Dict[str, Any] = {
+        "pendentes": len(dados.get("pendentes_ia", [])),
+        "enviados": 0,
+        "aplicados": 0,
+        "ignorados": 0,
+        "sem_resposta": 0,
+        "provider": None,
+    }
+    with open(args.from_file, encoding="utf-8") as fh:
+        respostas: Dict[str, Any] = json.load(fh)
+    stats["provider"] = f"arquivo:{os.path.basename(args.from_file)}"
+
+    por_nome = _agrupar_por_nome(dados["pendentes_ia"])
+    stats["enviados"] = len(por_nome)
+    stats["sem_resposta"] = sum(1 for bruto in por_nome if bruto not in respostas)
+    _aplicar_respostas(dados, por_nome, respostas, stats)
+    return stats
+
+
 def main() -> int:
     # Console Windows pode ser cp1252 (sem "→" nem "…"): em vez de derrubar o
     # script no fim com UnicodeEncodeError, troca o caractere por "?".
@@ -270,6 +307,11 @@ def main() -> int:
         default=0,
         help="limita quantos pendentes vão para a IA (0 = todos); útil para piloto",
     )
+    parser.add_argument(
+        "--from-file",
+        default=None,
+        help="mapping de IA gerado fora de linha ({bruto: resposta}); substitui --ia",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.db):
@@ -280,7 +322,12 @@ def main() -> int:
     try:
         contatos = _carregar_contatos(con)
         dados = planejar(contatos)
-        ia_stats = _rodar_ia(args, dados)
+        if args.from_file:
+            if args.ia:
+                raise SystemExit("--from-file e --ia são excludentes: escolha um caminho de IA")
+            ia_stats = _rodar_ia_de_arquivo(args, dados)
+        else:
+            ia_stats = _rodar_ia(args, dados)
 
         os.makedirs(_EXPORT_DIR, exist_ok=True)
         relatorio = os.path.join(_EXPORT_DIR, f"renomear-agenda-{_agora()}.json")
