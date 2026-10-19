@@ -14,16 +14,16 @@ interface MatrixResponse {
 export function PermissionsPanel() {
   const [matrix, setMatrix] = useState<MatrixResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
 
   const fetchMatrix = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get<MatrixResponse>('/settings/permissions/matrix')
       setMatrix(data)
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -42,7 +42,7 @@ export function PermissionsPanel() {
   }
 
   if (error || !matrix) {
-    return <ErrorState message="Não foi possível carregar a matriz de permissões." onRetry={fetchMatrix} />
+    return <ErrorState message="Não foi possível carregar a matriz de permissões." error={error} onRetry={fetchMatrix} />
   }
 
   const roles = Object.entries(matrix.roles)

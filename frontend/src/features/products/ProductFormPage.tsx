@@ -33,7 +33,11 @@ export function ProductFormPage() {
   const navigate = useNavigate()
   const isEdit = !!codigo
 
-  const { data: product, isLoading: isLoadingProduct } = useProduct(codigo ?? '')
+  const {
+    data: product,
+    isLoading: isLoadingProduct,
+    error: productError,
+  } = useProduct(codigo ?? '')
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct()
 
@@ -93,7 +97,11 @@ export function ProductFormPage() {
 
   if (isEdit && !product) {
     return (
-      <ErrorState message="Produto não encontrado." onRetry={() => navigate('/products')} />
+      <ErrorState
+        error={productError}
+        message="Produto não encontrado."
+        onRetry={() => navigate('/products')}
+      />
     )
   }
 

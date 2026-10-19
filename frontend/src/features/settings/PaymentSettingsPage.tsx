@@ -57,7 +57,7 @@ const PIX_KEY_TYPES = [
 function PaymentMethodsTab() {
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ code: '', name: '', payment_type: 'CASH', description: '', fee_type: 'NONE', fee_value: 0, discount_type: 'NONE', discount_value: 0 })
@@ -67,9 +67,9 @@ function PaymentMethodsTab() {
     try {
       const { data } = await apiClient.get('/payments/methods')
       setMethods(data.methods || [])
-      setError(false)
-    } catch {
-      setError(true)
+      setError(null)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -119,7 +119,7 @@ function PaymentMethodsTab() {
   }
 
   if (loading) return <div className="flex justify-center py-8"><LoadingSpinner /></div>
-  if (error) return <ErrorState message="Erro ao carregar métodos de pagamento" onRetry={fetchMethods} />
+  if (error) return <ErrorState message="Erro ao carregar métodos de pagamento" error={error} onRetry={fetchMethods} />
 
   return (
     <div className="space-y-4">
@@ -184,7 +184,7 @@ function PaymentMethodsTab() {
 function PixConfigTab() {
   const [configs, setConfigs] = useState<PixConfig[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ key: '', key_type: 'RANDOM', holder_name: '', holder_document: '', institution: '' })
 
@@ -193,9 +193,9 @@ function PixConfigTab() {
     try {
       const { data } = await apiClient.get('/payments/pix')
       setConfigs(data.configs || [])
-      setError(false)
-    } catch {
-      setError(true)
+      setError(null)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -222,7 +222,7 @@ function PixConfigTab() {
   }
 
   if (loading) return <div className="flex justify-center py-8"><LoadingSpinner /></div>
-  if (error) return <ErrorState message="Erro ao carregar configuração PIX" onRetry={fetchConfigs} />
+  if (error) return <ErrorState message="Erro ao carregar configuração PIX" error={error} onRetry={fetchConfigs} />
 
   return (
     <div className="space-y-4">

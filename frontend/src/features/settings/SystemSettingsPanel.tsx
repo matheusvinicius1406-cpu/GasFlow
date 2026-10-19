@@ -66,13 +66,13 @@ export function SystemSettingsPanel() {
   const [categories, setCategories] = useState<Record<string, SettingRow[]>>({})
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busyKey, setBusyKey] = useState('')
   const [notice, setNotice] = useState('')
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get<SettingsResponse>('/settings')
       setCategories(data.categories ?? {})
@@ -88,8 +88,8 @@ export function SystemSettingsPanel() {
       }
       setDrafts(next)
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -142,7 +142,7 @@ export function SystemSettingsPanel() {
   }
 
   if (error) {
-    return <ErrorState message="Não foi possível carregar as configurações do sistema." onRetry={fetchSettings} />
+    return <ErrorState message="Não foi possível carregar as configurações do sistema." error={error} onRetry={fetchSettings} />
   }
 
   const total = Object.values(categories).reduce((acc, rows) => acc + rows.length, 0)

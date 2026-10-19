@@ -66,7 +66,7 @@ function formatValue(c: Coupon): string {
 export function CouponsPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -102,13 +102,13 @@ export function CouponsPage() {
 
   const fetchCoupons = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get('/coupons')
       setCoupons(data.coupons ?? [])
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -242,7 +242,7 @@ export function CouponsPage() {
   }
 
   if (error) {
-    return <ErrorState message="Não foi possível carregar os cupons." onRetry={fetchCoupons} />
+    return <ErrorState error={error} message="Não foi possível carregar os cupons." onRetry={fetchCoupons} />
   }
 
   return (

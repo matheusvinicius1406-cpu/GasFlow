@@ -69,14 +69,14 @@ export function WorkflowsPage() {
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [killSwitch, setKillSwitch] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [activeTab, setActiveTab] = useState<'runs' | 'approvals' | 'workflows'>('runs')
   const [busy, setBusy] = useState<string | null>(null)
   const { success, error: toastError } = useToast()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [wfRes, runsRes, apprRes, ksRes] = await Promise.all([
         apiClient.get('/automation/workflows'),
@@ -88,8 +88,8 @@ export function WorkflowsPage() {
       setRuns(runsRes.data.runs || [])
       setApprovals(apprRes.data.approvals || [])
       setKillSwitch(Boolean(ksRes.data.active))
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -213,7 +213,7 @@ export function WorkflowsPage() {
   }
 
   if (error) {
-    return <ErrorState message="Não foi possível carregar as automações." onRetry={() => fetchData()} />
+    return <ErrorState error={error} message="Não foi possível carregar as automações." onRetry={() => fetchData()} />
   }
 
   const pendingApprovals = approvals.filter(a => a.status === 'PENDING')

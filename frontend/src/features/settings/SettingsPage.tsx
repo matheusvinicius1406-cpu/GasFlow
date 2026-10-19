@@ -30,19 +30,19 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [activeTab, setActiveTab] = useState<
     'profile' | 'payments' | 'printer' | 'system' | 'permissions' | 'intelligence'
   >('profile')
 
   const fetchProfile = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get('/auth/me')
       setProfile(data)
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -62,6 +62,7 @@ export function SettingsPage() {
     return (
       <ErrorState
         message="Não foi possível carregar as configurações."
+        error={error}
         onRetry={fetchProfile}
       />
     )

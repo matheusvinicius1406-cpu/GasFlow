@@ -53,6 +53,7 @@ export function CustomersPage() {
   if (error) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os clientes."
         onRetry={() => refetch()}
       />

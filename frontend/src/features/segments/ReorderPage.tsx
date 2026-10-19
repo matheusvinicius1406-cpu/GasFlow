@@ -60,6 +60,7 @@ export function ReorderPage() {
   const [summary, setSummary] = useState<ReorderSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [confidenceFilter, setConfidenceFilter] = useState<string>('');
@@ -67,6 +68,7 @@ export function ReorderPage() {
   const fetchData = async () => {
     setLoading(true);
     setError(null);
+    setFailure(null);
     try {
       const [summaryRes, oppsRes] = await Promise.all([
         apiClient.get('/reorder/summary'),
@@ -74,8 +76,9 @@ export function ReorderPage() {
       ]);
       setSummary(summaryRes.data);
       setOpportunities(oppsRes.data.opportunities || []);
-    } catch {
+    } catch (err) {
       setError('Erro ao carregar dados de recompra');
+      setFailure(err);
     } finally {
       setLoading(false);
     }
@@ -117,7 +120,7 @@ export function ReorderPage() {
         <PageHeader>
           <PageTitle subtitle="Análise de oportunidades de recompra">Recompra Inteligente</PageTitle>
         </PageHeader>
-        <ErrorState message={error} onRetry={fetchData} />
+        <ErrorState message={error} error={failure} onRetry={fetchData} />
       </Page>
     );
   }

@@ -580,6 +580,7 @@ export function VisaoGeralSection({ data, can }: VisaoGeralSectionProps) {
 
           {data.table.error ? (
             <ErrorState
+              error={data.table.error}
               message="Não foi possível carregar as movimentações."
               onRetry={() => void actions.reload()}
             />

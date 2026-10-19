@@ -216,6 +216,7 @@ export function DeliveriesPage() {
   if (error) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar as entregas."
         onRetry={() => refetch()}
       />

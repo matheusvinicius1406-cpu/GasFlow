@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const { mockGet, mockHasPermission } = vi.hoisted(() => ({
   mockGet: vi.fn<(url: string, config?: { params?: Record<string, unknown> }) => Promise<{ data: unknown }>>(),
@@ -13,25 +13,29 @@ vi.mock('@/lib/api/client', () => ({
   },
 }))
 
-vi.mock('@/features/auth', () => ({
-  useAuth: () => ({
-    hasPermission: (p: string) => mockHasPermission(p),
-    isLoading: false,
-  }),
-  // Réplica fiel do guard real (mesma semântica do App.tsx).
-  PermissionRoute: ({
-    permissions,
-    children,
-  }: {
-    permissions: string[]
-    children: React.ReactNode
-  }) => {
-    if (!permissions.some((p: string) => mockHasPermission(p))) {
-      return <Navigate to="/" replace />
-    }
-    return <>{children}</>
-  },
-}))
+vi.mock('@/features/auth', async () => {
+  const { PermissionDenied } = await import('@/components/ui/PermissionDenied')
+  return {
+    useAuth: () => ({
+      hasPermission: (p: string) => mockHasPermission(p),
+      isLoading: false,
+    }),
+    // Réplica fiel do guard real (mesma semântica do App.tsx): sem a
+    // permissão ele renderiza o estado unificado, não redireciona.
+    PermissionRoute: ({
+      permissions,
+      children,
+    }: {
+      permissions: string[]
+      children: React.ReactNode
+    }) => {
+      if (!permissions.some((p: string) => mockHasPermission(p))) {
+        return <PermissionDenied />
+      }
+      return <>{children}</>
+    },
+  }
+})
 
 import { AuditPage } from '../AuditPage'
 import { PermissionRoute } from '@/features/auth'
@@ -173,7 +177,7 @@ describe('AuditPage', () => {
     clickSpy.mockRestore()
   })
 
-  it('guard: sem audit.view, PermissionRoute redireciona para o dashboard', async () => {
+  it('guard: sem audit.view, mostra o estado "Sem permissão" no lugar da página', async () => {
     mockHasPermission.mockReturnValue(false)
 
     render(
@@ -192,10 +196,10 @@ describe('AuditPage', () => {
       </MemoryRouter>
     )
 
-    await waitFor(() => {
-      expect(screen.getByText('dashboard')).toBeInTheDocument()
-      expect(screen.queryByText('página-protegida')).not.toBeInTheDocument()
-    })
+    expect(await screen.findByRole('heading', { name: 'Sem permissão' })).toBeInTheDocument()
+    expect(screen.queryByText('página-protegida')).not.toBeInTheDocument()
+    // O guard antigo redirecionava em silêncio para o dashboard.
+    expect(screen.queryByText('dashboard')).not.toBeInTheDocument()
   })
 
   it('guard: com audit.view, renderiza o conteúdo', () => {

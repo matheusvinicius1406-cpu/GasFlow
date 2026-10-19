@@ -41,7 +41,7 @@ interface NodeContact {
 export function WhatsAppCustomersPage() {
   const [data, setData] = useState<CustomersResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const [promoteContactId, setPromoteContactId] = useState('')
@@ -49,15 +49,15 @@ export function WhatsAppCustomersPage() {
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get('/whatsapp/customers', {
         params: { limit: 200, offset: 0 },
       })
       setData(res.data)
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -201,7 +201,7 @@ export function WhatsAppCustomersPage() {
           <LoadingSpinner size="lg" />
         </div>
       ) : error ? (
-        <ErrorState message="Não foi possível carregar os clientes." onRetry={fetchCustomers} />
+        <ErrorState message="Não foi possível carregar os clientes." error={error} onRetry={fetchCustomers} />
       ) : customers.length === 0 ? (
         <EmptyState
           icon={UserRound}

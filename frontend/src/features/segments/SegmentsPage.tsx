@@ -336,7 +336,7 @@ function PreviewPanel({ segmentId, onClose }: { segmentId: number; onClose: () =
 export function SegmentsPage() {
   const [segments, setSegments] = useState<Segment[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingSegment, setEditingSegment] = useState<Segment | null>(null)
   const [previewId, setPreviewId] = useState<number | null>(null)
@@ -345,12 +345,12 @@ export function SegmentsPage() {
 
   const fetchSegments = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get('/segments')
       setSegments(data || [])
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -405,7 +405,7 @@ export function SegmentsPage() {
   }
 
   if (error) {
-    return <ErrorState message="Não foi possível carregar os segmentos." onRetry={fetchSegments} />
+    return <ErrorState message="Não foi possível carregar os segmentos." error={error} onRetry={fetchSegments} />
   }
 
   return (

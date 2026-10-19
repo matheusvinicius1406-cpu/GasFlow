@@ -45,6 +45,7 @@ export function DriverFormPage() {
   const [credentials, setCredentials] = useState<DriverCredentials | null>(null)
   const [fetching, setFetching] = useState(isEdit)
   const [error, setError] = useState<string | null>(null)
+  const [failure, setFailure] = useState<unknown>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -60,7 +61,10 @@ export function DriverFormPage() {
             document: data.document || '',
           })
         })
-        .catch(() => setError('Motorista não encontrado'))
+        .catch((err) => {
+          setError('Motorista não encontrado')
+          setFailure(err)
+        })
         .finally(() => setFetching(false))
     }
   }, [isEdit, codigo])
@@ -69,11 +73,13 @@ export function DriverFormPage() {
     e.preventDefault()
     if (!formData.nome.trim() || !formData.telefone.trim()) {
       setError('Nome e telefone são obrigatórios')
+      setFailure(null)
       return
     }
 
     setSubmitting(true)
     setError(null)
+    setFailure(null)
 
     try {
       if (isEdit && codigo) {
@@ -102,6 +108,7 @@ export function DriverFormPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(msg || 'Erro ao salvar motorista')
+      setFailure(err)
     } finally {
       setSubmitting(false)
     }
@@ -116,7 +123,7 @@ export function DriverFormPage() {
   }
 
   if (error && isEdit && !formData.nome) {
-    return <ErrorState message={error} onRetry={() => navigate('/drivers')} />
+    return <ErrorState error={failure} message={error} onRetry={() => navigate('/drivers')} />
   }
 
   if (credentials) {

@@ -67,7 +67,7 @@ export function WhatsAppWebPanelPage({ embedded = false }: { embedded?: boolean 
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [hasBridge, setHasBridge] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -82,13 +82,13 @@ export function WhatsAppWebPanelPage({ embedded = false }: { embedded?: boolean 
       return
     }
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await b.waWebStatuses()
       setEnabled(res.enabled)
       setStatuses(Object.fromEntries(res.statuses.map((s) => [s.accountId, s])))
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -188,7 +188,7 @@ export function WhatsAppWebPanelPage({ embedded = false }: { embedded?: boolean 
     return (
       <div className="space-y-6">
         {!embedded && <Header />}
-        <ErrorState message="Não foi possível carregar o painel WhatsApp Web." onRetry={load} />
+        <ErrorState message="Não foi possível carregar o painel WhatsApp Web." error={error} onRetry={load} />
       </div>
     )
   }

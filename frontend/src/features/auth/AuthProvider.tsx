@@ -10,6 +10,7 @@ import {
   SESSION_REFRESHED_EVENT,
 } from '@/lib/api/session'
 import type { User } from '@/types'
+import { PermissionDenied } from '@/components/ui/PermissionDenied'
 import { ChangePasswordGate } from './ChangePasswordGate'
 
 /**
@@ -243,7 +244,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-/** Guard por permissão: redireciona ao dashboard se não tem nenhuma delas. */
+/** Guard por permissão: sem nenhuma delas, renderiza o estado unificado
+ *  "Sem permissão" (mesmo copy do 403 e da seção financeira) — em vez de
+ *  mandar o usuário para o dashboard sem explicação. */
 export function PermissionRoute({
   permissions,
   children,
@@ -262,7 +265,7 @@ export function PermissionRoute({
   }
 
   if (!permissions.some((p) => hasPermission(p))) {
-    return <Navigate to="/" replace />
+    return <PermissionDenied />
   }
 
   return <>{children}</>

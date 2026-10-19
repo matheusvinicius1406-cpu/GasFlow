@@ -60,8 +60,11 @@ import {
 import { money, useVisaoGeralData } from './useVisaoGeralData'
 
 /** Estados loading/error de uma seção a partir do estado de um hook. */
-function sectionState(state: { data: unknown; error: boolean }) {
-  return { loading: state.data === null && !state.error, error: state.data === null && state.error }
+function sectionState(state: { data: unknown; error: unknown }) {
+  return {
+    loading: state.data === null && !state.error,
+    error: state.data === null ? (state.error ?? undefined) : undefined,
+  }
 }
 
 /**
@@ -147,7 +150,7 @@ export function CentralFinanceiraPage() {
           <SectionShell
             title="Visão Geral"
             loading={vg.loading && !vg.period}
-            error={vg.error && !vg.period}
+            error={!vg.period ? (vg.error ?? undefined) : undefined}
             onRetry={() => void vg.actions.reload()}
             empty={vg.empty}
             emptyIcon={BarChart3}

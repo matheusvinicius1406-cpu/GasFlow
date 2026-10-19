@@ -61,7 +61,7 @@ export function ListsPage() {
   const [contacts, setContacts] = useState<ListContactsResponse | null>(null)
   const [customers, setCustomers] = useState<ListCustomersResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const [newContactId, setNewContactId] = useState('')
@@ -69,13 +69,13 @@ export function ListsPage() {
 
   const fetchLists = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get<ListsResponse>('/whatsapp/lists')
       setLists(res.data.lists ?? [])
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -224,7 +224,7 @@ export function ListsPage() {
           <LoadingSpinner size="lg" />
         </div>
       ) : error ? (
-        <ErrorState message="Não foi possível carregar as listas." onRetry={fetchLists} />
+        <ErrorState message="Não foi possível carregar as listas." error={error} onRetry={fetchLists} />
       ) : (
         <>
           <Card>

@@ -57,7 +57,7 @@ export function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [roles, setRoles] = useState<AdminRole[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -73,12 +73,12 @@ export function UsersPage() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await apiClient.get<UsersResponse>('/admin/users')
       setUsers(data.users)
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -169,7 +169,7 @@ export function UsersPage() {
   }
 
   if (error) {
-    return <ErrorState message="Não foi possível carregar os usuários." onRetry={fetchUsers} />
+    return <ErrorState error={error} message="Não foi possível carregar os usuários." onRetry={fetchUsers} />
   }
 
   return (

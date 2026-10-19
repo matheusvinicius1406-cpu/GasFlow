@@ -89,6 +89,7 @@ export function AutomationsPage() {
   const [metrics, setMetrics] = useState<AutomationMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [activeTab, setActiveTab] = useState<'rules' | 'executions'>('rules');
   const [showCreate, setShowCreate] = useState(false);
   const [newRule, setNewRule] = useState({
@@ -108,6 +109,7 @@ export function AutomationsPage() {
   const fetchData = async () => {
     setLoading(true);
     setError(null);
+    setFailure(null);
     try {
       const [rulesRes, execsRes, metricsRes] = await Promise.all([
         apiClient.get('/automation/whatsapp/rules'),
@@ -117,8 +119,9 @@ export function AutomationsPage() {
       setRules(rulesRes.data.rules || []);
       setExecutions(execsRes.data.executions || []);
       setMetrics(metricsRes.data);
-    } catch {
+    } catch (err) {
       setError('Erro ao carregar automações');
+      setFailure(err);
     } finally {
       setLoading(false);
     }
@@ -219,7 +222,7 @@ export function AutomationsPage() {
     return (
       <Page>
         <PageHeader><PageTitle subtitle="Automações WhatsApp">Automações</PageTitle></PageHeader>
-        <ErrorState message={error} onRetry={fetchData} />
+        <ErrorState message={error} error={failure} onRetry={fetchData} />
       </Page>
     );
   }

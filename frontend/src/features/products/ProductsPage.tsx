@@ -40,6 +40,7 @@ export function ProductsPage() {
   if (error) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os produtos."
         onRetry={() => refetch()}
       />

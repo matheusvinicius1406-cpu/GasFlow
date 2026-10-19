@@ -48,6 +48,7 @@ export function CustomerDetailPage() {
   if (error || !customer) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os dados do cliente."
         onRetry={() => refetch()}
       />

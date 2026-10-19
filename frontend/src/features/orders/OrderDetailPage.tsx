@@ -124,6 +124,7 @@ export function OrderDetailPage() {
   if (error || !order) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os dados do pedido."
         onRetry={() => refetch()}
       />

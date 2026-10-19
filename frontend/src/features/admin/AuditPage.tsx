@@ -42,7 +42,7 @@ const ACTION_OPTIONS = [
 export function AuditPage() {
   const [records, setRecords] = useState<AuditRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [actorId, setActorId] = useState('')
   const [action, setAction] = useState('')
   const [resource, setResource] = useState('')
@@ -53,7 +53,7 @@ export function AuditPage() {
   const fetchAudit = useCallback(
     async (currentOffset: number) => {
       setLoading(true)
-      setError(false)
+      setError(null)
       try {
         const { data } = await apiClient.get<AuditResponse>('/admin/audit', {
           params: {
@@ -67,8 +67,8 @@ export function AuditPage() {
           },
         })
         setRecords(data.records)
-      } catch {
-        setError(true)
+      } catch (err) {
+        setError(err)
       } finally {
         setLoading(false)
       }
@@ -129,7 +129,13 @@ export function AuditPage() {
   }
 
   if (error && records.length === 0) {
-    return <ErrorState message="Não foi possível carregar a auditoria." onRetry={() => fetchAudit(offset)} />
+    return (
+      <ErrorState
+        error={error}
+        message="Não foi possível carregar a auditoria."
+        onRetry={() => fetchAudit(offset)}
+      />
+    )
   }
 
   return (

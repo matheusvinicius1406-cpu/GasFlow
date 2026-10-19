@@ -45,7 +45,7 @@ export function DriversPage() {
   const [drivers, setDrivers] = useState<DriverWithLocation[]>([])
   const [locations, setLocations] = useState<Record<string, { lat: number; lng: number; timestamp: string; is_stale: boolean; age_seconds?: number; today_distance_km?: number }>>({})
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   // Fase 6: posições/trajetos ao vivo por WebSocket (canal tenant:{id}).
   const { pointsByDriver, lastByDriver } = useTrackingSocket()
   // F7: motorista selecionado para ver/gerenciar o estoque carregado
@@ -56,7 +56,7 @@ export function DriversPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [driversRes, locationsRes] = await Promise.allSettled([
         apiClient.get('/delivery-drivers/'),
@@ -74,8 +74,8 @@ export function DriversPage() {
         }
         setLocations(locMap)
       }
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -171,7 +171,7 @@ export function DriversPage() {
 
   if (error) {
     return (
-      <ErrorState message="Não foi possível carregar os motoristas." onRetry={fetchData} />
+      <ErrorState error={error} message="Não foi possível carregar os motoristas." onRetry={fetchData} />
     )
   }
 

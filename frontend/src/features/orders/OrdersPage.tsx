@@ -116,6 +116,7 @@ export function OrdersPage() {
   if (error) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os pedidos."
         onRetry={() => refetch()}
       />

@@ -30,22 +30,22 @@ export function ContactsCrmPage() {
   const [search, setSearch] = useState('')
   const [data, setData] = useState<ContactsResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get('/whatsapp/contacts', {
         params: { search: search || undefined, page: 1, page_size: 100 },
       })
       setData(res.data)
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -208,7 +208,7 @@ export function ContactsCrmPage() {
           <LoadingSpinner size="lg" />
         </div>
       ) : error ? (
-        <ErrorState message="Não foi possível carregar os contatos." onRetry={fetchContacts} />
+        <ErrorState message="Não foi possível carregar os contatos." error={error} onRetry={fetchContacts} />
       ) : contacts.length === 0 ? (
         <EmptyState
           icon={Users}

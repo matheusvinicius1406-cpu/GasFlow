@@ -32,7 +32,11 @@ export function CustomerFormPage() {
   const navigate = useNavigate()
   const isEdit = !!codigo
 
-  const { data: customer, isLoading: isLoadingCustomer } = useCustomer(codigo ?? '')
+  const {
+    data: customer,
+    isLoading: isLoadingCustomer,
+    error: customerError,
+  } = useCustomer(codigo ?? '')
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
 
@@ -87,7 +91,11 @@ export function CustomerFormPage() {
 
   if (isEdit && !customer) {
     return (
-      <ErrorState message="Cliente não encontrado." onRetry={() => navigate('/customers')} />
+      <ErrorState
+        error={customerError}
+        message="Cliente não encontrado."
+        onRetry={() => navigate('/customers')}
+      />
     )
   }
 

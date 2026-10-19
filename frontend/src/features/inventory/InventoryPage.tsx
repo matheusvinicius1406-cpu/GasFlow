@@ -62,6 +62,7 @@ export function InventoryPage() {
   if (inventoryError) {
     return (
       <ErrorState
+        error={inventoryError}
         message="Não foi possível carregar o inventário."
         onRetry={() => refetch()}
       />

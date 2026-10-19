@@ -39,7 +39,7 @@ export function AISettingsPage() {
   const [status, setStatus] = useState<AiStatus | null>(null)
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [testPrompt, setTestPrompt] = useState('')
@@ -48,13 +48,13 @@ export function AISettingsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [statusRes, settingsRes] = await Promise.all([api.ai.status(), api.ai.settings()])
       setStatus(statusRes.data as AiStatus)
       setSettings(settingsRes.data as AiSettings)
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -99,7 +99,7 @@ export function AISettingsPage() {
   }
 
   if (error || !status || !settings) {
-    return <ErrorState message="Não foi possível carregar as configurações de IA." onRetry={load} />
+    return <ErrorState message="Não foi possível carregar as configurações de IA." error={error} onRetry={load} />
   }
 
   const style = STATUS_STYLES[status.state] ?? STATUS_STYLES.unavailable

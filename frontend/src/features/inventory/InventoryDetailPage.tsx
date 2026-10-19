@@ -92,6 +92,7 @@ export function InventoryDetailPage() {
   if (error || !inventory) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os dados de inventário."
         onRetry={() => refetch()}
       />

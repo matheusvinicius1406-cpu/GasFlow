@@ -168,7 +168,7 @@ export function ContactsRenamerPage() {
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const cancelRef = useRef(false)
 
   const buildRule = useCallback(
@@ -212,7 +212,7 @@ export function ContactsRenamerPage() {
   const fetchPreview = useCallback(
     async (targetPage: number) => {
       setBusy('preview')
-      setError(false)
+      setError(null)
       setNotice('')
       try {
         const res = await apiClient.post('/whatsapp/contacts/organizer/rename-preview', buildRule(), {
@@ -226,8 +226,8 @@ export function ContactsRenamerPage() {
         })
         setPreview(res.data)
         setPage(res.data.page)
-      } catch {
-        setError(true)
+      } catch (err) {
+        setError(err)
       } finally {
         setBusy('')
       }
@@ -562,7 +562,7 @@ export function ContactsRenamerPage() {
       )}
 
       {/* ── Prévia paginada ── */}
-      {error && <ErrorState message="Não foi possível gerar a prévia." onRetry={() => fetchPreview(page)} />}
+      {Boolean(error) && <ErrorState message="Não foi possível gerar a prévia." error={error} onRetry={() => fetchPreview(page)} />}
 
       {preview && !error && (
         <Card>

@@ -160,7 +160,7 @@ export function useVisaoGeralData(days: number) {
   const [period, setPeriod] = useState<PeriodData | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
 
   const [budget, setBudget] = useState<BudgetData | null>(null)
   const [budgetFailed, setBudgetFailed] = useState(false)
@@ -181,7 +181,7 @@ export function useVisaoGeralData(days: number) {
   const [tableTotal, setTableTotal] = useState(0)
   const [tableTotalPages, setTableTotalPages] = useState(1)
   const [tableLoading, setTableLoading] = useState(true)
-  const [tableError, setTableError] = useState(false)
+  const [tableError, setTableError] = useState<unknown>(null)
   const [pending, setPending] = useState<string | null>(null)
 
   // Guarda contra corrida: uma resposta antiga (período/aba anterior) nunca
@@ -194,7 +194,7 @@ export function useVisaoGeralData(days: number) {
   const fetchCore = useCallback(async () => {
     const requestId = ++coreIdRef.current
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const core = Promise.allSettled([
         apiClient.get<PeriodData>('/finance/reports/period', { params: { days } }),
@@ -211,7 +211,7 @@ export function useVisaoGeralData(days: number) {
 
       const [periodRes, balanceRes] = coreResults
       if (periodRes.status === 'fulfilled') setPeriod(periodRes.value.data)
-      else setError(true)
+      else setError(periodRes.reason)
       if (balanceRes.status === 'fulfilled') setBalance(money(balanceRes.value.data.balance))
 
       const [budgetRes, catsRes, recRes, dashRes] = sideResults
@@ -248,7 +248,7 @@ export function useVisaoGeralData(days: number) {
   const fetchTable = useCallback(async () => {
     const requestId = ++tableIdRef.current
     setTableLoading(true)
-    setTableError(false)
+    setTableError(null)
     try {
       const res = await apiClient.get<ListResponse<VisaoRow>>(TABLE_ENDPOINT[tab], {
         params: {
@@ -272,9 +272,9 @@ export function useVisaoGeralData(days: number) {
       setTableItems(res.data.items ?? [])
       setTableTotal(res.data.total ?? 0)
       setTableTotalPages(res.data.total_pages ?? 1)
-    } catch {
+    } catch (err) {
       if (requestId !== tableIdRef.current) return
-      setTableError(true)
+      setTableError(err)
     } finally {
       if (requestId === tableIdRef.current) setTableLoading(false)
     }

@@ -106,7 +106,7 @@ export interface BudgetSectionData {
 export interface ReportState<T> {
   data: T | null
   loading: boolean
-  error: boolean
+  error: unknown
   reload: () => Promise<void>
 }
 
@@ -122,7 +122,7 @@ function useReport<T>(
   const enabled = path !== null && params !== null
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(enabled)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
 
   const requestIdRef = useRef(0)
   const paramsRef = useRef(params)
@@ -133,16 +133,16 @@ function useReport<T>(
     if (path === null || paramsKey === null) return
     const requestId = ++requestIdRef.current
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get<T>(path, {
         params: (paramsRef.current ?? undefined) as Record<string, number | string> | undefined,
       })
       if (requestId !== requestIdRef.current) return
       setData(res.data)
-    } catch {
+    } catch (err) {
       if (requestId !== requestIdRef.current) return
-      setError(true)
+      setError(err)
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
@@ -152,7 +152,7 @@ function useReport<T>(
     if (paramsKey === null) {
       requestIdRef.current += 1
       setData(null)
-      setError(false)
+      setError(null)
       setLoading(false)
       return
     }
@@ -186,7 +186,7 @@ export function useProjectionData(horizon: number, enabled: boolean): ReportStat
 export interface OrcamentoState {
   data: BudgetSectionData | null
   loading: boolean
-  error: boolean
+  error: unknown
   /** true enquanto um PUT do orçamento está em voo. */
   saving: boolean
   reload: () => Promise<void>
@@ -206,14 +206,14 @@ export function useOrcamentoData(days: number, enabled: boolean): OrcamentoState
   const { success, error: toastError } = useToast()
   const [data, setData] = useState<BudgetSectionData | null>(null)
   const [loading, setLoading] = useState(enabled)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const requestIdRef = useRef(0)
 
   const reload = useCallback(async () => {
     const requestId = ++requestIdRef.current
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [budgetRes, realizedRes] = await Promise.all([
         apiClient.get<BudgetMonth>('/finance/budget'),
@@ -221,9 +221,9 @@ export function useOrcamentoData(days: number, enabled: boolean): OrcamentoState
       ])
       if (requestId !== requestIdRef.current) return
       setData({ budget: budgetRes.data, realized: realizedRes.data })
-    } catch {
+    } catch (err) {
       if (requestId !== requestIdRef.current) return
-      setError(true)
+      setError(err)
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
@@ -233,7 +233,7 @@ export function useOrcamentoData(days: number, enabled: boolean): OrcamentoState
     if (!enabled) {
       requestIdRef.current += 1
       setData(null)
-      setError(false)
+      setError(null)
       setLoading(false)
       return
     }
@@ -292,7 +292,7 @@ export interface ClientesData {
 export interface ClientesState {
   data: ClientesData | null
   loading: boolean
-  error: boolean
+  error: unknown
   reload: () => Promise<void>
 }
 
@@ -336,7 +336,7 @@ interface Endpoint {
 export interface PairState<A, B> {
   data: { a: A; b: B } | null
   loading: boolean
-  error: boolean
+  error: unknown
   reload: () => Promise<void>
 }
 
@@ -357,7 +357,7 @@ function usePair<A, B>(first: Endpoint | null, second: Endpoint | null): PairSta
 
   const [data, setData] = useState<{ a: A; b: B } | null>(null)
   const [loading, setLoading] = useState(enabled)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const requestIdRef = useRef(0)
 
   const reload = useCallback(async () => {
@@ -370,7 +370,7 @@ function usePair<A, B>(first: Endpoint | null, second: Endpoint | null): PairSta
       return
     const requestId = ++requestIdRef.current
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [firstRes, secondRes] = await Promise.all([
         apiClient.get<A>(firstPath, {
@@ -382,9 +382,9 @@ function usePair<A, B>(first: Endpoint | null, second: Endpoint | null): PairSta
       ])
       if (requestId !== requestIdRef.current) return
       setData({ a: firstRes.data, b: secondRes.data })
-    } catch {
+    } catch (err) {
       if (requestId !== requestIdRef.current) return
-      setError(true)
+      setError(err)
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
@@ -394,7 +394,7 @@ function usePair<A, B>(first: Endpoint | null, second: Endpoint | null): PairSta
     if (key === null) {
       requestIdRef.current += 1
       setData(null)
-      setError(false)
+      setError(null)
       setLoading(false)
       return
     }
@@ -543,7 +543,7 @@ export interface SavedReport {
 export interface SalvosState {
   data: SavedReport[] | null
   loading: boolean
-  error: boolean
+  error: unknown
   saving: boolean
   reload: () => Promise<void>
   create: (name: string, reportType: string) => Promise<boolean>
@@ -583,21 +583,21 @@ export function useSalvosData(enabled: boolean): SalvosState {
   const { success, error: toastError } = useToast()
   const [data, setData] = useState<SavedReport[] | null>(null)
   const [loading, setLoading] = useState(enabled)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const requestIdRef = useRef(0)
 
   const reload = useCallback(async () => {
     const requestId = ++requestIdRef.current
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get<{ items: SavedReport[] }>('/finance/saved-reports')
       if (requestId !== requestIdRef.current) return
       setData(res.data.items ?? [])
-    } catch {
+    } catch (err) {
       if (requestId !== requestIdRef.current) return
-      setError(true)
+      setError(err)
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
@@ -607,7 +607,7 @@ export function useSalvosData(enabled: boolean): SalvosState {
     if (!enabled) {
       requestIdRef.current += 1
       setData(null)
-      setError(false)
+      setError(null)
       setLoading(false)
       return
     }

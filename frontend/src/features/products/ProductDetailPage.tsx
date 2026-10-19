@@ -34,6 +34,7 @@ export function ProductDetailPage() {
   if (error || !product) {
     return (
       <ErrorState
+        error={error}
         message="Não foi possível carregar os dados do produto."
         onRetry={() => refetch()}
       />

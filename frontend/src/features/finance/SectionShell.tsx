@@ -9,8 +9,9 @@ interface SectionShellProps {
   title: string
   /** Estado de carregamento (o shell busca e injeta nas seções reais). */
   loading?: boolean
-  /** Estado de erro — mostra ErrorState com retry. */
-  error?: boolean
+  /** Estado de erro — mostra ErrorState com retry. Aceita o objeto da falha
+   *  (403 → "Sem permissão", rede → "Sem conexão") ou um booleano legado. */
+  error?: unknown
   /** Estado vazio (período sem dados) — mostra EmptyState. */
   empty?: boolean
   errorMessage?: string
@@ -50,7 +51,7 @@ export function SectionShell({
   if (error) {
     return (
       <Section title={title}>
-        <ErrorState message={errorMessage} onRetry={onRetry} />
+        <ErrorState error={error} message={errorMessage} onRetry={onRetry} />
       </Section>
     )
   }

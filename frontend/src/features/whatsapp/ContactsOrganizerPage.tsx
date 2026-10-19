@@ -56,7 +56,7 @@ export function ContactsOrganizerPage() {
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [applied, setApplied] = useState<Set<string>>(new Set())
 
   const buildRule = useCallback(
@@ -85,13 +85,13 @@ export function ContactsOrganizerPage() {
   const handlePreview = async () => {
     setBusy('preview')
     setNotice('')
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.post('/whatsapp/contacts/organizer/rename-preview', buildRule())
       setPreview(res.data)
       setApplied(new Set())
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setBusy('')
     }
@@ -254,7 +254,7 @@ export function ContactsOrganizerPage() {
       </div>
 
       {/* ── Preview das mudanças ── */}
-      {error && <ErrorState message="Não foi possível gerar o preview." onRetry={handlePreview} />}
+      {Boolean(error) && <ErrorState message="Não foi possível gerar o preview." error={error} onRetry={handlePreview} />}
 
       {preview && !error && (
         <Card>

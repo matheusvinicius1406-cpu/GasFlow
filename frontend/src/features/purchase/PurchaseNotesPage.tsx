@@ -70,7 +70,7 @@ export function PurchaseNotesPage() {
 
   const [notes, setNotes] = useState<PurchaseNote[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -87,7 +87,7 @@ export function PurchaseNotesPage() {
 
   const fetchNotes = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const { data } = await api.purchaseNotes.list({
         supplier: supplier || undefined,
@@ -97,8 +97,8 @@ export function PurchaseNotesPage() {
       })
       setNotes(data.notes ?? [])
       setNotice('')
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -227,7 +227,7 @@ export function PurchaseNotesPage() {
       {loading ? (
         <LoadingSpinner />
       ) : error ? (
-        <ErrorState message="Erro ao carregar notas de compra." onRetry={fetchNotes} />
+        <ErrorState error={error} message="Erro ao carregar notas de compra." onRetry={fetchNotes} />
       ) : notes.length === 0 ? (
         <EmptyState
           icon={FileText}

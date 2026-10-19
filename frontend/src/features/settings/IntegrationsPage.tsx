@@ -69,7 +69,7 @@ const EMPTY_FORM = {
 export function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [saving, setSaving] = useState(false)
@@ -81,12 +81,12 @@ export function IntegrationsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get('/integrations')
       setIntegrations(res.data.integrations || [])
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
@@ -230,6 +230,7 @@ export function IntegrationsPage() {
     return (
       <ErrorState
         message="Não foi possível carregar as integrações."
+        error={error}
         onRetry={() => fetchData()}
       />
     )

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const {
   mockList,
@@ -36,25 +36,29 @@ vi.mock('@/lib/api/client', () => ({
   },
 }))
 
-vi.mock('@/features/auth', () => ({
-  useAuth: () => ({
-    hasPermission: (p: string) => mockHasPermission(p),
-    isLoading: false,
-  }),
-  // Réplica fiel do guard real (mesma semântica do App.tsx).
-  PermissionRoute: ({
-    permissions,
-    children,
-  }: {
-    permissions: string[]
-    children: React.ReactNode
-  }) => {
-    if (!permissions.some((p: string) => mockHasPermission(p))) {
-      return <Navigate to="/" replace />
-    }
-    return <>{children}</>
-  },
-}))
+vi.mock('@/features/auth', async () => {
+  const { PermissionDenied } = await import('@/components/ui/PermissionDenied')
+  return {
+    useAuth: () => ({
+      hasPermission: (p: string) => mockHasPermission(p),
+      isLoading: false,
+    }),
+    // Réplica fiel do guard real (mesma semântica do App.tsx): sem a
+    // permissão ele renderiza o estado unificado, não redireciona.
+    PermissionRoute: ({
+      permissions,
+      children,
+    }: {
+      permissions: string[]
+      children: React.ReactNode
+    }) => {
+      if (!permissions.some((p: string) => mockHasPermission(p))) {
+        return <PermissionDenied />
+      }
+      return <>{children}</>
+    },
+  }
+})
 
 import { PurchaseNotesPage } from './PurchaseNotesPage'
 import { PermissionRoute } from '@/features/auth'
@@ -190,12 +194,12 @@ describe('PurchaseNotesPage', () => {
     })
   })
 
-  it('5. guard: sem purchase.read, PermissionRoute redireciona', async () => {
+  it('5. guard: sem purchase.read, mostra o estado "Sem permissão"', async () => {
     mockHasPermission.mockImplementation((p: string) => p !== 'purchase.read')
     renderPage()
-    await waitFor(() => {
-      expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    })
+    expect(await screen.findByRole('heading', { name: 'Sem permissão' })).toBeInTheDocument()
     expect(screen.queryByText('Notas de Compra')).not.toBeInTheDocument()
+    // O guard antigo redirecionava em silêncio para o dashboard.
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument()
   })
 })

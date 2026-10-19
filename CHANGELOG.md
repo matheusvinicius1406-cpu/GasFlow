@@ -4,6 +4,35 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### Onda E/I1 — Estados de permissão/offline unificados no frontend (19/10/2026)
+
+Fecha o item transversal I1/P2 de `docs/STATUS_E_PLANO.md` (§8.26): os 41 sites
+de `<ErrorState>` (37 arquivos) mostravam "Algo deu errado" para qualquer
+falha — inclusive 403 e queda de rede — e o `PermissionRoute` redirecionava em
+silêncio quando o usuário não tinha a permissão.
+
+- **Classificador único** (`frontend/src/lib/api/failure.ts`):
+  `classifyRequestFailure(error)` → `permission | offline | unknown`
+  (`response.status === 403` → "Sem permissão"; sem `response` → "Sem conexão";
+  resto → "Algo deu errado"; nulo/booleano → genérico, de propósito: um `true`
+  legado não carrega informação e não pode mentir "Sem conexão").
+- **`<ErrorState error?: unknown>`** escolhe o título sozinho; sem a prop,
+  mantém o título genérico antigo (retrocompatível).
+- **`PermissionDenied`** ("Sem permissão") passou a substituir o
+  `<Navigate to="/" />` silencioso do guard — a sidebar permanece porque todas
+  as rotas protegidas ficam dentro do `DashboardLayout`.
+- **Adoção nos 41 sites:** `useState(false)` → `useState<unknown>(null)`,
+  `setError(true)` → `catch (err) { setError(err) }` e `<ErrorState error={...}>`;
+  onde o estado guardava só a mensagem (`DriverFormPage`, `ReorderPage`,
+  `AutomationsPage`), um estado `failure` paralelo guarda o objeto e a mensagem
+  original fica intacta. Na financeira, `useVisaoGeralData`/`useAnalyticsData`
+  guardam o `.reason` do `Promise.allSettled`, `sectionState()` devolve o
+  próprio objeto e `SectionShell` o repassa.
+- **Testes:** +21 (suíte **499 → 520** em 88 arquivos) — classificador,
+  `ErrorState`, `PermissionDenied` e o `PermissionRoute` real com `AuthProvider`;
+  as réplicas de guard em `AuditPage.test.tsx` e `PurchaseNotesPage.test.tsx`
+  passaram a asserir o estado em vez do redirecionamento.
+
 ### Qualidade e CI — Ondas A/B/D/E (14–16/10/2026)
 
 Fechamento das pendências de dívida técnica, CI, segurança residual e

@@ -53,19 +53,19 @@ export function DeliveryCharts() {
   const [days, setDays] = useState<number>(30)
   const [data, setData] = useState<DeliveryReport | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const { exportPdf, exporting } = useExportPdf()
   // Dispara re-render na troca de tema para as cores (chartVar) re-resolverem.
   useChartThemeTick()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const res = await apiClient.get('/reports/deliveries', { params: { days } })
       setData(res.data)
-    } catch {
-      setError(true)
+    } catch (err) {
+      setError(err)
     } finally {
       setLoading(false)
     }
