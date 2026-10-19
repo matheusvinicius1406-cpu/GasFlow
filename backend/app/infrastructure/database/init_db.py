@@ -69,6 +69,7 @@ from app.infrastructure.repositories.route_model import (  # noqa: F401
     RouteRecord,
     RouteStopRecord,
 )
+from app.infrastructure.repositories.route_plan_model import RoutePlanRecord  # noqa: F401 — A4
 from app.infrastructure.repositories.whatsapp_automation_model import (  # noqa: F401
     AutomationRuleModel,
     AutomationExecutionModel,

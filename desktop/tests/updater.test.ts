@@ -109,3 +109,61 @@ test("listener que lança não derruba o set()", () => {
   const s = st.set({ status: "checking" });
   assert.equal(s.status, "checking");
 });
+
+// ── registerUpdateIpc idempotência + setupAutoUpdate guard (B4) ──
+
+test("registerUpdateIpc é idempotente: segunda chamada não duplica handlers", () => {
+  const handled: string[] = [];
+  Module.prototype.require = function (this: unknown, id: string) {
+    if (id === "electron") {
+      return {
+        app: { isPackaged: false },
+        BrowserWindow: { getAllWindows: () => [] },
+        ipcMain: {
+          handle: (channel: string) => {
+            handled.push(channel);
+          },
+        },
+      };
+    }
+    if (id === "electron-updater") {
+      return { autoUpdater: new EventEmitter() };
+    }
+    return origRequire.apply(this, arguments as unknown as Parameters<typeof origRequire>);
+  };
+  // Limpa o cache: o updater.js do topo do arquivo usou outro stub de ipcMain.
+  const updaterPath = req.resolve("../dist/main/updater.js");
+  delete req.cache[updaterPath];
+  const fresh = req("../dist/main/updater.js") as { registerUpdateIpc: () => void };
+  fresh.registerUpdateIpc();
+  const firstCount = handled.length;
+  assert.ok(firstCount >= 3, "pelo menos update:check/install/state registrados");
+  fresh.registerUpdateIpc(); // segunda chamada — deve ser no-op
+  assert.equal(handled.length, firstCount, "segunda chamada não deve registrar de novo");
+  // Restaura o stub original do topo para os próximos testes.
+  Module.prototype.require = origRequire;
+  delete req.cache[updaterPath];
+});
+
+test("setupAutoUpdate: app não empacotado (dev) não configura nada", () => {
+  Module.prototype.require = function (this: unknown, id: string) {
+    if (id === "electron") {
+      return {
+        app: { isPackaged: false },
+        BrowserWindow: { getAllWindows: () => [] },
+        ipcMain: { handle: () => undefined },
+      };
+    }
+    if (id === "electron-updater") {
+      return { autoUpdater: new EventEmitter() };
+    }
+    return origRequire.apply(this, arguments as unknown as Parameters<typeof origRequire>);
+  };
+  const fresh = req("../dist/main/updater.js") as {
+    setupAutoUpdate: (getChannel?: () => string) => void;
+  };
+  // Em dev (isPackaged=false), setupAutoUpdate deve retornar sem lançar.
+  // Não há como assertar "não fez nada" diretamente, mas não lançar já
+  // cobre o guard (sem ele, autoUpdater.checkForUpdatesAndNotify explodiria).
+  fresh.setupAutoUpdate(() => "beta");
+});

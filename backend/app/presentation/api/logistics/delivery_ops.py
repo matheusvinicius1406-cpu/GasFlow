@@ -1122,6 +1122,24 @@ async def optimize_delivery_route(req: RouteOptimizeRequest, ctx: TenantContext 
             "geometry": payload.geometry,
         }
 
+        # A4: persistir o último plano (best-effort — não pode transformar 200 em 500).
+        try:
+            from app.infrastructure.repositories.route_plan_repository import (
+                SQLAlchemyRoutePlanRepository,
+            )
+
+            SQLAlchemyRoutePlanRepository(db, ctx.tenant_id).save_plan(
+                driver_id=req.driver_id,
+                plan=payload,
+                source="ENDPOINT",
+                input_delivery_ids=list(req.delivery_ids),
+                origin=position,
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger("gasflow.routing").debug("route_plan.save_endpoint.failed", exc_info=True)
+
         publish_driver_event(
             EventType.ROUTE_OPTIMIZED,
             req.driver_id,
@@ -1137,6 +1155,38 @@ async def optimize_delivery_route(req: RouteOptimizeRequest, ctx: TenantContext 
             },
         )
         return result
+    finally:
+        db.close()
+
+
+@router.get("/route/plan/{driver_id}")
+async def get_route_plan(driver_id: str, ctx: TenantContext = Depends(get_tenant_context)):
+    """Último plano de rota otimizado persistido do entregador (A4).
+
+    404 quando não há plano persistido (feature desligada, entregador novo
+    ou backend reiniciado antes da A4). Leitura é tenant-scoped via repositório.
+    """
+    from app.infrastructure.repositories.route_plan_repository import SQLAlchemyRoutePlanRepository
+
+    db = _get_db()
+    try:
+        record = SQLAlchemyRoutePlanRepository(db, ctx.tenant_id).get_latest(driver_id)
+        if record is None:
+            raise HTTPException(404, "Plano de rota não encontrado")
+        return {
+            "driver_id": record.driver_id,
+            "source": record.source,
+            "input_delivery_ids": record.input_delivery_ids,
+            "ordered_delivery_ids": record.ordered_delivery_ids,
+            "total_distance_km": record.total_distance_km,
+            "total_duration_s": record.total_duration_s,
+            "improvement_km": record.improvement_km,
+            "provider": record.provider,
+            "geometry": record.geometry,
+            "changed": bool(record.changed),
+            "origin": [record.origin_lat, record.origin_lng] if record.origin_lat is not None else None,
+            "plan_version": record.plan_version,
+        }
     finally:
         db.close()
 
@@ -1279,6 +1329,25 @@ def _try_optimize_after_assign(tenant_id: str, driver_id: str) -> None:
                 deliveries=points,
             )
             changed = result.ordered_delivery_ids != [d.delivery_id for d in deliveries]
+
+            # A4: persistir o último plano (best-effort — dentro do try que engole exceções).
+            try:
+                from app.infrastructure.repositories.route_plan_repository import (
+                    SQLAlchemyRoutePlanRepository,
+                )
+
+                SQLAlchemyRoutePlanRepository(db, tenant_id).save_plan(
+                    driver_id=driver_id,
+                    plan=result,
+                    source="ASSIGN",
+                    input_delivery_ids=[d.delivery_id for d in deliveries],
+                    origin=position,
+                )
+            except Exception:
+                import logging
+
+                logging.getLogger("gasflow.routing").debug("route_plan.save_assign.failed", exc_info=True)
+
             publish_driver_event(
                 EventType.ROUTE_OPTIMIZED,
                 driver_id,

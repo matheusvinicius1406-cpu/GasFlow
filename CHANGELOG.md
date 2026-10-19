@@ -4,6 +4,37 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### A4/B4/C2/B5 — Pendências do plano fechadas (19/10/2026)
+
+Fecha as 4 pendências abertas de `docs/STATUS_E_PLANO.md` (A4, B4, C2, B5) e as
+limpezas pendentes (§4 nº 7–8). Estado: **28 resolvidos · 1 aberto (B5,
+bloqueio externo) · 18 externos**.
+
+- **A4 — persistência do plano de rota otimizado**: tabela
+  `route_plan_records` (upsert por `(tenant_id, driver_id)`, `plan_version`
+  incrementa), migração `a4b5c6d7e8f9`, `SQLAlchemyRoutePlanRepository`
+  (TenantMixin), save best-effort em `POST /delivery/route/optimize`
+  (`source="ENDPOINT"`) e em `_try_optimize_after_assign`
+  (`source="ASSIGN"`) — ambos degradam para debug log, nunca 500;
+  `GET /delivery/route/plan/{driver_id}` (404 sem plano). 13 testes de
+  persistência + 176 de regressão. Flag `DELIVERY_SMART_ROUTING_ENABLED`
+  segue default false.
+- **B4 — cobertura desktop 71 → 101 testes**: parsers puros do `ai-service`
+  (`extractJsonBlock`, `parseMoney` pt-BR, `coerceOrder` com aliases e hash
+  determinístico, `parseOrdersJson` com pedidos mistos), idempotência do
+  `registerUpdateIpc`, guard do `setupAutoUpdate` (dev), settings.json
+  corrompido (JSON inválido e não-objeto), canais do updater no preload.
+  Job `desktop` (typecheck + build + test) adicionado ao `ci.yml`.
+- **C2 — escopo do renomeador Fase 3/4**: mantido o estado atual — as 5
+  recomendações do §12 da spec aprovadas (cidades Belém-only; aceitar lacuna
+  CNEFE 2022; faces preliminar com re-ingestão idempotente; gate 10k;
+  PontoFato ligado com toggle break-glass).
+- **B5/D5 — migração TS 6→7**: movida para bloqueio externo —
+  `typescript-eslint` sem suporte a TS7; TS 7.1 stable 24/11/2026; lint
+  ~Q1/2027. Reavaliação marcada para **2027-01**.
+- **Limpezas**: `_legado_raiz/wwebjs_auth.legado.zip` (351,9 MB) e
+  `backend/gasflow.db.backups/` (5 cópias de dev) apagados.
+
 ### C3 — Lote de 744 contatos renomeado (19/10/2026)
 
 Fecha o item C3 de `docs/STATUS_E_PLANO.md` (§6.2): o lote de 744 contatos

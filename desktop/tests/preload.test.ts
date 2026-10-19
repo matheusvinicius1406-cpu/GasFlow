@@ -85,3 +85,22 @@ test("onWaWebStatus registra listener em gasflow:wa-web-status e devolve unsubsc
   assert.equal(registered[registered.length - 1].channel, "gasflow:wa-web-status");
   assert.equal(typeof off, "function");
 });
+
+test("gasflowUpdater usa os canais update:check/install/state corretos (B4)", () => {
+  const api = exposed["gasflowUpdater"] as {
+    check: () => unknown;
+    install: () => unknown;
+    getState: () => unknown;
+    onStateChange: (cb: () => void) => () => void;
+  };
+  const before = registered.length;
+  api.check();
+  assert.equal(registered[before].channel, "update:check");
+  api.install();
+  assert.equal(registered[before + 1].channel, "update:install");
+  api.getState();
+  assert.equal(registered[before + 2].channel, "update:state");
+  const off = api.onStateChange(() => undefined);
+  assert.equal(registered[before + 3].channel, "update:state");
+  assert.equal(typeof off, "function");
+});

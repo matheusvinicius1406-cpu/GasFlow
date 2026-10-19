@@ -80,3 +80,24 @@ test("saveSettings persiste e loadSettings relê o mesmo valor", () => {
     assert.equal(again.waEnabled, false);
   });
 });
+
+test("settings.json corrompido cai nos defaults e regenera chaves", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gf-cfg-test-"));
+  withStubbedElectron(tmp, () => {
+    // Limpa o cache: sem isso o config.js avaliado é o do teste anterior
+    // (app.getPath aponta para o tmp antigo — module cache do Node).
+    delete req.cache[req.resolve(cfgPath)];
+    const cfg = req(cfgPath);
+    // JSON inválido
+    fs.writeFileSync(path.join(tmp, "settings.json"), "{invalid json!!", "utf-8");
+    const s = cfg.loadSettings();
+    assert.equal(s.waEnabled, true, "default waEnabled");
+    assert.equal(s.waPort, 3101, "default waPort");
+    assert.ok(String(s.waApiKey).startsWith("wa-"), "waApiKey regenerada");
+    assert.ok(s.backendAdminPassword.length > 0, "backendAdminPassword regenerada");
+    // settings.json não-objeto (ex.: string) também cai nos defaults
+    fs.writeFileSync(path.join(tmp, "settings.json"), '"apenas string"', "utf-8");
+    const s2 = cfg.loadSettings();
+    assert.equal(s2.waPort, 3101);
+  });
+});

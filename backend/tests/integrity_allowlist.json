@@ -32,6 +32,11 @@
     },
     {
       "check": "dado-invisivel",
+      "target": "route_plan_records",
+      "reason": "Último plano otimizado por entregador (A4) — exposto via GET /delivery/route/plan/{driver_id}, não listado em tela."
+    },
+    {
+      "check": "dado-invisivel",
       "target": "service_payments",
       "reason": "Pagamentos de serviço (integração PSP) — suporta /payments, sem tabela exposta."
     },
