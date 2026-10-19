@@ -4,6 +4,66 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
 ## [Unreleased]
 
+### Qualidade e CI — Ondas A/B/D/E (14–16/10/2026)
+
+Fechamento das pendências de dívida técnica, CI, segurança residual e
+qualidade de frontend, conforme `docs/STATUS_E_PLANO.md` (§3–§5).
+
+- **Lint/complexidade (Onda A):** `C901` 44 → 0, `ARG` 119 → 0, `F841` 36 → 0
+  e `vulture` 0 — tudo travado no gate (`ruff.toml` com `max-complexity = 10`,
+  `per-file-ignores` de `ARG` só para `backend/tests/**`, `vulture` no CI com
+  `--min-confidence 80`). Os 46 blocos `except Exception:` do `backend/app`
+  ganharam log contextual com `exc_info`; zero `console.*` no serviço WhatsApp
+  (regra `no-console` + `pino`).
+- **Mypy strict total (Onda D):** bloco `ignore_errors` do `mypy.ini` apagado —
+  `mypy app` roda strict em **335 arquivos com 0 erros** (antes 610 erros em 53
+  módulos). Os 22 modelos SQLAlchemy migraram de `Column(...)` para
+  `Mapped[...] = mapped_column(...)`, preservando a nullability do schema.
+- **Bugs latentes expostos pelo strict, todos corrigidos:** reorder lendo
+  `created_at` nulo, `expires_at.isoformat()` opcional no login de sessão,
+  estorno sem guard de `payment.id`, divisão por `total_orders` nulo na
+  segmentação, `str` guardado no `except ValueError` do workflow engine, e o
+  mapa operacional/dashboard de entregadores que liam atributos de **model** na
+  **entidade** de domínio (`driver.status`, `driver.update_location`…) e
+  devolviam 500 em runtime.
+- **Código morto removido:** `application/whatsapp/use_cases.py` não importava
+  (`WhatsAppRepository` não existe) e era invisível para o `vulture`.
+- **Event Bus (Onda E):** `payment.confirmed`/`payment.pending` passaram a ser
+  **publicados** (`finance.py` e `finance/payments.py`) e o prefixo `payment`
+  entrou na assinatura da ponte realtime; no frontend, `realtimeQueryKeys`
+  invalida `orders`, `dashboard` e os caches de financeiro em `payment.*`.
+- **Frontend:** as 8 telas que ainda não tinham teste dedicado ganharam **35
+  testes** (suíte 463 → **499** em 84 arquivos) — `WorkflowsPage`,
+  `CustomerDetailPage`, `DriverLoginPage`, `InventoryDetailPage`,
+  `OrderDetailPage`, `ProductDetailPage`, `IntegrationsPage`,
+  `ContactsCrmPage`.
+- **CI (Onda B):** E2E medido em **2 min 12 s** (a premissa de ">45 min" era
+  falsa); step de lint adicionado ao job do WhatsApp; 13 PRs do Dependabot —
+  **11 mergeados** e #50/#25 fechados com ignore no major do TypeScript 7
+  (migração TS 6→7 fica como pendência deliberada).
+- **C1 — 12 rotas do serviço WhatsApp expostas ao painel:** `ListsPage` (listas,
+  membros, sync, seed) e `WhatsAppCustomersPage` (base, consentimento LGPD,
+  promote), preview no `CampaignWizardPage`, mídia em `WhatsAppAccountsPage` e
+  dedupe em `ContactsCrmPage`.
+- **Segurança (Onda D):** H1 (`/metrics` com `METRICS_PUBLIC`/chave de
+  serviço), H2 (JWT HS256 + bcrypt com rehash) e H3 (`finance.read` nos GETs)
+  verificados como já resolvidos no código, com teste citado em cada linha.
+
+### Docs — documento único de estado
+
+- **119 arquivos de `docs/` removidos**; `docs/STATUS_E_PLANO.md` passou a ser o
+  **único** documento de estado, pendências e decisões do projeto. Qualquer um
+  deles volta com `git show fdd2129:docs/<caminho>`.
+- `docs/routing/osrm.md` **recriado** a partir do código realmente entregue
+  (`osrm_provider.py`, `factory.py`, `circuit_breaker.py`,
+  `docker-compose.osrm.yml`, flags do `config.py`) — a Fase 10 já estava no
+  código, faltava só o doc prometido no `CHANGELOG` e no `config.py`.
+- Itens que estavam na raiz do workspace foram movidos para `data/` e
+  `_legado_raiz/` **antes** de qualquer exclusão, para que tudo fosse
+  recuperável pelo git.
+- Duas specs Playwright deixaram de gravar evidências dentro de `docs/` e
+  passaram a gravar em `e2e/evidencias/`.
+
 ### 🔒 P0 multiempresa — isolamento de conversas WhatsApp e automação por tenant
 
 - **Conversas WhatsApp por tenant (migração `c1a2b3d4e5f6`):** unicidade

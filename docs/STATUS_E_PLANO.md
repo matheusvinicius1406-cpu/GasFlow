@@ -5,10 +5,10 @@ Substitui os 119 arquivos que existiam em `docs/` até 2026-10-14 (todos apagado
 
 | | |
 |---|---|
-| **Data** | 2026-10-14 |
-| **Baseline** | `main` @ `96c5941`, pushado em `origin/main` |
+| **Data** | 2026-10-19 (última revisão; ondas concluídas até 2026-10-16) |
+| **Baseline** | `main` @ `fc535b6`, pushado em `origin/main` (árvore limpa) |
 | **Última release** | tag `v1.2.0` (desktop/frontend/mobile `1.2.0`) |
-| **Suítes** | backend **2.291** passed / 30 skipped / 0 failed · frontend **452** · whatsapp **106** · desktop 11/11 · ruff/mypy/alembic-head verdes |
+| **Suítes** | backend **2.292** passed / 30 skipped / 0 failed (16/10) · frontend **499** / 84 arquivos (19/10) · whatsapp **106** (19/10) · desktop **71** · ruff / mypy strict 0 em 335 / vulture 0 / alembic head único (19/10) |
 | **Gate de integridade** | 9 findings / 0 pendentes · allowlist 9/9 |
 | **Recuperar doc apagado** | `git show fdd2129:docs/<caminho>` |
 | **Gate completo** | §9 |
@@ -24,8 +24,8 @@ Substitui os 119 arquivos que existiam em `docs/` até 2026-10-14 (todos apagado
 - **§2** decisões técnicas que continuam valendo (resumo do que foi apagado).
 - **§3** o inventário completo de pendências — é o trabalho por fazer.
 - **§4** decisões que só você pode tomar.
-- **§5** como resolver, em ondas — **nada foi executado ainda**.
-- **§6** o que foi limpo em 2026-10-14 e o que ainda falta limpar.
+- **§5** como resolver, em ondas — **A, B, D e E executadas e fechadas**; C, F, G pendentes.
+- **§6** o que foi limpo (14/10 e 19/10) e o que ainda depende de decisão.
 - **§7** como recuperar qualquer arquivo apagado.
 - **§8** achados novos desta auditoria (não constavam em lugar nenhum).
 - **§9** comandos do gate.
@@ -44,9 +44,12 @@ Substitui os 119 arquivos que existiam em `docs/` até 2026-10-14 (todos apagado
 
 ### 1.2 O que é promessa quebrada
 
-- `docs/routing/osrm.md` é citado como existente no `CHANGELOG.md:344` e em `config.py:229` — **nunca foi criado** (ver §8.1).
-- Release `v1.2.0` publicada com instalador **sem assinatura** (D3).
-- `gh` CLI não instalado na máquina de dev → diagnóstico de CI às cegas (B3).
+- Release `v1.2.0` publicada com instalador **sem assinatura** (D3) — **única que segue de pé**.
+
+> **Corrigido em 2026-10-19:** este bloco listava duas promessas que já estavam
+> resolvidas e contradiziam o resto do documento — `docs/routing/osrm.md`
+> **foi recriado** em 14/10 (§8.11) e o `gh` CLI **está instalado e autenticado**
+> (§3-B3). Sobra só o D3.
 
 ---
 
@@ -103,7 +106,7 @@ Cada linha substitui um arquivo que foi removido. Detalhe: `git show fdd2129:doc
 
 ## 3. Pendências consolidadas
 
-**Total: 47 itens** — recontagem de **2026-10-16** (as Ondas A/D/E fecharam vários depois do número antigo, que era 8 resolvidos / 5 parciais / 26 abertos / 8 externos): **23 resolvidos · 1 parcial (I1 — só falta o transversal permissão/offline) · 5 abertos** (A4, B4, B5, C2, C3 — destes, A4/C2/C3 dependem de decisão de produto, §4 nº 2–4) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
+**Total: 47 itens** — recontagem de **2026-10-16**, reconferida em **2026-10-19 sem nenhuma mudança de status** (as Ondas A/D/E fecharam vários depois do número antigo, que era 8 resolvidos / 5 parciais / 26 abertos / 8 externos): **23 resolvidos · 1 parcial (I1 — só falta o transversal permissão/offline) · 5 abertos** (A4, B4, B5, C2, C3 — destes, A4/C2/C3 dependem de decisão de produto, §4 nº 2–4) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
 Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta auditoria.
 
 ### A. Segurança / authz
@@ -200,7 +203,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | I2 | ~~ESLint sem config no repo~~ **facto errado** — configs existem (`frontend/eslint.config.js`, `whatsapp/eslint.config.js`), `npm run lint` verde nos dois, e o CI **já roda lint no frontend** (`ci.yml:64`) | ⚠️ **corrigido 2026-10-14**: o gap real era o job do whatsapp não rodar lint apesar do script existir — step adicionado. `desktop`/`e2e`/`agent` seguem sem ESLint (desktop cobre com `tsc`; escopo de adicionar é decisão, não bug) |
 | I3 | `favorite_product` do Customer360 = `NOT_IMPLEMENTED` (LOW) | ✅ **já estava implementado** (FASE 6 FIX) — `order_repository.get_customer_metrics` calcula o produto favorito de `order_items` (soma de `quantity`, agrupada por `product_nome`, top-1) e o `Customer360UseCase` recebe o repositório de pedidos de verdade (`presentation/api/clients.py:105`), com `result.update(metrics)` no use case. Travado por `tests/test_phase6_validation.py:443` (`test_favorite_product_implemented`) e `tests/test_crm.py:218`. O `"favorite_product": None` que resta em `client/use_cases.py:198` é só o default do dict antes do update | `phase6/PHASE6_FINAL_VALIDATION` |
 | I4 | `order.created`/`payment.*` fora do Event Bus; consumidor `driver:*` no frontend (P2+) | ✅ **fechado 2026-10-16 (backend + consumidor frontend)** — `order.created`/`order.updated` **já eram publicados** (`presentation/api/orders.py` na criação e na troca de status) e a ponte realtime já assinava `order`. O buraco real era só o **pagamento**: `payment.confirmed`/`payment.pending` existiam no `EventType` **sem nenhum publisher** e o prefixo `payment` **não estava na assinatura** de `setup_realtime_bridge` (o próprio `test_realtime.py` afirmava `PAYMENT_CONFIRMED not in subscribed` — o teste documentava a lacuna como se fosse intenção). Fechado: helper `publish_payment_event`, publicação em `finance.py` (registro de pagamento) e `finance/payments.py` (criação → PENDING, confirmação → CONFIRMED), prefixo `payment` assinado na ponte, e testes trocados para afirmar a assinatura + roteamento do evento no canal do tenant. **Consumidor no frontend fechado** na mesma onda: `realtimeQueryKeys` ganhou o branch `payment.*` (invalida `orders`, `dashboard` e os caches `finance-payments`/`finance-receivables`/`finance-cash`/`finance-balance`), e o teste que antes afirmava `payment.confirmed → []` foi invertido | `phase15/RT01_DECISION` |
-| I5 | `docs/routing/osrm.md` inexistente (ver §8.1) — e a feature está entregue | esta auditoria |
+| I5 | `docs/routing/osrm.md` inexistente (ver §8.1) | ✅ **resolvida 2026-10-14** — arquivo recriado a partir do código realmente entregue (`osrm_provider.py`, `factory.py`, `circuit_breaker.py`, `docker-compose.osrm.yml`, flags do `config.py`), não da spec prometida; presente em `docs/routing/osrm.md` (§8.11) |
 
 ---
 
@@ -213,13 +216,13 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | **3** | **C2** — escopo do renomeador Fase 3/4 | o que entra da lista de §3-C2 |
 | **4** | **A4** — persistir `routes` | fazer só quando a Fase 21 for aprovada? |
 | **5** | **D7** — validações V.1/V.2/V.3 | quando/executar em que máquina (VM + celular real) |
-| **6** | **E1–E4** — dívida diferível | escopo e janela (nunca junto de correção) |
+| **6** | ~~**E1–E4** — dívida diferível~~ | ✅ **executada 2026-10-15** (Onda A, gate verde §9) — escopo fechado, nada junto de correção |
 | **7** | `_legado_raiz/wwebjs_auth.legado.zip` (351,9 MB) | manter ou apagar (sessão regenerável por QR) |
 | **8** | `backend/gasflow.db.backups/` (5 cópias) | manter ou apagar |
 
 ---
 
-## 5. Plano de resolução (nada executado)
+## 5. Plano de resolução — ondas A, B, D, E executadas; C, F, G pendentes
 
 Regra: **uma onda por vez, cada uma termina com suíte verde + commit.**
 
@@ -231,7 +234,7 @@ Regra: **uma onda por vez, cada uma termina com suíte verde + commit.**
 | **D** | **Segurança residual** (H1–H4) — ✅ **executada 2026-10-15**: H1/H2/H3 **já estavam no código** (verificação com evidência em §3-H); H4 apertado de **53 → 31 módulos** no baseline mypy (610 → 566 erros strict, 17 módulos corrigidos de fato + 5 que já estavam em 0). **Modelos migrados em 2026-10-16** (Onda D/H4 — §8.24): strict 566 → 165; **consumidores fechados na sequência (§8.25): 165 → 0 e o baseline apagado** — `mypy app` strict total, 0 seções | ~~~1 dia~~ ✅ | — |
 | **E** | **Qualidade FE**: I1 telas sem teste, I3 favorite_product, I4 Event Bus — ◐ **iniciada 2026-10-15**: I3 **já estava implementado** (medido, §3-I); I4 **fechado** no backend **e** no consumidor frontend (§3-I); **I1 telas fechado** (8 testes dedicados, 463→499); resta só o **transversal** de permissão/offline | ~~~1 dia~~ ◐ | — |
 | **F** | **Validações live**: G1–G9 + D7 | imprevisível | **credenciais/VM/celular (§4 nº 5)** |
-| **G** | **Limpeza restante** (§6.3) | ~30 min | **§4 nº 7–8** |
+| **G** | **Limpeza restante** (§6.3) — ◐ **executada 2026-10-19**: logs, `__pycache__` (86 pastas) e caches `.mypy/.pytest/.ruff` apagados (~75 MB); resíduos de teste do §6.3 já não existiam. **Resta só a decisão** nº 7–8 | ~~30 min~~ ◐ | **§4 nº 7–8** |
 | **—** | **Bloqueios externos D1–D8** | fora do código | certificado/jurídico/upstream |
 
 **Não fazer junto:** onda de dívida (A) sempre isolada de correção de bug.
@@ -271,17 +274,16 @@ A raiz `automação zap/` **não é um repo git** — tudo foi movido para dentr
 | Duplicatas | **19 nomes repetidos em 52 IDs** (ex.: "Surper Gas ( Wagner )" ×4, "= Gas Amigo" ×3) → investigar duplicidade real **antes** de renomear |
 | Dry-run | OK com `qwen3:1.7b`: 0 alterações pendentes no determinístico, 744 elegíveis à IA |
 
-### 6.3 Ainda falta limpar (fora do git, ignorado — exige confirmação)
+### 6.3 Limpeza restante — situação em 2026-10-19
 
-| Caminho | O que é | Ação |
+| Caminho | O que é | Status |
 |---|---|---|
-| `backend/$(mktemp -u).db*` | bug de shell virou arquivo literal | apagar |
-| `backend/_import_test.db` (**178 MB**), `_integrity_recon.db*`, `_login_test*.db*`, `ci-boot-test.db*`, `gate_fresh.db*`, `gate_legacy.db*`, `test_matrix.db*`, `test_migration.db`, `test-desktop.db*` | resíduos de teste | apagar |
-| `backend/gasflow.db.legacy` | banco legado | apagar |
-| `backend/*.log` (`b1-pytest*`, `dev.log`, `full_run.log`, `pair_run.log`, `pip-ci-install.log`, `pytest-*.log`, `trio.log`, `uvicorn-boot.log`) | logs | apagar |
-| `backend/__pycache__/`, `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/` | caches | apagar |
-| `compose-e2e-run.log`, `compose-e2e.log` | logs na raiz | apagar |
-| **manter** | `backend/gasflow.db` (dev), `backend/.venv-ci/`, `backend/gasflow.db.backups/` (§4 nº 8) | — |
+| `backend/$(mktemp -u).db*`, `backend/_import_test.db` (**178 MB**), `_integrity_recon.db*`, `_login_test*.db*`, `ci-boot-test.db*`, `gate_fresh.db*`, `gate_legacy.db*`, `test_matrix.db*`, `test_migration.db`, `test-desktop.db*`, `gasflow.db.legacy` | resíduos de teste / banco legado | ✅ **já não existem no disco** (verificado 19/10) |
+| `backend/*.log` (`pytest-ondaD-h4.log`, `pytest-ondaD2.log`, `_ia_full.log`, `_onda_e_pytest.log`, `dev.log`, `full_run.log`, …) | logs | ✅ **apagados em 2026-10-19** |
+| `compose-e2e-run.log`, `compose-e2e.log` | logs na raiz | ✅ **apagados em 2026-10-19** |
+| `backend/__pycache__/`, `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/` | caches regeneráveis | ✅ **apagados em 2026-10-19** (renascem sozinhos no próximo gate) |
+| **manter** | `backend/gasflow.db` (dev), `backend/.venv-ci/` | — |
+| **decisão pendente (§4 nº 7–8)** | `_legado_raiz/wwebjs_auth.legado.zip` (**351,9 MB**) · `backend/gasflow.db.backups/` (5 cópias, 6,2 MB) | ⏳ **aguardando confirmação** — não toquei |
 
 ---
 
@@ -353,7 +355,12 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 
 ## 9. Gate de verificação
 
-**Última execução completa: 2026-10-16 (Onda D/H4 — migração dos modelos `Mapped[...]` + onda de consumidores)**, sobre o baseline verde de 2026-10-14 (§8.8/§8.9):
+**Última execução completa: 2026-10-16 (Onda D/H4 — migração dos modelos `Mapped[...]` + onda de consumidores)**, sobre o baseline verde de 2026-10-14 (§8.8/§8.9).
+
+> **Reconferência de 2026-10-19** (só checks rápidos + frontend/whatsapp, **sem** `pytest`
+> de backend nem `desktop`): `ruff` limpo · `mypy app` strict **0 em 335 arquivos** ·
+> `vulture` 0 · `alembic heads` único `c1a2b3d4e5f6` · `vitest --maxWorkers=2` **499/84** ·
+> `whatsapp npm test` **106/0**. As linhas abaixo continuam valendo de 16/10.
 
 | Check | Resultado |
 |---|---|
@@ -363,8 +370,8 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 | `python -m vulture app --min-confidence 80` | **0 findings** (era 1: `raise` duplicado em `client_repository.py`) — re-rodado na Onda D após remover o módulo morto: ainda 0 |
 | `pytest -q -p no:randomly` | **2292 passed / 30 skipped / 0 failed** — 964 s no gate de 2026-10-16 (Onda D/H4: modelos + consumidores); 859 s na Onda A e 1627 s na Onda D (mesma suíte e contagem; diferença de tempo é variância de carga da máquina, não regressão) |
 | `alembic heads` | head único `c1a2b3d4e5f6` |
-| `frontend: vitest run --maxWorkers=2` | **499 passed / 84 files / 0 errors** (164 s) — medido 2026-10-16 (subiu de 463/76 com os 8 testes dedicados do I1 + 1 do consumidor `payment.*`) |
-| `whatsapp: npm test` | **106 passed / 0 failed** (45 s) — medido 2026-10-15 |
+| `frontend: vitest run --maxWorkers=2` | **499 passed / 84 files / 0 errors** — medido 2026-10-16 em 164 s e **repetido 2026-10-19 em 458 s** (mesma contagem; a diferença é carga da máquina, não regressão). Subiu de 463/76 com os 8 testes dedicados do I1 + 1 do consumidor `payment.*` |
+| `whatsapp: npm test` | **106 passed / 0 failed** — medido 2026-10-15 e **repetido 2026-10-19** (94 s) |
 | `desktop: npm run typecheck` (baseline 2026-10-14) | exit 0 |
 | `desktop: npm test` (baseline 2026-10-14) | **71 passed / 0 failed** |
 | `tests.integrity_audit` | findings=9 / **pendentes=0** |
