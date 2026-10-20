@@ -5,11 +5,11 @@ Substitui os 119 arquivos que existiam em `docs/` até 2026-10-14 (todos apagado
 
 | | |
 |---|---|
-| **Data** | 2026-10-19 (última revisão; ondas concluídas até 2026-10-16) |
-| **Baseline** | `main` @ `fc535b6`, pushado em `origin/main` (árvore limpa) |
+| **Data** | 2026-10-20 (última revisão; ondas concluídas até 2026-10-16) |
+| **Baseline** | `main` @ `48037b2` (A4/B4/C2; árvore de trabalho com o refactor do desktop de 20/10) |
 | **Última release** | tag `v1.2.0` (desktop/frontend/mobile `1.2.0`) |
-| **Suítes** | backend **2.292** passed / 30 skipped / 0 failed (16/10) · frontend **520** / 88 arquivos (19/10) · whatsapp **106** (19/10) · desktop **71** · ruff / mypy strict 0 em 335 / vulture 0 / alembic head único (19/10) |
-| **Gate de integridade** | 9 findings / 0 pendentes · allowlist 9/9 |
+| **Suítes** | backend **2.310** passed / 30 skipped / 0 failed (20/10) + 11 testes novos verdes (sync-all e LGPD) · frontend **528** / 90 arquivos (20/10) · whatsapp **106** (19/10) · desktop **152** (20/10) · ruff / mypy strict 0 em 337 / vulture 0 / alembic head único `a4b5c6d7e8f9` (20/10) |
+| **Gate de integridade** | 11 findings / 0 pendentes · allowlist 14/14 |
 | **Recuperar doc apagado** | `git show fdd2129:docs/<caminho>` |
 | **Gate completo** | §9 |
 
@@ -106,7 +106,7 @@ Cada linha substitui um arquivo que foi removido. Detalhe: `git show fdd2129:doc
 
 ## 3. Pendências consolidadas
 
-**Total: 47 itens** — recontagem de **2026-10-16**, atualizada em **2026-10-19** (o I1 fechou com o transversal de permissão/offline, §8.26, **C3 fechou com a renomeação do lote**, §6.2, **A4 fechou com a persistência do plano de rota**, §8.28, **B4 fechou com a cobertura desktop**, §8.29, e **C2 fechou mantendo o estado atual**, §8.30): **28 resolvidos · 0 parciais · 1 aberto** (B5 — agora bloqueio externo com data-alvo de reavaliação, D5) **· 18 dependentes de fator externo** (D1–D8, G1–G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
+**Total: 47 itens** — recontagem de **2026-10-16**, atualizada em **2026-10-20** (o I1 fechou com o transversal de permissão/offline, §8.26, **C3 fechou com a renomeação do lote**, §6.2, **A4 fechou com a persistência do plano de rota**, §8.28, **B4 fechou com a cobertura desktop**, §8.29, e **C2 fechou mantendo o estado atual**, §8.30, e **G8 fechou com a Fase D do auto-update**, `release-v1.2.0-spec.md`): **29 resolvidos · 0 parciais · 1 aberto** (B5 — agora bloqueio externo com data-alvo de reavaliação, D5) **· 17 dependentes de fator externo** (D1–D8, G1–G7, G9, H5 — certificado, jurídico, credenciais, VM/celular, upstream). Critério: “resolvido” = o gate que cobre o item está verde e a evidência está citada na própria linha; “parcial” = só um subitem resta.
 Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta auditoria.
 
 ### A. Segurança / authz
@@ -126,7 +126,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | B2 | PRs do Dependabot vermelhas (TS7 no whatsapp, ESLint10; 25+ branches) | ✅ **resolvida** — 13 PRs: **11 mergeados**, **#50/#25 fechados** com `ignore this major version` para TypeScript 7.x. 0 PRs abertos, 0 branches órfãs, CI do `main` combinado verde 6/6 em 14:46. Sobra uma **pendência deliberada** nova: migrar TS 6→7 à parte (ver TS7) | ~~S–M~~ ✅ | 2026-10-14, §8.17 |
 | B5 | Migração TypeScript 6→7 (quebra `/frontend` e `/whatsapp`) — reprovada pelo Dependabot, precisa de trabalho deliberado | ⏳ **bloqueio externo** (D5) — `typescript-eslint` sem suporte a TS7; TS 7.1 stable 24/11/2026; lint ~Q1/2027. `ignoreDeprecations: "6.0"` no tsconfig do whatsapp perde efeito em TS7. `@dependabot ignore this major version` ativo. **Reavaliação: 2027-01** (após stable + typescript-eslint) | M | §8.13 / §8.17 / D5 |
 | B3 | `gh` CLI ausente na máquina de dev | ✅ **resolvida** — `gh` 2.102.0 instalado (winget) e **autenticado** como `matheusvinicius1406-cpu` com escopos `repo` + `workflow`. Dois atritos registrados no caminho: o instalador registra no *Machine* PATH, mas sessões abertas antes da instalação não enxergam (basta repor o PATH ou abrir shell novo); e o `gh.exe` não roda com duplo clique — exige `cmd.exe`/terminal | ~~S~~ ✅ | 2026-10-14 |
-| B4 | Testes do desktop cobrem só fumaça (updater/config/preload) | ✅ **resolvida 2026-10-19** — 71→**101 testes**: parsers do ai-service (extractJsonBlock/parseMoney/coerceOrder/parseOrdersJson), idempotência do `registerUpdateIpc`, guard do `setupAutoUpdate` (dev), settings.json corrompido, canais do updater no preload. Job `desktop` adicionado ao CI (typecheck+build+test) | M | §8.28 |
+| B4 | Testes do desktop cobrem só fumaça (updater/config/preload) | ✅ **resolvida 2026-10-19, ampliada em 2026-10-20** — 71→**101→152 testes**: parsers do ai-service (extractJsonBlock/parseMoney/coerceOrder/parseOrdersJson), idempotência do `registerUpdateIpc`, guard do `setupAutoUpdate` (dev), settings.json corrompido, canais do updater no preload; em 20/10, helpers puros extraídos de `index.ts` (`app-helpers`: porta/URLs, paths de boot, nome de PDF, cupom ESC/POS, plano de serviços), contrato completo do IPC do updater e protocolo JSON-lines do `AgentBridge` (incluindo spawn que falha). Job `desktop` no CI (typecheck+build+test) | M | §8.28 / §8.30 |
 
 ### C. Decisões de produto
 
@@ -151,7 +151,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | D5 | TypeScript 7 bloqueado no `whatsapp` | `typescript-eslint` compatível com TS7 (reavaliar 2027-01 — TS 7.1 stable 24/11/2026, lint ~Q1/2027) |
 | D6 | Shim `jest-dom-vitest.d.ts` | Vitest 5 upstream |
 | D7 | Validações manuais V.1/V.2/V.3 | Execução em ambiente/credenciais — **checklist em 0/3** |
-| D8 | LGPD export/delete de dados | Implementação (M) + política |
+| D8 | LGPD export/delete de dados | ✅ **implementado 2026-10-20** — backend `POST /clients/{codigo}/export` + `DELETE /clients/{codigo}/data` (anonimização preserva pedidos/fiscal, auditoria, **10 testes**) e tela **Privacidade e LGPD** na ficha do cliente (exportar JSON; anonimizar exige digitar o código; permissões `customer.write`/`customer.*`). Falta só a política/revisão jurídica |
 
 ### E. Dívida técnica diferível — **Onda A concluída em 2026-10-15 (E1–E4 fechadas)**
 
@@ -182,7 +182,7 @@ Código dos grupos: `A`–`F` herdados do PLANO_MASTER · `G`–`I` novos desta 
 | G5 | Roteiro manual da **Central Financeira** (15 seções) + impressão seção a seção | `auditoria/central-financeira-fase5` §4 |
 | G6 | Testes de carga do rate limit (ab/vegeta) não executados; janela ZSET não atômica sob concorrência extrema | `phase15/SC01` |
 | G7 | `NOT VERIFIED`: Docker/device/provider real (phase10) · STT/TTS reais (phase11) · **provider de IA de texto ainda mock** (FE01 IA-01) | phase10/11, `FE01` |
-| G8 | `release.yml` permissão de escrita (P-3) + `UpdateNotifier`/`latest.yml` E2E em release real (D-2/D-3) | `auditoria/01_MATRIZ_DE_RISCOS` |
+| G8 | `release.yml` permissão de escrita (P-3) + `UpdateNotifier`/`latest.yml` E2E em release real (D-2/D-3) | ✅ **fechada 2026-10-20** — `permissions: contents: write` no `release.yml` (comprovado pela release v1.2.0 completa de 23/09) e **Fase D da `release-v1.2.0-spec.md` validada com log real do updater** (upgrade 1.1.6→1.2.0, `sem atualizações (v1.2.0 é a mais recente)`, `download_url` do APK 200/50.3MB, boot do empacotado com `/health` 200) | `auditoria/01_MATRIZ_DE_RISCOS` · `release-v1.2.0-spec.md` §Fase D |
 | G9 | Auto-recovery `logged_out` sem prova em campo (W-1) | `01_MATRIZ_DE_RISCOS`, `PENDING_RESOLUTION` WA-02 |
 
 ### H. Segurança residual (novo) — **Onda D executada em 2026-10-15**
@@ -229,7 +229,7 @@ Regra: **uma onda por vez, cada uma termina com suíte verde + commit.**
 | Onda | Escopo | Esforço | Pré-requisito |
 |---|---|---|---|
 | **A** | **Dívida E1–E4** (except silenciosos, pino, complexidade, F841) — ✅ **concluída 2026-10-15**, gate completo verde (§9) | ~~~1 dia~~ ✅ | nenhum |
-| **B** | **CI**: ✅ **concluída 2026-10-14** — B1 ✅ (E2E medido 2:12, não >45 min) · B3 ✅ (`gh` instalado e autenticado) · B2 ✅ (11 mergeados / 2 fechados) · I2 ✅ (lint no job do whatsapp) · **B4 ✅ (cobertura desktop, 101 testes + job CI, §8.29)** · B5 → bloqueio externo D5 (reavaliar 2027-01) | ~~2–3 h~~ ✅ | `gh` |
+| **B** | **CI**: ✅ **concluída 2026-10-14** — B1 ✅ (E2E medido 2:12, não >45 min) · B3 ✅ (`gh` instalado e autenticado) · B2 ✅ (11 mergeados / 2 fechados) · I2 ✅ (lint no job do whatsapp) · **B4 ✅ (cobertura desktop, 152 testes + job CI, §8.28/§8.30)** · B5 → bloqueio externo D5 (reavaliar 2027-01) | ~~2–3 h~~ ✅ | `gh` |
 | **C** | **Decisões de produto**: C1 ✅, C3 ✅, **C2 ✅** | ✅ **concluída 2026-10-19** | — |
 | **D** | **Segurança residual** (H1–H4) — ✅ **executada 2026-10-15**: H1/H2/H3 **já estavam no código** (verificação com evidência em §3-H); H4 apertado de **53 → 31 módulos** no baseline mypy (610 → 566 erros strict, 17 módulos corrigidos de fato + 5 que já estavam em 0). **Modelos migrados em 2026-10-16** (Onda D/H4 — §8.24): strict 566 → 165; **consumidores fechados na sequência (§8.25): 165 → 0 e o baseline apagado** — `mypy app` strict total, 0 seções | ~~~1 dia~~ ✅ | — |
 | **E** | **Qualidade FE**: I1 telas sem teste, I3 favorite_product, I4 Event Bus — ✅ **concluída 2026-10-19**: I3 **já estava implementado** (medido, §3-I); I4 **fechado** no backend **e** no consumidor frontend (§3-I); **I1 telas fechado** (8 testes dedicados, 463→499); **I1 transversal permissão/offline fechado** (§8.26, 499→520) | ~~~1 dia~~ ✅ | — |
@@ -357,21 +357,26 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 
 27. **A4 — persistência do plano de rota otimizado (2026-10-19).** O resultado da otimização (Fase 8) era efêmero: HTTP response + evento em memória (ring buffer de 1000). Reiniciar o backend perdia a ordem otimizada. Implementado: tabela `route_plan_records` (upsert por `(tenant_id, driver_id)`, `plan_version` incrementa a cada save), migração `a4b5c6d7e8f9` (head único), `SQLAlchemyRoutePlanRepository` (TenantMixin — leituras sempre tenant-scoped), save best-effort nos dois caminhos (`POST /delivery/route/optimize` → `source="ENDPOINT"`, `_try_optimize_after_assign` → `source="ASSIGN"`, ambos em try/except que degrada para debug log, nunca 500), `GET /delivery/route/plan/{driver_id}` (404 quando não há plano). Allowlist de integridade: `route_plan_records` em `tests/integrity_allowlist.json`. 13 testes de persistência (upsert, tenant isolation, restart survival, geometry JSON round-trip) + 176 de regressão (delivery, persistence, cross-tenant). Flag `DELIVERY_SMART_ROUTING_ENABLED` continua default false — tabela fica vazia até a flag ligar.
 
-28. **B4 — cobertura desktop: 71 → 101 testes + job no CI (2026-10-19).** A premissa "só fumaça" estava desatualizada (11 arquivos, 71 testes, `node:test` via `tsx --test`, miram `dist/`). Os gaps reais fechados: parsers puros do `ai-service` (`extractJsonBlock` com fences/balanceamento, `parseMoney` pt-BR, `coerceOrder` com aliases e hash determinístico, `parseOrdersJson` com pedidos mistos), idempotência do `registerUpdateIpc` (segunda chamada não duplica handlers), guard do `setupAutoUpdate` (dev não empacotado não configura nada), settings.json corrompido (JSON inválido e não-objeto caem nos defaults e regeneram chaves), canais do updater no preload (`update:check`/`install`/`state`). Job `desktop` adicionado ao `ci.yml` (typecheck + build + test). Ainda sem teste: `index.ts` (743 linhas — single-instance/second-instance/activate), IPC do updater em si (canais Electron), dedupe do assistant, agent-bridge, backend-bridge — diferíveis.
+28. **B4 — cobertura desktop: 71 → 101 testes + job no CI (2026-10-19).** A premissa "só fumaça" estava desatualizada (11 arquivos, 71 testes, `node:test` via `tsx --test`, miram `dist/`). Os gaps reais fechados: parsers puros do `ai-service` (`extractJsonBlock` com fences/balanceamento, `parseMoney` pt-BR, `coerceOrder` com aliases e hash determinístico, `parseOrdersJson` com pedidos mistos), idempotência do `registerUpdateIpc` (segunda chamada não duplica handlers), guard do `setupAutoUpdate` (dev não empacotado não configura nada), settings.json corrompido (JSON inválido e não-objeto caem nos defaults e regeneram chaves), canais do updater no preload (`update:check`/`install`/`state`). Job `desktop` adicionado ao `ci.yml` (typecheck + build + test). Ainda sem teste: `index.ts` (743 linhas — single-instance/second-instance/activate), dedupe do assistant, backend-bridge — diferíveis. O IPC do updater e o agent-bridge foram cobertos na continuação de 20/10 (§8.30).
 
 29. **C2 — escopo do renomeador Fase 3/4: mantido o estado atual (2026-10-19).** As 5 recomendações do §12 da spec (`prompts/renomeador-contatos-fase3.md`) foram aprovadas: (1) cidades Belém-only; (2) aceitar lacuna CNEFE 2022 sem endereço pós-censo; (3) Faces em versão preliminar com re-ingestão idempotente; (4) gate 10k; (5) PontoFato ligado com toggle break-glass. Verificado no código: Fase 3 (IBGE/CNEFE) já em produção (migração `9f4b7e2a6c31`, `IbgeEntreRuasProvider`, wire-up em `jobs.py:318-320`, gate D20 aprovado); PontoFato ligado (`pontofato_enabled: true` em `config.py:300`, usado em `cep.py:192`).
+
+30. **B4 (continuação) — helpers puros do main process e protocolo do agente (2026-10-20).** `desktop/src/main/index.ts` inicia o Electron no require, então nada nele é importável num teste. As decisões de configuração/formatação foram extraídas para `desktop/src/main/app-helpers.ts` (sem dependência de Electron, `fs`/`path` injetados): `backendPort`/`backendUrl`/`waBaseUrl`, `sqliteDatabaseUrl`, `resolveFrontendDist`, `resolvePython` (empacotado → venv → PATH), `sanitizePdfFilename` (fallback para vazio, não só não-string), `isSessionToken`, `TEST_RECEIPT_ESCPOS` e `planServices` (whatsapp/assistant/printer/painel/relay). O boot passou a usar `plan.*` também no relay, eliminando a última checagem de flags duplicada. Testes novos: `app-helpers.test.ts` (24), `agent-bridge.test.ts` (18 — correlação de id, buffering de JSON-lines, eventos, stderr, exit e **spawn que falha**, que antes deixava `running=true` fantasma e `pending` sem resposta), `updater-ipc.test.ts` (7 — os 3 canais, idempotência e conversão de erro) e `backend-wa-spawn.test.ts` (2 — mesmo bug de spawn no `BackendBridge`/`WhatsAppBridge`, que esperavam o health check inteiro antes de falhar). **Desktop 101 → 152 testes**, `tsc`/build limpos; CI inalterado (o job `desktop` já roda a suíte inteira).
+
+31. **Telas órfãs e gate de links (2026-10-20).** Duas rotas internas existiam em `App.tsx` e em `features/` e **não tinham nenhuma entrada no menu**: `/automation` (WorkflowsPage) e `/settings/integrations` (IntegrationsPage). O gate de integridade não acusava porque `_nav_link_findings` deixava o link da raiz (`/`) cobrir todas as rotas por prefixo — `"/automation".startswith("/")` é sempre true — e ainda ignorava o alvo exato (`target != route`). Corrigido nos dois pontos, com testes de regressão (`test_nav_link_findings_*`), e as duas telas entraram no grupo **Configurações** do menu. As 4 rotas que restam no allowlist são legítimas e declaradas: `/cadastro` (convite público), `/track/*` (rastreio enviado ao cliente), `/reports` e `/reports/heatmap` (redirects legados para `/finance`). Na mesma onda: **Integrações** ganhou resumo (ativas/desativadas/com erro) e o botão **Sincronizar todas** consumindo o `POST /integrations/sync-all` que existia sem tela (teste de contrato em `test_integrations.py`); **Automações (workflows)** ganhou resumo de execuções ativas, aprovações pendentes e workflows definidos. Na mesma data, a ficha do cliente ganhou o card **Privacidade e LGPD**: exportação em JSON (`POST /clients/{codigo}/export`) e anonimização (`DELETE /clients/{codigo}/data`) com confirmação pelo código do cliente, permissões `customer.write`/`customer.*` e feedback de 403/404. Gate: FE **528/90** (+5 do card LGPD), integridade **11/0** (allowlist 14/14), `tsc`/lint limpos; backend LGPD **10/10**.
 
 ---
 
 ## 9. Gate de verificação
 
-**Última execução completa: 2026-10-16 (Onda D/H4 — migração dos modelos `Mapped[...]` + onda de consumidores)**, sobre o baseline verde de 2026-10-14 (§8.8/§8.9).
+**Última execução completa: 2026-10-20** (backend + frontend + whatsapp + desktop + ruff/mypy/vulture/alembic/integridade), sobre o baseline verde de 2026-10-16 (§8.8/§8.9).
 
-> **Reconferência de 2026-10-19** (só checks rápidos + frontend/whatsapp, **sem** `pytest`
-> de backend nem `desktop`): `ruff` limpo · `mypy app` strict **0 em 335 arquivos** ·
-> `vulture` 0 · `alembic heads` único `c1a2b3d4e5f6` · `vitest --maxWorkers=2` **520/88** ·
-> `whatsapp npm test` **106/0** · `tsc` e `eslint` limpos no FE (mesma data, pós-Onda E/I1).
-> As linhas abaixo continuam valendo de 16/10.
+> **Reconferência de 2026-10-20** (checks rápidos + frontend/whatsapp/desktop):
+> `ruff` limpo · `mypy app` strict **0 em 337 arquivos** · `vulture` 0 ·
+> `alembic heads` único `a4b5c6d7e8f9` · `vitest --maxWorkers=2` **528/90** ·
+> `whatsapp npm test` **106/0** · `desktop typecheck/build/test` **152/0** ·
+> `tsc` e `eslint` limpos no FE. A suíte completa de backend também foi reexecutada
+> nesta data: **2310 passed / 30 skipped / 0 failed** em 1676 s.
 
 | Check | Resultado |
 |---|---|
@@ -379,13 +384,13 @@ git checkout 96c5941 -- _legado_raiz/            # restaurar o protótipo inteir
 | `mypy app` (**strict total** — bloco `ignore_errors` apagado em 2026-10-16) | Success: **0 issues in 335 files** |
 | `mypy` **sem o baseline** (medida do strict real, Onda D/H4) | **610 → 566 → 165 → 0 erros** (53 → 31 → 21 → **0 módulos**); o bloco `ignore_errors` do `mypy.ini` foi **apagado por inteiro** em 2026-10-16 — o `mypy app` agora É o strict (§8.24/§8.25) |
 | `python -m vulture app --min-confidence 80` | **0 findings** (era 1: `raise` duplicado em `client_repository.py`) — re-rodado na Onda D após remover o módulo morto: ainda 0 |
-| `pytest -q -p no:randomly` | **2292 passed / 30 skipped / 0 failed** — 964 s no gate de 2026-10-16 (Onda D/H4: modelos + consumidores); 859 s na Onda A e 1627 s na Onda D (mesma suíte e contagem; diferença de tempo é variância de carga da máquina, não regressão) |
-| `alembic heads` | head único `c1a2b3d4e5f6` |
-| `frontend: vitest run --maxWorkers=2` | **520 passed / 88 files / 0 errors** — medido **2026-10-19 em 345 s** após a Onda E/I1 (+21 testes novos: `failure`, `ErrorState`, `PermissionDenied`, `PermissionRoute`). Antes: 499/84 no gate de 16/10 (mesma suíte, diferença é carga da máquina) e 463/76 antes dos 8 testes dedicados do I1 |
+| `pytest -q -p no:randomly` | **2310 passed / 30 skipped / 0 failed** — medido **2026-10-20 em 1676 s** (pós-A4: +18 testes). Histórico: 2292/30 em 964 s no gate de 2026-10-16 (Onda D/H4), 859 s na Onda A e 1627 s na Onda D — mesma suíte; diferença de tempo é variância de carga da máquina, não regressão |
+| `alembic heads` | head único **`a4b5c6d7e8f9`** (migração A4; era `c1a2b3d4e5f6` até 19/10) |
+| `frontend: vitest run --maxWorkers=2` | **528 passed / 90 files / 0 errors** — medido **2026-10-20** após a onda de navegação/telas (+8: `nav.test.tsx` 2, resumo/sync-all em `IntegrationsPage` 1, card LGPD 5). Antes: 520/88 em 19/10 (Onda E/I1), 499/84 em 16/10 e 463/76 antes dos 8 testes dedicados do I1 |
 | `whatsapp: npm test` | **106 passed / 0 failed** — medido 2026-10-15 e **repetido 2026-10-19** (94 s) |
 | `desktop: npm run typecheck` (baseline 2026-10-14) | exit 0 |
-| `desktop: npm test` (baseline 2026-10-14) | **71 passed / 0 failed** |
-| `tests.integrity_audit` | findings=9 / **pendentes=0** |
+| `desktop: npm test` (baseline 2026-10-14, atualizado 2026-10-20) | **152 passed / 0 failed** |
+| `tests.integrity_audit` | findings=**11** / **pendentes=0** (allowlist 14/14; inclui os 4 links públicos/redirects declarados em §8.31) |
 | CI no `main` (run `bb4f26d`, 2026-10-14) | **6/6 jobs verdes em 8 min 36 s** (E2E 2:12, Backend 5:51) — ver §8.16 |
 | CI no `main` combinado (run `991db31`, 2026-10-14, após 11 merges de deps) | **6/6 jobs verdes em 14 min 46 s** — ver §8.17 |
 | CI no `main` (run `38914204555`, 2026-10-16 — mypy strict + onda de consumidores) | **6/6 jobs verdes em 9 min 48 s** (Backend 7:11, Trivy 2:31, Frontend 1:26, Migrations 0:54, WhatsApp 0:27, Agent 0:12); `E2E` 2:06 e `Build & Push Images` 1:45 verdes |
@@ -396,8 +401,8 @@ cd backend
 .venv-ci/Scripts/python.exe -m mypy app
 .venv-ci/Scripts/python.exe -m vulture app --min-confidence 80
 .venv-ci/Scripts/python.exe -m alembic heads                   # head único c1a2b3d4e5f6
-.venv-ci/Scripts/python.exe -m pytest -q -p no:randomly        # ~20 min
-ADMIN_PASSWORD='<sua>' .venv-ci/Scripts/python.exe -m tests.integrity_audit   # espera 9/0
+.venv-ci/Scripts/python.exe -m pytest -q -p no:randomly        # ~28 min nesta máquina
+ADMIN_PASSWORD='<sua>' .venv-ci/Scripts/python.exe -m tests.integrity_audit   # espera 11/0
 cd ../frontend && npx vitest run --maxWorkers=2                # OBRIGATÓRIO nesta máquina
 cd ../whatsapp && npm test
 cd ../desktop && npm run typecheck && npm test

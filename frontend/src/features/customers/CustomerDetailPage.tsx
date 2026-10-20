@@ -13,6 +13,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { formatPhone, formatDate, formatCurrency } from '@/lib/utils'
 import { ClientCouponsTab } from './ClientCouponsTab'
 import { ClientReferralsTab } from './ClientReferralsTab'
+import { ClientPrivacyCard } from './ClientPrivacyCard'
 
 const CLIENT_TYPES: Record<string, string> = {
   CONSUMER: 'Consumidor',
@@ -368,6 +369,12 @@ export function CustomerDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ClientPrivacyCard
+        customerCodigo={customer.codigo}
+        customerNome={customer.nome}
+        onErased={() => { void refetch() }}
+      />
     </div>
   )
 }

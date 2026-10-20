@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plug, Plus, RefreshCw, Trash2, KeyRound, Wifi, Copy } from 'lucide-react'
+import { AlertTriangle, Plug, Plus, RefreshCw, Trash2, KeyRound, Wifi, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
+import { StatCard } from '@/components/ui/StatCard'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { apiClient } from '@/lib/api/client'
 import { useToast } from '@/components/ui/Toast'
@@ -165,6 +166,28 @@ export function IntegrationsPage() {
   }
 
   /**
+   * Enfileira todas as integrações ativas de uma vez (POST /integrations/sync-all).
+   * O backend não raspa site nenhum aqui: só marca para o agente buscar no
+   * próximo poll — por isso a mensagem fala em fila, não em "sincronizado".
+   */
+  async function handleSyncAll() {
+    setBusy('sync-all')
+    try {
+      const res = await apiClient.post('/integrations/sync-all')
+      const queued = Number(res.data?.queued ?? 0)
+      success(
+        'Sincronização solicitada',
+        queued === 1 ? '1 integração na fila do agente.' : `${queued} integrações na fila do agente.`,
+      )
+      await fetchData()
+    } catch (err) {
+      reportError(err, 'sincronizar todas', fetchData)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
    * Excluir = soft delete. A integração sai de circulação (`is_active=false`),
    * mas o histórico de sincronização fica e não há reativação — por isso a
    * confirmação diz o que realmente acontece, e a lista continua mostrando a
@@ -236,6 +259,12 @@ export function IntegrationsPage() {
     )
   }
 
+  const activeCount = integrations.filter(i => i.is_active).length
+  const inactiveCount = integrations.length - activeCount
+  const errorCount = integrations.filter(
+    i => i.is_active && ['ERROR', 'FAILED', 'PARTIAL'].includes(i.last_sync_status ?? ''),
+  ).length
+
   return (
     <Page>
       <PageHeader>
@@ -243,6 +272,16 @@ export function IntegrationsPage() {
           Integrações
         </PageTitle>
         <PageActions>
+          {canWrite && activeCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleSyncAll}
+              disabled={busy === 'sync-all'}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${busy === 'sync-all' ? 'animate-spin' : ''}`} />
+              {busy === 'sync-all' ? 'Enfileirando...' : 'Sincronizar todas'}
+            </Button>
+          )}
           {canWrite && (
             <Button onClick={() => setFormOpen(!formOpen)}>
               <Plus className="h-4 w-4 mr-1" /> Nova integração
@@ -250,6 +289,19 @@ export function IntegrationsPage() {
           )}
         </PageActions>
       </PageHeader>
+
+      {integrations.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard title="Integrações ativas" value={activeCount} icon={Plug} />
+          <StatCard title="Desativadas" value={inactiveCount} icon={Plug} />
+          <StatCard
+            title="Com erro na última sync"
+            value={errorCount}
+            icon={AlertTriangle}
+            description={errorCount > 0 ? 'Revise a conexão das integrações em vermelho.' : undefined}
+          />
+        </div>
+      )}
 
       {freshToken && (
         <Card>

@@ -48,9 +48,17 @@ class WhatsAppBridge extends node_events_1.EventEmitter {
         child.stdout?.on("data", (d) => forward(d, "info"));
         child.stderr?.setEncoding("utf-8");
         child.stderr?.on("data", (d) => forward(d, "error"));
-        child.on("error", (e) => this.emit("log", { level: "error", scope: "whatsapp", message: `falha ao iniciar: ${e.message}` }));
+        child.on("error", (e) => {
+            // Spawn falhou (ENOENT/EACCES): sem `exit`, running ficaria true
+            // e o start() esperaria o /api/health ate o timeout.
+            if (this.child === child)
+                this.child = null;
+            this.emit("log", { level: "error", scope: "whatsapp", message: `falha ao iniciar: ${e.message}` });
+            this.emit("status", this.status());
+        });
         child.on("exit", (code) => {
-            this.child = null;
+            if (this.child === child)
+                this.child = null;
             this.emit("log", {
                 level: "info",
                 scope: "whatsapp",

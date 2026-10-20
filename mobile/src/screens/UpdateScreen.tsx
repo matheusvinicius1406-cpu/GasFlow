@@ -142,10 +142,10 @@ export default function UpdateScreen({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.65)",
   },
   loadingText: {
     marginTop: 16,

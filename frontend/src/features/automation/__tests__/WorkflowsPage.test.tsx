@@ -36,6 +36,9 @@ describe('WorkflowsPage', () => {
       expect(screen.getByText('abcdef12')).toBeInTheDocument()
     })
     expect(screen.getByText('wf-1')).toBeInTheDocument()
+    expect(screen.getByText('Execuções ativas')).toBeInTheDocument()
+    expect(screen.getByText('Aprovações pendentes')).toBeInTheDocument()
+    expect(screen.getByText('Workflows definidos')).toBeInTheDocument()
   })
 
   it('lists pending approvals on the approvals tab', async () => {

@@ -21,6 +21,7 @@ import {
   Megaphone,
   MessageSquare,
   Package,
+  Plug,
   Repeat,
   Route,
   Settings,
@@ -33,6 +34,7 @@ import {
   UserCog,
   Users,
   Warehouse,
+  Workflow,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -104,8 +106,10 @@ export const NAV_GROUPS: NavEntry[] = [
     icon: Settings,
     items: [
       { label: 'Geral', href: '/settings', icon: Settings },
+      { label: 'Integrações', href: '/settings/integrations', icon: Plug },
       { label: 'Usuários', href: '/admin/users', icon: UserCog },
       { label: 'Auditoria', href: '/admin/audit', icon: ShieldCheck },
+      { label: 'Automações', href: '/automation', icon: Workflow },
       { label: 'IA', href: '/settings/ai', icon: Brain },
     ],
   },

@@ -14,6 +14,15 @@ vi.mock('@/lib/api/hooks', () => ({
   useDisableCustomer: () => ({ mutateAsync: disableMock, isPending: false }),
 }))
 
+// A ficha inclui o card LGPD (useAuth/useToast); o harness de rota não tem
+// esses providers — sem permissão o card não renderiza, que é o caso aqui.
+vi.mock('@/features/auth', () => ({
+  useAuth: () => ({ hasPermission: () => false }),
+}))
+vi.mock('@/components/ui/Toast', () => ({
+  useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }),
+}))
+
 import { CustomerDetailPage } from '../CustomerDetailPage'
 
 const customer = {

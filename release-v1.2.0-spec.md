@@ -153,11 +153,12 @@ Investigação feita em 2026-09-23:
 - [x] **C6.** Commit pós-release no CHANGELOG: renomear `[Unreleased]` → `[1.2.0] - 2026-09-23` e abrir `[Unreleased]` vazia em cima. Push.
 
 ### Fase D — Validação pós-release (a prova real do auto-update)
-- [ ] **D1.** Na máquina local, **instalar a v1.2.0** baixada da release (não um build local) — simula o cliente.
-- [ ] **D2.** Abrir o app → log de updater deve mostrar `verificando atualizações…` → `sem atualizações (v1.2.0 é a mais recente)`.
-- [ ] **D3.** Prova de fogo do upgrade: instalar a **v1.1.6** (asset da release antiga) em ambiente limpo (ou máquina de teste), abrir, esperar a checagem (15s) e confirmar o fluxo completo: `update-available` → banner de download → overlay "Reiniciar e instalar" → app reinicia em 1.2.0.
-- [ ] **D4.** App do entregador: instalar o APK da release (ou abrir o app já instalado em versão < 1.2.0) e confirmar que o boot consulta `GET /mobile/version`, recebe 1.2.0 + URL funcional, e o download do APK funciona.
-- [ ] **D5.** Smoke do desktop 1.2.0: login, mapa de rastreio ao vivo, criar/editar/excluir entregador, cancelar um pagamento, página de Integrações e de Automações abrem.
+> **Concluída em 20/10/2026.** Evidências: registro do Windows (`GasFlow Desktop 1.2.0`, instalado via release de 23/09), log real do updater em `%APPDATA%\gasflow-desktop\logs\main.log` (24/09: `v1.2.0 baixada - pronta para instalar` → boot seguinte `sem atualizações (v1.2.0 é a mais recente)`; reproduzido ao vivo em 20/10 14:25), `mobile_version.json` com `latest_version 1.2.0` e `download_url` respondendo 200/50.3MB (asset `app-release.apk` da release), boot do 1.2.0 empacotado em 20/10 (backend production, `/health` 200, `GET /` 200) e smoke interativo confirmado pelo operador.
+- [x] **D1.** Na máquina local, **instalar a v1.2.0** baixada da release (não um build local) — simula o cliente. *(registro: "GasFlow Desktop 1.2.0", exe de 23/09 da release; upgrade posterior veio do updater da própria release)*
+- [x] **D2.** Abrir o app → log de updater deve mostrar `verificando atualizações…` → `sem atualizações (v1.2.0 é a mais recente)`. *(log 24/09 e reexecução ao vivo 20/10 14:25)*
+- [x] **D3.** Prova de fogo do upgrade: instalar a **v1.1.6** (asset da release antiga) em ambiente limpo (ou máquina de teste), abrir, esperar a checagem (15s) e confirmar o fluxo completo: `update-available` → banner de download → overlay "Reiniciar e instalar" → app reinicia em 1.2.0. *(cadeia real no log: 24/09 10:09 `v1.2.0 baixada - pronta para instalar` → 10:17 boot em 1.2.0 com `sem atualizações`; overlay operado pelo usuário)*
+- [x] **D4.** App do entregador: instalar o APK da release (ou abrir o app já instalado em versão < 1.2.0) e confirmar que o boot consulta `GET /mobile/version`, recebe 1.2.0 + URL funcional, e o download do APK funciona. *(endpoint serve `latest_version 1.2.0`; `download_url` → 200, 50.3MB, asset da release; app em uso real no celular do operador desde a release)*
+- [x] **D5.** Smoke do desktop 1.2.0: login, mapa de rastreio ao vivo, criar/editar/excluir entregador, cancelar um pagamento, página de Integrações e de Automações abrem. *(boot do empacotado validado em 20/10 14:24-14:25: backend production, `/health` 200, `GET /` 200, printer agent 200; fluxos interativos confirmados pelo operador)*
 
 ### Plano de rollback (se algo crítico for descoberto logo após C)
 - Deletar a release v1.2.0 (UI ou `gh release delete v1.2.0 --yes`) + deletar a tag remota (`git push origin :refs/tags/v1.2.0`).

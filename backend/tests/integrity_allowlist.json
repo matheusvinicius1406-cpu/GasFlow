@@ -54,6 +54,26 @@
       "check": "dado-invisivel",
       "target": "vehicle_loads",
       "reason": "Cargas do veículo do entregador — núcleo do estoque do entregador (F7)."
+    },
+    {
+      "check": "tela-sem-link",
+      "target": "/cadastro",
+      "reason": "Auto-cadastro por convite (hospedado na Vercel) — o link é gerado e enviado ao cliente, não vive no menu interno."
+    },
+    {
+      "check": "tela-sem-link",
+      "target": "/track/*",
+      "reason": "Rastreio público do pedido — link enviado ao cliente; não há entrada no menu do operador."
+    },
+    {
+      "check": "tela-sem-link",
+      "target": "/reports",
+      "reason": "Redirect legado para /finance; mantido para bookmarks antigos."
+    },
+    {
+      "check": "tela-sem-link",
+      "target": "/reports/heatmap",
+      "reason": "Redirect legado para /finance?secao=mapa-de-calor; mantido para bookmarks antigos."
     }
   ]
 }

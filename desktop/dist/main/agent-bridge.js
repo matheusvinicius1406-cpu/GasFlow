@@ -100,6 +100,12 @@ class AgentBridge extends node_events_1.EventEmitter {
         child.on("error", (e) => {
             this.lastError = e.message;
             this.emit("log", { level: "error", scope: "agent", message: `falha ao iniciar agente: ${e.message}` });
+            // Spawn falhou (ENOENT/EACCES): este child nunca vai emitir `exit`,
+            // então sem marcar como morto o running ficaria true para sempre e o
+            // start() seguiria como se o agente estivesse vivo.
+            if (this.child === child)
+                this.child = null;
+            this.rejectAllPending(`falha ao iniciar agente: ${e.message}`);
             this.emit("status", this.status());
         });
         child.on("exit", (code, signal) => {

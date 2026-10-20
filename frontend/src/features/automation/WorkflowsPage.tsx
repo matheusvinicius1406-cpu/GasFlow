@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Page, PageHeader, PageTitle, PageActions } from '@/components/layout/Page'
+import { StatCard } from '@/components/ui/StatCard'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
 import { apiClient } from '@/lib/api/client'
 import { useToast } from '@/components/ui/Toast'
@@ -217,6 +218,7 @@ export function WorkflowsPage() {
   }
 
   const pendingApprovals = approvals.filter(a => a.status === 'PENDING')
+  const activeRuns = runs.filter(r => !TERMINAL_RUN_STATES.includes(r.status))
 
   return (
     <Page>
@@ -236,6 +238,17 @@ export function WorkflowsPage() {
           </Button>
         </PageActions>
       </PageHeader>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard title="Execuções ativas" value={activeRuns.length} icon={Play} />
+        <StatCard
+          title="Aprovações pendentes"
+          value={pendingApprovals.length}
+          icon={ShieldAlert}
+          description={pendingApprovals.length > 0 ? 'Ações de risco aguardando revisão.' : undefined}
+        />
+        <StatCard title="Workflows definidos" value={workflows.length} icon={Workflow} />
+      </div>
 
       {killSwitch && (
         <Card>

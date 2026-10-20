@@ -26,7 +26,7 @@ from app.presentation.schemas.client import (
     ClientListResponse,
     Customer360Response,
 )
-from app.presentation.dependencies import get_tenant_context
+from app.presentation.dependencies import get_tenant_context, require_permission
 from app.domain.security.models import TenantContext
 
 
@@ -154,3 +154,69 @@ def disable_client(
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return client
+
+
+# ── LGPD (D8) — portabilidade e exclusão/anonimização ──
+
+
+def _audit_lgpd(db: Session, ctx: TenantContext, action: str, codigo: str, details: dict) -> None:
+    """Auditoria da operação LGPD (rastreabilidade — art. 6, X). Só contagens, sem PII."""
+    from app.infrastructure.repositories.auth_repository import SQLAlchemyAuditRepository
+
+    SQLAlchemyAuditRepository(db).create(
+        actor_id=ctx.user_id,
+        tenant_id=ctx.tenant_id,
+        action=action,
+        resource="client",
+        resource_id=codigo,
+        details=details,
+        platform="backend",
+    )
+
+
+@router.post("/{codigo}/export")
+def export_client_data(
+    codigo: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.write")),
+):
+    """LGPD art. 18, V — exportação (portabilidade) de todos os dados do titular.
+
+    Permissão `customer.write` (admin/manager/operator): o pacote contém a PII
+    completa do cliente — DRIVER e CUSTOMER ficam de fora. Registros de
+    terceiros (ex.: quem o indicou) não são exportados.
+    """
+    from app.application.lgpd.use_cases import ExportClientDataUseCase
+
+    repository = SQLAlchemyClientRepository(db, ctx.tenant_id)
+    use_case = ExportClientDataUseCase(db, repository, ctx.tenant_id)
+    result = use_case.execute(codigo)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    counts = {key: len(value) for key, value in result.items() if isinstance(value, list)}
+    _audit_lgpd(db, ctx, "LGPD_EXPORTED", codigo, {"secoes": counts})
+    return result
+
+
+@router.delete("/{codigo}/data")
+def erase_client_data(
+    codigo: str,
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(require_permission("customer.*")),
+):
+    """LGPD art. 18, VI — anonimização da PII, preservando pedidos e fiscal.
+
+    Permissão `customer.*` (admin/manager): a exclusão é destrutiva e
+    irreversível; OPERATOR não pode executá-la. O `codigo` do cliente é
+    mantido como chave estrutural — valores de pedidos/pagamentos ficam
+    intactos. Idempotente.
+    """
+    from app.application.lgpd.use_cases import EraseClientDataUseCase
+
+    repository = SQLAlchemyClientRepository(db, ctx.tenant_id)
+    use_case = EraseClientDataUseCase(db, repository, ctx.tenant_id)
+    result = use_case.execute(codigo)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    _audit_lgpd(db, ctx, "LGPD_ERASED", codigo, {"registros_afetados": result["registros_afetados"]})
+    return result

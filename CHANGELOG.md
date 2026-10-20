@@ -2,7 +2,101 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
-## [Unreleased]
+## [1.3.0] - 2026-10-20
+
+### LGPD D8 no backend — exportação e anonimização + bateria final (20/10/2026)
+
+Fecha a implementação (M) do item D8 de `docs/STATUS_E_PLANO.md` no backend,
+complementando o card do frontend já entregue. A política (documento
+jurídico) permanece pendente — é fator externo.
+
+- **`POST /clients/{codigo}/export`** (`customer.write`): pacote JSON de
+  portabilidade (LGPD art. 18, V) com cliente, pedidos + itens, pagamentos,
+  recebíveis, conversas WhatsApp + mensagens, entregas, paradas de rota,
+  execuções de automação, leads, indicações (titular como indicado),
+  pagamentos de serviço, pedidos importados e impressões (sem os bytes
+  ESC/POS). PII de terceiros fica de fora.
+- **`DELETE /clients/{codigo}/data`** (`customer.*` — admin/manager):
+  anonimização idempotente (art. 18, VI) em **13 tabelas** (clients, orders,
+  payments, service_payments, whatsapp_conversations/messages,
+  delivery_records, route_stop_records, automation_executions, site_leads,
+  referrals, print_jobs, imported_orders) preservando a integridade
+  referencial e fiscal: o `codigo` do cliente nunca muda e valores de
+  pedidos/pagamentos/recebíveis ficam intactos; a prova de entrega em
+  binário é mantida (controvérsia consumerista). Commit único — tudo ou
+  nada.
+- **Auditoria**: `LGPD_EXPORTED`/`LGPD_ERASED` em `auth_audit_log` com ator,
+  tenant e só contagens (nunca PII).
+- **Use cases**: `app/application/lgpd/use_cases.py`
+  (`ExportClientDataUseCase`/`EraseClientDataUseCase`).
+- **Testes**: `backend/tests/test_lgpd.py` — 10 novos: 401/404, payload
+  completo com isolamento de dados de terceiros, anonimização com fiscal
+  intacto, idempotência, trilha de auditoria e a matriz de permissão
+  (OPERATOR exporta, não apaga; DRIVER/CUSTOMER não exportam).
+- **Gates backend**: ruff 0, mypy 0 (339 arquivos), vulture 0.
+- **Bateria final dos subsistemas (20/10):** whatsapp (testes + lint +
+  typecheck), agent (testes + typecheck), desktop (testes + typecheck),
+  frontend (testes + lint + build) e mobile (testes + typecheck) — todos
+  verdes.
+- **Fase D da v1.2.0 validada (20/10)** — último item em aberto da spec de
+  release: upgrade real 1.1.6→1.2.0 comprovado em log do updater
+  (`v1.2.0 baixada - pronta para instalar` → `sem atualizações (v1.2.0 é a
+  mais recente)`), checagem reproduzida ao vivo no empacotado, APK do
+  entregador com `download_url` respondendo 200/50.3MB e boot saudável
+  (`/health` 200). Spec inteira: **20/20 checkboxes**.
+- **Fase D da v1.2.0 validada (20/10)** — último item em aberto da spec de
+  release: upgrade real 1.1.6→1.2.0 comprovado em log do updater
+  (`v1.2.0 baixada - pronta para instalar` → `sem atualizações (v1.2.0 é a
+  mais recente)`), checagem reproduzida ao vivo no empacotado, APK do
+  entregador com `download_url` respondendo 200/50.3MB e boot saudável
+  (`/health` 200). Spec inteira: **20/20 checkboxes**.
+
+### Telas órfãs, gate de links e Integrações (20/10/2026)
+
+- **Navegação**: `/automation` (WorkflowsPage) e `/settings/integrations`
+  (IntegrationsPage) existiam mas não tinham entrada em lugar nenhum do menu.
+  As duas entraram no grupo **Configurações** da sidebar.
+- **Gate de integridade**: `_nav_link_findings` tratava o link da raiz (`/`)
+  como prefixo de toda rota e ignorava o alvo exato — nenhuma tela órfã era
+  acusada. Corrigido, com testes de regressão. As 4 exceções restantes são
+  legítimas e documentadas na allowlist (`/cadastro`, `/track/*`, `/reports`,
+  `/reports/heatmap`).
+- **Integrações**: resumo (ativas/desativadas/com erro) e botão **Sincronizar
+  todas**, consumindo o `POST /integrations/sync-all` que já existia no backend
+  sem superfície. Teste de contrato novo em `test_integrations.py`.
+- **Automações (workflows)**: resumo de execuções ativas, aprovações pendentes
+  e workflows definidos.
+- **Privacidade e LGPD (D8)**: card na ficha do cliente com **Exportar dados**
+  (JSON de portabilidade, `customer.write`) e **Anonimizar dados**
+  (`customer.*`, exige digitar o código do cliente; preserva pedidos e fiscal).
+  Consome `POST /clients/{codigo}/export` e `DELETE /clients/{codigo}/data`,
+  com tratamento de 403/404. 5 testes novos no frontend; os 10 testes LGPD do
+  backend seguem verdes.
+- **Gate**: frontend **528/90** (+8 testes), integridade **11 findings / 0
+  pendentes** (allowlist 14/14), `tsc`/ESLint limpos.
+
+### Desktop — cobertura do main process 101 → 152 testes (20/10/2026)
+
+Continuação do B4: o que ainda vivia só dentro de `index.ts` foi extraído para
+helpers puros e testado sem Electron.
+
+- **`desktop/src/main/app-helpers.ts`** (novo): `backendPort`/`backendUrl`/
+  `waBaseUrl`, `sqliteDatabaseUrl`, `resolveFrontendDist`, `resolvePython`
+  (empacotado → venv → PATH), `sanitizePdfFilename` (agora trata também nome
+  vazio), `isSessionToken`, `TEST_RECEIPT_ESCPOS` e `planServices`
+  (whatsapp/assistant/printer/painel/relay). `index.ts` passou a usar `plan.*`
+  também no relay — não sobrou checagem de flags duplicada no boot.
+- **Bridges de subprocesso**: falha de spawn (ENOENT/EACCES) agora zera o
+  `child` nos três bridges. No `agent-bridge`, também rejeita os `pending` com
+  erro e emite `status`; antes o bridge ficava `running=true` para sempre e
+  comandos pendentes estouravam por timeout. No `BackendBridge` e no
+  `WhatsAppBridge`, o `start()` esperava o health check inteiro (90s/20s) antes
+  de mostrar o erro real; agora falha no primeiro ciclo.
+- **Testes**: `app-helpers.test.ts` (24), `agent-bridge.test.ts` (18 — id,
+  buffering de JSON-lines, eventos, stderr, exit e spawn que falha),
+  `updater-ipc.test.ts` (7 — os 3 canais, idempotência e conversão de erro) e
+  `backend-wa-spawn.test.ts` (2 — falha de spawn sem esperar o health check).
+  **Desktop 101 → 152 testes**, `tsc`/build limpos.
 
 ### A4/B4/C2/B5 — Pendências do plano fechadas (19/10/2026)
 

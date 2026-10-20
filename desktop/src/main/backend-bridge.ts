@@ -47,9 +47,17 @@ class BackendBridge {
         child.stdout?.on("data", (d) => forward(d, "info"));
         child.stderr?.setEncoding("utf-8");
         child.stderr?.on("data", (d) => forward(d, "error"));
-        child.on("error", (e) => this.onLog("error", "backend", `falha ao iniciar: ${e.message}`));
+        child.on("error", (e) => {
+            // Spawn falhou (ENOENT/EACCES): sem `exit`, o child ficaria
+            // "running" para sempre e o start() esperaria o /health ate o
+            // deadline (90s) antes de mostrar o erro real.
+            if (this.child === child)
+                this.child = null;
+            this.onLog("error", "backend", `falha ao iniciar: ${e.message}`);
+        });
         child.on("exit", (code) => {
-            this.child = null;
+            if (this.child === child)
+                this.child = null;
             this.onLog("info", "backend", `uvicorn encerrado (code=${code ?? "?"})`);
         });
         // Aguarda /health (primeira execução pode criar tabelas/migrar).

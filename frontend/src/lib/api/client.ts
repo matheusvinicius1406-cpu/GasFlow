@@ -190,6 +190,9 @@ export const api = {
     create: (data: unknown) => apiClient.post('/clients/', data),
     update: (codigo: string, data: unknown) => apiClient.put(`/clients/${codigo}`, data),
     disable: (codigo: string) => apiClient.patch(`/clients/${codigo}/disable`),
+    // LGPD (D8) — portabilidade e anonimização da PII do titular.
+    exportData: (codigo: string) => apiClient.post(`/clients/${codigo}/export`),
+    eraseData: (codigo: string) => apiClient.delete(`/clients/${codigo}/data`),
   },
 
   // Orders

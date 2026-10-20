@@ -33,6 +33,8 @@ import {
 import { attachDriverSocket, reconnectDelay } from "../logic/realtime";
 import { OfflineQueue, type QueueItem, type QueueStorage } from "../logic/offlineQueue";
 import { resolveConnection, type ResolvedConnection } from "../logic/connection";
+import { getConnectionTargets, setConnectionConfig } from "../logic/config";
+import { getServerUrlStorage, normalizeServerUrl } from "../logic/serverConfig";
 import { TrackingController, type TrackingDeps, type GpsPosition } from "../logic/tracking";
 import { createBackgroundTracking } from "../logic/backgroundTracking";
 
@@ -295,12 +297,42 @@ export function makeTransport() {
 
 export function LoginScreenWired() {
   const setSession = useSessionStore((s) => s.setSession);
+  const [initialServerUrl, setInitialServerUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getServerUrlStorage()
+      .get()
+      .then((stored) => setInitialServerUrl(normalizeServerUrl(stored ?? "") ?? "http://127.0.0.1:8000"));
+  }, []);
 
   const doLogin = useCallback(
-    async (username: string, password: string) => {
+    async (username: string, password: string, serverUrl: string) => {
+      const url = normalizeServerUrl(serverUrl);
+      if (!url) throw new Error("Informe o servidor no formato http://ip:8000.");
+      setConnectionConfig({ lanBaseUrl: url });
+      await getServerUrlStorage().set(url);
+      const targets = getConnectionTargets();
+      const resolved = await resolveConnection(targets, fetch);
+      useConnectionStore.getState().setConnection(resolved, targets.cloud?.relayToken ?? "");
+
       const { connection } = useConnectionStore.getState();
-      if (!connection.baseUrl) throw new Error("Sem conexão com o depósito.");
-      const result = await operatorLogin(fetch, connection.baseUrl, username, password);
+      if (!connection.baseUrl) throw new Error("Servidor inacessível — confira o endereço e a rede.");
+
+      let result;
+      try {
+        result = await operatorLogin(fetch, connection.baseUrl, username, password);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (err instanceof Error && err.name === "PasswordChangeRequiredError") throw err;
+        if (/Network request failed|timed? ?out/i.test(msg)) {
+          throw new Error("Servidor inacessível — confira o endereço e a rede.");
+        }
+        if (/HTTP 40[01]/i.test(msg) || /credenciais|password|username/i.test(msg)) {
+          throw new Error("Usuário ou senha inválidos.");
+        }
+        throw err instanceof Error ? err : new Error("Falha no login.");
+      }
+
       const access = result.access_token || result.token || "";
       // driver_id é resolvido pelo /driver/me; aqui só a sessão.
       setSession({ access_token: access, refresh_token: result.refresh_token, driver_id: "" });
@@ -314,7 +346,8 @@ export function LoginScreenWired() {
   );
 
   // A navegação reage ao store (accessToken); o onLogin é redundante aqui.
-  return <LoginScreen onLogin={() => undefined} doLogin={doLogin} />;
+  if (initialServerUrl === null) return null;
+  return <LoginScreen onLogin={() => undefined} doLogin={doLogin} initialServerUrl={initialServerUrl} />;
 }
 
 // ── Troca de senha obrigatória (wired) ───────────────────────

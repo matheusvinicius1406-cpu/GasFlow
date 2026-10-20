@@ -25,10 +25,13 @@ import {
   createMemoryConsentStorage,
 } from "./src/logic/session";
 import { setTokenStorage, createKeychainTokenStorage, type KeychainLike } from "./src/logic/tokenStorage";
+import { setServerUrlStorage, createKeychainServerUrlStorage, getServerUrlStorage, normalizeServerUrl } from "./src/logic/serverConfig";
 import { resolveConnection } from "./src/logic/connection";
-import { getConnectionTargets } from "./src/logic/config";
+import { getConnectionTargets, setConnectionConfig } from "./src/logic/config";
 import { useConnectionStore } from "./src/containers/wired";
 import { requestLocationPermission } from "./src/logic/permissions";
+import UpdateScreen from "./src/screens/UpdateScreen";
+import { getCurrentAppVersion } from "./src/logic/config";
 
 /**
  * Storage do consentimento no RN. O AsyncStorage e dependencia nativa — para
@@ -44,10 +47,19 @@ setConsentStorage(createMemoryConsentStorage());
  */
 setTokenStorage(createKeychainTokenStorage(Keychain as unknown as KeychainLike));
 
+/**
+ * URL do servidor: mesma custódia Keystore do token — o que o entregador
+ * digitou na tela de login vale no boot seguinte (sem ele o app nasce em
+ * offline e o login não tem baseUrl).
+ */
+setServerUrlStorage(createKeychainServerUrlStorage(Keychain as unknown as KeychainLike));
+
 export default function App() {
   const [booted, setBooted] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
+  const [showUpdate, setShowUpdate] = useState(true);
   const setConnection = useConnectionStore((s) => s.setConnection);
+  const connection = useConnectionStore((s) => s.connection);
 
   useEffect(() => {
     void (async () => {
@@ -59,6 +71,13 @@ export default function App() {
 
       // 3. Restaurar sessao persistida (Keystore)
       await restorePersistedSession();
+
+      // 3.5. Servidor salvo pelo entregador vira o alvo do probe de conexao
+      const storedServer = await getServerUrlStorage().get();
+      const storedUrl = normalizeServerUrl(storedServer ?? "");
+      if (storedUrl) {
+        setConnectionConfig({ lanBaseUrl: storedUrl });
+      }
 
       // 4. Resolver conexao ativa (LAN → relay → cloud)
       const targets = getConnectionTargets();
@@ -79,6 +98,13 @@ export default function App() {
       {booted && (
         <SafeAreaProvider>
           <RootNavigator />
+          {showUpdate && connection.baseUrl ? (
+            <UpdateScreen
+              currentVersion={getCurrentAppVersion()}
+              baseUrl={connection.baseUrl}
+              onDismiss={() => setShowUpdate(false)}
+            />
+          ) : null}
         </SafeAreaProvider>
       )}
     </>

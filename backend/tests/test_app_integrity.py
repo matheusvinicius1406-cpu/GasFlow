@@ -25,3 +25,22 @@ def test_app_integrity() -> None:
         f"{len(pending)} problema(s) de integridade fora da allowlist "
         f"(rode `python -m tests.integrity_audit --report`): {detalhe}"
     )
+
+
+def test_nav_link_findings_root_link_does_not_mask_orphan_screen() -> None:
+    """Regressão: o link "/" não pode fazer toda rota parecer linkada.
+
+    A checagem de prefixo com `target="/"` aprovava qualquer tela
+    (`"/automation".startswith("/")`), então telas sem entrada no menu nunca
+    apareciam como `tela-sem-link`.
+    """
+    routes = {"/", "/automation", "/settings/integrations"}
+    findings = audit._nav_link_findings(routes, {"/"}, {"/"})
+    targets = {f.target for f in findings if f.check == "tela-sem-link"}
+    assert targets == {"/automation", "/settings/integrations"}
+
+
+def test_nav_link_findings_accepts_route_reached_by_link() -> None:
+    routes = {"/", "/orders", "/orders/new"}
+    findings = audit._nav_link_findings(routes, {"/"}, {"/orders"})
+    assert findings == []

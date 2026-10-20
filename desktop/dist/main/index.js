@@ -73,6 +73,9 @@ const wa_bridge_1 = require("./wa-bridge");
 // Protótipo WhatsApp Web (pairing/status apenas — envio segue no Baileys).
 const wa_web_panel_1 = require("./wa-web-panel");
 const updater_1 = require("./updater");
+// Helpers puros (testáveis sem Electron) — porta/URLs, resolução de paths,
+// flags de boot e nomes de arquivo.
+const app_helpers_1 = require("./app-helpers");
 // P0 3.6 — gate de permissão para handlers IPC nativos (defesa em profundidade).
 const ipc_permissions_1 = require("./ipc-permissions");
 let mainWindow = null;
@@ -94,14 +97,13 @@ let orchestrator = null;
 let printWorker = null;
 // ── Helpers ──────────────────────────────────────────────────────────
 function backendPort() {
-    const m = settings.gasflowApiUrl.match(/:(\d+)/);
-    return m ? Number.parseInt(m[1], 10) : 8000;
+    return (0, app_helpers_1.backendPort)(settings.gasflowApiUrl);
 }
 function backendUrl() {
-    return `http://127.0.0.1:${backendPort()}`;
+    return (0, app_helpers_1.backendUrl)(settings.gasflowApiUrl);
 }
 function waBaseUrl() {
-    return `http://127.0.0.1:${settings.waPort}`;
+    return (0, app_helpers_1.waBaseUrl)(settings.waPort);
 }
 function notify(title, body) {
     try {
@@ -116,29 +118,26 @@ function notify(title, body) {
     }
 }
 function resolveFrontendDist() {
-    if (electron_1.app.isPackaged) {
-        return path.join(process.resourcesPath, "frontend");
-    }
     const devDist = path.join(__dirname, "..", "..", "..", "frontend", "dist");
-    return fs.existsSync(devDist) ? devDist : "";
+    return (0, app_helpers_1.resolveFrontendDist)({
+        isPackaged: electron_1.app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        devDist,
+        exists: (p) => fs.existsSync(p),
+    });
 }
 /** Python do backend: prefere venv local, senão python do PATH. */
 function resolvePython() {
     const backendDir = electron_1.app.isPackaged
         ? path.join(process.resourcesPath, "backend")
         : path.join(__dirname, "..", "..", "..", "backend");
-    if (electron_1.app.isPackaged) {
-        const packagedBackend = path.join(backendDir, "gasflow-backend.exe");
-        if (fs.existsSync(packagedBackend)) {
-            return { command: packagedBackend, args: [], cwd: backendDir };
-        }
-    }
-    const venvPython = path.join(backendDir, ".venv", "Scripts", "python.exe");
-    const cwd = fs.existsSync(path.join(backendDir, "app", "main.py")) ? backendDir : process.cwd();
-    if (fs.existsSync(venvPython)) {
-        return { command: venvPython, args: ["-m", "uvicorn", "app.main:app"], cwd };
-    }
-    return { command: "python", args: ["-m", "uvicorn", "app.main:app"], cwd };
+    return (0, app_helpers_1.resolvePython)({
+        isPackaged: electron_1.app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        backendDir,
+        exists: (p) => fs.existsSync(p),
+        cwd: process.cwd(),
+    });
 }
 // ── Serviços ─────────────────────────────────────────────────────────
 function ensureBackend() {
@@ -146,7 +145,7 @@ function ensureBackend() {
         return backend;
     const { command, args, cwd } = resolvePython();
     const userData = electron_1.app.getPath("userData");
-    const sqliteUrl = `sqlite:///${path.join(userData, "gasflow.db").replace(/\\/g, "/")}`;
+    const sqliteUrl = (0, app_helpers_1.sqliteDatabaseUrl)(userData);
     backend = new backend_bridge_1.BackendBridge({
         command,
         args: [...args, "--host", "127.0.0.1", "--port", String(backendPort())],
@@ -341,7 +340,7 @@ function startOrchestrated(name) {
 // permanece no backend via require_permission).
 function registerProtectedIpc() {
     electron_1.ipcMain.handle("auth:session-token", (_event, token) => {
-        if (typeof token !== "string")
+        if (!(0, app_helpers_1.isSessionToken)(token))
             return { ok: false };
         (0, ipc_permissions_1.registerTokenProvider)(() => token);
         ipc_permissions_1.clearPermissionCache();
@@ -378,7 +377,6 @@ function registerProtectedIpc() {
     // aqui o gate garante purchase.read também na barreira IPC.
     (0, ipc_permissions_1.registerProtectedHandler)("purchase:export-pdf", "purchase.read", async (_event, args) => {
         const html = args?.html;
-        const filename = typeof args?.filename === "string" ? args.filename : "nota-compra.pdf";
         if (typeof html !== "string" || !html)
             throw new Error("html ausente");
         const { BrowserWindow } = require("electron");
@@ -396,7 +394,7 @@ function registerProtectedIpc() {
             const { writeFile } = require("node:fs/promises");
             const { tmpdir } = require("node:os");
             const { join } = require("node:path");
-            const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const safeName = (0, app_helpers_1.sanitizePdfFilename)(args?.filename);
             const outPath = join(tmpdir(), safeName);
             await writeFile(outPath, pdf);
             await shell.openPath(outPath);
@@ -528,21 +526,11 @@ function registerSettingsIpc() {
         }
         // O cupom de teste é montado aqui (o desktop não importa o formatador
         // Python do backend): só precisa provar que sai papel.
-        const testPayload = Buffer.from(TEST_RECEIPT_ESCPOS, "binary");
+        const testPayload = Buffer.from(app_helpers_1.TEST_RECEIPT_ESCPOS, "binary");
         const result = await printRawBytes(printerName, testPayload);
         return { ok: result.ok, error: result.error, printerName };
     });
 }
-// Cupom de teste em ESC/POS (80mm): inicializa, escreve e corta.
-const TEST_RECEIPT_ESCPOS = "\x1b@" + "\x1b\x21\x10" + "        GASFLOW         \n" + "\x1b\x21\x00" +
-    "------------------------------------------\n" +
-    "     TESTE DE IMPRESSORA\n" +
-    "------------------------------------------\n" +
-    "Se este cupom saiu, a impressora esta\n" +
-    "configurada e os cupons de pedido vao\n" +
-    "sair automaticamente.\n" +
-    "------------------------------------------\n" +
-    "\n\n\n" + "\x1bi";
 function ensureAssistant() {
     if (assistant)
         return assistant;
@@ -638,6 +626,9 @@ if (!gotLock) {
 else {
     electron_1.app.on("second-instance", () => mainWindow?.focus());
     electron_1.app.whenReady().then(async () => {
+        // Plano de serviços decidido uma vez (flags do settings.json) — as
+        // decisões puras ficam em app-helpers.planServices (testadas sem GUI).
+        const plan = (0, app_helpers_1.planServices)(settings);
         // Handlers de settings registrados cedo — o renderer pode chamar a
         // qualquer momento depois do preload.
         registerSettingsIpc();
@@ -671,9 +662,9 @@ else {
         }
         // Serviços em segundo plano sob orquestração — independentes: falha
         // de um não trava o outro. waEnabled=false pula o WhatsApp.
-        if (settings.waEnabled !== false) {
+        if (plan.whatsapp) {
             void startOrchestrated("whatsapp").then(() => {
-                if (settings.waAutoReply)
+                if (plan.assistant)
                     ensureAssistant().start();
             });
         }
@@ -683,7 +674,7 @@ else {
         // F10.3: agente também sob orquestração (antes só havia retry no boot).
         void startOrchestrated("agent");
         // F10.7: worker de impressão (pula se desligado nas configurações).
-        if (settings.printerEnabled !== false) {
+        if (plan.printer) {
             void startOrchestrated("printer");
         }
         else {
@@ -691,7 +682,7 @@ else {
         }
         // Protótipo WA Web: painel nasce só com flag on (default OFF) —
         // attach/detach das views fica na janela (createWindow/closed).
-        if (settings.waWebPanel?.enabled === true) {
+        if (plan.waWebPanel) {
             ensureWaWebPanel();
         }
         else {
@@ -704,7 +695,9 @@ else {
             .catch((e) => logger_1.logger.warn("ai.setup", `boot: ${e.message}`));
         // App do Entregador (Fase 1): relay outbound p/ localização em tempo
         // real. Desligado por padrão (relayEnabled=false no settings.json).
-        if (settings.relayEnabled && settings.relayUrl) {
+        // A decisão (flag E url) vem do plano de serviços, a mesma testada em
+        // app-helpers.planServices.
+        if (plan.relay) {
             // Fix do elo morto (rastreador): posição vinda da rua era entregue
             // ao renderer e descartada — o mapa do operador nunca via o
             // entregador fora da WiFi do depósito. Agora o main process ingere

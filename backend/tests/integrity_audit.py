@@ -355,8 +355,11 @@ def _nav_link_findings(routes: set[str], hrefs: set[str], linked: set[str]) -> l
     for route in sorted(routes):
         if route in hrefs or route == "/":
             continue
+        # O link da raiz ("/") não pode "cobrir" toda rota por prefixo: sem o
+        # `target != "/"`, qualquer tela passaria (`"/automation".startswith("/")`),
+        # e o check de tela órfã nunca acusaria nada.
         if any(
-            route.startswith(target) or target.startswith(route.split("*")[0]) for target in linked if target != route
+            target != "/" and (route.startswith(target) or target.startswith(route.split("*")[0])) for target in linked
         ):
             continue
         findings.append(Finding("tela-sem-link", route, "rota sem entrada na navegação e sem link no app"))

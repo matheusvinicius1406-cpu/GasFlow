@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 
@@ -52,6 +52,20 @@ describe('IntegrationsPage', () => {
     expect(screen.getByText('https://revenda.com.br')).toBeInTheDocument()
   })
 
+  it('mostra o resumo e enfileira todas as integrações ativas', async () => {
+    renderWithProviders(<IntegrationsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Integrações ativas')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Desativadas')).toBeInTheDocument()
+    expect(screen.getByText('Com erro na última sync')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sincronizar todas/ }))
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/integrations/sync-all')
+    })
+  })
+
   it('shows the empty state when there are no integrations', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { integrations: [] } })
     renderWithProviders(<IntegrationsPage />)
@@ -67,6 +81,7 @@ describe('IntegrationsPage', () => {
       expect(screen.getByText('Revenda Centro')).toBeInTheDocument()
     })
     expect(screen.queryByRole('button', { name: /Nova integração/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Sincronizar todas/ })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Rotacionar token de Revenda Centro' })
     ).not.toBeInTheDocument()

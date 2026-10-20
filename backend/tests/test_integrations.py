@@ -172,6 +172,25 @@ def _mk_integration(client, admin_token, name="Webhook Site"):
     return res.json()
 
 
+def test_sync_all_queues_only_active_integrations(client, admin_token):
+    active = _mk_integration(client, admin_token, "Sync All Ativa")
+    inactive = _mk_integration(client, admin_token, "Sync All Desativada")
+    res = client.put(
+        f"/integrations/{inactive['id']}",
+        headers=_auth(admin_token),
+        json={"is_active": False},
+    )
+    assert res.status_code == 200
+
+    res = client.post("/integrations/sync-all", headers=_auth(admin_token))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["ok"] is True
+    assert body["queued"] == len(body["integration_ids"])
+    assert active["id"] in body["integration_ids"]
+    assert inactive["id"] not in body["integration_ids"]
+
+
 def test_import_rejects_invalid_token(client, admin_token):
     integ = _mk_integration(client, admin_token)
     res = client.post(
