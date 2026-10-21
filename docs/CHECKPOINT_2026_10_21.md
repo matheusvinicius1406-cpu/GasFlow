@@ -52,13 +52,39 @@ entrou um lote novo fechado hoje: a identidade visual.
    mapa de rastreio do desktop.
 6. Registrar o resultado em `release-v1.2.0-spec.md` (D4/D5) e no CHANGELOG.
 
+## Fechado no fim do dia (release v1.2.1)
+
+- **Release `v1.2.1` publicada** (tag em `dfd9601`, CI verde, `release.yml`
+  verde): `GasFlow-Desktop-Setup-1.2.1.exe` (192 MB) + `.blockmap` +
+  `latest.yml` (`version: 1.2.1`) + **`app-release.apk`** (52.836.098 bytes,
+  `versionCode 4`) anexado por upload. O `download_url` do
+  `mobile_version.json` (`releases/latest/...`) responde **200** com exatamente
+  esse APK — o auto-update do entregador agora serve a 1.2.1.
+- **Dois fixes de CI/gate**: `print-transport` (valida payload/impressora
+  antes do guard de plataforma + `opts.platform` injetável — o job `CI`
+  falhava só no Linux) e `ci_gate.py` (match por stem `Backend`/`Frontend`/
+  `WhatsApp service`/`Agent` — a comparação exata travou a primeira tag por
+  75 min esperando "Backend (ruff + pytest)" depois da renomeação com
+  vulture).
+- **Bump 1.2.1** em lockstep (mobile `versionCode 4`, `config.ts`,
+  `package.json`+locks de mobile/desktop/frontend que estavam em 1.1.7/1.2.0,
+  fallback do `/mobile/version`, `mobile_version.json`) e CHANGELOG
+  re-titulado para `[1.2.1]` (tag == seção).
+- **README reescrito** como página de projeto (logo, badges, sumário,
+  monorepo com versões, quickstart, releases) e 5 lotes commitados
+  (`8edcc4c` fix desktop · `4893710` bump · `6d38414` readme · `dfd9601`
+  ci-gate · tag `v1.2.1`).
+- **Banco local zerado**: `backend/gasflow.db` apagado, boot recriou tudo
+  (admin reseedado, login 200, 1,3 MB). `*.db` é ignorado pelo git — nada
+  disso entrou nos commits.
+- Gates do dia: backend ruff+vulture+mypy+**2323 pytest** · frontend lint +
+  **528** + build · desktop typecheck + build + **153** · mobile typecheck +
+  **64** · CI/E2E/Build&Push/Trivy verdes.
+
 ## Decisões levantadas hoje
 
-- **Versão do app ficou 1.2.0** (sem bump): o CHANGELOG ganhou a seção
-  `1.3.1` para o lote visual, mas `versionName`/`versionCode` do Android e o
-  `mobile_version.json` só devem subir quando uma release for publicada — o
-  `download_url` aponta para `releases/latest`, que ainda serve o 1.2.0.
-- A árvore de trabalho está **suja e não commitada** (ícones, tema, telas,
-  favicon, script, docs). Precisa de commit quando você quiser fechar o lote.
-- `desktop/build/icon.{png,ico}` mudou: o próximo build do empacotado do
-  desktop já sai com a nova marca (não precisa de ação agora).
+- **Release completa antecipada**: em vez de "bump agora, tag depois",
+  publicamos a `v1.2.1` no mesmo dia (o `latest.yml` e o `mobile_version.json`
+  agora são coerentes entre si).
+- `desktop/build/icon.{png,ico}` mudou: o instalador 1.2.1 já saiu com a nova
+  marca.
