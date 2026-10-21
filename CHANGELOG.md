@@ -2,7 +2,7 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
-## [1.3.1] - 2026-10-21
+## [1.2.1] - 2026-10-21
 
 ### Identidade visual unificada — app do entregador, desktop e web (21/10/2026)
 
@@ -34,6 +34,21 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
 - **Gates**: mobile typecheck + **64/64** testes; frontend lint + **528/528**
   testes + build; APK release buildado em 14m03s com bundle embutido e ícone
   conferido dentro do pacote (foreground 432 px idêntico ao gerado).
+- **CI do desktop consertado**: `printRawBytes` valida impressora configurada
+  e payload vazio **antes** do guard de plataforma e passa a aceitar
+  `opts.platform` injetável — o job `CI` falhava só no Linux porque o guard
+  "RAW só no Windows" interrompia os testes antes do `exec`; 153/153 desktop
+  locais e teste novo cobrindo o guard.
+- **Release v1.2.1**: `versionCode 4`/`versionName 1.2.1` no Android,
+  `getCurrentAppVersion` do app, `package.json` + locks do `mobile`,
+  `desktop` e `frontend` (locks também saíram do 1.1.7), fallback do
+  `GET /mobile/version` e `mobile_version.json` (`latest_version 1.2.1`,
+  changelog e `release_date 2026-10-21`).
+- **README reescrito** como página de projeto: logo, badges, sumário,
+  mapa do monorepo, quickstart e seção de releases.
+- **Banco local de dev zerado** (não versionado, `*.db` no `.gitignore`):
+  `backend/gasflow.db` apagado e recriado no boot com seed idempotente
+  (`admin` reseedado, login 200). Não afeta dados de produção.
 
 ## [1.3.0] - 2026-10-20
 

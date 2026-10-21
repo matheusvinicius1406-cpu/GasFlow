@@ -1,7 +1,7 @@
 {
-  "latest_version": "1.2.0",
+  "latest_version": "1.2.1",
   "download_url": "https://github.com/matheusvinicius1406-cpu/GasFlow/releases/latest/download/app-release.apk",
-  "changelog": "Acoes de entrega no app do entregador (/driver/*, fim do 401), cleartext LAN no release, CRUD de entregadores no painel, cancelamentos, integracoes e automacoes.",
+  "changelog": "Nova identidade visual (simbolo unificado), app do entregador no tema escuro em todas as telas, splash no tema e banners de conexao.",
   "min_required": "1.0.0",
-  "release_date": "2026-09-23"
+  "release_date": "2026-10-21"
 }

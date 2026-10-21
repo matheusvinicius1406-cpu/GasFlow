@@ -50,11 +50,11 @@ def _version_file() -> Path:
 
 # Versao padrao caso o arquivo nao exista
 _DEFAULT_VERSION = {
-    "latest_version": "1.2.0",
+    "latest_version": "1.2.1",
     "download_url": "",
-    "changelog": "Sistema operacional de entregas com rastreamento em tempo real.",
+    "changelog": "Identidade visual unificada e app do entregador no tema escuro.",
     "min_required": "1.0.0",
-    "release_date": "2026-09-22",
+    "release_date": "2026-10-21",
 }
 
 

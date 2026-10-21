@@ -92,5 +92,5 @@ def test_arquivo_ausente_cai_nos_defaults(client, tmp_path, monkeypatch):
 
     assert res.status_code == 200
     data = res.json()
-    assert data["latest_version"] == "1.2.0"
+    assert data["latest_version"] == "1.2.1"
     assert data["download_url"] == ""

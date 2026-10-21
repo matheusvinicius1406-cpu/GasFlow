@@ -1,6 +1,6 @@
 {
   "name": "gasflow-desktop",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "author": "GasFlow",
   "description": "GasFlow Desktop — container Electron do frontend original, com backend FastAPI, agente de integração e WhatsApp rodando localmente.",
