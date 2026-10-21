@@ -16,6 +16,23 @@ acesso e opera só nas rotas do namespace `/driver/*`.
 > Detalhes da receita de build (caminho ASCII, JDK 17, `react-native-screens`
 > 4.4.0, `newArchEnabled=false`): **`android/BUILD.md`**.
 
+## Identidade visual
+
+A UI segue o design system dark do projeto em **`src/theme`** (tokens copiados
+do `frontend/src/index.css`), com componentes compartilhados em
+**`src/components/ui/`** (`Button`, `Input`, `Card`, `StatusChip`, `Banner`,
+`EmptyState`, `Logo`). Nada de hex solto em `StyleSheet`.
+
+O símbolo do app — launcher Android (legado + adaptive), `src/assets/logo-*.png`,
+ícone do desktop e favicon do web — é gerado pelo mesmo script:
+
+```bash
+python scripts/generate_brand_icons.py
+```
+
+Mudou a paleta ou o desenho da marca, rode o script de novo: ele regrava todos
+os destinos a partir da mesma geometria (inclusive o `favicon.svg` vetorial).
+
 ## ⚠️ Bloqueio conhecido — GPS em segundo plano (Fase 5)
 
 A lib indicada, **`@ikolvi/tracelet@0.1.0-alpha.1`**, **não compila** no projeto

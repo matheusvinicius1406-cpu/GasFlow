@@ -2,6 +2,39 @@
 
 Todas as mudanças relevantes do GasFlow, agrupadas por release.
 
+## [1.3.1] - 2026-10-21
+
+### Identidade visual unificada — app do entregador, desktop e web (21/10/2026)
+
+- **Símbolo unificado**: nova marca (chama com miolo) gerada por
+  `scripts/generate_brand_icons.py` — a mesma arte em todos os destinos:
+  launcher Android legado (mdpi→xxxhdpi, `ic_launcher` + `ic_launcher_round`),
+  adaptive icon do Android 8+ (`mipmap-anydpi-v26` + `ic_launcher_foreground`
+  de 432 px + cor de fundo em `values/colors.xml`), `mobile/assets/logo-mark.png`
+  e `logo-badge.png`, `desktop/build/icon.png` + `icon.ico` (16→256) e
+  `frontend/public/favicon.svg` (vetorial, escrito pelo mesmo script). O robô
+  verde do template do React Native saiu do launcher.
+- **Design system mobile** (`mobile/src/theme`): tokens espelhados do web
+  (fundo `#09090b`, surface `#18181b`, laranja `#f97316`, raio/spacing/
+  tipografia) e componentes compartilhados `Button`, `Input`, `Card`,
+  `StatusChip`, `Banner`, `EmptyState` e `Logo`.
+- **Telas no tema escuro**: login, troca de senha obrigatória (checklist de
+  requisitos acompanhando o que é digitado), consentimento LGPD, rota do dia
+  (hero de progresso com % e km do dia, chips de status, estado vazio) e
+  detalhe da entrega (ações rápidas Navegar/Ligar, ações habilitadas por
+  status, nota sobre a fila offline).
+- **Splash e navegação**: `windowBackground` nativo e splash animado no fundo
+  escuro com a nova marca; status bar clara permanente; headers do React
+  Navigation no tema (card `#0f0f12`, texto `#fafafa`).
+- **Contêiner**: banner de "sem conexão" quando o modo é offline, erro de
+  atualização da rota em banner de perigo e loading do detalhe com estado
+  vazio em vez de texto solto.
+- **Web**: `BrandLogo` (sidebar/login/UpdateScreen) e o boot do `index.html`
+  passam a usar o símbolo unificado; `frontend/dist` regerado.
+- **Gates**: mobile typecheck + **64/64** testes; frontend lint + **528/528**
+  testes + build; APK release buildado em 14m03s com bundle embutido e ícone
+  conferido dentro do pacote (foreground 432 px idêntico ao gerado).
+
 ## [1.3.0] - 2026-10-20
 
 ### LGPD D8 no backend — exportação e anonimização + bateria final (20/10/2026)
@@ -38,12 +71,6 @@ jurídico) permanece pendente — é fator externo.
   typecheck), agent (testes + typecheck), desktop (testes + typecheck),
   frontend (testes + lint + build) e mobile (testes + typecheck) — todos
   verdes.
-- **Fase D da v1.2.0 validada (20/10)** — último item em aberto da spec de
-  release: upgrade real 1.1.6→1.2.0 comprovado em log do updater
-  (`v1.2.0 baixada - pronta para instalar` → `sem atualizações (v1.2.0 é a
-  mais recente)`), checagem reproduzida ao vivo no empacotado, APK do
-  entregador com `download_url` respondendo 200/50.3MB e boot saudável
-  (`/health` 200). Spec inteira: **20/20 checkboxes**.
 - **Fase D da v1.2.0 validada (20/10)** — último item em aberto da spec de
   release: upgrade real 1.1.6→1.2.0 comprovado em log do updater
   (`v1.2.0 baixada - pronta para instalar` → `sem atualizações (v1.2.0 é a
