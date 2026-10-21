@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo do adaptive icon (Android 8+) — casa com o gradiente do badge. -->
+    <color name="ic_launcher_background">#0D0F16</color>
+    <!-- Janela nativa antes do RN montar — mesmo fundo do tema escuro do app. -->
+    <color name="splash_background">#09090B</color>
+</resources>
