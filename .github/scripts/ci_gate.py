@@ -34,11 +34,15 @@ import urllib.request
 
 API = "https://api.github.com"
 
+# Stems estáveis por família de job — o match é por startswith, então renomes
+# de job (ex.: "Backend (ruff + pytest)" → "Backend (ruff + vulture + pytest)")
+# continuam casando. Uma comparação exata aqui travou o gate da v1.2.1 por
+# 75 min esperando um job que já não existia mais (21/10/2026).
 REQUIRED_JOBS = (
-    "Backend (ruff + pytest)",
-    "Frontend (typecheck + build + tests)",
-    "WhatsApp service (typecheck + build + tests)",
-    "Agent (typecheck + build + tests)",
+    "Backend",
+    "Frontend",
+    "WhatsApp service",
+    "Agent",
 )
 
 TIMEOUT_S = 75 * 60

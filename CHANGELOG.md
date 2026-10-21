@@ -46,6 +46,11 @@ Todas as mudanças relevantes do GasFlow, agrupadas por release.
   changelog e `release_date 2026-10-21`).
 - **README reescrito** como página de projeto: logo, badges, sumário,
   mapa do monorepo, quickstart e seção de releases.
+- **Gate do release consertado**: o `ci_gate.py` casava o nome do job de
+  backend por igualdade de string e travou a primeira tag v1.2.1 por 75 min
+  esperando `"Backend (ruff + pytest)"` depois da renomeação para
+  `"Backend (ruff + vulture + pytest)"`. Agora o match é por stem estável
+  (`Backend`, `Frontend`, `WhatsApp service`, `Agent`) via `startswith`.
 - **Banco local de dev zerado** (não versionado, `*.db` no `.gitignore`):
   `backend/gasflow.db` apagado e recriado no boot com seed idempotente
   (`admin` reseedado, login 200). Não afeta dados de produção.
