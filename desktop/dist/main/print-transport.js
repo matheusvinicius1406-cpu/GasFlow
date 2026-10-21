@@ -163,11 +163,12 @@ async function printRawBytes(printerName, data, opts = {}) {
     if (!printerName || !printerName.trim()) {
         return { ok: false, error: "impressora não configurada" };
     }
-    if (process.platform !== "win32") {
-        return { ok: false, error: `impressão RAW só é suportada no Windows (atual: ${process.platform})` };
-    }
     if (!data || data.length === 0) {
         return { ok: false, error: "payload ESC/POS vazio" };
+    }
+    const platform = opts.platform ?? process.platform;
+    if (platform !== "win32") {
+        return { ok: false, error: `impressão RAW só é suportada no Windows (atual: ${platform})` };
     }
     let tmpFile = null;
     try {

@@ -50,7 +50,7 @@ test("sucesso: grava os bytes e confirma", async () => {
     };
 
     const data = Buffer.from("\x1b@CUPOM", "utf-8");
-    const result = await printRawBytes("GT710", data, { exec: exec as never, tmpDir: TMP });
+    const result = await printRawBytes("GT710", data, { exec: exec as never, tmpDir: TMP, platform: "win32" });
 
     assert.equal(result.ok, true);
     assert.equal(seen!.size, data.length, "o arquivo temporário leva os bytes ESC/POS");
@@ -67,7 +67,11 @@ test("falha do spooler devolve a mensagem do script", async () => {
         stderr: "OpenPrinter falhou (impressora não encontrada: GT710)",
     });
 
-    const result = await printRawBytes("GT710", Buffer.from("x"), { exec: exec as never, tmpDir: TMP });
+    const result = await printRawBytes("GT710", Buffer.from("x"), {
+        exec: exec as never,
+        tmpDir: TMP,
+        platform: "win32",
+    });
 
     assert.equal(result.ok, false);
     assert.match(result.error!, /impressora não encontrada/);
@@ -92,4 +96,22 @@ test("payload vazio é recusado (não manda papel em branco)", async () => {
 
     assert.equal(result.ok, false);
     assert.match(result.error!, /vazio/);
+});
+
+test("fora do Windows recusa antes de tocar o spooler", async () => {
+    let called = false;
+    const exec = async () => {
+        called = true;
+        return { code: 0, stdout: "", stderr: "" };
+    };
+
+    const result = await printRawBytes("GT710", Buffer.from("x"), {
+        exec: exec as never,
+        tmpDir: TMP,
+        platform: "linux",
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error!, /só é suportada no Windows/);
+    assert.equal(called, false);
 });

@@ -171,17 +171,18 @@ export function buildPrintArgs(scriptPath: string, printerName: string, filePath
 export async function printRawBytes(
     printerName: string,
     data: Buffer,
-    opts: { exec?: ExecFileFn; timeoutMs?: number; tmpDir?: string } = {}
+    opts: { exec?: ExecFileFn; timeoutMs?: number; tmpDir?: string; platform?: NodeJS.Platform } = {}
 ): Promise<RawPrintResult> {
     const startedAt = Date.now();
     if (!printerName || !printerName.trim()) {
         return { ok: false, error: "impressora não configurada" };
     }
-    if (process.platform !== "win32") {
-        return { ok: false, error: `impressão RAW só é suportada no Windows (atual: ${process.platform})` };
-    }
     if (!data || data.length === 0) {
         return { ok: false, error: "payload ESC/POS vazio" };
+    }
+    const platform = opts.platform ?? process.platform;
+    if (platform !== "win32") {
+        return { ok: false, error: `impressão RAW só é suportada no Windows (atual: ${platform})` };
     }
 
     let tmpFile: string | null = null;
