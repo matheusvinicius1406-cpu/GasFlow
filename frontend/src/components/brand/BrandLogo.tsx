@@ -1,4 +1,3 @@
-import { Flame } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
 
@@ -27,7 +26,15 @@ export function BrandLogo({ className, size = 'md' }: BrandLogoProps) {
     )
   }
 
-  return <Flame className={cn('text-primary', sizeClasses[size], className)} />
+  // Símbolo unificado (scripts/generate_brand_icons.py) — mesma arte do
+  // launcher Android e do ícone do desktop.
+  return (
+    <img
+      src="/favicon.svg"
+      alt={`${branding.companyName} logo`}
+      className={cn('object-contain', sizeClasses[size], className)}
+    />
+  )
 }
 
 // ── BrandName ──────────────────────────────────────────────

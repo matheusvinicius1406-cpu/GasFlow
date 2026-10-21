@@ -2,19 +2,19 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GasFlow - Sistema Operacional</title>
     <!--
-      Splash de entrada — markup e CSS críticos INLINE de propósito.
+      Splash de entrada â€” markup e CSS crÃ­ticos INLINE de propÃ³sito.
 
       O splash precisa pintar ANTES do bundle (que carrega o index.css), ou
-      seja, no primeiro frame: é o que transforma a tela em branco do boot em
-      uma abertura de app. Quem o remove é `dismissBootSplash()`
+      seja, no primeiro frame: Ã© o que transforma a tela em branco do boot em
+      uma abertura de app. Quem o remove Ã© `dismissBootSplash()`
       (src/lib/boot/splash.ts), chamado pelo React assim que o app monta.
 
-      O id abaixo é o mesmo de BOOT_SPLASH_ID — se mudar aqui, mude lá.
-      Estilo auto-contido: não usa variáveis do design system (não existem
+      O id abaixo Ã© o mesmo de BOOT_SPLASH_ID â€” se mudar aqui, mude lÃ¡.
+      Estilo auto-contido: nÃ£o usa variÃ¡veis do design system (nÃ£o existem
       ainda neste momento da carga).
     -->
     <style>
@@ -101,7 +101,7 @@
         transition: opacity 0.34s ease-in;
       }
 
-      /* Estado de saída: some e deixa de capturar cliques. */
+      /* Estado de saÃ­da: some e deixa de capturar cliques. */
       .gf-boot--leave {
         opacity: 0;
         pointer-events: none;
@@ -207,20 +207,7 @@
       <div class="gf-boot__content">
         <div class="gf-boot__mark">
           <span class="gf-boot__ring"></span>
-          <svg
-            class="gf-boot__flame"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
-            />
-          </svg>
+          <img class="gf-boot__flame" src="/favicon.svg" width="44" height="44" alt="" aria-hidden="true" />
         </div>
         <p class="gf-boot__name">GasFlow</p>
         <p class="gf-boot__tagline">Sistema Operacional</p>
@@ -229,9 +216,9 @@
     </div>
 
     <script>
-      // Rede de segurança: se o bundle não montar (falha de rede/JS), o splash
-      // não pode ficar preso parecendo travamento. Se o React já montou, o nó
-      // foi removido e este timer não faz nada.
+      // Rede de seguranÃ§a: se o bundle nÃ£o montar (falha de rede/JS), o splash
+      // nÃ£o pode ficar preso parecendo travamento. Se o React jÃ¡ montou, o nÃ³
+      // foi removido e este timer nÃ£o faz nada.
       window.setTimeout(function () {
         var el = document.getElementById('gasflow-boot-splash')
         if (!el) return
