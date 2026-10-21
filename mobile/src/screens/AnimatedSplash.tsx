@@ -1,7 +1,7 @@
 /**
  * AnimatedSplash — tela de splash animada exibida durante o boot do app.
  *
- * Mostra o logo do GasFlow com animações de fade + scale + pulse.
+ * Mostra a marca unificada do GasFlow com animações de fade + scale + pulse.
  * Chamado por App.tsx enquanto booted === false.
  * Ao montar, dispara as animações; quando o boot termina, faz fade-out.
  */
@@ -15,6 +15,9 @@ import {
   StatusBar,
   Dimensions,
 } from "react-native";
+
+import Logo from "../components/ui/Logo";
+import { colors, spacing, typography } from "../theme";
 
 const { width } = Dimensions.get("window");
 
@@ -95,7 +98,7 @@ export default function AnimatedSplash({ visible }: AnimatedSplashProps) {
 
   return (
     <Animated.View style={[styles.container, { opacity: containerOpacity }]} testID="animated-splash">
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
 
       {/* Glow de fundo */}
       <View style={styles.glow} />
@@ -110,9 +113,7 @@ export default function AnimatedSplash({ visible }: AnimatedSplashProps) {
           },
         ]}
       >
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoEmoji}>🔥</Text>
-        </View>
+        <Logo size={104} />
       </Animated.View>
 
       {/* Título */}
@@ -145,49 +146,33 @@ export default function AnimatedSplash({ visible }: AnimatedSplashProps) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 9999,
   },
   glow: {
     position: "absolute",
-    width: width * 0.6,
-    height: width * 0.6,
-    borderRadius: (width * 0.6) / 2,
-    backgroundColor: "rgba(255, 107, 0, 0.08)",
-    top: "30%",
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: (width * 0.7) / 2,
+    backgroundColor: colors.brandSoft,
+    top: "28%",
   },
   logoContainer: {
-    marginBottom: 24,
-  },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#FF6B00",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#FF6B00",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoEmoji: {
-    fontSize: 48,
+    marginBottom: spacing.xl,
   },
   title: {
-    fontSize: 32,
+    fontSize: typography.display,
     fontWeight: "800",
-    color: "#1a1a1a",
+    color: colors.foreground,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 8,
-    letterSpacing: 0.5,
+    fontSize: typography.label,
+    color: colors.mutedForeground,
+    marginTop: spacing.sm,
+    letterSpacing: 0.6,
   },
   progressContainer: {
     position: "absolute",
@@ -196,14 +181,14 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 3,
-    backgroundColor: "#e5e5e5",
     borderRadius: 2,
+    backgroundColor: colors.surfaceMuted,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
     width: "60%",
-    backgroundColor: "#FF6B00",
     borderRadius: 2,
+    backgroundColor: colors.brand,
   },
 });

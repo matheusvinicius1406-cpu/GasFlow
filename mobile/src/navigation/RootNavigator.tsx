@@ -16,8 +16,8 @@
  */
 
 import React from "react";
-import { View, StyleSheet } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { StatusBar, StyleSheet, View } from "react-native";
+import { DarkTheme, NavigationContainer, type Theme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import AnimatedSplash from "../screens/AnimatedSplash";
@@ -31,6 +31,22 @@ import {
   DeliveryDetailScreenWiredProps,
 } from "../containers/wired";
 import { useSessionStore } from "../logic/session";
+import { colors, typography } from "../theme";
+
+/** Tema do React Navigation no design system dark do projeto. */
+const theme: Theme = {
+  ...DarkTheme,
+  dark: true,
+  colors: {
+    ...DarkTheme.colors,
+    primary: colors.brand,
+    background: colors.background,
+    card: colors.backgroundSecondary,
+    text: colors.foreground,
+    border: colors.border,
+    notification: colors.brand,
+  },
+};
 
 export type RootStackParamList = {
   Login: undefined;
@@ -60,13 +76,23 @@ export default function RootNavigator() {
           : "RouteToday";
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={theme}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={colors.backgroundSecondary}
+        translucent={false}
+      />
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{
           gestureEnabled: false,
           animation: "slide_from_right",
-          contentStyle: { backgroundColor: "#ffffff" },
+          headerStyle: { backgroundColor: colors.backgroundSecondary },
+          headerTintColor: colors.foreground,
+          headerTitleStyle: { fontWeight: "700", fontSize: typography.h3 },
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: "minimal",
+          contentStyle: { backgroundColor: colors.background },
         }}
       >
         {!consentLoaded ? (
@@ -106,5 +132,10 @@ export default function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center" },
+  splash: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
 });

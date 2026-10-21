@@ -6,10 +6,25 @@
  * O campo "Servidor" existe porque o alvo de conexão não tem outro ponto de
  * entrada no app: o valor digitado vira o lanBaseUrl (persistido no Keystore)
  * e é resolvido antes do login.
+ *
+ * Visual: design system dark do projeto (src/theme) — mesma marca do desktop.
  */
 
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, StyleSheet } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Logo from "../components/ui/Logo";
+import { colors, spacing, typography } from "../theme";
 
 interface Props {
   onLogin: (tokens: { access_token: string; refresh_token: string; driver_id: string }) => void;
@@ -42,38 +57,93 @@ export default function LoginScreen({ onLogin, doLogin, initialServerUrl }: Prop
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>GasFlow — Entregador</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Servidor (http://ip:8000)"
-        keyboardType="url"
-        autoCapitalize="none"
-        autoCorrect={false}
-        value={server}
-        onChangeText={setServer}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Usuário"
-        autoCapitalize="none"
-        value={username}
-        onChangeText={setUsername}
-      />
-      <TextInput style={styles.input} placeholder="Senha" secureTextEntry value={password} onChangeText={setPassword} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button
-        title={loading ? "Entrando…" : "Entrar"}
-        onPress={submit}
-        disabled={loading || !username || !password || !server}
-      />
-    </View>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.brand}>
+          <Logo size={76} showWordmark />
+        </View>
+
+        <Card style={styles.card}>
+          <Input
+            label="Servidor"
+            placeholder="http://ip:8000"
+            hint="Endereço do depósito (LAN ou nuvem)"
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={server}
+            onChangeText={setServer}
+          />
+          <Input
+            label="Usuário"
+            placeholder="seu usuário"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={username}
+            onChangeText={setUsername}
+          />
+          <Input
+            label="Senha"
+            placeholder="sua senha"
+            secureTextEntry
+            autoCapitalize="none"
+            value={password}
+            onChangeText={setPassword}
+            returnKeyType="go"
+          />
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <Button
+            title={loading ? "Entrando…" : "Entrar"}
+            onPress={() => void submit()}
+            loading={loading}
+            disabled={loading || !username || !password || !server}
+          />
+        </Card>
+
+        <Text style={styles.footer}>GasFlow · Sistema Operacional de Entregas</Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 24, textAlign: "center" },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, marginBottom: 12 },
-  error: { color: "#c00", marginBottom: 12 },
+  screen: { flex: 1, backgroundColor: colors.background },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxxl,
+  },
+  brand: { alignItems: "center", marginBottom: spacing.xxl },
+  card: { padding: spacing.xl },
+  errorBox: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  errorText: { color: colors.danger, fontSize: typography.label, lineHeight: 18 },
+  footer: {
+    color: colors.mutedForeground,
+    fontSize: typography.caption,
+    textAlign: "center",
+    marginTop: spacing.xl,
+    letterSpacing: 0.3,
+  },
 });

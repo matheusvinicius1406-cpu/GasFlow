@@ -18,9 +18,10 @@ import {
 import {
   checkForUpdate,
   openDownloadLink,
-  type MobileVersionInfo,
   type UpdateCheckResult,
 } from "../logic/mobileUpdate";
+import Logo from "../components/ui/Logo";
+import { colors, radius, shadows, spacing, typography } from "../theme";
 
 interface UpdateScreenProps {
   currentVersion: string;
@@ -63,9 +64,9 @@ export default function UpdateScreen({
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FF6B00" />
-        <Text style={styles.loadingText}>Verificando atualizacoes...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.brand} />
+        <Text style={styles.loadingText}>Verificando atualizações…</Text>
       </View>
     );
   }
@@ -87,9 +88,9 @@ export default function UpdateScreen({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.updateIcon}>
-            <Text style={styles.updateIconText}>⬆</Text>
+            <Logo size={34} />
           </View>
-          <Text style={styles.title}>Atualizacao Disponivel</Text>
+          <Text style={styles.title}>Atualização disponível</Text>
           <Text style={styles.version}>
             v{currentVersion} → v{info.latest_version}
           </Text>
@@ -106,7 +107,7 @@ export default function UpdateScreen({
         {/* Required badge */}
         {result.isRequired ? (
           <View style={styles.requiredBadge}>
-            <Text style={styles.requiredText}>Atualizacao obrigatoria</Text>
+            <Text style={styles.requiredText}>Atualização obrigatória</Text>
           </View>
         ) : null}
 
@@ -114,13 +115,15 @@ export default function UpdateScreen({
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.updateButton, downloading && styles.updateButtonDisabled]}
-            onPress={handleUpdate}
+            onPress={() => void handleUpdate()}
             disabled={downloading}
+            accessibilityRole="button"
+            accessibilityLabel="Baixar e instalar atualização"
           >
             {downloading ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.background} />
             ) : (
-              <Text style={styles.updateButtonText}>Baixar e Instalar</Text>
+              <Text style={styles.updateButtonText}>Baixar e instalar</Text>
             )}
           </TouchableOpacity>
 
@@ -141,123 +144,135 @@ export default function UpdateScreen({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.65)",
+    backgroundColor: colors.background,
+    zIndex: 9999,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: "#666",
+    marginTop: spacing.md,
+    fontSize: typography.label,
+    color: colors.mutedForeground,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: colors.overlay,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 9998,
+    paddingHorizontal: spacing.xl,
   },
   card: {
-    width: "85%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 24,
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...shadows.floating,
   },
   header: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   updateIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#FFF3E0",
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
-  },
-  updateIconText: {
-    fontSize: 28,
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 4,
+    fontSize: typography.h2,
+    fontWeight: "800",
+    color: colors.foreground,
+    marginBottom: spacing.xs,
   },
   version: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: typography.label,
+    color: colors.mutedForeground,
+    fontVariant: ["tabular-nums"],
   },
   changelogContainer: {
     width: "100%",
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
   changelogLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 4,
+    fontSize: typography.caption,
+    fontWeight: "700",
+    color: colors.mutedForeground,
+    marginBottom: spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   changelog: {
-    fontSize: 13,
-    color: "#333",
-    lineHeight: 18,
+    fontSize: typography.label,
+    color: colors.foreground,
+    lineHeight: 19,
   },
   requiredBadge: {
-    backgroundColor: "#FFF3E0",
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 16,
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.lg,
+    alignSelf: "center",
   },
   requiredText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#E65100",
+    fontSize: typography.caption,
+    fontWeight: "700",
+    color: colors.warning,
   },
   actions: {
     width: "100%",
-    gap: 10,
+    gap: spacing.sm,
   },
   updateButton: {
-    backgroundColor: "#FF6B00",
-    borderRadius: 10,
-    paddingVertical: 14,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md + 2,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
   },
   updateButtonDisabled: {
     opacity: 0.7,
   },
   updateButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
+    color: colors.background,
+    fontSize: typography.body,
+    fontWeight: "800",
   },
   laterButton: {
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
     alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
   },
   laterButtonText: {
-    color: "#666",
-    fontSize: 14,
-    fontWeight: "500",
+    color: colors.mutedForeground,
+    fontSize: typography.bodySm,
+    fontWeight: "600",
   },
   releaseDate: {
-    marginTop: 12,
-    fontSize: 11,
-    color: "#999",
+    marginTop: spacing.md,
+    fontSize: typography.caption,
+    color: colors.mutedForeground,
   },
 });

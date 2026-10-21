@@ -11,13 +11,17 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import LoginScreen from "../screens/LoginScreen";
 import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import RouteTodayScreen, { type RouteDelivery } from "../screens/RouteTodayScreen";
-import DeliveryDetailScreen, { type DeliveryDetail } from "../screens/DeliveryDetailScreen";
+import DeliveryDetailScreen, {
+  DeliveryLoading,
+  type DeliveryDetail,
+} from "../screens/DeliveryDetailScreen";
+import Banner from "../components/ui/Banner";
 import { useSessionStore } from "../logic/session";
 import {
   operatorLogin,
@@ -451,7 +455,7 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
       setDeliveries(list.map(toRoute));
       setError(null);
     } catch {
-      setError("Sem conexão — mostrando dados salvos.");
+      setError("Não foi possível atualizar a rota — confira a conexão.");
     }
   }, [token, connection.baseUrl]);
 
@@ -519,7 +523,10 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
 
   return (
     <View style={{ flex: 1 }}>
-      {error ? <Text style={styles.offlineBanner}>{error}</Text> : null}
+      {connection.mode === "offline" ? (
+        <Banner tone="warning">Sem conexão — as ações ficam salvas e sincronizam depois</Banner>
+      ) : null}
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       <RouteTodayScreen
         deliveries={deliveries}
         todayDistanceKm={todayDistanceKm ?? undefined}
@@ -572,11 +579,7 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
   );
 
   if (!delivery) {
-    return (
-      <View style={styles.splash}>
-        <Text>Carregando entrega…</Text>
-      </View>
-    );
+    return <DeliveryLoading />;
   }
 
   return (
@@ -588,8 +591,3 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
     />
   );
 }
-
-const styles = StyleSheet.create({
-  offlineBanner: { backgroundColor: "#f0ad4e", color: "#000", padding: 8, textAlign: "center" },
-  splash: { flex: 1, alignItems: "center", justifyContent: "center" },
-});
