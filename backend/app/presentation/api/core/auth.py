@@ -287,8 +287,21 @@ async def get_audit(ctx: TenantContext = Depends(require_admin), limit: int = 50
 
 
 @router.get("/tenants")
-async def list_tenants(_ctx: TenantContext = Depends(require_admin)):
-    """List all tenants (admin only)."""
+async def list_tenants(ctx: TenantContext = Depends(require_admin)):
+    """Lista todas as empresas (somente administradores de plataforma).
+
+    SEC-01C: o listing é GLOBAL (cruza todos os tenants) — com apenas
+    `require_admin`, qualquer admin de qualquer empresa enumerava todas as
+    demais (enumeração cross-tenant). A autorização usa o contexto da sessão
+    (token validado + membership vinda do banco); o tenant informado pelo
+    cliente nunca decide privilégio.
+
+    Risco residual documentado (heurística SEC-01B): ADMIN não-bootstrap do
+    tenant `default` também atende `is_platform_admin`. Mitigação futura:
+    flag `is_platform` explícita (migration própria, fora do SEC-01C).
+    """
+    if not is_platform_admin(ctx):
+        raise HTTPException(status_code=403, detail="Tenant management requires platform administrator")
     auth = get_auth_service()
     tenants = auth.get_tenants()
     return {"tenants": [{"id": t.id, "name": t.name} for t in tenants]}
@@ -296,7 +309,18 @@ async def list_tenants(_ctx: TenantContext = Depends(require_admin)):
 
 @router.post("/tenants")
 async def create_tenant(req: CreateTenantRequest, ctx: TenantContext = Depends(require_admin)):
-    """Create a new tenant (admin only)."""
+    """Cria uma nova empresa (somente administradores de plataforma).
+
+    SEC-01C: com apenas `require_admin`, qualquer admin de empresa criava
+    tenants novos — e `auth.create_tenant` o associa ADMINISTRADOR ao tenant
+    criado (membership automática), ou seja, spawn de empresas sob controle
+    alheio. Escopo de plataforma é validado no `ctx` da sessão; o
+    `req.tenant_id` serve apenas para nomear o recurso, nunca para autorizar.
+    Contrato legítimo de criação (payload, 200/400, membership do criador)
+    inalterado para quem é de plataforma.
+    """
+    if not is_platform_admin(ctx):
+        raise HTTPException(status_code=403, detail="Tenant management requires platform administrator")
     auth = get_auth_service()
     result = auth.create_tenant(req.tenant_id, req.name, ctx.user_id)
     if not result["success"]:
