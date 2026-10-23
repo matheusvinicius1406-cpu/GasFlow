@@ -147,6 +147,8 @@ services:
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
       - ALLOW_INSECURE_AUTH=false
+      # SEC-02: /metrics exige API key por padrão (fail-closed, igual backend)
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-false}
       # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
       - GASFLOW_BACKEND_URL=http://backend:8000
       - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
