@@ -7,8 +7,9 @@ Classificação usada:
   física ausente).
 - **P2** — pode ser entregue depois, sem bloquear demo nem produção mínima.
 
-Nenhum item abaixo foi corrigido nesta frente: QA/readiness documenta, não
-implementa. Arquivos de produção e de outras frentes estão congelados.
+Nenhum item abaixo foi corrigido na frente QA/readiness: aquela frente
+documenta, não implementa. A frente **MOBILE-P0** (commit seguinte) corrigiu
+os itens marcados abaixo como CORRIGIDO; o restante segue intacto.
 
 ---
 
@@ -27,7 +28,13 @@ implementa. Arquivos de produção e de outras frentes estão congelados.
   operador precisa marcar “chegou” antes.
 - **Escopo:** bloqueia **demo do app**; não bloqueia a demo no Desktop.
 - **Ação:** adicionar ação `arrive` no app (ou relaxar a regra de domínio com
-  decisão de produto) — fora desta frente.
+  decisão de produto).
+- **Status: CORRIGIDO (frente MOBILE-P0).** O app ganhou a ação **“Cheguei ao
+  destino”** (`DeliveryAction` + `arrive` em `api.ts`, `deliveryFlow.ts` como
+  espelho das regras `can_*` do backend, dedupe de toque repetido na fila).
+  Fluxo agora é `start → arrive → complete`, com `complete` habilitado só em
+  `ARRIVED`. Coberto por `test_delivery_readiness_arrive_flow.py` (backend) e
+  `mobile/tests/deliveryFlow.test.ts` (app).
 
 ### P0-2 — App aponta para `:8000`, Home Server publica só a porta 80
 
@@ -42,6 +49,13 @@ implementa. Arquivos de produção e de outras frentes estão congelados.
   (`127.0.0.1:8000`) o valor atual está correto.
 - **Ação:** orientar `http://<ip>` na demo (feito no `ROTEIRO_DEMO.md`) e, na
   próxima janela de código, ajustar placeholder/default para a porta 80.
+- **Status: CORRIGIDO (frente MOBILE-P0).** Placeholder do login passou a
+  `http://IP_DO_SERVIDOR` com hint explicando porta 80 do Home Server, `:8000`
+  só como orientação de emulador (`10.0.2.2:8000`) e HTTPS aceito
+  (`normalizeServerUrl`). O default de emulador foi mantido de propósito e a
+  URL digitada pelo operador continua persistida no Keystore — atualização do
+  app não sobrescreve (`serverConfig.ts`). Teste de readiness
+  `test_home_server_url_guidance_is_documented` agora verifica o texto novo.
 
 > **Não existe P0 para a demo no Desktop.** Login, cadastros, pedido, status,
 > rastreio público, conclusão e financeiro estão cobertos por testes.

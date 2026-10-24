@@ -78,10 +78,10 @@ URL digitada (não `/api`).
 
 | Cliente | URL usada | Esperada no Home Server | Compatível? | Ação |
 |---|---|---|---|---|
-| App — default de dev | `http://10.0.2.2:8000` | `http://<ip>` (porta 80) | **Não** | Orientar digitar `http://<ip>`; default de emulador não vale em campo |
-| App — placeholder da tela de login | `http://ip:8000` | `http://<ip>` (porta 80) | **Não** | Instrução de demo + ajuste futuro do texto (código congelado nesta frente) |
+| App — default de dev | `http://10.0.2.2:8000` (só emulador, mantido de propósito) | `http://<ip>` (porta 80) | **Não em campo** | Orientar digitar `http://<ip>`; default de emulador não vale em celular real |
+| App — placeholder da tela de login | `http://IP_DO_SERVIDOR` + hint da porta 80 (frente MOBILE-P0) | `http://<ip>` (porta 80) | **Sim** | — |
 | App — `/auth/login`, `/auth/me`, `/auth/change-password` | raiz | nginx `location /auth/` → backend sem strip (OPS-01A) | **Sim** | Validar no laboratório OPS-01B |
-| App — `/driver/*` (deliveries, me, start, complete, fail, location) | raiz | nginx `location /driver/` → backend sem strip | **Sim** | Validar no laboratório |
+| App — `/driver/*` (deliveries, me, start, arrive, complete, fail, location) | raiz | nginx `location /driver/` → backend sem strip | **Sim** | Validar no laboratório |
 | App — `/ws?token=…` | raiz | nginx `location /ws` com Upgrade (3600 s) | **Sim** | Teste com app aberto na LAN |
 | App — update OTA | `<base>/api/v1/mobile/version` | nginx `/api/v1/` **sem strip** | **Sim** | Apontar `download_url` para o host do servidor |
 | Web/console | `/api/*` | nginx `/api` com strip | **Sim** | — |
@@ -98,10 +98,10 @@ somente a porta do frontend.
 | # | Achado | Evidência | Impacto |
 |---|---|---|---|
 | C1 | App envia `client_action_id`; backend usa `idempotency_key` (`ActionRequest`) → o id do app é ignorado | `mobile/src/logic/api.ts` × `driver_api.py:147` | Replay offline não tem dedupe no servidor; retry pode receber 400/409 em vez de replay |
-| C2 | App **nunca** chama `/driver/deliveries/{id}/arrive`; backend exige `ARRIVED` para concluir | `grep arrive mobile/src` vazio; `driver_api.handle_complete_delivery` | **Entregador não conclui entrega sozinho** — precisa do operador marcar “chegou” |
+| C2 | App **nunca** chamava `/driver/deliveries/{id}/arrive`; backend exige `ARRIVED` para concluir | `grep arrive mobile/src` vazio; `driver_api.handle_complete_delivery` | **CORRIGIDO (frente MOBILE-P0):** ação “Cheguei ao destino” no app + `deliveryFlow.ts` espelhando as regras `can_*` |
 | C3 | App envia `{ reason }` para falha; backend lê `failure_reason` | `wired.tsx` `onFail` × `ActionRequest` | Motivo da falha cai em `OTHER` |
 | C4 | `DeliveryRecord.to_dict()` não envia `phone`; app espera `phone` para o botão “Ligar” | `delivery_persistence_model.py:107` × `api.ts DeliveryDTO` | Botão de ligação sem número |
-| C5 | App envia `proof_type: "NONE"`; enum do domínio não tem `NONE` | `wired.tsx` × `domain/delivery/delivery.py ProofType` | Fica gravado texto fora do enum (sem validação), relatórios podem ficar inconsistentes |
+| C5 | App enviava `proof_type: "NONE"`; enum do domínio não tem `NONE` | `wired.tsx` × `domain/delivery/delivery.py ProofType` | **CORRIGIDO (frente MOBILE-P0):** conclusão envia `MANUAL_CONFIRMATION` (valor do enum) |
 
 Cada item está classificado em `PENDENCIAS_BLOQUEANTES.md`.
 
@@ -210,8 +210,9 @@ câmera/assinatura (não implementadas) · rotação de tela/teclado · APK assi
 - **O sistema web/desktop está funcional e testado** (415 testes backend
   executados hoje, sem falhas).
 - **O app do entregador está implementado, mas nunca foi validado em aparelho**
-  e tem três lacunas funcionais relevantes: conclusão sem `arrive`, fila
-  offline volátil e GPS só em primeiro plano.
+  e ainda tem duas lacunas funcionais relevantes (fila offline volátil e GPS
+  só em primeiro plano); a conclusão de entrega sem `arrive` foi corrigida
+  pela frente MOBILE-P0.
 - **A stack Home Server está configurada, não operada**: backup/restore/migração
   são da frente OpenCode e seguem pendentes.
 - **A demo de hoje deve ser feita no Desktop**, com dados fictícios, e o

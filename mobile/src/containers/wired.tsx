@@ -39,6 +39,7 @@ import { OfflineQueue, type QueueItem, type QueueStorage } from "../logic/offlin
 import { resolveConnection, type ResolvedConnection } from "../logic/connection";
 import { getConnectionTargets, setConnectionConfig } from "../logic/config";
 import { getServerUrlStorage, normalizeServerUrl } from "../logic/serverConfig";
+import { nextStatusAfter, type DeliveryFlowAction } from "../logic/deliveryFlow";
 import { TrackingController, type TrackingDeps, type GpsPosition } from "../logic/tracking";
 import { createBackgroundTracking } from "../logic/backgroundTracking";
 
@@ -312,7 +313,11 @@ export function LoginScreenWired() {
   const doLogin = useCallback(
     async (username: string, password: string, serverUrl: string) => {
       const url = normalizeServerUrl(serverUrl);
-      if (!url) throw new Error("Informe o servidor no formato http://ip:8000.");
+      if (!url) {
+        throw new Error(
+          "Informe o servidor no formato http://IP_DO_SERVIDOR (Home Server, porta 80) ou http://10.0.2.2:8000 (emulador).",
+        );
+      }
       setConnectionConfig({ lanBaseUrl: url });
       await getServerUrlStorage().set(url);
       const targets = getConnectionTargets();
@@ -548,6 +553,9 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
   const token = useSessionStore((s) => s.accessToken);
   const { connection } = useConnectionStore();
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null);
+  // Evita toque duplicado: só uma ação em voo/na fila por vez (o backend
+  // recusaria um replay sem client_action_id com INVALID_STATE 400).
+  const [pendingAction, setPendingAction] = useState<DeliveryFlowAction | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -563,19 +571,32 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
   }, [deliveryId, token, connection.baseUrl]);
 
   const enqueueAction = useCallback(
-    (kind: "start" | "complete" | "fail", payload: Record<string, unknown> = {}) => {
+    (kind: DeliveryFlowAction, payload: Record<string, unknown> = {}) => {
+      // Deduplicação: uma mesma ação não entra duas vezes na fila (toque
+      // repetido offline criaria itens que o backend recusaria depois).
+      const alreadyQueued = deliveryQueue.storage
+        .all()
+        .some((i) => i.kind === kind && i.deliveryId === deliveryId && i.status === "pending");
+      if (alreadyQueued || pendingAction !== null) return;
+
+      setPendingAction(kind);
       // Sempre enfileira: quando online, o flush dispara imediatamente;
       // quando offline, fica pending e vai no próximo flush (C4.3).
       deliveryQueue.enqueue(kind, deliveryId, payload);
+      const optimisticStatus = (prev: DeliveryDetail) => ({ ...prev, status: nextStatusAfter(prev.status, kind) });
       if (connection.mode !== "offline") {
-        void deliveryQueue.flush(makeTransport()).then(() => {
-          setDelivery((prev) => (prev ? { ...prev, status: kind === "complete" ? "DELIVERED" : kind === "start" ? "EN_ROUTE" : prev.status } : prev));
-        });
+        void deliveryQueue
+          .flush(makeTransport())
+          .then(() => {
+            setDelivery((prev) => (prev ? optimisticStatus(prev) : prev));
+          })
+          .finally(() => setPendingAction(null));
       } else {
-        setDelivery((prev) => (prev ? { ...prev, status: kind === "complete" ? "DELIVERED" : kind === "start" ? "EN_ROUTE" : prev.status } : prev));
+        setDelivery((prev) => (prev ? optimisticStatus(prev) : prev));
+        setPendingAction(null);
       }
     },
-    [deliveryId, token, connection.baseUrl, connection.mode]
+    [deliveryId, token, connection.baseUrl, connection.mode, pendingAction]
   );
 
   if (!delivery) {
@@ -585,8 +606,10 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
   return (
     <DeliveryDetailScreen
       delivery={delivery}
+      pendingAction={pendingAction}
       onStart={() => enqueueAction("start")}
-      onComplete={() => enqueueAction("complete", { proof_type: "NONE" })}
+      onArrive={() => enqueueAction("arrive")}
+      onComplete={() => enqueueAction("complete", { proof_type: "MANUAL_CONFIRMATION" })}
       onFail={(reason) => enqueueAction("fail", { reason })}
     />
   );
