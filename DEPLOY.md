@@ -32,15 +32,29 @@ Rollback completo em `docs/phase16/BAILEYS_MIGRATION.md`.
 ## Arquitetura de produção
 
 ```
-Internet → nginx (frontend, :80)
-             ├── /            → SPA (dist estático)
-             ├── /api/*       → backend FastAPI (strip do prefixo)
-             └── /docs|health → backend (rotas raiz)
+Internet → nginx (frontend, :80)                [frontend/nginx.conf]
+             ├── /                      → SPA (try_files → index.html)
+             ├── /assets/*              → estático (cache 1y)
+             ├── /api/v1/*              → backend:8000  SEM strip  (FastAPI serve /api/v1/*)
+             ├── /api/driver/*          → backend:8000  SEM strip  (namespace legado)
+             ├── /api/*                 → backend:8000  COM strip  (/api → / p/ clients, orders, auth…)
+             ├── /auth/*  /driver/*  /ws            → backend (app do entregador)
+             ├── /health /ready /docs /openapi.json /redoc → backend
+             ├── /payments/webhook/pix  → backend (callback do PSP)
+             └── /metrics, /metrics/, /api/metrics → 404 (nunca exposto;
+                                            Prometheus fala direto na rede
+                                            interna com Bearer)
 backend (:8000, interna)
    ├── postgres:5432 (interna)     — schema gerenciado por Alembic
-   └── whatsapp:3000 (interna)     — serviço WhatsApp (proxy /whatsapp/*)
+   └── whatsapp:3000 (interna)     — serviço WhatsApp (bridge POST /whatsapp/incoming
+                                     e scrape /metrics; ambos na rede interna)
 whatsapp (:3001 host, opcional p/ pareamento QR)
+prometheus / alertmanager / grafana  (--profile observability, só rede interna)
 ```
+
+A matriz URL → destino está coberta por
+`backend/tests/test_nginx_routing.py` (confere cada location contra as rotas
+reais do FastAPI — regressões de strip/refixo quebram o teste sem Docker).
 
 - **Frontend** (`nginx:alpine`) é a única porta pública padrão (`80`).
 - **Postgres e backend** ficam na rede interna, sem porta exposta.
@@ -54,8 +68,12 @@ whatsapp (:3001 host, opcional p/ pareamento QR)
 ```bash
 # 1. Configuração
 cp .env.production.example .env.production
-#    Preencha: POSTGRES_PASSWORD, ADMIN_PASSWORD, CORS_ORIGINS, MARCOS_GAS_API_KEY
+#    Preencha: POSTGRES_PASSWORD, ADMIN_PASSWORD, CORS_ORIGINS, MARCOS_GAS_API_KEY,
+#    GRAFANA_ADMIN_PASSWORD (exigido pelo compose mesmo sem --profile observability)
+#    ALERTS_WEBHOOK_SECRET (opcional; vazio = o Alertmanager leva 503 do backend)
 #    Ajuste DATABASE_URL se o Postgres for externo.
+#    Valide antes de subir:
+docker compose -f docker-compose.prod.yml --env-file .env.production config -q
 
 # 2. Build das imagens (ou use as do GHCR — veja "Imagens GHCR")
 docker compose -f docker-compose.prod.yml --env-file .env.production build
@@ -130,6 +148,44 @@ docker compose -f docker-compose.prod.yml up -d
 Todas documentadas em `.env.production.example` (PostgreSQL, backend,
 frontend, whatsapp, IA e PIX com placeholders para fases futuras).
 
+> Só entra no container o que está em `environment:` de cada service do
+> `docker-compose.prod.yml`. As seções de IA/áudio do example (`AI_*`,
+> `STT_*`, `TTS_*`, `PIPER_*`, `OPENAI_*`) ainda não são repassadas ao
+> backend — acrescente a linha equivalente em `environment:` quando for
+> habilitar esses recursos no deploy (as demais, incluindo
+> `METRICS_PUBLIC`, `ALERTS_WEBHOOK_SECRET` e `WA_*`, já estão ligadas).
+
+## Perfil Home Server (12 GB)
+
+O `docker-compose.prod.yml` é dimensionado para um host de 12 GB:
+
+| Grupo | Services | RAM (deploy.resources.limits) |
+|---|---|---|
+| Core (`up -d` padrão) | postgres, redis, backend, frontend, whatsapp | 512 + 128 + 1024 + 256 + 2048 = **3968 MB** |
+| Observabilidade (`--profile observability`) | prometheus, alertmanager, grafana | 512 + 128 + 256 = **896 MB** |
+| Total | core + observabilidade | **4864 MB** (~7 GB de folra p/ SO e Docker) |
+
+- **O `up -d` padrão sobe só o core.** Prometheus/Alertmanager/Grafana entram
+  com `--profile observability` (recomendado subir depois do core estar
+  healthy). A interpolação `${GRAFANA_ADMIN_PASSWORD:?...}` é avaliada para o
+  arquivo inteiro — por isso a senha é obrigatória mesmo sem o profile.
+- Sem o profile não há scrape, mas a postura de métricas não muda:
+  `/metrics` exige `Bearer == MARCOS_GAS_API_KEY` (401 sem a chave) e o nginx
+  responde 404 em `/metrics` (nada de métrica pela borda).
+- Saúde: `docker compose ps` (todos `healthy`) → `./scripts/smoke-test.sh` →
+  `GET /health` (liveness) e `GET /ready` (database/redis/whatsapp).
+- Disco: volumes `driver: local` para `postgres_data`, `whatsapp_data`,
+  `whatsapp_auth`, `baileys_auth`, `whatsapp_uploads`, `whatsapp_export` e
+  `backups_data` (mais `prometheus_data`/`grafana_data` com o profile).
+  Backups do Postgres continuam sendo `pg_dump` agendado no host sobre o
+  volume `postgres_data`.
+- IA local: `AI_PROVIDER=ollama` aponta para `host.docker.internal:11434` e o
+  modelo carregado consome RAM **fora** dos limites do compose — se o host for
+  apertado, use `AI_PROVIDER=mock` ou limite a memória do Ollama.
+- Evidências de config (rodam no CI, sem Docker): `backend/tests/test_prod_stack_config.py`
+  (invariantes O1/O2, perfis, limits e volumes) e
+  `backend/tests/test_nginx_routing.py` (matriz de roteamento).
+
 ## Troubleshooting
 
 | Sintoma | Causa provável | Ação |
@@ -182,6 +238,9 @@ publicou não re-entrega a si mesmo (sem duplicatas).
   do banco (HMAC-SHA256 do corpo com `PSP_WEBHOOK_SECRET` no header
   `X-Pix-Signature`), encontra o payment por txid e o confirma automaticamente
   (`confirmed_by=psp-webhook`). Sem secret configurado o endpoint responde 503.
+  Na borda, o nginx encaminha esse caminho raiz (`location /payments/webhook/pix`);
+  `/api/payments/webhook/pix` (strip) e `/api/v1/payments/webhook/pix` chegam ao
+  mesmo handler — sem esse location o callback do banco receberia o HTML da SPA.
 - Provedor: `PSP_PROVIDER=mock` (default, sem rede) | `gerencianet` |
   `pagseguro` | `mercadopago` (exigem `PSP_API_URL` + `PSP_API_KEY`; sem
   credenciais as chamadas falham com erro explícito — nunca tentam rede
@@ -207,9 +266,15 @@ publicou não re-entrega a si mesmo (sem duplicatas).
 ### Pré-deploy
 - [ ] `git checkout main && git pull`
 - [ ] `git tag` — conferir versão atual (ex.: `v1.0.0-rc.1`)
-- [ ] `docker compose -f docker-compose.prod.yml config -q` (valida sintaxe/env)
+- [ ] `docker compose -f docker-compose.prod.yml --env-file .env.production config -q`
+      (valida sintaxe/env — sem `--env-file` ele lê o shell e falha em
+      `${VAR:?...}`)
 - [ ] Variáveis definidas (`.env.production`): `POSTGRES_PASSWORD`,
-      `ADMIN_PASSWORD`, `CORS_ORIGINS`, `MARCOS_GAS_API_KEY` (se IA real)
+      `ADMIN_PASSWORD`, `CORS_ORIGINS`, `MARCOS_GAS_API_KEY`, e
+      `GRAFANA_ADMIN_PASSWORD` (exigido pelo compose mesmo sem
+      `--profile observability`); `METRICS_PUBLIC=false` (default) e
+      `ALERTS_WEBHOOK_SECRET` (recomendado) conforme
+      `.env.production.example`
 - [ ] Imagens: `docker compose -f docker-compose.prod.yml pull` (GHCR) ou
       `build` local
 
@@ -218,7 +283,9 @@ publicou não re-entrega a si mesmo (sem duplicatas).
 - [ ] Healthchecks: `docker compose ps` (postgres, redis, backend, frontend,
       whatsapp em `healthy`)
 - [ ] Migrations: `docker compose logs backend` — `alembic upgrade head` sem erro
-- [ ] Smoke: `./scripts/smoke-test.sh http://localhost` (5/5)
+- [ ] Smoke: `./scripts/smoke-test.sh http://localhost` (9/9 — SPA, `/health`,
+      `/ready`, `/api/v1` sem strip, `/auth/me` 401, `/driver/me` 401,
+      `/metrics` 404, whatsapp 401, login + `/dashboard`)
 
 ### Pós-deploy
 - [ ] `GET /api/ready` → `database`, `redis` e `whatsapp` ok

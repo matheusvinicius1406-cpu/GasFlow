@@ -43,8 +43,10 @@ COPY . .
 # obrigatório na imagem; sem isso `node dist/server.js` falharia)
 RUN npm run build
 
-# Cria diretórios de dados (sessão Baileys + SQLite)
-RUN mkdir -p data baileys_auth wwebjs_auth
+# Cria diretórios de dados (sessão Baileys + SQLite + anexos de mídia +
+# relatórios do dedupe). Todos são montados como volume no compose — o mkdir
+# garante que a inicialização do volume herd dono/grupo corretos.
+RUN mkdir -p data baileys_auth wwebjs_auth uploads export
 
 # Produção sem npm e sem devDeps.
 #
