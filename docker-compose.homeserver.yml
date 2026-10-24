@@ -1,0 +1,171 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow — Perfil HOME SERVER (OPS-01B)
+#
+# Overlay do `docker-compose.prod.yml` para o servidor doméstico:
+#   Intel i3-10110U (2C/4T) · 12 GB RAM · HDD ~1 TB · Windows 11
+#   + GasFlow Desktop rodando na MESMA máquina (127.0.0.1:8000, SQLite).
+#
+# O overlay NÃO cria serviços, NÃO renomeia volumes e NÃO publica portas
+# novas (a única porta segue sendo a do frontend, herdada do prod):
+#   - aperta RAM/CPU para o host de 12 GB (core ~2,6 GB, ver orçamento);
+#   - liga rotação de logs (json-file 10 MB × 3) em todos os serviços;
+#   - adiciona os healthchecks que faltavam (frontend, alertmanager, grafana);
+#   - aplica `no-new-privileges` e `stop_grace_period` (HDD lento escreve muito);
+#   - mantém a observabilidade atrás do profile `observability` (opcional);
+#   - não adiciona IA local: Ollama nunca é dependência deste perfil.
+#
+# Montagem (sempre prod + homeserver, nesta ordem):
+#   docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
+#     --env-file .env.production config -q
+#
+# Laboratório isolado (portas/volumes/containers separados):
+#   docker-compose.homeserver.lab.yml + deploy/home-server/README.md
+#
+# Orçamento de memória (deploy.resources.limits, MB):
+#   core — postgres 640 + redis 128 + backend 768 + frontend 128 + whatsapp 1024 = 2688
+#   obs  — prometheus 384 + alertmanager 96 + grafana 192                        =  672
+#   total                                                                        = 3360
+# Com o Windows 11 (~4 GB de base) sobram ~4,4 GB de folga em 12 GB.
+# ═══════════════════════════════════════════════════════════════
+
+# Blocos reutilizados (top-level `x-` é ignorado pelo Compose).
+x-homeserver-logging: &homeserver-logging
+  driver: json-file
+  options:
+    # HDD de 1 TB + containers barulhentos: sem teto, o json-file default
+    # cresce até encher o disco. 30 MB por serviço é o teto do perfil.
+    max-size: "10m"
+    max-file: "3"
+
+x-homeserver-security: &homeserver-security
+  # Impede escalada de privilégio via setuid dentro do container. Vale para
+  # todos (nenhum serviço da stack precisa de ganho de privilégio em runtime).
+  - no-new-privileges:true
+
+services:
+
+  postgres:
+    # /dev/shm default (64 MB) força sort/hash join a usar disco; 128 MB
+    # custa pouco dentro do limite de 640 MB e evita I/O extra no HDD.
+    shm_size: "128mb"
+    # Checkpoint de shutdown no HDD 5400 rpm é lento — sem isso o SIGKILL
+    # chega no meio do flush.
+    stop_grace_period: 60s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    healthcheck:
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+          cpus: "1.0"
+
+  redis:
+    # Continua sem volume: contadores de rate limit são efêmeros por desenho.
+    stop_grace_period: 10s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    healthcheck:
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+
+  backend:
+    # 1 worker no servidor doméstico (2C/4T): ver BACKEND_WORKERS em
+    # .env.production. Dois workers + pub/sub Redis cabem na RAM, mas
+    # competem com o GasFlow Desktop que roda na mesma máquina.
+    stop_grace_period: 30s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.5"
+
+  frontend:
+    stop_grace_period: 10s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    # Healthcheck do nginx: `/` é o index estático (não passa pelo backend),
+    # então o frontend não fica "unhealthy" quando a API está reiniciando.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+
+  whatsapp:
+    # Baileys (WebSocket puro) vive com 200–400 MB; 1 GB cobre o rollback
+    # para wwebjs (Chromium) sem os 2 GB do prod genérico.
+    # Sem `depends_on: backend`: o gateway sobe sozinho, responde /api/health
+    # e o bridge de mensagens reenvia — amarrar ao backend só atrasaria o
+    # pareamento em até 2 min (start_period da migration).
+    stop_grace_period: 45s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+
+  # ── Observabilidade opcional (--profile observability) ──────────
+  # Continua fora do `up -d` padrão: no Home Server ela é o primeiro
+  # candidato a ficar de fora quando a RAM aperta.
+
+  prometheus:
+    stop_grace_period: 15s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    healthcheck:
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+
+  alertmanager:
+    stop_grace_period: 15s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    # Sem healthcheck no prod; aqui o Alertmanager precisa aparecer como
+    # saudável (ou não) no `docker compose ps` do servidor doméstico.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+          cpus: "0.25"
+
+  grafana:
+    stop_grace_period: 15s
+    logging: *homeserver-logging
+    security_opt: *homeserver-security
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: "0.5"
