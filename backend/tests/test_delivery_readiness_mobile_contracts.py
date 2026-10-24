@@ -11,7 +11,8 @@ Coberto:
 
 - toda URL montada em `mobile/src/logic/api.ts` existe no OpenAPI com o método
   certo (e a lista de namespaces usados pelo app está congelada — um hardcode
-  novo quebra o teste);
+  novo quebra o teste), incluindo o `/arrive` adicionado pela frente MOBILE-P0
+  para destravar a conclusão de entrega;
 - `/driver/*` e `/auth/*` respondem 401 sem token e `/driver/me` recusa
   operador/admin com 403 (matriz sobre todas as rotas do app);
 - WebSocket `/ws` recusa token inválido (4001) — canal do realtime do app;
@@ -20,8 +21,9 @@ Coberto:
 - `/public/tracking/{token}` devolve somente posição (sem PII), por construção;
 - nenhum IP privado hardcoded no app além dos defaults de dev
   (`10.0.2.2`, `127.0.0.1`);
-- as lacunas de contrato conhecidas (idempotência, `arrive`, telefone,
-  `failure_reason`) seguem documentadas em `docs/delivery/`.
+- as lacunas de contrato conhecidas (idempotência, telefone,
+  `failure_reason`) seguem documentadas em `docs/delivery/`; o `/arrive` foi
+  CORRIGIDO (frente MOBILE-P0) e o teste agora exige que o app o chame.
 
 Fora de escopo (não executado aqui): Android físico, GPS real, Docker/Nginx
 reais, câmera/assinatura, WhatsApp real.
@@ -60,6 +62,7 @@ EXPECTED_MOBILE_CALLS = {
     ("GET", "/driver/me"),
     ("POST", "/driver/deliveries/{}/accept"),
     ("POST", "/driver/deliveries/{}/start"),
+    ("POST", "/driver/deliveries/{}/arrive"),
     ("POST", "/driver/deliveries/{}/complete"),
     ("POST", "/driver/deliveries/{}/fail"),
     ("POST", "/driver/location"),
@@ -72,6 +75,7 @@ MINIMAL_BODY = {
     "/driver/location": {"latitude": 0.0, "longitude": 0.0},
     "/driver/deliveries/{}/accept": {},
     "/driver/deliveries/{}/start": {},
+    "/driver/deliveries/{}/arrive": {},
     "/driver/deliveries/{}/complete": {},
     "/driver/deliveries/{}/fail": {"failure_reason": "OTHER"},
 }
@@ -221,9 +225,12 @@ def test_home_server_url_guidance_is_documented() -> None:
     status = _read(STATUS_DOC)
     assert "http://<ip>" in demo and "sem `:8000`" in demo, "demo precisa ensinar a URL do Home Server (porta 80)"
     assert "8000" in status, "status precisa registrar a incompatibilidade de :8000 com o Home Server"
-    assert "http://ip:8000" in _read(LOGIN_SCREEN), (
-        "placeholder do app mudou: revisar a orientação de URL e o relatório de entrega"
-    )
+    # Frente MOBILE-P0: placeholder e hint do app apontam para a porta 80 do
+    # Home Server; `:8000` só aparece como orientação de emulador.
+    login = _read(LOGIN_SCREEN)
+    assert "http://IP_DO_SERVIDOR" in login, "placeholder do login deve orientar a URL do Home Server (porta 80)"
+    assert "http://ip:8000" not in login, "placeholder :8000 induz o operador a publicar o backend direto"
+    assert "10.0.2.2:8000" in login, "orientação de emulador (10.0.2.2) deve seguir documentada no app"
 
 
 # ── Lacunas de contrato conhecidas (documentadas, não corrigidas) ──
@@ -237,7 +244,10 @@ def test_known_mobile_contract_gaps_are_documented() -> None:
     # Fatos do código que sustentam a documentação (se mudarem, revisar o doc).
     assert "client_action_id" not in ActionRequest.model_fields
     assert "idempotency_key" in ActionRequest.model_fields
-    assert "arrive" not in _read(API_TS), "app passou a chamar /arrive: atualizar demo e pendências"
+    # Frente MOBILE-P0: o /arrive agora existe no app (P0-1 corrigido).
+    api_ts = _read(API_TS)
+    assert "arrive" in api_ts, "app voltou a não chamar /arrive: conclusão de entrega quebra de novo"
+    assert "/driver/deliveries/${deliveryId}/arrive" in api_ts
     assert "phone" not in re.findall(
         r'"(\w+)":',
         re.search(r"def to_dict.*?return \{(.*?)\n        \}", _read(DELIVERY_MODEL), re.S).group(1),

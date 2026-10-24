@@ -15,7 +15,12 @@ export interface ConnectionConfig {
 }
 
 export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
-  // Host machine a partir do emulador Android (10.0.2.2 = loopback do host)
+  // Default EXCLUSIVO de emulador Android (10.0.2.2 = loopback do host,
+  // :8000 = backend direto). Em servidor real o operador digita a URL do
+  // Home Server na tela de login (http://IP_DO_SERVIDOR, porta 80 — o nginx
+  // expõe /auth/*, /driver/* e /ws; o backend :8000 NÃO é publicado).
+  // Essa URL fica persistida no Keystore (serverConfig.ts) e não é
+  // sobrescrita por atualização do app.
   lanBaseUrl: "http://10.0.2.2:8000",
   cloudBaseUrl: "",
   relayToken: "",
