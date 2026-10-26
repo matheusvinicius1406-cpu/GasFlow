@@ -44,6 +44,7 @@ def diagnose(source: Path, *, with_hash: bool) -> dict:
         "size_bytes": None,
         "mtime_utc": None,
         "header_ok": False,
+        "header_write_version": None,
         "open_mode": None,
         "journal_mode": None,
         "page_size": None,
@@ -69,6 +70,8 @@ def diagnose(source: Path, *, with_hash: bool) -> dict:
     info["size_bytes"] = stat.st_size
     info["mtime_utc"] = c.iso_from_mtime(stat.st_mtime)
     info["header_ok"] = c.has_sqlite_magic(source)
+    if info["header_ok"]:
+        info["header_write_version"] = c.journal_write_version(source)
     for suffix in ("-wal", "-shm"):
         sidecar = Path(str(source) + suffix)
         info["sidecars"][suffix.lstrip("-")] = (
@@ -80,7 +83,15 @@ def diagnose(source: Path, *, with_hash: bool) -> dict:
         info["status"] = "invalid_header"
         return info
 
-    conn, mode = c.open_readonly(source)
+    try:
+        conn, mode = c.open_readonly(source)
+    except c.ReadOnlyOpenError as exc:
+        # Abertura estritamente read-only falhou: erro explícito, sem fallback
+        # de escrita e sem criar sidecars na origem.
+        info["open_mode"] = "denied"
+        info["read_only_error"] = str(exc)
+        info["status"] = "read_only_error"
+        return info
     try:
         info["open_mode"] = mode
         info["journal_mode"] = c.pragma_str(conn, "journal_mode")
@@ -108,6 +119,9 @@ def diagnose(source: Path, *, with_hash: bool) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    refusal = c.guard_report_path(args.report)
+    if refusal:
+        return c.die(c.EXIT_SAFETY, refusal)
     source = Path(args.source).expanduser()
     if source.exists():
         source = source.resolve()
@@ -127,6 +141,12 @@ def main(argv: list[str] | None = None) -> int:
         return c.EXIT_OK
     if status == "missing":
         return c.die(c.EXIT_SAFETY, f"origem inexistente: {source}")
+    if status == "read_only_error":
+        return c.die(
+            c.EXIT_SAFETY,
+            f"abertura somente-leitura da origem recusada: "
+            f"{report['source'].get('read_only_error')}",
+        )
     if status in {"invalid_header", "not_a_file"}:
         return c.die(c.EXIT_FAIL, f"origem não é SQLite válido ({status})")
     return c.die(

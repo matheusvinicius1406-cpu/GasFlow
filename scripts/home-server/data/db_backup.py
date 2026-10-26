@@ -58,7 +58,10 @@ def preflight_source(source: Path) -> tuple[sqlite3.Connection, str] | int:
         return c.die(c.EXIT_SAFETY, f"origem inexistente: {source}")
     if not c.has_sqlite_magic(source):
         return c.die(c.EXIT_FAIL, f"origem sem header SQLite: {source}")
-    conn, mode = c.open_readonly(source)
+    try:
+        conn, mode = c.open_readonly(source)
+    except c.ReadOnlyOpenError as exc:
+        return c.die(c.EXIT_SAFETY, str(exc))
     problems = c.integrity_problems(conn)
     if problems:
         conn.close()
@@ -168,9 +171,24 @@ def build_manifest(
     }
 
 
-def _finish(report: dict, args: argparse.Namespace, *, overwrite: bool = False) -> None:
+def _report_refusal(args: argparse.Namespace, targets: dict) -> str | None:
+    """Proíbe sobrescrever relatório existente ou colidir com artefatos do backup."""
+    refusal = c.guard_report_path(args.report)
+    if refusal:
+        return refusal
     if args.report:
-        c.write_json(args.report, report, overwrite=overwrite)
+        report_path = Path(args.report).expanduser().resolve()
+        if report_path in (
+            targets["backup"].resolve(),
+            targets["manifest"].resolve(),
+        ):
+            return f"--report coincide com artefato do backup: {report_path}"
+    return None
+
+
+def _finish(report: dict, args: argparse.Namespace) -> None:
+    if args.report:
+        c.write_json(args.report, report)
     c.emit(report)
 
 
@@ -219,6 +237,11 @@ def run(args: argparse.Namespace) -> int:
         conn.close()
         return c.die(c.EXIT_SAFETY, str(exc))
 
+    report_refusal = _report_refusal(args, targets)
+    if report_refusal:
+        conn.close()
+        return c.die(c.EXIT_SAFETY, report_refusal)
+
     before = snapshot(conn, source, with_hash=True)
     report = {
         "tool": c.TOOL,
@@ -254,7 +277,7 @@ def run(args: argparse.Namespace) -> int:
         _cleanup(targets["manifest"])
         report["status"] = "failed"
         report["error"] = str(exc)
-        _finish(report, args, overwrite=True)
+        _finish(report, args)
         return c.die(c.EXIT_FAIL, str(exc))
 
     conn.close()

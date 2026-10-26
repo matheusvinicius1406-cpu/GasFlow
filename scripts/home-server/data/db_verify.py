@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -47,14 +46,24 @@ def default_manifest(backup: Path) -> Path:
 
 
 def verify_file(backup: Path) -> dict:
-    result = {"header_ok": False, "integrity_check": [], "sha256": None, "counts": {}}
+    result = {
+        "header_ok": False,
+        "integrity_check": [],
+        "sha256": None,
+        "counts": {},
+    }
     if not backup.exists() or not backup.is_file():
         return result
     result["header_ok"] = c.has_sqlite_magic(backup)
     if not result["header_ok"]:
         return result
     result["sha256"] = c.sha256_file(backup)
-    conn = sqlite3.connect(f"file:{backup.resolve().as_posix()}?mode=ro", uri=True)
+    try:
+        conn, _mode = c.open_readonly(backup)
+    except c.ReadOnlyOpenError as exc:
+        # Abertura estritamente read-only falhou: sem fallback de escrita.
+        result["open_error"] = str(exc)
+        return result
     try:
         result["integrity_check"] = c.integrity_problems(conn)
         result["counts"] = c.row_counts(conn)
@@ -64,18 +73,26 @@ def verify_file(backup: Path) -> dict:
 
 
 def compare_source(backup: Path, source: Path) -> dict:
-    src_conn, _mode = c.open_readonly(source)
+    mismatch = {
+        "counts_match": False,
+        "schema_match": False,
+        "count_differences": [],
+    }
     try:
-        src_counts = c.row_counts(src_conn)
-        src_schema = c.schema_snapshot(src_conn)
-    finally:
-        src_conn.close()
-    bk_conn = sqlite3.connect(f"file:{backup.resolve().as_posix()}?mode=ro", uri=True)
-    try:
-        bk_counts = c.row_counts(bk_conn)
-        bk_schema = c.schema_snapshot(bk_conn)
-    finally:
-        bk_conn.close()
+        src_conn, _mode = c.open_readonly(source)
+        try:
+            src_counts = c.row_counts(src_conn)
+            src_schema = c.schema_snapshot(src_conn)
+        finally:
+            src_conn.close()
+        bk_conn, _mode2 = c.open_readonly(backup)
+        try:
+            bk_counts = c.row_counts(bk_conn)
+            bk_schema = c.schema_snapshot(bk_conn)
+        finally:
+            bk_conn.close()
+    except c.ReadOnlyOpenError as exc:
+        return {**mismatch, "open_error": str(exc)}
     return {
         "counts_match": bk_counts == src_counts,
         "schema_match": bk_schema == src_schema,
@@ -126,7 +143,11 @@ def _load_manifest(manifest_path: Path, report: dict) -> dict:
     return manifest
 
 
-def _record_file_checks(file_check: dict, report: dict) -> None:
+def _record_file_checks(file_check: dict, report: dict) -> str | None:
+    """Registra checks do arquivo; devolve motivo quando a abertura foi negada."""
+    if file_check.get("open_error"):
+        report["failures"].append("abertura_somente_leitura")
+        return file_check["open_error"]
     checks = report["checks"]
     checks["header_ok"] = file_check["header_ok"]
     checks["integrity_check"] = file_check["integrity_check"]
@@ -134,6 +155,7 @@ def _record_file_checks(file_check: dict, report: dict) -> None:
         report["failures"].append("header_invalido")
     if file_check["integrity_check"]:
         report["failures"].append("integridade")
+    return None
 
 
 def _record_manifest_match(manifest: dict, file_check: dict, report: dict) -> None:
@@ -157,8 +179,11 @@ def _record_source_compare(args, backup: Path, report: dict) -> int | None:
     source = Path(args.source).expanduser().resolve()
     if not source.exists():
         return c.die(c.EXIT_SAFETY, f"origem inexistente: {source}")
-    report["checks"]["source_comparison"] = compare_source(backup, source)
-    cmp_result = report["checks"]["source_comparison"]
+    cmp_result = compare_source(backup, source)
+    report["checks"]["source_comparison"] = cmp_result
+    if cmp_result.get("open_error"):
+        report["failures"].append("abertura_somente_leitura")
+        return c.die(c.EXIT_SAFETY, cmp_result["open_error"])
     if not (cmp_result["counts_match"] and cmp_result["schema_match"]):
         report["failures"].append("divergente_da_origem_atual")
     return None
@@ -173,6 +198,9 @@ def _record_drill(args, backup: Path, expected_counts: dict, report: dict) -> No
 
 
 def run(args: argparse.Namespace) -> int:
+    report_refusal = c.guard_report_path(args.report)
+    if report_refusal:
+        return c.die(c.EXIT_SAFETY, report_refusal)
     backup = Path(args.backup).expanduser()
     if not backup.exists():
         return c.die(c.EXIT_SAFETY, f"backup inexistente: {backup}")
@@ -196,7 +224,12 @@ def run(args: argparse.Namespace) -> int:
 
     manifest = _load_manifest(manifest_path, report)
     file_check = verify_file(backup)
-    _record_file_checks(file_check, report)
+    open_error = _record_file_checks(file_check, report)
+    if open_error:
+        report["status"] = "failed"
+        report["error"] = open_error
+        c.emit(report)
+        return c.die(c.EXIT_SAFETY, open_error)
     _record_manifest_match(manifest, file_check, report)
 
     expected_counts = manifest.get("tables") or {}
@@ -207,7 +240,7 @@ def run(args: argparse.Namespace) -> int:
 
     report["status"] = "ok" if not report["failures"] else "failed"
     if args.report:
-        c.write_json(args.report, report, overwrite=True)
+        c.write_json(args.report, report)
     c.emit(report)
     if report["failures"]:
         return c.die(c.EXIT_FAIL, f"falhas: {', '.join(report['failures'])}")
