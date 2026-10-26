@@ -1,8 +1,10 @@
 """Utilitários comuns dos scripts de dados do Home Server (OPS-01D).
 
 Invariante central de todo script deste pacote: a origem nunca é modificada.
-Conexões de leitura usam a URI ``mode=ro``; todo artefato de saída é criado
-em caminho explícito, com nome único, e recusa sobrescrever arquivo existente.
+Conexões de leitura são ESTRITAMENTE ``mode=ro`` (sem fallback de escrita e
+sem criar sidecars na origem — ver ``open_readonly``); todo artefato de saída
+é criado em caminho explícito, com nome único, e recusa sobrescrever arquivo
+existente (inclusive relatórios — ver ``guard_report_path``).
 
 Nada aqui lê conteúdo de linhas (sem PII em relatórios): relatórios contêm
 apenas caminhos, contagens, nomes de tabela/coluna, chaves primárias e motivos.
@@ -28,6 +30,14 @@ TOOL_VERSION = "1.0.0"
 
 SQLITE_MAGIC = b"SQLite format 3\x00"
 _CHUNK = 1 << 20
+
+
+class ReadOnlyOpenError(RuntimeError):
+    """Origem não pôde ser aberta estritamente somente-leitura.
+
+    Levantada em vez de cair para uma conexão com capacidade de escrita.
+    Nenhum arquivo da origem é criado, modificado ou teve permissão alterada.
+    """
 
 
 def utc_now() -> str:
@@ -60,22 +70,82 @@ def has_sqlite_magic(path: str | Path) -> bool:
         return False
 
 
-def open_readonly(path: str | Path) -> tuple[sqlite3.Connection, str]:
-    """Abre a origem somente-leitura; registra o modo efetivamente usado.
+def journal_write_version(path: str | Path) -> int | None:
+    """Byte 18 do header SQLite sem abrir o banco: 1=rollback, 2=WAL."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(18)
+            byte = fh.read(1)
+    except OSError:
+        return None
+    return byte[0] if byte else None
 
-    Modo ``ro`` é o padrão. O fallback (leitura normal) existe porque um
-    SQLite em WAL com ``-shm`` ausente recusa conexão ro — o fallback não
-    altera o conteúdo, apenas pode criar sidecar de WAL.
+
+def _sidecar_state(base: Path) -> dict[str, tuple[int, int] | None]:
+    """(tamanho, mtime_ns) dos sidecars -wal/-shm — para detectar mudanças."""
+    state: dict[str, tuple[int, int] | None] = {}
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(base) + suffix)
+        try:
+            st = sidecar.stat()
+            state[suffix] = (st.st_size, st.st_mtime_ns)
+        except OSError:
+            state[suffix] = None
+    return state
+
+
+def open_readonly(path: str | Path) -> tuple[sqlite3.Connection, str]:
+    """Abre a origem ESTRITAMENTE somente-leitura (nunca com capacidade de escrita).
+
+    Política por tipo de journal (byte 18 do header, lido sem abrir o banco):
+
+    * rollback (1): ``mode=ro``;
+    * WAL (2) com ``-shm`` presente: ``mode=ro`` (leitura não altera sidecars);
+    * WAL (2) sem ``-shm`` e sem ``-wal`` (fecho limpo): ``mode=ro&immutable=1``
+      — o ``mode=ro`` puro faria o SQLite criar ``-shm``/``-wal`` na origem;
+    * WAL (2) sem ``-shm`` com ``-wal`` pendente: ``ReadOnlyOpenError`` — a
+      recuperação de transações pendentes exigiria escrita na origem.
+
+    Se a abertura falhar, ou se qualquer sidecar aparecer/mudar durante ela,
+    ``ReadOnlyOpenError`` é levantado: sem fallback silencioso, sem alteração
+    de permissões, sem criar ou modificar banco/sidecars na origem.
     """
     resolved = Path(path).resolve()
-    uri = f"file:{resolved.as_posix()}?mode=ro"
+    if not resolved.is_file():
+        raise ReadOnlyOpenError(f"arquivo inexistente: {resolved}")
+    params = "mode=ro"
+    if journal_write_version(resolved) == 2:
+        has_shm = Path(str(resolved) + "-shm").exists()
+        wal_path = Path(str(resolved) + "-wal")
+        if not has_shm:
+            if wal_path.exists() and wal_path.stat().st_size > 0:
+                raise ReadOnlyOpenError(
+                    "WAL com transações pendentes e sem -shm: recuperação "
+                    f"exigiria escrita na origem ({resolved.name})"
+                )
+            params = "mode=ro&immutable=1"
+    before = _sidecar_state(resolved)
+    uri = f"file:{resolved.as_posix()}?{params}"
+    conn: sqlite3.Connection | None = None
     try:
         conn = sqlite3.connect(uri, uri=True)
         conn.execute("SELECT 1").fetchone()
-        return conn, "ro"
-    except sqlite3.Error:
-        conn = sqlite3.connect(str(resolved))
-        return conn, "rw-fallback"
+    except sqlite3.Error as exc:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        raise ReadOnlyOpenError(
+            f"abertura somente-leitura recusada: {resolved.name} ({exc})"
+        ) from exc
+    if before != _sidecar_state(resolved):
+        conn.close()
+        raise ReadOnlyOpenError(
+            "sidecars da origem mudaram durante a abertura "
+            f"({resolved.name}) — escritor externo ativo?"
+        )
+    return conn, ("ro-immutable" if "immutable=1" in params else "ro")
 
 
 def table_names(conn: sqlite3.Connection) -> list[str]:
@@ -137,6 +207,13 @@ def scalar_setting(conn: sqlite3.Connection, table: str, column: str) -> Any:
     except sqlite3.Error:
         return None
     return None if row is None else row[0]
+
+
+def guard_report_path(path: str | Path | None) -> str | None:
+    """Relatório existente é preservado: sobrescrita de ``--report`` proibida."""
+    if path and Path(path).exists():
+        return f"relatório existente (sobrescrita proibida): {path}"
+    return None
 
 
 def write_json(path: str | Path, data: Any, *, overwrite: bool = False) -> None:
