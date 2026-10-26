@@ -16,7 +16,9 @@ após as guardas de segurança:
 Validações (no dry-run e no execute): cast de tipos, NOT NULL, PK/unicidades,
 tenant nulo (política ``block`` por padrão), chaves de negócio
 (``mapping.LOGICAL_FKS``), FKs declaradas no modelo, ordenação de dependência
-e — pós-carga — contagens e ``PRAGMA foreign_key_check``.
+e — pós-carga — contagens, somas financeiras e ``PRAGMA foreign_key_check``.
+Reexecução sobre alvo com marcador válido = reconciliação somente-leitura
+(idempotente; nunca reescreve). Relatório nunca sobrescreve arquivo existente.
 
 Códigos: 0 ok | 1 falha | 2 segurança | 3 migração parcial (bloqueios).
 """
@@ -29,7 +31,7 @@ import sqlite3
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -37,15 +39,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import common as c  # noqa: E402
 import mapping as m  # noqa: E402
+from sqlalchemy import create_engine, event, text  # noqa: E402
 
 REPORT_ISSUE_CAP = 500
+MARKER_TABLE = "_ops01d_run"
 MARKER_DDL = (
-    "CREATE TABLE IF NOT EXISTS _ops01d_run ("
+    f"CREATE TABLE IF NOT EXISTS {MARKER_TABLE} ("
     "id INTEGER PRIMARY KEY, tool_version TEXT NOT NULL, "
     "source_fingerprint TEXT NOT NULL, source_kind TEXT NOT NULL, "
     "started_at TEXT NOT NULL, finished_at TEXT NOT NULL, "
     "counters TEXT NOT NULL)"
 )
+FINANCIAL_COLUMNS: dict[str, tuple[str, ...]] = {
+    "orders": ("subtotal", "delivery_fee", "discount", "total"),
+    "order_items": ("unit_price", "subtotal"),
+    "payments": ("amount",),
+    "receivables": ("original_amount", "paid_amount"),
+    "financial_ledger": ("amount",),
+}
+_CENT = Decimal("0.01")
 
 
 @dataclass
@@ -181,7 +193,7 @@ def _plan_for_table(name: str, source_cols: dict, metadata, target_tables) -> Ta
     if name not in target_tables:
         return TablePlan(name, "block", "tabela_legada_sem_equivalente")
     target = metadata.tables[name]
-    unknown = tuple(sorted(set(source_cols) - set(target.columns)))
+    unknown = tuple(sorted(set(source_cols) - set(target.columns.keys())))
     if unknown:
         return TablePlan(name, "block", "coluna_sem_equivalente", (), (), unknown)
     insert_cols = tuple(col.name for col in target.columns if col.name in source_cols)
@@ -580,3 +592,496 @@ def _tenant_distribution(validation: Validation) -> dict[str, int]:
             key = str(row.get("tenant_id"))
             distribution[key] = distribution.get(key, 0) + 1
     return distribution
+
+
+@dataclass
+class Prepared:
+    source: Path
+    target: Path
+    kind: str
+    validation: Validation
+    metadata: Any
+    report: dict
+
+
+def _kind_gate(kind: str, allow_unknown: bool) -> str | None:
+    if kind == "whatsapp-service":
+        return "banco do serviço WhatsApp: fora do escopo da migração"
+    if kind == "unknown" and not allow_unknown:
+        return (
+            "assinatura da origem não reconhecida "
+            "(use --allow-unknown-source se for seguro)"
+        )
+    return None
+
+
+def _prepare(args: argparse.Namespace) -> Prepared | int:
+    target_str = str(args.target)
+    if target_str.startswith(("postgresql://", "postgres://")):
+        return c.die(
+            c.EXIT_SAFETY,
+            "alvo postgresql:// recusado nesta fase "
+            "(ver docs/data-migration/README.md)",
+        )
+    source = Path(args.source).expanduser()
+    if not source.exists() or not source.is_file():
+        return c.die(c.EXIT_SAFETY, f"origem inexistente ou não é arquivo: {source}")
+    source = source.resolve()
+    if not c.has_sqlite_magic(source):
+        return c.die(c.EXIT_FAIL, f"origem não é SQLite: {source.name}")
+    target = Path(args.target).expanduser().resolve()
+    try:
+        conn, _mode = c.open_readonly(source)
+    except c.ReadOnlyOpenError as exc:
+        return c.die(c.EXIT_SAFETY, str(exc))
+    try:
+        kind = detect_source_kind(conn)
+        gate = _kind_gate(kind, args.allow_unknown_source)
+        if gate:
+            return c.die(c.EXIT_SAFETY, gate)
+        source_schema = c.schema_snapshot(conn)
+        source_rows = load_source_rows(conn)
+    finally:
+        conn.close()
+    try:
+        metadata = _import_models()
+    except Exception as exc:  # noqa: BLE001 — diagnóstico sem traceback de ambiente
+        return c.die(c.EXIT_FAIL, f"schema atual indisponível: {type(exc).__name__}")
+    validation = validate_source(source_schema, source_rows, metadata, args)
+    report = _base_report(args, source, target, kind, validation, metadata)
+    return Prepared(source, target, kind, validation, metadata, report)
+
+
+def _base_report(
+    args: argparse.Namespace,
+    source: Path,
+    target: Path,
+    kind: str,
+    validation: Validation,
+    metadata: Any,
+) -> dict:
+    return {
+        "tool": c.TOOL,
+        "tool_version": c.TOOL_VERSION,
+        "command": "rehearsal",
+        "generated_at": c.utc_now(),
+        "mode": "execute" if args.execute else "dry-run",
+        "source": {
+            "path": str(source),
+            "kind": kind,
+            "size_bytes": source.stat().st_size,
+            "fingerprint": source_fingerprint(source),
+            "target_schema_tables": len(metadata.tables),
+        },
+        "target": {"path": str(target), "exists": target.exists()},
+        "policy": {
+            "null_tenant": args.null_tenant,
+            "strict": bool(args.strict),
+            "allow_unknown_source": bool(args.allow_unknown_source),
+        },
+        "summary": _summary(validation),
+        "plans": _plan_dicts(validation.plans),
+        "issues": _issue_dicts(validation.issues),
+        "issues_total": len(validation.issues),
+        "tenants": validation.tenants,
+        "order": validation.order,
+        "target_only": validation.target_only,
+        "status": "pending",
+    }
+
+
+def _summary(validation: Validation) -> dict:
+    tables = {"migrate": 0, "skip": 0, "block": 0}
+    blocked: list[str] = []
+    for plan in validation.plans:
+        tables[plan.action] += 1
+        if plan.action == "block":
+            blocked.append(plan.table)
+    rows_planned = {
+        name: len(rows) for name, rows in validation.accepted.items() if rows
+    }
+    return {
+        "tables": tables,
+        "rows_planned": rows_planned,
+        "rows_total": sum(rows_planned.values()),
+        "issues": len(validation.issues),
+        "blocked_tables": blocked,
+        "has_blocks": _has_blocks(validation),
+    }
+
+
+def _plan_dicts(plans: list[TablePlan]) -> list[dict]:
+    return [
+        {
+            "table": plan.table,
+            "action": plan.action,
+            "reason": plan.reason,
+            "missing_target": list(plan.missing_target),
+            "unknown_source": list(plan.unknown_source),
+        }
+        for plan in plans
+    ]
+
+
+def _issue_dicts(issues: list[RowIssue]) -> list[dict]:
+    return [
+        {
+            "table": issue.table,
+            "pk": issue.pk,
+            "column": issue.column,
+            "rule": issue.rule,
+        }
+        for issue in issues[:REPORT_ISSUE_CAP]
+    ]
+
+
+def _has_blocks(validation: Validation) -> bool:
+    if any(plan.action == "block" for plan in validation.plans):
+        return True
+    return bool(validation.issues)
+
+
+def plan_target_mode(
+    source: Path, target: Path, fingerprint: str
+) -> tuple[str, str | None, dict | None]:
+    """('fresh'|'reconcile'|'blocked', motivo|None, marcador|None) — nunca grava."""
+    if target.name == source.name:
+        return ("blocked", "nome do alvo coincide com o nome da origem", None)
+    if not target.exists():
+        return ("fresh", None, None)
+    info = _marker_info(target)
+    if isinstance(info, str):
+        return ("blocked", info, None)
+    if info["fingerprint"] != fingerprint:
+        return ("blocked", "alvo criado para OUTRA origem — reexecução bloqueada", None)
+    return ("reconcile", None, info)
+
+
+def _marker_info(target: Path) -> dict | str:
+    """Lê o marcador do alvo (somente-leitura). Retorna dict ou motivo de bloqueio."""
+    try:
+        conn, _mode = c.open_readonly(target)
+    except Exception as exc:  # noqa: BLE001 — qualquer falha de leitura bloqueia
+        return f"alvo ilegível: {type(exc).__name__}"
+    try:
+        if MARKER_TABLE not in set(c.table_names(conn)):
+            return "alvo existente sem marcador _ops01d_run (sobrescrita proibida)"
+        row = conn.execute(
+            f'SELECT source_fingerprint, counters FROM "{MARKER_TABLE}"'
+            " ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return "marcador _ops01d_run vazio — execução anterior incompleta"
+    try:
+        counters = json.loads(row[1])
+    except ValueError:
+        return "marcador _ops01d_run corrompido"
+    return {"fingerprint": row[0], "counters": counters}
+
+
+def _rows(conn: Any, sql: str) -> list[tuple]:
+    """Consulta simples sobre conexão sqlite3 (leitura) ou SQLAlchemy (txn)."""
+    if isinstance(conn, sqlite3.Connection):
+        return conn.execute(sql).fetchall()
+    return conn.execute(text(sql)).fetchall()
+
+
+def _expected_counts(validation: Validation, metadata: Any) -> dict[str, int]:
+    """Contagens esperadas no alvo por tabela do schema atual (só migração)."""
+    counts: dict[str, int] = {}
+    for name in sorted(set(metadata.tables) - {MARKER_TABLE}):
+        counts[name] = len(validation.accepted.get(name) or [])
+    return counts
+
+
+def _count_mismatches(conn: Any, validation: Validation, metadata: Any) -> list[dict]:
+    mismatches = []
+    for name, expected in _expected_counts(validation, metadata).items():
+        actual = _rows(conn, f'SELECT COUNT(*) FROM "{name}"')[0][0]
+        if actual != expected:
+            mismatches.append({"table": name, "expected": expected, "actual": actual})
+    return mismatches
+
+
+def _quantized(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0.00")
+    return Decimal(str(value)).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _expected_financial_value(row: dict, col: str, target: Any) -> Decimal | None:
+    """Valor esperado de coluna financeira (espelha o DEFAULT aplicado no INSERT)."""
+    if col in row:
+        value = row[col]
+    else:
+        default = target.columns[col].default
+        value = default.arg if default is not None and default.is_scalar else None
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
+def _financial_diffs(conn: Any, validation: Validation, metadata: Any) -> list[dict]:
+    """Soma por coluna financeira no destino vs linhas aceitas (NULL = ignora)."""
+    diffs = []
+    for table, cols in FINANCIAL_COLUMNS.items():
+        rows = validation.accepted.get(table) or []
+        if not rows:
+            continue
+        target = metadata.tables[table]
+        exprs = ", ".join(f'SUM("{col}")' for col in cols)
+        actual_row = _rows(conn, f'SELECT {exprs} FROM "{table}"')[0]
+        for col, raw in zip(cols, actual_row):
+            expected = _quantized(
+                sum(
+                    (
+                        Decimal(str(v))
+                        for r in rows
+                        if (v := _expected_financial_value(r, col, target)) is not None
+                    ),
+                    Decimal("0.00"),
+                )
+            )
+            if _quantized(raw) != expected:
+                diffs.append(
+                    {
+                        "table": table,
+                        "column": col,
+                        "expected": str(expected),
+                        "actual": str(_quantized(raw)),
+                    }
+                )
+    return diffs
+
+
+def _target_engine(target: Path):
+    engine = create_engine(f"sqlite:///{target.as_posix()}")
+
+    @event.listens_for(engine, "connect")
+    def _enable_fks(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.close()
+
+    return engine
+
+
+def _load_rows(conn: Any, validation: Validation, metadata: Any) -> None:
+    for table_name in validation.order:
+        rows = validation.accepted.get(table_name) or []
+        if not rows:
+            continue
+        conn.execute(metadata.tables[table_name].insert(), rows)
+
+
+def _write_marker(
+    conn: Any,
+    fingerprint: str,
+    kind: str,
+    started_at: str,
+    counts: dict[str, int],
+) -> None:
+    conn.execute(text(MARKER_DDL))
+    conn.execute(
+        text(
+            f"INSERT INTO {MARKER_TABLE} (tool_version, source_fingerprint,"
+            " source_kind, started_at, finished_at, counters) VALUES"
+            " (:tool_version, :source_fingerprint, :source_kind,"
+            " :started_at, :finished_at, :counters)"
+        ),
+        {
+            "tool_version": c.TOOL_VERSION,
+            "source_fingerprint": fingerprint,
+            "source_kind": kind,
+            "started_at": started_at,
+            "finished_at": c.utc_now(),
+            "counters": json.dumps(counts, sort_keys=True),
+        },
+    )
+
+
+def _remove_target(target: Path) -> None:
+    """Remove SOMENTE o arquivo de alvo criado nesta execução (nunca a origem)."""
+    for suffix in ("", "-wal", "-shm"):
+        Path(str(target) + suffix).unlink(missing_ok=True)
+
+
+def _safe_error(exc: BaseException) -> str:
+    message = " ".join(str(exc).split())
+    return f"{type(exc).__name__}: {message[:300]}"
+
+
+def _finish(report: dict, args: argparse.Namespace) -> None:
+    if args.report:
+        c.write_json(args.report, report)
+    c.emit(report)
+
+
+def _fail(
+    report: dict,
+    args: argparse.Namespace,
+    code: int,
+    message: str,
+    *,
+    status: str = "failed",
+) -> int:
+    report["status"] = status
+    report["error"] = message
+    _finish(report, args)
+    return c.die(code, message)
+
+
+def _dry_run(prepared: Prepared, args: argparse.Namespace) -> int:
+    blocks = _has_blocks(prepared.validation)
+    prepared.report["status"] = "dry-run-partial" if blocks else "dry-run"
+    _finish(prepared.report, args)
+    c.note("dry-run: nenhum arquivo gravado")
+    return c.EXIT_PARTIAL if blocks else c.EXIT_OK
+
+
+def _strict_blocked(prepared: Prepared, args: argparse.Namespace) -> int:
+    prepared.report["status"] = "strict-blocked"
+    _finish(prepared.report, args)
+    c.note("--strict: bloqueios impedem a gravação (fail-closed)")
+    return c.EXIT_PARTIAL
+
+
+def _reconcile_path(prepared: Prepared, args: argparse.Namespace, marker: dict) -> int:
+    report = prepared.report
+    try:
+        conn, _mode = c.open_readonly(prepared.target)
+    except Exception as exc:  # noqa: BLE001 — falha de leitura = bloqueio
+        return _fail(
+            report,
+            args,
+            c.EXIT_SAFETY,
+            f"alvo ilegível na reconciliação: {type(exc).__name__}",
+            status="blocked",
+        )
+    try:
+        mismatches = _count_mismatches(conn, prepared.validation, prepared.metadata)
+        diffs = _financial_diffs(conn, prepared.validation, prepared.metadata)
+    finally:
+        conn.close()
+    drifted = marker.get("counters") != _expected_counts(
+        prepared.validation, prepared.metadata
+    )
+    if mismatches or diffs or drifted:
+        report["reconcile"] = {
+            "count_mismatches": mismatches,
+            "financial_diffs": diffs,
+            "marker_drift": drifted,
+        }
+        return _fail(
+            report,
+            args,
+            c.EXIT_SAFETY,
+            "reconciliação reprovada — o alvo diverge do ensaio original",
+            status="reconcile-mismatch",
+        )
+    report["reconcile"] = {
+        "status": "ok",
+        "count_mismatches": [],
+        "financial_diffs": [],
+        "marker_drift": False,
+    }
+    blocks = _has_blocks(prepared.validation)
+    report["status"] = "reconciled-partial" if blocks else "reconciled"
+    _finish(report, args)
+    c.note("reconciliação confirmada: alvo consistente com o ensaio original")
+    return c.EXIT_PARTIAL if blocks else c.EXIT_OK
+
+
+def _execute_migration(prepared: Prepared, args: argparse.Namespace) -> int:
+    report = prepared.report
+    target = prepared.target
+    report["target"]["created"] = False
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return _fail(
+            report,
+            args,
+            c.EXIT_FAIL,
+            f"diretório do alvo indisponível: {_safe_error(exc)}",
+        )
+    engine = _target_engine(target)
+    try:
+        prepared.metadata.create_all(bind=engine)
+        with engine.begin() as conn:
+            _load_rows(conn, prepared.validation, prepared.metadata)
+            violations = _rows(conn, "PRAGMA foreign_key_check")
+            if violations:
+                raise RuntimeError(
+                    f"foreign_key_check: {len(violations)} violação(ões)"
+                )
+            mismatches = _count_mismatches(conn, prepared.validation, prepared.metadata)
+            if mismatches:
+                raise RuntimeError(f"contagens divergentes: {mismatches[:3]}")
+            diffs = _financial_diffs(conn, prepared.validation, prepared.metadata)
+            if diffs:
+                raise RuntimeError(f"financeiro divergente: {diffs[:3]}")
+            _write_marker(
+                conn,
+                report["source"]["fingerprint"],
+                prepared.kind,
+                c.utc_now(),
+                _expected_counts(prepared.validation, prepared.metadata),
+            )
+    except Exception as exc:  # noqa: BLE001 — falha -> rollback + remoção do alvo
+        engine.dispose()
+        _remove_target(target)
+        return _fail(
+            report,
+            args,
+            c.EXIT_FAIL,
+            f"ensaio falhou (alvo removido): {_safe_error(exc)}",
+        )
+    engine.dispose()
+    report["target"]["created"] = True
+    blocks = _has_blocks(prepared.validation)
+    report["status"] = "migrated-partial" if blocks else "migrated"
+    report["verification"] = {
+        "foreign_key_check": "ok",
+        "count_mismatches": 0,
+        "financial_diffs": 0,
+        "marker": "escrito",
+    }
+    _finish(report, args)
+    c.note(f"ensaio concluído: {target}")
+    return c.EXIT_PARTIAL if blocks else c.EXIT_OK
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    refusal = c.guard_report_path(args.report)
+    if refusal:
+        return c.die(c.EXIT_SAFETY, refusal)
+    prepared = _prepare(args)
+    if isinstance(prepared, int):
+        return prepared
+    mode, block_reason, marker = plan_target_mode(
+        prepared.source, prepared.target, prepared.report["source"]["fingerprint"]
+    )
+    if mode == "blocked":
+        return _fail(
+            prepared.report,
+            args,
+            c.EXIT_SAFETY,
+            block_reason or "alvo bloqueado",
+            status="blocked",
+        )
+    prepared.report["target"]["plan"] = mode
+    if mode == "reconcile" and marker is not None:
+        return _reconcile_path(prepared, args, marker)
+    if args.execute and args.strict and _has_blocks(prepared.validation):
+        return _strict_blocked(prepared, args)
+    if not args.execute:
+        return _dry_run(prepared, args)
+    return _execute_migration(prepared, args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
