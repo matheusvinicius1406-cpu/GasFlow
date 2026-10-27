@@ -26,6 +26,16 @@ repos:
         exclude: *artefato_de_build
       - id: check-json
       - id: check-yaml
+        # `docker-compose.homeserver.lab.yml` usa a tag `!override` do Compose
+        # (>= 2.24.4) para substituir a lista `ports` herdada do prod. O modo
+        # safe do check-yaml rejeita tags customizadas, então esse arquivo é
+        # checado com `--unsafe`: valida a SINTAXE do YAML sem construir os
+        # objetos (é exatamente o caso de uso documentado do flag). Os demais
+        # YAMLs do repo continuam no modo safe, sem exceção.
+        exclude: &yaml_com_tag_compose ^docker-compose\.homeserver\.lab\.yml$
+      - id: check-yaml
+        args: [--unsafe]
+        files: *yaml_com_tag_compose
       - id: check-added-large-files
 
   - repo: https://github.com/astral-sh/ruff-pre-commit

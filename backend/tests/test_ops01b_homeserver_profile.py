@@ -75,6 +75,8 @@ def _compose_config(files: tuple[Path, ...], env_file: Path, profiles: tuple[str
     if not docker:
         pytest.skip("docker CLI indisponível no host")
     command = [docker, "compose"]
+    if LAB in files:
+        command += ["-p", LAB_PROJECT]
     for file in files:
         command += ["-f", str(file)]
     for profile in profiles:
@@ -410,7 +412,11 @@ def test_lab_env_is_fictional_and_sized_for_two_cores() -> None:
     assert "gasflow_lab" in env["DATABASE_URL"]
     assert env["BACKEND_WORKERS"] == "1", "i3-10110U (2C/4T) → 1 worker"
     assert str(LAB_FRONTEND_PORT) in env["CORS_ORIGINS"]
-    assert env["FRONTEND_PORT"] == f"127.0.0.1:{LAB_FRONTEND_PORT}", "única porta: loopback no env do lab"
+    assert "FRONTEND_PORT" not in env, "a porta do laboratório é fixa no overlay, não configurável pelo env"
+    frontend_ports = _published_ports(_lab()["services"]["frontend"])
+    assert len(frontend_ports) == 1
+    assert frontend_ports[0].get("host_ip") == "127.0.0.1"
+    assert int(str(frontend_ports[0].get("published"))) == LAB_FRONTEND_PORT
     assert env["METRICS_PUBLIC"] == "false"
     assert env["ENVIRONMENT"] == "production", "laboratório valida a semântica de produção"
 

@@ -10,10 +10,11 @@ configuração + procedimento de validação em laboratório**.
 | Arquivo | Papel |
 |---|---|
 | `docker-compose.homeserver.yml` | Overlay do `docker-compose.prod.yml` com limites de RAM/CPU, rotação de logs, healthchecks e hardening do perfil Home Server |
-| `docker-compose.homeserver.lab.yml` | Terceiro arquivo do laboratório: projeto `gasflow-hs-lab`, containers `-lab`, `restart: "no"` (a porta vem de `FRONTEND_PORT=127.0.0.1:8088` no env do lab) |
+| `docker-compose.homeserver.lab.yml` | Terceiro arquivo do laboratório: use `-p gasflow-hs-lab`, containers `-lab`, `restart: "no"`; `ports: !override` fixa `127.0.0.1:8088`, e o backend fixa o DSN em `gasflow_lab`, independentemente de variáveis herdadas |
 | `deploy/home-server/.env.lab.example` | Template de variáveis **fictícias** do laboratório (copiar para `.env.lab`, fora do git) |
 | `deploy/home-server/verify-static.sh` | Verificação estática (compose config, portas, orçamento de RAM, rotação de logs) — não sobe nada |
 | `backend/tests/test_ops01b_homeserver_profile.py` | Testes das invariantes deste perfil (sem Docker daemon) |
+| `backend/tests/test_ops01c_lab_pre_homologation.py` | Gate estático da fase 0 do LAB-01 (ignora overrides de porta/DSN/projeto, falha segura, PG/Redis isolados, alembic no container) |
 
 O `docker-compose.prod.yml` **não foi alterado**: o perfil é aditivo, para que o
 compose de produção continue válido para hosts maiores e para o CI.
@@ -27,7 +28,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   --env-file .env.production config -q
 
 # Laboratório isolado
-docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
+docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   -f docker-compose.homeserver.lab.yml \
   --env-file deploy/home-server/.env.lab config -q
 ```
@@ -90,7 +91,7 @@ e não são dependência de nada. O overlay não os adiciona; o laboratório usa
 | Ambiente | Portas publicadas | Bind |
 |---|---|---|
 | Perfil real (prod + homeserver) | `FRONTEND_PORT` (default 80) | todas as interfaces (LAN/túnel) |
-| Laboratório (prod + homeserver + lab) | `8088` | **somente `127.0.0.1`** |
+| Laboratório (`-p gasflow-hs-lab`, prod + homeserver + lab) | `8088` | **somente `127.0.0.1` (fixo no overlay)** |
 
 - Postgres, Redis, backend, WhatsApp, Prometheus, Alertmanager e Grafana
   **não publicam porta nenhuma** — falam entre si pela rede `internal`.
@@ -141,7 +142,7 @@ Nomes **idênticos aos do prod** (`<projeto>_<volume>`), sem renomear nada:
 
 | Item | Ambiente real | Laboratório |
 |---|---|---|
-| Projeto Compose | `<dir>` (ex.: `gasflow`) | `gasflow-hs-lab` |
+| Projeto Compose | `<dir>` (ex.: `gasflow`) | `gasflow-hs-lab` (fixado também por `-p`) |
 | Containers | `gasflow-*` | `gasflow-hs-lab-*` |
 | Volumes | `<projeto>_postgres_data` … | `gasflow-hs-lab_postgres_data` … |
 | Rede | `<projeto>_internal` | `gasflow-hs-lab_internal` |
@@ -163,8 +164,9 @@ desktop (`%APPDATA%\gasflow-desktop`), sessões WhatsApp reais, portas `:80` /
 
 Pré-requisitos:
 
-- Docker Desktop + WSL2 inicializados; `docker compose version` ≥ 2.20
-  (top-level `name:` para o projeto do laboratório).
+- Docker Desktop + WSL2 inicializados; `docker compose version` ≥ 2.24.4
+  (a tag `!override` fixa a porta do lab em `127.0.0.1:8088`; abaixo disso
+  o compose recusa `docker-compose.homeserver.lab.yml`).
 - ~20 GB livres (3 imagens buildadas localmente ficam ~2,5 GB) e 8 GB livres
   de RAM no pico do build.
 - `cp deploy/home-server/.env.lab.example deploy/home-server/.env.lab`
@@ -178,17 +180,17 @@ Passos:
 ./deploy/home-server/verify-static.sh
 
 # 2. Conferir o que seria criado
-docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
+docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   -f docker-compose.homeserver.lab.yml --env-file deploy/home-server/.env.lab \
   config --images
 
 # 3. Subir SÓ o core (obs fica de fora)
-docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
+docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   -f docker-compose.homeserver.lab.yml --env-file deploy/home-server/.env.lab \
   up -d --build
 
 # 4. Saúde (todos healthy; frontend/alertmanager/grafana agora têm healthcheck)
-docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
+docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   -f docker-compose.homeserver.lab.yml --env-file deploy/home-server/.env.lab ps
 
 # 5. Smoke HTTP pela borda do laboratório
@@ -198,11 +200,11 @@ docker compose -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
 docker stats --no-stream
 
 # 7. Observabilidade opcional (depois do core healthy)
-docker compose ... --profile observability up -d
+docker compose -p gasflow-hs-lab ... --profile observability up -d
 
 # 8. Desmontar
-docker compose ... down          # preserva volumes do lab
-docker compose ... down -v       # APAGA só volumes gasflow-hs-lab_*
+docker compose -p gasflow-hs-lab ... down          # preserva volumes do lab
+docker compose -p gasflow-hs-lab ... down -v       # APAGA só volumes gasflow-hs-lab_*
 ```
 
 > **WhatsApp no laboratório**: o gateway **não** conecta conta sozinho no

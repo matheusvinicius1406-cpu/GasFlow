@@ -3,6 +3,7 @@
 #
 # Terceiro arquivo da pilha: prod → homeserver → lab.
 #   docker compose \
+#     -p gasflow-hs-lab \
 #     -f docker-compose.prod.yml \
 #     -f docker-compose.homeserver.yml \
 #     -f docker-compose.homeserver.lab.yml \
@@ -31,6 +32,9 @@ services:
 
   postgres:
     container_name: gasflow-hs-lab-postgres
+    environment:
+      POSTGRES_DB: gasflow_lab
+      POSTGRES_USER: gasflow_lab
     restart: "no"
 
   redis:
@@ -39,16 +43,19 @@ services:
 
   backend:
     container_name: gasflow-hs-lab-backend
+    environment:
+      # Fixar o destino impede DATABASE_URL herdada do processo Compose de
+      # apontar o backend do laboratório para um banco externo ou SQLite.
+      DATABASE_URL: postgresql+psycopg2://gasflow_lab:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/gasflow_lab
     restart: "no"
 
   frontend:
     container_name: gasflow-hs-lab-frontend
-    # A porta NÃO é declarada aqui de propósito: o compose de prod já publica
-    # `"${FRONTEND_PORT:-80}:80"` e listas de `ports` são somadas no merge
-    # (declarar outra criaria DUAS publicações, inclusive a :80). O laboratório
-    # usa `FRONTEND_PORT=127.0.0.1:8088` no `deploy/home-server/.env.lab`, que
-    # resulta em loopback + porta alta: zero conflito com o nginx/host em :80,
-    # com o backend do GasFlow Desktop em 127.0.0.1:8000 e com outra stack.
+    # O compose de prod publica "${FRONTEND_PORT:-80}:80" e listas de ports
+    # são somadas no merge. !override substitui a lista inteira (Compose
+    # >= 2.24.4); o bind literal não pode ser aberto por FRONTEND_PORT herdada.
+    ports: !override
+      - "127.0.0.1:8088:80"
     restart: "no"
 
   whatsapp:

@@ -34,8 +34,8 @@ PY=$(command -v python || command -v python3 || true)
 # 1. Os dois modos precisam resolver (com e sem o profile de observabilidade).
 docker compose -f "$PROD" -f "$HS" --env-file "$ENV_PROD" config -q
 docker compose -f "$PROD" -f "$HS" --profile observability --env-file "$ENV_PROD" config -q
-docker compose -f "$PROD" -f "$HS" -f "$LAB" --env-file "$ENV_LAB" config -q
-docker compose -f "$PROD" -f "$HS" -f "$LAB" --profile observability --env-file "$ENV_LAB" config -q
+docker compose -p gasflow-hs-lab -f "$PROD" -f "$HS" -f "$LAB" --env-file "$ENV_LAB" config -q
+docker compose -p gasflow-hs-lab -f "$PROD" -f "$HS" -f "$LAB" --profile observability --env-file "$ENV_LAB" config -q
 echo "PASS compose config -q (perfil real e laboratório, com e sem observabilidade)"
 
 CHECKS=$(cat <<'PY'
@@ -125,6 +125,11 @@ if MODE == "real":
 if MODE == "lab":
     if doc.get("name") != "gasflow-hs-lab":
         fail(f"projeto do laboratório deveria ser gasflow-hs-lab (veio {doc.get('name')})")
+    db_url = str((services.get("backend", {}).get("environment") or {}).get("DATABASE_URL", ""))
+    if not db_url.startswith("postgresql") or "@postgres:5432/gasflow_lab" not in db_url:
+        fail("backend do laboratório deve apontar para postgres:5432/gasflow_lab")
+    if "sqlite" in db_url.lower() or "outside.invalid" in db_url:
+        fail("backend do laboratório não pode apontar para SQLite ou outro host")
     for name, svc in services.items():
         cname = svc.get("container_name") or ""
         if not cname.startswith("gasflow-hs-lab-"):
@@ -156,7 +161,7 @@ docker compose -f "$PROD" -f "$HS" --profile observability --env-file "$ENV_PROD
   config --format json | "$PY" -c "$CHECKS" real
 
 # 3. Laboratório isolado.
-docker compose -f "$PROD" -f "$HS" -f "$LAB" --profile observability --env-file "$ENV_LAB" \
+docker compose -p gasflow-hs-lab -f "$PROD" -f "$HS" -f "$LAB" --profile observability --env-file "$ENV_LAB" \
   config --format json | "$PY" -c "$CHECKS" lab
 
 # 4. O env real do laboratório não pode estar versionado.
