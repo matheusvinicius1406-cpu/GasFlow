@@ -216,7 +216,7 @@ export async function postDeliveryAction(
   await requestJson<unknown>(fetchFn, path, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ client_action_id: clientActionId, ...payload }),
+    body: JSON.stringify({ ...payload, idempotency_key: clientActionId }),
   });
 }
 
