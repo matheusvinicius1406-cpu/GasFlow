@@ -92,3 +92,7 @@ desktop/dist/builder-debug.yml
 # Legado da raiz do workspace (fora do git por tamanho/sensibilidade;
 # recuperar o conteúdo nos commits 2026-10-14 de data/ e _legado_raiz/)
 _legado_raiz/*.zip
+
+# OPS-01B: env real do laboratório Home Server (o template .env.lab.example
+# é versionado; o .env.lab com valores locais não).
+deploy/home-server/.env.lab

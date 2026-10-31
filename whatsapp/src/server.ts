@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import { CONNECT_PAGE_HTML } from './connect-page.js';
 import { closeDb, countLists, insertList } from './db.js';
 import { providerManager } from './provider/provider-manager.js';
 import { router } from './routes.js';
@@ -8,7 +7,7 @@ import { startWorker, stopWorker } from './broadcast.js';
 import { forwardIncomingMessage, type RawIncomingMessage } from './incoming.js';
 import { logger } from './log.js';
 import { requireAuth } from './auth.js';
-import { renderMetrics, METRICS_CONTENT_TYPE } from './metrics.js';
+import { registerInfrastructureRoutes } from './infrastructure-routes.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -38,43 +37,10 @@ async function main(): Promise<void> {
   app.use(express.json({ limit: '30mb' }));
   app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
-  // ── Liveness: process is alive ──────────────────────────
-  app.get('/api/health', (_req, res) => {
-    const mem = process.memoryUsage();
-    const accounts = providerManager.getAllAccounts();
-    res.json({
-      ok: true,
-      uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
-      memory: { rssMb: Math.round(mem.rss / 1024 / 1024), heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024) },
-      whatsapp: { accounts, total: accounts.length },
-    });
-  });
-
-  // ── Readiness: provider manager initialized ─────────────
-  app.get('/api/ready', (_req, res) => {
-    const accountIds = providerManager.getAccountIds();
-    const ready = accountIds.length > 0;
-    res.status(ready ? 200 : 503).json({
-      ready,
-      accounts: accountIds,
-      total: accountIds.length,
-    });
-  });
-
-  // Backward compat
-  app.get('/connect', (_req, res) => {
-    res.type('html').send(CONNECT_PAGE_HTML);
-  });
-
-  // ── Prometheus metrics ─────────────────────────────────
-  app.get('/metrics', async (_req, res) => {
-    try {
-      res.set('Content-Type', METRICS_CONTENT_TYPE);
-      res.send(await renderMetrics());
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'metrics error' });
-    }
-  });
+  // ── Rotas de infraestrutura (health/ready/connect/metrics) ──
+  // SEC-02: extraídas para src/infrastructure-routes.ts (testabilidade e
+  // política de exposição centralizada — ver cabeçalho do módulo).
+  registerInfrastructureRoutes(app, startedAt);
 
   app.use('/api', router);
 

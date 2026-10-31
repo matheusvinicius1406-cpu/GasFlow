@@ -35,10 +35,17 @@ echo "== Smoke test — $BASE_URL =="
 check "frontend (SPA)"                "$BASE_URL/"                         200
 # Health via nginx -> backend
 check "backend /health via nginx"     "$BASE_URL/api/health"               200
-# Docs/root-level via nginx
-check "backend docs via nginx"        "$BASE_URL/docs"                     200
-# WhatsApp health via backend proxy
-check "whatsapp via backend proxy"    "$BASE_URL/api/whatsapp/health"      200
+# Readiness (database/redis/whatsapp) via nginx - rota /ready e nova no nginx
+check "backend /ready via nginx"      "$BASE_URL/ready"                    200
+# /api/v1/* e' servido COM o prefixo pelo FastAPI (nginx NAO faz strip)
+check "api v1 (sem strip)"            "$BASE_URL/api/v1/health"            200
+# Regressao M1: rotas raiz do backend (antes caiam no fallback da SPA)
+check "auth raiz (401 esperado)"      "$BASE_URL/auth/me"                  401
+check "driver raiz (401 esperado)"    "$BASE_URL/driver/me"                401
+# Regressao O2: /metrics nunca sai pela borda
+check "metrics bloqueado na borda"    "$BASE_URL/metrics"                  404
+# WhatsApp health exige Bearer (MARCOS_GAS_API_KEY) - 401 sem a chave
+check "whatsapp via backend proxy"    "$BASE_URL/api/whatsapp/health"      401
 
 # Autenticação real: login -> token -> /dashboard
 LOGIN_BODY=$(curl -s --max-time 5 -X POST "$BASE_URL/api/auth/login" \

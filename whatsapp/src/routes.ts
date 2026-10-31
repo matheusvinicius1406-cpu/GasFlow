@@ -48,6 +48,11 @@ import { logger } from './log.js';
 
 export const router = Router();
 
+// SEC-02A — fail-closed: TODA rota do router exige API key (Bearer).
+// Rotas novas herdam a proteção automaticamente; o requireAuth explícito
+// em cada rota abaixo é mantido como marcador auditável de intenção.
+router.use(requireAuth);
+
 // ═══════════════════════════════════════════════════════════
 // WhatsApp Multi-Account
 // ═══════════════════════════════════════════════════════════
@@ -458,7 +463,7 @@ router.post('/whatsapp/logout', requireAuth, async (_req: Request, res: Response
   res.json({ message: 'Logout realizado.' });
 });
 
-router.get('/whatsapp/health', async (_req: Request, res: Response) => {
+router.get('/whatsapp/health', requireAuth, async (_req: Request, res: Response) => {
   const account = providerManager.getAccount('primary');
   if (!account) {
     res.status(503).json({ healthy: false });
@@ -508,7 +513,7 @@ router.get('/contacts', requireAuth, (req: Request, res: Response) => {
   res.json({ total: countContacts(filter), limit, offset, contacts: listContacts(filter) });
 });
 
-router.get('/contacts/:id', (req: Request, res: Response) => {
+router.get('/contacts/:id', requireAuth, (req: Request, res: Response) => {
   const contact = getContactById(Number(String(req.params.id)));
   if (!contact) { res.status(404).json({ error: 'Contato não encontrado.' }); return; }
   res.json(contact);
@@ -526,7 +531,7 @@ router.get('/customers', requireAuth, (req: Request, res: Response) => {
   res.json({ total: countCustomers({ customerStatus }), limit, offset, customers: listCustomers(filter) });
 });
 
-router.get('/customers/:id', (req: Request, res: Response) => {
+router.get('/customers/:id', requireAuth, (req: Request, res: Response) => {
   const customer = getCustomerWithContact(Number(String(req.params.id)));
   if (!customer) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
   // Preferência de marketing incluída — backend (automações) consome p/ LGPD.
@@ -628,7 +633,7 @@ router.post('/lists', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-router.get('/lists/:id', (req: Request, res: Response) => {
+router.get('/lists/:id', requireAuth, (req: Request, res: Response) => {
   const list = getListById(Number(String(req.params.id)));
   if (!list) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ ...list, contactCount: countListContacts(list.id), customerCount: countListCustomers(list.id) });
@@ -653,7 +658,7 @@ router.delete('/lists/:id', requireAuth, (req: Request, res: Response) => {
   res.status(204).send();
 });
 
-router.get('/lists/:id/contacts', (req: Request, res: Response) => {
+router.get('/lists/:id/contacts', requireAuth, (req: Request, res: Response) => {
   const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ total: countListContacts(id), contacts: getListContacts(id) });
@@ -675,7 +680,7 @@ router.delete('/lists/:id/contacts/:contactId', requireAuth, (req: Request, res:
   res.status(204).send();
 });
 
-router.get('/lists/:id/customers', (req: Request, res: Response) => {
+router.get('/lists/:id/customers', requireAuth, (req: Request, res: Response) => {
   const id = Number(String(req.params.id));
   if (!getListById(id)) { res.status(404).json({ error: 'Lista não encontrada.' }); return; }
   res.json({ total: countListCustomers(id), customers: getListCustomers(id) });
@@ -734,7 +739,7 @@ router.post('/campaigns', requireAuth, (req: Request, res: Response) => {
   res.status(201).json(getCampaignById(id));
 });
 
-router.get('/campaigns/:id', (req: Request, res: Response) => {
+router.get('/campaigns/:id', requireAuth, (req: Request, res: Response) => {
   const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   res.json(campaign);
@@ -774,14 +779,14 @@ router.post('/campaigns/:id/cancel', requireAuth, (req: Request, res: Response) 
   res.json({ message: 'Campanha cancelada.', campaign: getCampaignById(campaign.id) });
 });
 
-router.get('/campaigns/:id/recipients', (req: Request, res: Response) => {
+router.get('/campaigns/:id/recipients', requireAuth, (req: Request, res: Response) => {
   const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   const recipients = getCampaignRecipients(campaign.id);
   res.json({ total: recipients.length, recipients });
 });
 
-router.get('/campaigns/:id/results', (req: Request, res: Response) => {
+router.get('/campaigns/:id/results', requireAuth, (req: Request, res: Response) => {
   const campaign = getCampaignById(Number(String(req.params.id)));
   if (!campaign) { res.status(404).json({ error: 'Campanha não encontrada.' }); return; }
   res.json({ campaign: getCampaignById(campaign.id), results: getCampaignResults(campaign.id) });
