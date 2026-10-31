@@ -171,4 +171,50 @@ if git ls-files --error-unmatch deploy/home-server/.env.lab >/dev/null 2>&1; the
 fi
 echo "PASS segredos: .env.lab fora do git; placeholders fictícios no template"
 
+if [ -f deploy/home-server/.env.lab ]; then
+  "$PY" - deploy/home-server/.env.lab <<'PY'
+import sys
+import re
+from pathlib import Path
+
+values = {}
+for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        continue
+    key, _, value = stripped.partition("=")
+    values[key.strip()] = value.strip()
+
+keys = (
+    "POSTGRES_PASSWORD",
+    "ADMIN_PASSWORD",
+    "MARCOS_GAS_API_KEY",
+    "GASFLOW_SERVICE_KEY",
+    "ALERTS_WEBHOOK_SECRET",
+    "GRAFANA_ADMIN_PASSWORD",
+)
+credentials = [values.get(key, "") for key in keys]
+for key, value in zip(keys, credentials):
+    cryptographic_hex = re.fullmatch(r"[0-9a-f]{64}", value) is not None
+    diverse_value = len(value) >= 32 and len(set(value)) >= 16
+    if not (cryptographic_hex or diverse_value) or value.startswith("CHANGE_ME_lab_"):
+        print(f"FAIL .env.lab: {key} precisa de credencial forte e exclusiva")
+        sys.exit(1)
+if values.get("GASFLOW_SERVICE_KEY") != values.get("MARCOS_GAS_API_KEY"):
+    print("FAIL .env.lab: a chave compartilhada backend/WhatsApp precisa ser igual")
+    sys.exit(1)
+independent = [
+    values[key]
+    for key in keys
+    if key not in {"MARCOS_GAS_API_KEY", "GASFLOW_SERVICE_KEY"}
+]
+if len(set(independent)) != len(independent):
+    print("FAIL .env.lab: credenciais independentes precisam ser distintas")
+    sys.exit(1)
+PY
+  echo "PASS segredos: credenciais locais fortes; chave backend/WhatsApp compartilhada corretamente"
+else
+  echo "SKIP credenciais locais: deploy/home-server/.env.lab ausente"
+fi
+
 echo "OK — perfil Home Server e laboratório válidos (nada foi iniciado)"

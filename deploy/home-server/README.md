@@ -41,7 +41,7 @@ docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.ho
 |---|---|---|
 | `postgres` | banco de produção (schema via Alembic) | ✔ |
 | `redis` | rate limit + pub/sub realtime entre workers + fila de aprovações | ✔ |
-| `backend` | FastAPI (`alembic upgrade head` no boot) | ✔ |
+| `backend` | FastAPI (recusa PostgreSQL fora do Alembic head) | ✔ |
 | `frontend` | nginx: SPA + proxy `/api`, `/auth`, `/driver`, `/ws` (única porta publicada) | ✔ |
 | `whatsapp` | gateway Baileys (rollback wwebjs) | ✔ |
 
@@ -151,7 +151,7 @@ Nomes **idênticos aos do prod** (`<projeto>_<volume>`), sem renomear nada:
 | Banco | `gasflow` (Postgres) | `gasflow_lab` (Postgres) |
 | Reinício | `unless-stopped` | `"no"` (não volta sozinho) |
 | WhatsApp | número real | número de teste; **broadcast desligado** |
-| Segredos | `.env.production` (real) | `.env.lab` (placeholders `CHANGE_ME_lab_*`) |
+| Segredos | `.env.production` (real) | `.env.lab` (credenciais fortes, aleatórias e exclusivas; o template mantém placeholders) |
 
 O laboratório **não** toca em: GasFlow Desktop, `127.0.0.1:8000`, SQLite do
 desktop (`%APPDATA%\gasflow-desktop`), sessões WhatsApp reais, portas `:80` /
@@ -169,9 +169,11 @@ Pré-requisitos:
   o compose recusa `docker-compose.homeserver.lab.yml`).
 - ~20 GB livres (3 imagens buildadas localmente ficam ~2,5 GB) e 8 GB livres
   de RAM no pico do build.
-- `cp deploy/home-server/.env.lab.example deploy/home-server/.env.lab`
-  (os placeholders `CHANGE_ME_lab_*` são aceitáveis no laboratório; se quiser,
-  troque por valores locais — nunca por segredos reais).
+- Copie `deploy/home-server/.env.lab.example` para
+  `deploy/home-server/.env.lab` somente se o arquivo local ainda não existir.
+  Antes de usar o laboratório, substitua todos os placeholders
+  `CHANGE_ME_lab_*` por credenciais fortes, aleatórias e exclusivas. O arquivo
+  `.env.lab` é ignorado pelo Git; nunca reutilize segredos de produção.
 
 Passos:
 
@@ -234,6 +236,10 @@ Critérios de aceite do laboratório:
 - **Logs**: rotação json-file em todos os serviços.
 - **Segredos**: via `secrets:`/arquivos (`/run/secrets`), nunca em `argv`,
   nunca na imagem, nunca no git. `.env.lab` fica fora do git.
+- **WhatsApp outbound**: `WA_SEND_MODE` default `dry-run`; modo inválido ou
+  ausente bloqueia texto/mídia antes do provider. O overlay de laboratório
+  fixa `dry-run`, independentemente do `.env.lab`. `live` exige alteração
+  operacional explícita e não é habilitado pela homologação.
 - **Healthchecks**: os 5 do core (frontend adicionado) e os 3 da obs
   (alertmanager e grafana adicionados), com `start_period` compatível com o
   boot lento do HDD.
@@ -248,10 +254,13 @@ Critérios de aceite do laboratório:
    `:8000`/rotas na nginx — fora do escopo desta fase (o perfil só publica a
    porta do frontend). Decidir entre publicar 8000 restrito à LAN ou ajustar
    locations.
-3. **`alembic upgrade head` no boot sem backup prévio (O4)**: o wrapper
-   `pg_dump` → `up -d` → smoke não foi criado aqui (os scripts de
-   `scripts/home-server/data/` são de outro responsável). Enquanto não
-   existir, faça snapshot manual antes de atualizar.
+3. **Migrations protegidas por backup**: `docker-compose.prod.yml` não migra
+  no boot. `scripts/home-server/data/pg_deploy_gate.py` cria dump custom,
+  valida hash e `pg_restore --list` em diretório confirmado pelo operador
+  como off-host, e só então executa Alembic. O gate exige `--execute` e
+  `--confirm-off-host`; permaneceu sem execução contra serviço real nesta
+  missão. O backend recusa iniciar se o PostgreSQL não estiver no Alembic
+  head. O laboratório descartável mantém migration explícita no overlay.
 4. **`BACKEND_WORKERS`**: o template prod mantém `2` (host maior/CI). No
    servidor doméstico use `1` (ver bloco Home Server do
    `.env.production.example`, ou o `.env.lab.example`).

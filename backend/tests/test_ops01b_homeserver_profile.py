@@ -41,6 +41,7 @@ HOMESERVER = REPO_ROOT / "docker-compose.homeserver.yml"
 LAB = REPO_ROOT / "docker-compose.homeserver.lab.yml"
 ENV_PROD = REPO_ROOT / ".env.production.example"
 ENV_LAB = REPO_ROOT / "deploy" / "home-server" / ".env.lab.example"
+ENV_LAB_REAL = REPO_ROOT / "deploy" / "home-server" / ".env.lab"
 README = REPO_ROOT / "deploy" / "home-server" / "README.md"
 VERIFY = REPO_ROOT / "deploy" / "home-server" / "verify-static.sh"
 
@@ -373,6 +374,7 @@ def test_lab_does_not_auto_restart() -> None:
 def test_lab_disables_whatsapp_broadcast_and_critical_webhook() -> None:
     """Laboratório nunca dispara campanha nem chama webhook do ambiente real."""
     whatsapp_env = _lab()["services"]["whatsapp"].get("environment") or {}
+    assert str(whatsapp_env.get("WA_SEND_MODE")).lower() == "dry-run"
     assert str(whatsapp_env.get("WA_BROADCAST_ENABLED")).lower() == "false"
     assert not whatsapp_env.get("WA_CRITICAL_WEBHOOK_URL")
     assert str(whatsapp_env.get("ALLOW_INSECURE_AUTH")).lower() == "false"
@@ -398,7 +400,7 @@ def test_lab_backend_runs_single_worker() -> None:
 # ── Template de variáveis do laboratório ────────────────────────
 
 
-def test_lab_env_is_fictional_and_sized_for_two_cores() -> None:
+def test_lab_env_template_is_fictional_and_sized_for_two_cores() -> None:
     env = _env_vars(ENV_LAB)
     for key in (
         "POSTGRES_PASSWORD",
@@ -419,6 +421,37 @@ def test_lab_env_is_fictional_and_sized_for_two_cores() -> None:
     assert int(str(frontend_ports[0].get("published"))) == LAB_FRONTEND_PORT
     assert env["METRICS_PUBLIC"] == "false"
     assert env["ENVIRONMENT"] == "production", "laboratório valida a semântica de produção"
+
+
+def test_local_lab_env_uses_strong_credentials_with_shared_service_key_when_present() -> None:
+    """O arquivo local deve usar segredos fortes; valores fictícios ficam só no template."""
+    if not ENV_LAB_REAL.exists():
+        return
+
+    env = _env_vars(ENV_LAB_REAL)
+    credential_keys = (
+        "POSTGRES_PASSWORD",
+        "ADMIN_PASSWORD",
+        "MARCOS_GAS_API_KEY",
+        "GASFLOW_SERVICE_KEY",
+        "ALERTS_WEBHOOK_SECRET",
+        "GRAFANA_ADMIN_PASSWORD",
+    )
+    credentials = [env.get(key, "") for key in credential_keys]
+    for key, credential in zip(credential_keys, credentials, strict=True):
+        cryptographic_hex = re.fullmatch(r"[0-9a-f]{64}", credential) is not None
+        diverse_value = len(credential) >= 32 and len(set(credential)) >= 16
+        assert cryptographic_hex or diverse_value, f"{key} precisa ser uma credencial forte"
+        assert not credential.startswith("CHANGE_ME_lab_"), f"{key} ainda é placeholder"
+    assert env["GASFLOW_SERVICE_KEY"] == env["MARCOS_GAS_API_KEY"], (
+        "a chave compartilhada backend/WhatsApp precisa ser igual nos dois serviços"
+    )
+    independent_credentials = [
+        env[key] for key in credential_keys if key not in {"MARCOS_GAS_API_KEY", "GASFLOW_SERVICE_KEY"}
+    ]
+    assert len(set(independent_credentials)) == len(independent_credentials), (
+        "credenciais independentes do laboratório precisam ser exclusivas"
+    )
 
 
 def test_lab_env_file_is_gitignored() -> None:

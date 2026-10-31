@@ -32,7 +32,7 @@ Resolução estática com `docker compose -p gasflow-hs-lab config --format json
 | Containers | `gasflow-hs-lab-*` (8) | `gasflow-*` / processos Desktop |
 | Volumes (runtime) | `gasflow-hs-lab_postgres_data`, `_whatsapp_auth`, `_baileys_auth`, `_whatsapp_data`, `_whatsapp_uploads`, `_whatsapp_export`, `_backups_data`, `_prometheus_data`, `_grafana_data` | volumes reais com outro prefixo |
 | Rede | `gasflow-hs-lab_internal` | rede da stack real |
-| Credenciais | `.env.lab.example` só com `CHANGE_ME_lab_*`; `.env.lab` local existente, ignorado pelo Git, também com placeholders; banco fixado em `gasflow_lab` | `C:\gf\.env` e `C:\gf\backend\.env` existem e **não são lidos por este stack** |
+| Credenciais | `.env.lab.example` mantém placeholders `CHANGE_ME_lab_*`; `.env.lab` local, ignorado pelo Git, usa segredos fortes e exclusivos do laboratório; `MARCOS_GAS_API_KEY` e `GASFLOW_SERVICE_KEY` compartilham a chave service-to-service exigida pelo app; banco fixado em `gasflow_lab` | `C:\gf\.env` e `C:\gf\backend\.env` existem e **não são lidos por este stack** |
 | Bind mounts | apenas configs de `monitoring/` (read-only) — **nenhum bind de dados/sessão** | — |
 
 Evidências adicionais: `deploy/home-server/.env.lab` já existia no início da
@@ -204,8 +204,12 @@ Em todos os gates valem as **Proibições permanentes** (§6).
 - Docker Desktop iniciado **manualmente** pelo operador (engine parada hoje).
 - `docker compose version` ≥ **2.24.4** (P1-7: a tag `!override` do overlay
   do lab exige isso; abaixo disso o `config` recusa o arquivo).
-- `cp deploy/home-server/.env.lab.example deploy/home-server/.env.lab`
-  (valores fictícios `CHANGE_ME_lab_*`, fora do git).
+- `.env.lab` presente e ignorado pelo Git; todos os segredos locais devem ser
+  fortes e exclusivos do laboratório. `MARCOS_GAS_API_KEY` e
+  `GASFLOW_SERVICE_KEY` precisam conter a mesma chave service-to-service;
+  os demais segredos devem ser independentes. O template `.env.lab.example` mantém
+  `CHANGE_ME_lab_*` apenas como valores fictícios e não deve ser usado para
+  iniciar o laboratório sem substituí-los.
 - Árvore limpa e branch correta: `git status --short && git branch --show-current`
   → `release/home-server-candidate`.
 - Nenhum container GasFlow ativo: `docker ps --format '{{.Names}}'`.
@@ -469,7 +473,8 @@ docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.ho
 python scripts/home-server/data/pg_backup.py --mock --execute --out "$TEMP/gf-lab-bk"
 
 # b. dump real do banco fictício (senha só via ambiente, nunca em argv)
-export PGPASSWORD='CHANGE_ME_lab_postgres_password'
+# Obtenha POSTGRES_PASSWORD de deploy/home-server/.env.lab por meio seguro;
+# não imprima o valor nem o coloque no histórico do shell.
 docker compose -p gasflow-hs-lab -f docker-compose.prod.yml -f docker-compose.homeserver.yml \
   -f docker-compose.homeserver.lab.yml --env-file deploy/home-server/.env.lab \
   exec postgres pg_dump -U gasflow_lab -d gasflow_lab --format custom \
@@ -582,7 +587,7 @@ Depois: `docker volume ls` não pode listar nenhum `gasflow-hs-lab_*`.
 
 | # | Entregável | Estado |
 |---|---|---|
-| 1 | **Arquivo de ambiente fictício** | template `deploy/home-server/.env.lab.example` (só `CHANGE_ME_lab_*`) versionado; `.env.lab` já existente, **gitignored**, credenciais verificadas como placeholders |
+| 1 | **Arquivo de ambiente fictício** | template `deploy/home-server/.env.lab.example` (só placeholders `CHANGE_ME_lab_*`) versionado; `.env.lab` local, **gitignored**, segredos fortes e exclusivos do laboratório, com chave backend/WhatsApp compartilhada conforme contrato |
 | 2 | **Configuração de Compose resolvida** | `docker compose … config --format json` verde para prod+hs e prod+hs+lab, com e sem `--profile observability`, com `.env.production.example` e `.env.lab.example` |
 | 3 | **Comandos revisados de inicialização** | ordem fixa prod → homeserver → lab, sempre `--env-file deploy/home-server/.env.lab`; só `up -d postgres redis` na primeira etapa (gate LAB-01) |
 | 4 | **Critérios de verificação do PostgreSQL** | ver gate LAB-01: `healthy` via `pg_isready -U gasflow_lab -d gasflow_lab`, `current_database()` = `gasflow_lab`, **sem porta 5432 publicada**, volume `gasflow-hs-lab_postgres_data`, nenhuma migration nesta etapa |
