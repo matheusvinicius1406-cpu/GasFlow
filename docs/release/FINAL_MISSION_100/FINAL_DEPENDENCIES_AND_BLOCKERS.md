@@ -1,6 +1,25 @@
 # Final Dependencies and Blockers
 
-Atualizado em 30/10/2026 após a continuação da missão.
+Atualizado em 31/10/2026 após a continuação da missão.
+
+## Atualização de 31/10/2026
+
+**Tratado:** `CVE-2026-111181` (`body-parser` 2.3.0 transitivo via `express`).
+Correção por atualização para `2.4.0` **dentro da faixa `^2.3.0`** que o `express`
+já declara — sem `overrides`, sem mudar `package.json`. PR **#80**, branch
+`fix/security-body-parser-cve`. Todos os checks verdes, **incluindo Trivy
+(passou em 3m44s)**. Validado localmente: 106 testes WhatsApp, typecheck, lint e
+build limpos.
+
+**Confirmado ainda bloqueado (físico/humano, não é código):**
+
+- **Dispositivo Android.** `adb` disponível mas **nenhum aparelho anexado**
+  (`List of devices` vazio). Instalação e teste em aparelho seguem impossíveis
+  nesta máquina. Detalhes em `docs/mobile/MOBILE_USB_LAB_01_REPORT.md`.
+- **Docker daemon parado.** Etapa de lab (backup off-host real, imagem R-1 com
+  digest) continua bloqueada até o Docker Desktop subir.
+- **Backup off-host real**, PII versionado, migração Marcos Gás, aceite
+  financeiro e de isolamento de tenant: inalterados, dependem de decisão humana.
 
 ## P0
 
