@@ -88,6 +88,10 @@ services:
       # o backend responde 503 em produção (fail-closed). O Alertmanager
       # precisa do MESMO valor para assinar — ver monitoring/alertmanager.yml.
       - ALERTS_WEBHOOK_SECRET=${ALERTS_WEBHOOK_SECRET:-}
+      # /metrics fail-closed por padrão (paridade com whatsapp). Só expõe
+      # sem auth se METRICS_PUBLIC=true — em produção deve ficar false e o
+      # Prometheus autentica via Bearer/MARCOS_GAS_API_KEY (ver secrets).
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-false}
     # Aplica migrations antes de servir — o schema em prod é do Alembic,
     # não do create_all do boot (que segue disponível p/ dev/tests).
     command: >
@@ -147,6 +151,8 @@ services:
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
       - ALLOW_INSECURE_AUTH=false
+      # SEC-02: /metrics exige API key por padrão (fail-closed, igual backend)
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-false}
       # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
       - GASFLOW_BACKEND_URL=http://backend:8000
       - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:?Set MARCOS_GAS_API_KEY}
@@ -158,6 +164,10 @@ services:
       # Motor Baileys (dual-mode; rollback: WA_ENGINE=wwebjs)
       - WA_ENGINE=${WA_ENGINE:-baileys}
       - BAILEYS_AUTH_DIR=/app/baileys_auth
+      # Anexos de mídia enviados (resolveSafeMediaPath lê de /app/uploads).
+      # Default do código é <cwd>/uploads — explícito aqui p/ casar com o
+      # volume abaixo (persistência entre restarts/recreates).
+      - WA_UPLOADS_DIR=/app/uploads
       # Higiene anti-ban (caps/warmup/cooldown/quiet hours/jitter)
       - WA_MINUTE_CAP=${WA_MINUTE_CAP:-20}
       - WA_HOURLY_CAP=${WA_HOURLY_CAP:-200}
@@ -173,6 +183,11 @@ services:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth
       - baileys_auth:/app/baileys_auth
+      - whatsapp_uploads:/app/uploads
+      # Relatórios de auditoria do dedupe (runDedupe grava
+      # export/duplicados-excluidos-<ts>.json) — sem volume o JSON morria no
+      # recreate do container.
+      - whatsapp_export:/app/export
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
       interval: 15s
@@ -188,13 +203,22 @@ services:
       - internal
 
   # ── Observabilidade (Fase 16.3) ──────────────────────
+  # Services sob profile "observability": ficam DE FORA do `up -d` padrão
+  # (Home Server 12 GB — core usa ~3.9 GB de caps; obs adiciona ~0.9 GB).
+  # Subir tudo: docker compose ... --profile observability up -d
 
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: gasflow-prometheus
+    profiles: ["observability"]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
+    # Secret com MARCOS_GAS_API_KEY montado em /run/secrets/metrics_key;
+    # prometheus.yml usa authorization.credentials_file (Bearer) nos jobs
+    # gasflow-backend e gasflow-whatsapp (ambos exigem a key, fail-closed).
+    secrets:
+      - metrics_key
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
@@ -215,6 +239,13 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: gasflow-alertmanager
+    profiles: ["observability"]
+    # Segredo do webhook (X-Alert-Secret/Bearer p/ POST /api/v1/webhooks/alerts),
+    # montado em /run/secrets/alerts_secret e lido pelo http_config do
+    # monitoring/alertmanager.yml. Mesmo valor de ALERTS_WEBHOOK_SECRET do
+    # backend — vazio = backend responde 503 (fail-closed), como antes.
+    secrets:
+      - alerts_secret
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
@@ -228,8 +259,12 @@ services:
   grafana:
     image: grafana/grafana:11.2.0
     container_name: gasflow-grafana
+    profiles: ["observability"]
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      # Interpolação vale para TODOS os services do arquivo (inclusive os de
+      # profile desativado) — o `:?` exige o valor mesmo sem --profile
+      # observability. Nunca cair em default vazio: o Grafana usaria admin/admin.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD (exigido mesmo sem --profile observability)}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -249,6 +284,16 @@ networks:
   internal:
     driver: bridge
 
+# Segredos usados via `secrets:` nos services. O valor vem do ambiente
+# (--env-file .env.production) — não vai para o versionado. No container o
+# arquivo aparece em /run/secrets/<nome> (default 0444, legível p/ qualquer
+# user do container, incl. nobody do prom/prometheus e do alertmanager).
+secrets:
+  metrics_key:
+    environment: MARCOS_GAS_API_KEY
+  alerts_secret:
+    environment: ALERTS_WEBHOOK_SECRET
+
 volumes:
   postgres_data:
     driver: local
@@ -257,6 +302,10 @@ volumes:
   whatsapp_auth:
     driver: local
   baileys_auth:
+    driver: local
+  whatsapp_uploads:
+    driver: local
+  whatsapp_export:
     driver: local
   backups_data:
     driver: local

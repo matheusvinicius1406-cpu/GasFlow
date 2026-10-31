@@ -650,10 +650,19 @@ class AuthService:
         system_role = role.system_role if role else SystemRole.OPERATOR
         # P0 3.2: permissões do DB (catálogo + matriz + overrides) com
         # fallback para o JSON/dict legado quando o DB não tem catálogo.
+        # SEC-01B: sem membership no tenant da sessão não há papel — e não há
+        # permissões. Nada compensa a ausência de membership (nem override);
+        # a fronteira fica aqui, na fronteira de autorização compartilhada,
+        # e não em uma rota. Identidades globais (SYSTEM / serviço) não passam
+        # por cá sem membership: elas nascem com membership ou autenticam por
+        # chave de serviço.
         try:
             from app.application.security.permission_policy_loader import get_policy_loader
 
-            permissions = get_policy_loader().load_for_user(user.id, membership.role_id if membership else None)
+            if membership is None:
+                permissions = set()
+            else:
+                permissions = get_policy_loader().load_for_user(user.id, membership.role_id)
         except Exception:
             logger.exception("policy.loader.unavailable — usando permissões do role JSON")
             permissions = set(role.permissions) if role else set()
@@ -734,14 +743,23 @@ class AuthService:
                 return {"success": False, "error": f"Role '{role_name}' not found"}
             import uuid
 
+            from sqlalchemy.exc import IntegrityError
+
             user_id = str(uuid.uuid4())
-            user_repo.create(
-                user_id=user_id,
-                username=username,
-                email=email,
-                display_name=display_name or username,
-                password_hash=hash_password(password),
-            )
+            try:
+                user_repo.create(
+                    user_id=user_id,
+                    username=username,
+                    email=email,
+                    display_name=display_name or username,
+                    password_hash=hash_password(password),
+                )
+            except IntegrityError as exc:
+                # SEC-01B: corrida contra outro INSERT do mesmo username viola
+                # o unique global — resposta controlada (400 na API), nunca 500.
+                if "username" in str(exc).lower():
+                    return {"success": False, "error": "Username already exists"}
+                raise
             self._get_membership_repo().create(user_id, tenant_id, role.id)
             self._audit(user_id, tenant_id, AuditAction.USER_CREATED.value, result="SUCCESS")
             return {"success": True, "user_id": user_id}
