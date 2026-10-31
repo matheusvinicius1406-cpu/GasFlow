@@ -3,10 +3,8 @@
     <!-- Background -->
     <item android:drawable="@color/splash_background" />
     <!-- Center logo placeholder — replaced by RN AnimatedSplash -->
-    <item android:gravity="center">
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher"
-            android:tileMode="disabled" />
-    </item>
+    <!-- Logo: item com drawable direto, NÃO <bitmap> (ver drawable-v24). -->
+    <item
+        android:gravity="center"
+        android:drawable="@mipmap/ic_launcher" />
 </layer-list>
