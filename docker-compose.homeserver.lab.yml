@@ -1,0 +1,73 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow — LABORATÓRIO isolado do perfil Home Server (OPS-01B)
+#
+# Terceiro arquivo da pilha: prod → homeserver → lab.
+#   docker compose \
+#     -f docker-compose.prod.yml \
+#     -f docker-compose.homeserver.yml \
+#     -f docker-compose.homeserver.lab.yml \
+#     --env-file deploy/home-server/.env.lab config
+#
+# O que este arquivo separa do ambiente real:
+#   - projeto Compose próprio (`gasflow-hs-lab`) → volumes e rede ganham o
+#     prefixo `gasflow-hs-lab_` e NUNCA tocam nos volumes de produção;
+#   - `container_name` com sufixo `-lab` → não colide com uma stack real
+#     rodando na mesma máquina;
+#   - única porta publicada é `127.0.0.1:8088` (frontend), em loopback:
+#     não disputa a :80, não disputa `127.0.0.1:8000` do GasFlow Desktop e
+#     não fica visível na LAN;
+#   - `restart: "no"` → laboratório não volta sozinho depois de um teste
+#     (nada de loop de restart consumindo CPU/HDD enquanto ninguém olha);
+#   - broadcast do WhatsApp desligado → mesmo que alguém pareie um número
+#     de teste, nenhuma campanha sai.
+#
+# Segredos: vêm de `deploy/home-server/.env.lab` (cópia do `.env.lab.example`,
+# valores fictícios, fora do git). Nunca use os segredos de produção aqui.
+# ═══════════════════════════════════════════════════════════════
+
+name: gasflow-hs-lab
+
+services:
+
+  postgres:
+    container_name: gasflow-hs-lab-postgres
+    restart: "no"
+
+  redis:
+    container_name: gasflow-hs-lab-redis
+    restart: "no"
+
+  backend:
+    container_name: gasflow-hs-lab-backend
+    restart: "no"
+
+  frontend:
+    container_name: gasflow-hs-lab-frontend
+    # A porta NÃO é declarada aqui de propósito: o compose de prod já publica
+    # `"${FRONTEND_PORT:-80}:80"` e listas de `ports` são somadas no merge
+    # (declarar outra criaria DUAS publicações, inclusive a :80). O laboratório
+    # usa `FRONTEND_PORT=127.0.0.1:8088` no `deploy/home-server/.env.lab`, que
+    # resulta em loopback + porta alta: zero conflito com o nginx/host em :80,
+    # com o backend do GasFlow Desktop em 127.0.0.1:8000 e com outra stack.
+    restart: "no"
+
+  whatsapp:
+    container_name: gasflow-hs-lab-whatsapp
+    environment:
+      # Sem disparo de campanha no laboratório (higiene + segurança).
+      - WA_BROADCAST_ENABLED=false
+      # Nada de webhook externo apontando para o ambiente real.
+      - WA_CRITICAL_WEBHOOK_URL=
+    restart: "no"
+
+  prometheus:
+    container_name: gasflow-hs-lab-prometheus
+    restart: "no"
+
+  alertmanager:
+    container_name: gasflow-hs-lab-alertmanager
+    restart: "no"
+
+  grafana:
+    container_name: gasflow-hs-lab-grafana
+    restart: "no"

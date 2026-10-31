@@ -15,7 +15,7 @@ export type QueueStatus = "pending" | "synced";
 
 export interface QueueItem {
   client_action_id: string;
-  kind: "start" | "complete" | "fail" | "location";
+  kind: "start" | "arrive" | "complete" | "fail" | "location";
   deliveryId: string;
   payload: Record<string, unknown>;
   status: QueueStatus;

@@ -69,3 +69,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 export function isAuthEnabled(): boolean {
   return !!API_KEY;
 }
+
+/**
+ * Non-terminating check: true when the request carries a valid Bearer key
+ * (or the insecure dev bypass is active). Used by routes that are publicly
+ * reachable but return richer data only to authenticated callers.
+ */
+export function hasValidApiKey(req: Request): boolean {
+  if (!API_KEY && ALLOW_INSECURE_AUTH) return true;
+  if (!API_KEY) return false;
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+  return safeEqual(authHeader.slice(7), API_KEY);
+}
