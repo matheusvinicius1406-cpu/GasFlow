@@ -1,6 +1,48 @@
 # Final Git State
 
-## Worktrees (verificados em 30/10/2026)
+## Atualização de 31/10/2026
+
+### Worktrees no estado atual (todos limpos)
+
+| Worktree | Branch | HEAD | Sujo |
+| --- | --- | --- | --- |
+| `GasFlow` | `sec-02-whatsapp-gateway` | `bc41c68` | 0 |
+| `GasFlow-freebuff` | `parallel/freebuff-mobile-p0` | `92e3d50` | 0 |
+| `GasFlow-opencode` | `parallel/opencode-data` | `d256ac6` | 0 |
+| `GasFlow-integration` | `release/home-server-candidate` | `01d6c39` | 0 |
+| `GasFlow-cve-fix` | `fix/security-body-parser-cve` | `3247952` | 0 |
+
+`GasFlow-cve-fix` é o worktree **novo** desta continuação, criado a partir de
+`origin/main` para conter a correção do CVE sem misturar com a linha de
+integração. Nenhum worktree preexistente foi removido, movido ou reposicionado.
+
+### Commits criados nesta continuação (31/10/2026)
+
+| Branch | Commit | Conteúdo |
+| --- | --- | --- |
+| `release/home-server-candidate` | `bf2d4d4` | `FINAL_PR_INTEGRATION_PLAN.md` + `MOBILE_USB_LAB_01_REPORT.md` |
+| `release/home-server-candidate` | `01d6c39` | `SECURITY_OFFLINE_PERSISTENCE_AUDIT.md` + update de blockers |
+| `fix/security-body-parser-cve` | `3247952` | `body-parser` 2.3.0 → 2.4.0 (CVE-2026-111181) |
+
+Todos `push` para `origin`. **Nenhum force-push, nenhuma reescrita, nenhum
+reset, nenhuma branch removida.**
+
+### Correção do APK histórico (o artefato sumiu)
+
+A afirmação abaixo — `app-release.apk` de 52.692.772 bytes com SHA-256
+`f2c33ba4…` — descreve um artefato que **não existe mais no disco**. Os dois
+APKs hoje presentes têm hashes diferentes:
+
+| Artefato | Tamanho | SHA-256 (prefixo) |
+| --- | --- | --- |
+| `GasFlow` (WhatsApp gateway) | 52.836.098 | `eb0cdb97…` |
+| `GasFlow-integration` | 52.695.120 | `fe21486d…` |
+
+Nenhum coincide com `f2c33ba4…`. Consequência prática: **a homologação em
+aparelho precisa de um build novo**, e o hash deve ser registrado no ato, não
+herdado do checkpoint anterior. Detalhes em `docs/mobile/MOBILE_USB_LAB_01_REPORT.md`.
+
+## Worktrees (verificados em 30/10/2026 — histórico)
 
 | Worktree | Branch | HEAD completo | Estado relevante |
 | --- | --- | --- | --- |
@@ -51,7 +93,10 @@ Alterações **desta continuação** (30/10/2026):
 Diff no worktree de integração ao final: **32 entradas** (`git status --porcelain`)
 = 24 do checkpoint + 8 desta continuação (6 arquivos modificados e 2 novos).
 
-## Artefato de build (não versionado)
+## Artefato de build (não versionado) — histórico, ver seção de atualização
+
+O APK descrito a seguir **não existe mais no disco** (hashes atuais na seção
+"Atualização de 31/10/2026"):
 
 `mobile/android/app/build/outputs/apk/release/app-release.apk`
 (52.692.772 bytes, arm64-v8a, SHA-256
