@@ -6,6 +6,47 @@
 Ambiente dos execuções: Windows, Python 3.14.6, Node 24.17.0, sem Docker daemon,
 sem `psql`/`pg_dump`, sem aparelho Android conectado.
 
+## 0. Regressão de 31/10/2026 (continuação atual)
+
+Executada no worktree `GasFlow-integration`, HEAD `01d6c39` (após a correção do
+CVE ir para `main` via PR #80; esta branch ainda não a contém — ver
+`FINAL_PR_INTEGRATION_PLAN.md`).
+
+| Área | Comando | Resultado |
+| --- | --- | --- |
+| Mobile — suíte completa | `npm test` | **101 passed, 0 failed**, 9 suítes |
+| Mobile — typecheck | `npx tsc -p tsconfig.json --noEmit` | **exit 0**, sem erros |
+| Desktop — suíte completa | `npm test` | **153 passed, 0 failed** |
+| Frontend — suíte completa | `npm test` (vitest) | **90 arquivos / 528 passed, 0 failed** em 311,95s |
+| WhatsApp — suíte completa | `npm test` | **162 passed, 0 failed**, 37 suítes |
+| Backend — suíte completa | `python -m pytest -q -m "not live and not slow" -p no:cacheprovider` | **2552 passed, 15 skipped, 17 deselected, 0 failed** em 19m18s (exit 0) |
+| Backend (CI, PR #80) | job `Backend (ruff + vulture + pytest)` | **pass** em 7m32s |
+
+### Nota sobre a regressão do backend
+
+**Concluída: 2552 passed, 15 skipped, 17 deselected, 0 failed em 19m18s**
+(`-m "not live and not slow"`, exit 0). Contagem idêntica à execução histórica
+de referência — nenhum teste regrediu.
+
+O caminho até aqui teve dois falsos negativos de ambiente, não de teste: uma
+execução sem filtro chegou a 61% sem nenhuma falha antes de o processo ser
+morto por timeout de 20 min do shell. O custo real é das suítes de medição
+IBGE (rede real, >4 min cada). A evidência de CI do PR #80 (verde em 7m32s)
+confirmou o resultado antes da confirmação local.
+
+### CVE-2026-111181 (PR #80) — evidência CI completa
+
+| Job | Resultado |
+| --- | --- |
+| Agent (typecheck + build + tests) | pass · 13s |
+| Backend (ruff + vulture + pytest) | pass · 7m32s |
+| Desktop (typecheck + build + tests) | pass · 22s |
+| Frontend (typecheck + build + tests) | pass · 1m42s |
+| Migrations (PostgreSQL, banco zerado) | pass · 59s |
+| **Trivy (scan de vulnerabilidades)** | **pass · 3m44s** |
+| WhatsApp service (typecheck + build + tests) | pass · 1m11s |
+| playwright | pass · 2m18s |
+
 ## 1. Executado nesta continuação
 
 | Área | Comando / artefato | Resultado | Limite da evidência |
