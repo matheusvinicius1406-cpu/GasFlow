@@ -21,6 +21,7 @@ from app.application.settings.settings_service import SettingsService, SettingsE
 from app.presentation.dependencies import (
     require_permission,
     get_tenant_context,
+    is_platform_admin,
 )
 from app.domain.security.models import TenantContext, ROLE_PERMISSIONS
 
@@ -78,6 +79,12 @@ def update_key(
     svc: SettingsService = Depends(_svc),
     ctx: TenantContext = Depends(require_permission("settings.write")),
 ):
+    # SEC-01B: system_settings é global por deploy (ver SettingsService) —
+    # sem este guard, admin de uma empresa reconfigurava a visão/operacao de
+    # todas (site_name, pix_enabled...). Escrita = escopo de plataforma;
+    # leitura segue liberada (dados de configuração, sem dado de tenant).
+    if not is_platform_admin(ctx):
+        raise HTTPException(status_code=403, detail="Global settings require platform administrator")
     try:
         row = svc.update(key, body.value, updated_by=ctx.user_id)
     except SettingsError as e:
@@ -88,8 +95,11 @@ def update_key(
 @router.post("/seed", response_model=SeedResult)
 def seed(
     svc: SettingsService = Depends(_svc),
-    _ctx: TenantContext = Depends(require_permission("settings.write")),
+    ctx: TenantContext = Depends(require_permission("settings.write")),
 ):
+    # SEC-01B: mesma regra da escrita — seed de defaults é mutação global.
+    if not is_platform_admin(ctx):
+        raise HTTPException(status_code=403, detail="Global settings require platform administrator")
     return SeedResult(created=svc.seed_defaults())
 
 

@@ -56,8 +56,15 @@ class PermissionPolicyLoader:
     # ── API principal ────────────────────────────────────────
 
     def load_for_user(self, user_id: str, role_id: Optional[str]) -> set[str]:
-        """Permissões efetivas do usuário (role ∓ overrides), com cache."""
-        key = f"user:{user_id}"
+        """Permissões efetivas do usuário (role ∓ overrides), com cache.
+
+        SEC-01B: a chave inclui o `role_id` (papel da membership no tenant da
+        sessão). Sem isso o cache ficava só por usuário e servia o set de
+        permissões de um papel anterior por até TTL — membership revogada
+        (role_id=None) ou papel trocado continuava valendo, e o mesmo usuário
+        em dois tenants com papéis diferentes dividia um único set.
+        """
+        key = f"user:{user_id}:role:{role_id}"
         return set(self._cache.get_or_load(key, lambda: self._resolve(user_id, role_id), self._ttl))
 
     def load_for_role(self, role_id: str) -> set[str]:
@@ -81,7 +88,9 @@ class PermissionPolicyLoader:
         return set(self._cache.get_or_load(key, _load, self._ttl))
 
     def invalidate_user(self, user_id: str) -> None:
-        self._cache.invalidate(f"user:{user_id}")
+        # SEC-01B: o prefixo cobre todas as variantes `user:{id}:role:{rid}`
+        # (a chave passou a incluir o papel).
+        self._cache.invalidate_prefix(f"user:{user_id}:")
 
     def invalidate_all(self) -> None:
         """Evento `permissions.changed`: qualquer edição de role/permissão."""
