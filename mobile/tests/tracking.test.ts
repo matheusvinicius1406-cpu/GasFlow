@@ -172,9 +172,13 @@ interface Harness {
 }
 
 function makeHarness(initial: Partial<TrackingSnapshot> = {}): Harness {
-  let clock = 1_000_000;
+  // Relógio local às 10:00: `isWithinWorkHours` compara HORA LOCAL, então um
+  // valor fixo em ms desde a epoch cairia fora da janela 06:00-22:00 conforme
+  // o fuso do runner (quebrava na CI em UTC). Ancorar em hora local mantém o
+  // teste determinístico em qualquer fuso.
   const watchCount = { calls: 0, stops: 0 };
   let onPosition: ((p: GpsPosition) => void) | null = null;
+  let clock = new Date(2026, 8, 17, 10, 0, 0).getTime();
   const snap: TrackingSnapshot = {
     statuses: [],
     workWindow: WINDOW,
