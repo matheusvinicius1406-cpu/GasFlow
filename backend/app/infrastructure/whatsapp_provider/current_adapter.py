@@ -12,6 +12,7 @@ FastAPI → WhatsAppWebAdapter → HTTP → Node.js /whatsapp/* → Baileys → 
 
 import httpx
 import logging
+import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -278,8 +279,17 @@ class WhatsAppWebAdapter(WhatsAppProvider):
 
     async def health_check(self) -> bool:
         try:
+            # SEC-02: /api/health expõe o detalhe de contas apenas para
+            # chamadas autenticadas — envia Bearer quando a chave existe.
+            headers = {}
+            api_key = os.getenv("MARCOS_GAS_API_KEY", "")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self._service_url.replace('/api', '')}/api/health")
+                resp = await client.get(
+                    f"{self._service_url.replace('/api', '')}/api/health",
+                    headers=headers,
+                )
                 if resp.status_code == 200:
                     data = resp.json()
                     accounts = data.get("whatsapp", {}).get("accounts", [])

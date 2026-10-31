@@ -12,12 +12,22 @@ alerting:
         - targets: ["alertmanager:9093"]
 
 scrape_configs:
+  # Ambos os jobs usam authorization Bearer lendo /run/secrets/metrics_key
+  # (MARCOS_GAS_API_KEY, montado pelo compose). Backend e whatsapp exigem a
+  # key em /metrics (fail-closed, METRICS_PUBLIC=false) — sem isto os dois
+  # scrapes ficam 401 e o stack sobe "healthy" sem métricas.
   - job_name: gasflow-backend
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_key
     static_configs:
       - targets: ["backend:8000"]
 
   - job_name: gasflow-whatsapp
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_key
     static_configs:
       - targets: ["whatsapp:3000"]

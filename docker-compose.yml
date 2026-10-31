@@ -133,6 +133,8 @@ services:
       - DATA_DIR=/app/data
       - MARCOS_GAS_API_KEY=${MARCOS_GAS_API_KEY:-}
       - ALLOW_INSECURE_AUTH=${ALLOW_INSECURE_AUTH:-true}
+      # SEC-02: /metrics público só em dev (espelha METRICS_PUBLIC do backend)
+      - METRICS_PUBLIC=${METRICS_PUBLIC:-true}
       # Bridge de mensagens recebidas → backend (POST /whatsapp/incoming)
       - GASFLOW_BACKEND_URL=http://backend:8000
       - GASFLOW_SERVICE_KEY=${MARCOS_GAS_API_KEY:-}
@@ -157,7 +159,9 @@ services:
       - BAILEYS_AUTH_DIR=/app/baileys_auth
       - WA_LOG_LEVEL=${WA_LOG_LEVEL:-info}
     ports:
-      - "${WHATSAPP_PORT:-3001}:3000"
+      # SEC-02: bind loopback — porta exposta só na máquina do dev
+      # (rede interna Docker / Prometheus segue via nome do container:3000)
+      - "127.0.0.1:${WHATSAPP_PORT:-3001}:3000"
     volumes:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth

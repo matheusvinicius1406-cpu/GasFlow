@@ -109,6 +109,31 @@ def get_tenant_context(
 # ── Admin-only Dependency ───────────────────────────────
 
 
+# SEC-01B: tenant de bootstrap da plataforma — onde vivem o operador raiz
+# (admin-001) e as identidades de serviço. NÃO é uma role por tenant: é o
+# escopo de plataforma do modelo atual (ver is_platform_admin).
+PLATFORM_TENANT_ID = "default"
+
+
+def is_platform_admin(ctx: TenantContext) -> bool:
+    """Escopo de PLATAFORMA — necessário para mutar recursos GLOBAIS.
+
+    SEC-01B: `auth_roles`, `role_permissions` e `system_settings` são globais
+    (sem tenant_id) e compartilhados por todas as empresas do deploy. Um
+    administrador restrito a um tenant não pode alterá-los — faria uma empresa
+    reconfigurar (ou enfraquecer) a outra. Alcança o escopo quem é:
+
+    - `SystemRole.SYSTEM` — administrador global legítimo (SEC-01); ou
+    - membro da sessão no tenant de plataforma `default` (bootstrap: operador
+      raiz admin-001, pré-requisito de toda instalação single-tenant).
+
+    Evolução necessária (não aqui): roles e settings POR TENANT — aí a
+    customização deixa de ser global e este guard perde o motivo de existir.
+    """
+
+    return ctx.role == SystemRole.SYSTEM or ctx.tenant_id == PLATFORM_TENANT_ID
+
+
 def require_admin(ctx: TenantContext = Depends(get_tenant_context)) -> TenantContext:
     """Require admin role. Raises 403 if not admin."""
     if ctx.role != SystemRole.ADMIN and not ctx.has_permission("admin.*"):

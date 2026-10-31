@@ -19,13 +19,15 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.application.security.permission_policy_loader import get_policy_loader
-from app.domain.security.models import TenantContext
+from app.domain.security.models import SystemRole, TenantContext
 from app.infrastructure.database.init_db import engine
 from app.infrastructure.repositories.auth_model import AuthMembershipModel, AuthRoleModel, AuthUserModel
 from app.infrastructure.repositories.delivery_model import DeliveryDriverModel
-from app.presentation.dependencies import require_admin, require_permission
+from app.presentation.dependencies import is_platform_admin, require_admin, require_permission
 from app.presentation.schemas.delivery import CreateDriverResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -38,6 +40,112 @@ def _session():
     from sqlalchemy.orm import Session as DBSession
 
     return DBSession(bind=engine)
+
+
+# ── SEC-01: isolamento multi-tenant ─────────────────────
+#
+# `auth_users` é global (não tem tenant_id): a pertença de um usuário a uma
+# empresa vive só em `auth_memberships`. Sem a checagem abaixo, qualquer
+# admin enxergava/editava/reseta/desativava usuários de outras empresas
+# (IDOR cross-tenant). A membership é a fronteira de tenant.
+
+
+def _is_global_admin(ctx: TenantContext) -> bool:
+    """Administrador global de plataforma — único papel global do modelo.
+
+    `SystemRole.SYSTEM` é a identidade de serviço/plataforma (ROLE_PERMISSIONS
+    = admin.*), construída fora do fluxo de membership por tenant. Preserva o
+    acesso global legítimo; todo ADMIN de tenant continua estrito na
+    membership do tenant da sessão.
+    """
+    return ctx.role == SystemRole.SYSTEM
+
+
+def _has_membership(db, user_id: str, tenant_id: str) -> bool:
+    return (
+        db.query(AuthMembershipModel.id)
+        .filter(AuthMembershipModel.user_id == user_id, AuthMembershipModel.tenant_id == tenant_id)
+        .first()
+        is not None
+    )
+
+
+def _ensure_actor_in_tenant(db, ctx: TenantContext) -> None:
+    """SEC-01: exige membership do ATOR no tenant da sessão.
+
+    `validate_token` deriva o papel da membership, mas as permissões vêm
+    também de `user_permissions_override` — usuário sem membership nenhuma
+    no tenant poderia passar no `require_permission` e operar a administração
+    da empresa. 403 (o tenant é o da própria sessão; não vaza nada).
+    """
+    if _is_global_admin(ctx):
+        return
+    if not _has_membership(db, ctx.user_id, ctx.tenant_id):
+        raise HTTPException(status_code=403, detail="Tenant membership required")
+
+
+def _get_tenant_user(db, ctx: TenantContext, user_id: str) -> AuthUserModel:
+    """SEC-01: carrega o usuário-alvo só se ele pertence ao tenant do ator.
+
+    Responde 404 (não 403) quando o id existe em outra empresa — um 403
+    confirmaria a existência do recurso alheio. Usuário multi-tenant passa:
+    basta membership no tenant do ator (as mutações continuam afetando a
+    conta global — status/senha são colunas globais por design).
+    """
+    user = db.query(AuthUserModel).filter(AuthUserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if _is_global_admin(ctx):
+        return user
+    if not _has_membership(db, user_id, ctx.tenant_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _scoped_users_query(db, ctx: TenantContext):
+    """Query de usuários restrita aos membros do tenant do ator."""
+    query = db.query(AuthUserModel)
+    if not _is_global_admin(ctx):
+        query = query.filter(
+            AuthUserModel.id.in_(
+                select(AuthMembershipModel.user_id).where(AuthMembershipModel.tenant_id == ctx.tenant_id)
+            )
+        )
+    return query
+
+
+def _reject_global_role(role) -> None:
+    """SEC-01: a administração por tenant não pode cunhar papel global.
+
+    `SYSTEM` concede admin.* e ainda o cartão de administrador global de
+    `_is_global_admin` — atribuído aqui, um admin de empresa nomearia um
+    administrador de todas as empresas.
+    """
+    if role is not None and role.system_role == SystemRole.SYSTEM.value:
+        raise HTTPException(status_code=400, detail="SYSTEM role cannot be assigned from tenant admin")
+
+
+def _ensure_unique_username(db, user_id: Optional[str], username: str) -> None:
+    """SEC-01B: unicidade de username é GLOBAL (uq_auth_user_username) —
+    o conflito com conta de OUTRA empresa respondia 500 (IntegrityError)
+    expondo stack interno. Mesmo contrato do POST (400 controlado)."""
+    query = db.query(AuthUserModel.id).filter(AuthUserModel.username == username)
+    if user_id:
+        query = query.filter(AuthUserModel.id != user_id)
+    if query.first() is not None:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+
+def _commit_or_username_conflict(db) -> None:
+    """Rede de segurança p/ corrida no INSERT: violar o unique de username
+    vira 400 controlado, nunca 500. Outras violações seguem como erro."""
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if "username" in str(exc).lower():
+            raise HTTPException(status_code=400, detail="Username already exists") from exc
+        raise
 
 
 def _audit_mutation(
@@ -151,7 +259,7 @@ class UpdateRolePermissionsBody(BaseModel):
 
 @router.get("/users")
 async def list_users(
-    _ctx: TenantContext = Depends(require_permission("user.read")),
+    ctx: TenantContext = Depends(require_permission("user.read")),
     search: Optional[str] = None,
     role_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -159,7 +267,9 @@ async def list_users(
 ):
     db = _session()
     try:
-        query = db.query(AuthUserModel)
+        # SEC-01: antes listava TODAS as auth_users (todas as empresas).
+        _ensure_actor_in_tenant(db, ctx)
+        query = _scoped_users_query(db, ctx)
         if search:
             like = f"%{search}%"
             query = query.filter(
@@ -201,12 +311,13 @@ async def create_user(
 
     db = _session()
     try:
-        if db.query(AuthUserModel).filter(AuthUserModel.username == body.username).first():
-            raise HTTPException(status_code=400, detail="Username already exists")
+        _ensure_actor_in_tenant(db, ctx)
+        _ensure_unique_username(db, None, body.username)
 
         role = _resolve_role(db, body.role_id, body.role)
         if role is None:
             raise HTTPException(status_code=400, detail="Role not found")
+        _reject_global_role(role)
 
         user = AuthUserModel(
             id=str(uuid.uuid4()),
@@ -231,7 +342,7 @@ async def create_user(
             )
         )
         db.add(user)
-        db.commit()
+        _commit_or_username_conflict(db)
         db.refresh(user)
 
         _audit_mutation(ctx, "USER_CREATED", "user", str(user.id), None, _user_snapshot(user))
@@ -248,15 +359,19 @@ async def update_user(
 ):
     db = _session()
     try:
-        user = db.query(AuthUserModel).filter(AuthUserModel.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        _ensure_actor_in_tenant(db, ctx)
+        user = _get_tenant_user(db, ctx, user_id)
+        # SEC-01B: renomear para username de OUTRA empresa violava o unique
+        # global no commit → 500. Checagem prévia (400) + rede no commit.
+        if body.username is not None:
+            _ensure_unique_username(db, user_id, body.username)
         before = _user_snapshot(user)
 
         if body.role_id is not None:
             role = db.query(AuthRoleModel).filter(AuthRoleModel.id == body.role_id).first()
             if not role:
                 raise HTTPException(status_code=400, detail="Role not found")
+            _reject_global_role(role)
         for field in ("username", "email", "display_name", "role_id"):
             value = getattr(body, field)
             if value is not None:
@@ -285,7 +400,7 @@ async def update_user(
                     )
                 )
             get_policy_loader().invalidate_user(user_id)
-        db.commit()
+        _commit_or_username_conflict(db)
         db.refresh(user)
 
         _audit_mutation(ctx, "RESOURCE_MODIFIED", "user", user.id, before, _user_snapshot(user))
@@ -307,9 +422,8 @@ async def reset_password(
 
     db = _session()
     try:
-        user = db.query(AuthUserModel).filter(AuthUserModel.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        _ensure_actor_in_tenant(db, ctx)
+        user = _get_tenant_user(db, ctx, user_id)
         before = _user_snapshot(user)
 
         temp_password = _generate_temp_password()
@@ -336,12 +450,25 @@ async def deactivate_user(
     user_id: str,
     ctx: TenantContext = Depends(require_permission("user.deactivate")),
 ):
-    """Soft delete: status=DISABLED (preserva histórico e auditoria)."""
+    """Soft delete: status=DISABLED (preserva histórico e auditoria).
+
+    SEC-01B (contrato documentado, comportamento INALTERADO):
+    - **Desativar conta** (aqui): coluna global `auth_users.status` — o login
+      cessa em TODOS os tenants onde o usuário é membro. Efeito colateral
+      esperado para usuário multi-tenant (conta é única por design).
+    - **Revogar membership** (auth_memberships): não existe endpoint hoje —
+      só remoção direta no DB. É o que corta o acesso a UM tenant sem tocar
+      nos demais.
+    - **Suspender só em uma empresa**: exige revogar a membership daquele
+      tenant (sem endpoint) ou um status por tenant (coluna nova) — modelo
+      atual não tem. Contrato de produto recomendado: desativação global
+      explicitamente rotulada como "conta inteira" + fluxo de revogação de
+      membership por tenant; implementação em elemento separado (não SEC-01B).
+    """
     db = _session()
     try:
-        user = db.query(AuthUserModel).filter(AuthUserModel.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        _ensure_actor_in_tenant(db, ctx)
+        user = _get_tenant_user(db, ctx, user_id)
         if user.id == ctx.user_id:
             raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
         before = _user_snapshot(user)
@@ -364,9 +491,8 @@ async def activate_user(
 ):
     db = _session()
     try:
-        user = db.query(AuthUserModel).filter(AuthUserModel.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        _ensure_actor_in_tenant(db, ctx)
+        user = _get_tenant_user(db, ctx, user_id)
         before = _user_snapshot(user)
 
         user.status = "ACTIVE"
@@ -389,8 +515,14 @@ def _driver_role(db):
     return db.query(AuthRoleModel).filter(AuthRoleModel.name == "DRIVER").first()
 
 
-def _find_driver_user(db, driver_id: str, role_id: Optional[str]):
-    query = db.query(AuthUserModel).filter(AuthUserModel.driver_id == driver_id)
+def _find_driver_user(db, ctx: TenantContext, driver_id: str, role_id: Optional[str]):
+    """SEC-01: credencial do entregador restrita ao tenant do ator.
+
+    `auth_users.driver_id` guarda o `codigo`, sequencial POR TENANT (dois
+    empresas têm "000001"): sem o escopo, `.first()` podia devolver a
+    credencial — e o reset de senha batia — em outra empresa.
+    """
+    query = _scoped_users_query(db, ctx).filter(AuthUserModel.driver_id == driver_id)
     if role_id:
         query = query.filter(AuthUserModel.role_id == role_id)
     return query.first()
@@ -416,6 +548,7 @@ async def list_drivers(ctx: TenantContext = Depends(require_permission("user.rea
     """Lista entregadores do tenant com a credencial vinculada (sem senha)."""
     db = _session()
     try:
+        _ensure_actor_in_tenant(db, ctx)
         role = _driver_role(db)
         drivers = (
             db.query(DeliveryDriverModel)
@@ -423,9 +556,11 @@ async def list_drivers(ctx: TenantContext = Depends(require_permission("user.rea
             .order_by(DeliveryDriverModel.codigo)
             .all()
         )
+        # SEC-01: credenciais também escopadas — `driver_id` (codigo) colide
+        # entre tenants; sem o filtro o username de outra empresa vazava aqui.
         users = {
             u.driver_id: u
-            for u in db.query(AuthUserModel).filter(AuthUserModel.driver_id.isnot(None)).all()
+            for u in _scoped_users_query(db, ctx).filter(AuthUserModel.driver_id.isnot(None)).all()
             if role is None or u.role_id == role.id
         }
         return {"drivers": [_driver_payload(d, users.get(d.codigo)) for d in drivers]}
@@ -457,6 +592,7 @@ async def create_driver(
 
     db = _session()
     try:
+        _ensure_actor_in_tenant(db, ctx)
         try:
             result = CreateDriverWithCredentialUseCase(db, ctx.tenant_id, actor_id=ctx.user_id or "").execute(
                 nome=body.name,
@@ -488,8 +624,9 @@ async def reset_driver_password(
 
     db = _session()
     try:
+        _ensure_actor_in_tenant(db, ctx)
         role = _driver_role(db)
-        user = _find_driver_user(db, driver_id, role.id if role else None)
+        user = _find_driver_user(db, ctx, driver_id, role.id if role else None)
         if not user:
             raise HTTPException(status_code=404, detail="Driver credential not found")
         before = _user_snapshot(user)
@@ -529,6 +666,7 @@ async def deactivate_driver(
 
     db = _session()
     try:
+        _ensure_actor_in_tenant(db, ctx)
         result = DeleteDriverUseCase(db, ctx.tenant_id, actor_id=ctx.user_id or "").execute(driver_id)
     except DriverInRouteError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -544,9 +682,13 @@ async def deactivate_driver(
 
 
 @router.get("/roles")
-async def list_roles(_ctx: TenantContext = Depends(require_permission("role.manage"))):
+async def list_roles(ctx: TenantContext = Depends(require_permission("role.manage"))):
     db = _session()
     try:
+        # SEC-01B: mesmo contrato dos endpoints de usuário — membership no
+        # tenant da sessão é o que autoriza a administração (leitura do
+        # catálogo permanece permitida a qualquer admin de empresa).
+        _ensure_actor_in_tenant(db, ctx)
         roles = db.query(AuthRoleModel).order_by(AuthRoleModel.name).all()
         return {
             "roles": [
@@ -572,11 +714,23 @@ async def update_role_permissions(
     """Atualiza a matriz role→permissões (JSON do auth_roles) e a normalizada.
 
     Invalida o cache do PermissionPolicyLoader (permissions.changed).
+
+    SEC-01B: a matriz é GLOBAL (auth_roles/role_permissions não têm
+    tenant_id) e vale para todas as empresas do deploy — admin de uma empresa
+    alterava permissões usadas por outra (cross-tenant indireto). Muta só
+    administrador de plataforma (is_platform_admin). Roles por tenant é a
+    evolução documentada — não introduzida aqui.
     """
     from sqlalchemy import text
 
     db = _session()
     try:
+        _ensure_actor_in_tenant(db, ctx)
+        if not is_platform_admin(ctx):
+            raise HTTPException(
+                status_code=403,
+                detail="Global role permissions can only be changed by platform administrators",
+            )
         role = db.query(AuthRoleModel).filter(AuthRoleModel.id == role_id).first()
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
@@ -637,6 +791,9 @@ async def list_audit(
     try:
         from app.infrastructure.repositories.auth_repository import SQLAlchemyAuditRepository
 
+        # SEC-01B: auditoria é filtrada por tenant, mas a membership do ator
+        # continua sendo a fronteira — consistente com o resto do router.
+        _ensure_actor_in_tenant(db, ctx)
         rows = SQLAlchemyAuditRepository(db).list_filtered(
             tenant_id=ctx.tenant_id,
             actor_id=actor_id,
