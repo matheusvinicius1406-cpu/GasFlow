@@ -77,6 +77,19 @@ os itens marcados abaixo como CORRIGIDO; o restante segue intacto.
   `setConsentStorage(createMemoryConsentStorage())`.
 - **Ação:** injetar storage nativo persistente no boot; teste de replay após
   reinício.
+- **Status: CORRIGIDO (FINAL MISSION 100, continuação 30/10/2026).** Criado
+  `mobile/src/logic/queuePersistence.ts` (`PersistentQueueStorage`): a fila
+  continua síncrona para a UI e o snapshot é espelhado no AsyncStorage a cada
+  mutação, com escrita serializada, merge no boot (nunca ressuscita ação
+  `synced`) e `remove()` real. `wired.tsx` exporta `hydrateOfflineQueue()` /
+  `clearOfflineQueue()`; `App.tsx` reidrata no boot **antes** do replay e o
+  logout explícito descarta a fila. O consentimento LGPD usa o mesmo
+  AsyncStorage (`createAsyncStorageConsentStorage`, fail-closed em payload
+  corrompido). Sem AsyncStorage o app cai em memória e isso é reportado por
+  `offlineQueuePersistenceState()` — não é presumido. Provas: 9 testes de
+  restart/replay em `mobile/tests/queuePersistence.test.ts`, 2 de consentimento
+  em `mobile/tests/session.test.ts`, 86 testes mobile verdes e `tsc --noEmit`
+  limpo. **Não comprovado:** instalação em aparelho físico (P1-4).
 
 ### P1-2 — GPS só em primeiro plano (background bloqueado)
 
@@ -99,6 +112,12 @@ os itens marcados abaixo como CORRIGIDO; o restante segue intacto.
   (`test`, `typecheck`).
 - **Ação:** adicionar job `mobile` (node ≥ 22, `npm ci`, `npm test`,
   `npm run typecheck`).
+- **Status: CORRIGIDO (FINAL MISSION 100, continuação 30/10/2026).** Job `mobile`
+  adicionado a `.github/workflows/ci.yml` (Node 24, `npm ci`, `npm run
+  typecheck`, `npm test`), no mesmo padrão dos jobs whatsapp/agent. Validado
+  como YAML (8 jobs, ordem dos steps conferida) e com os comandos executados
+  localmente. **Não comprovado:** execução no runner do GitHub (sem push nesta
+  missão).
 
 ### P1-4 — Validação física do app pendente desde a v1.2.1
 
@@ -136,14 +155,20 @@ os itens marcados abaixo como CORRIGIDO; o restante segue intacto.
 - **Ação:** enviar `idempotency_key` no app (ou aceitar `client_action_id` no
   backend, com compatibilidade).
 
-### P1-8 — Migration automática no boot sem backup prévio
+### P1-8 — Gate de backup pré-migration ainda não executado operacionalmente
 
-- **Fato:** `docker-compose.prod.yml` roda `alembic upgrade head` no boot do
-  backend; não há wrapper `pg_dump → up -d → smoke`.
-- **Impacto:** migration falhando a meio caminho deixa o banco em estado
-  indeterminado sem snapshot.
-- **Evidência:** OPS-01A/OPS-00 (achado O4); compose do backend.
-- **Ação:** wrapper de deploy com backup antes do `up`.
+- **Fato atual:** produção não executa mais `alembic upgrade head` implicitamente
+  no boot. `scripts/home-server/data/pg_deploy_gate.py` foi implementado para
+  gerar dump custom em filesystem separado, verificar magic/hash/manifesto e
+  `pg_restore --list`, e só então executar Alembic. O backend recusa iniciar
+  PostgreSQL sem `alembic_version` no head.
+- **Validação desta missão:** testes unitários do gate e do fail-closed passaram;
+  o gate não foi executado contra Docker/PostgreSQL real e nenhum destino externo
+  foi escolhido. O teste não prova que o operador selecionará um destino off-host.
+- **Impacto residual:** deploy de produção continua bloqueado até destino externo,
+  imagem identificada, backup/restauração em cópia e aceite operacional.
+- **Ação:** configurar um destino realmente fora do host, obter autorização e
+  executar o gate somente em ambiente descartável antes de qualquer janela real.
 
 ### P1-9 — Servidor doméstico em HDD + notebook
 
