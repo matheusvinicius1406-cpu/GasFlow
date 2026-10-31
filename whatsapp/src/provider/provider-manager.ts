@@ -60,6 +60,11 @@ const CRM_SYNC_ON_CONNECT_DELAY_MS = 8_000;
 
 const HEADLESS = process.env.WHATSAPP_HEADFUL !== 'true';
 
+/** Envio externo exige habilitação explícita; ausência e valores inválidos bloqueiam. */
+export function outboundSendEnabled(): boolean {
+  return process.env.WA_SEND_MODE?.trim().toLowerCase() === 'live';
+}
+
 // ── Engine selection (Baileys migration) ────────────────
 
 export type EngineName = 'wwebjs' | 'baileys';
@@ -302,6 +307,10 @@ export class AccountInstance implements WhatsAppProvider {
   }
 
   async sendMessage(recipient: string, message: MessagePayload): Promise<SendResult> {
+    if (!outboundSendEnabled()) {
+      logger.warn('outbound.send.blocked', { account: this.id, kind: 'text' });
+      return { success: false, error: 'Envio externo desabilitado (WA_SEND_MODE não é live).' };
+    }
     if (!this.isConnected()) {
       return { success: false, error: 'WhatsApp não está conectado.' };
     }
@@ -331,6 +340,10 @@ export class AccountInstance implements WhatsAppProvider {
   }
 
   async sendMedia(recipient: string, media: MediaPayload): Promise<SendMediaResult> {
+    if (!outboundSendEnabled()) {
+      logger.warn('outbound.send.blocked', { account: this.id, kind: 'media' });
+      return { success: false, error: 'Envio externo desabilitado (WA_SEND_MODE não é live).' };
+    }
     if (!this.isConnected()) {
       return { success: false, error: 'WhatsApp não está conectado.' };
     }

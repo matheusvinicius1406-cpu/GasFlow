@@ -16,7 +16,7 @@
 
 import { db, claimNextRecipient, getCampaignById, getCustomerWithContact, getPreference, markRecipientCancelled, markRecipientFailed, markRecipientSent, recoverStaleProcessing, updateCampaignStatus, setCampaignProtection } from './db.js';
 import { jidUser, normalizePhone } from './normalize.js';
-import { providerManager } from './provider/provider-manager.js';
+import { outboundSendEnabled, providerManager } from './provider/provider-manager.js';
 import { checkRate, recordSend, hasDailyBudget, recordSent, isQuietHour, nextAllowedTime, gaussianDelayMs } from './anti-ban/index.js';
 import { logger } from './log.js';
 
@@ -46,6 +46,10 @@ let workerTimer: NodeJS.Timeout | null = null;
 let pausedUntilMs = 0;
 
 export function startWorker(): void {
+  if (!outboundSendEnabled()) {
+    logger.info('broadcast.outbound_dry_run');
+    return;
+  }
   if (!BROADCAST_ENABLED) {
     logger.info('broadcast.disabled');
     return;
@@ -89,6 +93,10 @@ function pauseWorkerUntil(untilMs: number, reason: string): void {
 
 /** Exportado para testes: executa um ciclo da fila (drain de inelegíveis + 1 envio). */
 export async function processNext(): Promise<void> {
+  if (!outboundSendEnabled()) {
+    logger.info('broadcast.outbound_dry_run');
+    return;
+  }
   // Find the first RUNNING campaign
   const campaigns = db
     .prepare("SELECT id FROM campaigns WHERE status = 'RUNNING'")

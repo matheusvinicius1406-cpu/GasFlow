@@ -7,6 +7,8 @@
  */
 process.env.DATA_DIR =
   'data/test-' + Date.now() + '-' + process.pid + '-' + Math.random().toString(36).slice(2, 8);
+// Esses testes exercitam elegibilidade da fila; o provider fica desconectado.
+process.env.WA_SEND_MODE = 'live';
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

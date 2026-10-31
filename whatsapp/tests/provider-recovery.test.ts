@@ -18,7 +18,18 @@ class FakeEngine {
   logoutCalls = 0;
   disconnectCalls = 0;
   clearCalls = 0;
+  sendCalls = 0;
   behavior: 'resolve' | 'hang' | 'reject' = 'resolve';
+
+  async sendText(): Promise<{ id: string }> {
+    this.sendCalls += 1;
+    return { id: 'fake-message-id' };
+  }
+
+  async sendMediaBase64(): Promise<{ id: string }> {
+    this.sendCalls += 1;
+    return { id: 'fake-media-id' };
+  }
 
   logout(): Promise<void> {
     this.logoutCalls += 1;
@@ -182,5 +193,49 @@ describe('Telemetria — transições e contador por motivo', () => {
 
     assert.equal(stats()['408'], 2);
     assert.equal(stats()['logged_out_401'], 1);
+  });
+});
+
+describe('Envio externo fail-closed', () => {
+  it('bloqueia texto e mídia antes de chamar o engine sem modo live explícito', async () => {
+    const previousMode = process.env.WA_SEND_MODE;
+    delete process.env.WA_SEND_MODE;
+    try {
+      const engine = new FakeEngine();
+      const account = new AccountInstance({ id: 'primary', name: 'Teste', sessionDir: 'unused' });
+      (account as unknown as { baileys: BaileysEngine | null }).baileys = engine as unknown as BaileysEngine;
+      (account as unknown as { state: string }).state = 'connected';
+
+      const text = await account.sendMessage('5511999999999', { text: 'mensagem de teste' });
+      const media = await account.sendMedia('5511999999999', { data: 'ZmFrZQ==', mimetype: 'image/png' });
+
+      assert.equal(text.success, false);
+      assert.match(text.error ?? '', /desabilitado/);
+      assert.equal(media.success, false);
+      assert.match(media.error ?? '', /desabilitado/);
+      assert.equal(engine.sendCalls, 0);
+    } finally {
+      if (previousMode === undefined) delete process.env.WA_SEND_MODE;
+      else process.env.WA_SEND_MODE = previousMode;
+    }
+  });
+
+  it('valores inválidos não habilitam envio', async () => {
+    const previousMode = process.env.WA_SEND_MODE;
+    process.env.WA_SEND_MODE = 'enabled';
+    try {
+      const engine = new FakeEngine();
+      const account = new AccountInstance({ id: 'primary', name: 'Teste', sessionDir: 'unused' });
+      (account as unknown as { baileys: BaileysEngine | null }).baileys = engine as unknown as BaileysEngine;
+      (account as unknown as { state: string }).state = 'connected';
+
+      const result = await account.sendMessage('5511999999999', { text: 'mensagem de teste' });
+
+      assert.equal(result.success, false);
+      assert.equal(engine.sendCalls, 0);
+    } finally {
+      if (previousMode === undefined) delete process.env.WA_SEND_MODE;
+      else process.env.WA_SEND_MODE = previousMode;
+    }
   });
 });

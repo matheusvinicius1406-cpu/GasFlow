@@ -3,7 +3,7 @@
 # Diferenças vs docker-compose.yml (dev):
 #   - Sem bind mount de source (imagens buildadas são a fonte)
 #   - ENVIRONMENT=production por padrão
-#   - Backend roda `alembic upgrade head` antes de subir a API
+#   - Backend exige schema PostgreSQL já no Alembic head; o deploy gate migra após backup
 #   - Postgres e backend sem portas expostas (rede interna)
 #   - Frontend (nginx) é a única porta pública (80); WhatsApp fica apenas
 #     na rede interna e o pareamento usa uma rede administrativa/túnel.
@@ -92,11 +92,10 @@ services:
       # sem auth se METRICS_PUBLIC=true — em produção deve ficar false e o
       # Prometheus autentica via Bearer/MARCOS_GAS_API_KEY (ver secrets).
       - METRICS_PUBLIC=${METRICS_PUBLIC:-false}
-    # Aplica migrations antes de servir — o schema em prod é do Alembic,
-    # não do create_all do boot (que segue disponível p/ dev/tests).
+    # Migrations são executadas pelo pg_deploy_gate.py somente após backup
+    # verificado em filesystem off-host. O boot da API nunca migra implicitamente.
     command: >
-      sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}"
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,9 +107,6 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 30s
       timeout: 5s
-      # `alembic upgrade head` roda antes do uvicorn; num banco zerado a
-      # cadeia inteira pode passar dos 20s originais e o container era
-      # marcado como unhealthy durante o boot.
       start_period: 120s
       retries: 5
     restart: unless-stopped
@@ -159,6 +155,8 @@ services:
       - WA_HEARTBEAT_INTERVAL_MIN=${WA_HEARTBEAT_INTERVAL_MIN:-5}
       - WA_SEND_MIN_INTERVAL_MS=${WA_SEND_MIN_INTERVAL_MS:-2000}
       - WA_SEND_MAX_INTERVAL_MS=${WA_SEND_MAX_INTERVAL_MS:-10000}
+      # Envio externo bloqueado por padrão; só liberar com aprovação operacional.
+      - WA_SEND_MODE=${WA_SEND_MODE:-dry-run}
       - WA_CRITICAL_WEBHOOK_URL=${WA_CRITICAL_WEBHOOK_URL:-}
       - WA_LOG_LEVEL=${WA_LOG_LEVEL:-info}
       # Motor Baileys (dual-mode; rollback: WA_ENGINE=wwebjs)
@@ -178,7 +176,9 @@ services:
       - WA_QUIET_HOURS_END=${WA_QUIET_HOURS_END:-7}
       - WA_SEND_MEAN_MS=${WA_SEND_MEAN_MS:-3000}
       - WA_SEND_STDEV_MS=${WA_SEND_STDEV_MS:-1000}
-      - WA_BROADCAST_ENABLED=${WA_BROADCAST_ENABLED:-true}
+      # Campanhas (envio em massa) são opt-in explícito: além de WA_SEND_MODE=live,
+      # o operador precisa ligar WA_BROADCAST_ENABLED=true. Default fail-closed.
+      - WA_BROADCAST_ENABLED=${WA_BROADCAST_ENABLED:-false}
     volumes:
       - whatsapp_data:/app/data
       - whatsapp_auth:/app/wwebjs_auth

@@ -43,6 +43,10 @@ services:
 
   backend:
     container_name: gasflow-hs-lab-backend
+    # Banco descartável de laboratório: migrations explícitas são seguras aqui.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
     environment:
       # Fixar o destino impede DATABASE_URL herdada do processo Compose de
       # apontar o backend do laboratório para um banco externo ou SQLite.
@@ -61,6 +65,8 @@ services:
   whatsapp:
     container_name: gasflow-hs-lab-whatsapp
     environment:
+      # Fail-closed: o laboratório nunca envia mensagens externas.
+      - WA_SEND_MODE=dry-run
       # Sem disparo de campanha no laboratório (higiene + segurança).
       - WA_BROADCAST_ENABLED=false
       # Nada de webhook externo apontando para o ambiente real.
