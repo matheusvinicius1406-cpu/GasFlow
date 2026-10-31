@@ -36,6 +36,14 @@ import {
 } from "../logic/api";
 import { attachDriverSocket, reconnectDelay } from "../logic/realtime";
 import { OfflineQueue, type QueueItem, type QueueStorage } from "../logic/offlineQueue";
+import {
+  PersistentQueueStorage,
+  createAsyncStorageKV,
+  createMemoryAsyncKV,
+  type AsyncKV,
+  type AsyncStorageLike,
+} from "../logic/queuePersistence";
+import type { QueueOwner } from "../logic/offlineQueue";
 import { resolveConnection, type ResolvedConnection } from "../logic/connection";
 import { getConnectionTargets, setConnectionConfig } from "../logic/config";
 import { getServerUrlStorage, normalizeServerUrl } from "../logic/serverConfig";
@@ -60,17 +68,102 @@ export const useConnectionStore = create<ConnectionStore>((set) => ({
   setConnection: (connection, relayToken = "") => set({ connection, relayToken }),
 }));
 
-/** Fila offline com storage em memória + rehidratação (RN real: SQLite/MMKV). */
-const queueItems: QueueItem[] = [];
-export const queueStorage: QueueStorage = {
-  all: () => queueItems.slice(),
-  save: (item) => {
-    const idx = queueItems.findIndex((i) => i.client_action_id === item.client_action_id);
-    if (idx >= 0) queueItems[idx] = { ...item };
-    else queueItems.push({ ...item });
-  },
-};
+/**
+ * Fila offline persistente (prompt 3.1). O snapshot vive no AsyncStorage e é
+ * reidratado no boot por `hydrateOfflineQueue` (App.tsx). Sem AsyncStorage o
+ * storage cai em memória — o app não deixa de operar, mas nesse modo a fila
+ * NÃO sobrevive ao fechamento (limitação explícita, não presumida).
+ */
+const queuePersistence = new PersistentQueueStorage(createMemoryAsyncKV());
+export const queueStorage: QueueStorage = queuePersistence;
 export const deliveryQueue = new OfflineQueue(queueStorage);
+
+/** Aponta a fila para o KV persistente e reidrata o que sobrou do boot anterior. */
+export async function attachQueueStorage(kv: AsyncKV): Promise<void> {
+  await queuePersistence.attach(kv);
+}
+
+/** Liga a fila ao AsyncStorage real. Qualquer falha mantém o modo memória. */
+export async function hydrateOfflineQueue(asyncStorage?: AsyncStorageLike | null): Promise<boolean> {
+  if (!asyncStorage) return false;
+  try {
+    await attachQueueStorage(createAsyncStorageKV(asyncStorage));
+    return queuePersistence.isHydrated;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mensagem do erro de gravação durável, sem vazar caminho/segredo.
+ * Ex.: falha de disco cheio do AsyncStorage.
+ */
+function persistErrorMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `A ação NÃO foi gravada neste aparelho (${detail}). Ela pode ser perdida se o app fechar.`;
+}
+
+/**
+ * Identidade autenticada para a fila (motorista + tenant). `null` enquanto não
+ * resolvida: nesse caso nada é reproduzido (fail-closed) e a fila fica intacta.
+ */
+export function currentQueueOwner(): QueueOwner | null {
+  const driverId = trackingRuntime.driverId || useSessionStore.getState().driverId;
+  if (!driverId) return null;
+  const tenantId = trackingRuntime.tenantId || undefined;
+  return tenantId ? { driverId, tenantId } : { driverId };
+}
+
+/**
+ * Marca a identidade da sessão na fila. Chamado no boot (sessão restaurada) e
+ * quando `/driver/me` resolve o motorista. **Nunca apaga ação pendente.**
+ */
+export function syncQueueSessionOwner(): void {
+  queuePersistence.setSessionOwner(currentQueueOwner());
+}
+
+/**
+ * Persistência durável da fila. Resolve só quando o snapshot foi escrito — é
+ * o que permite à UI afirmar “ação salva” com segurança (prompt 3.1).
+ */
+export function persistOfflineQueue(): Promise<void> {
+  return queuePersistence.persist();
+}
+
+/**
+ * Logout explícito: a sessão sai, **a fila fica** — ações não sincronizadas
+ * são preservadas para a próxima sessão do mesmo motorista e deixam de ser
+ * reproduzidas por qualquer outra identidade (filtro por owner no flush).
+ */
+export function onSessionClosed(): { held: number } {
+  const held = queuePersistence.heldForOtherOwner(null).length;
+  queuePersistence.setSessionOwner(null);
+  return { held };
+}
+
+/** Descarte explícito e rastreável de uma ação (única forma de remover). */
+export function discardQueueItem(clientActionId: string, reason: string): boolean {
+  return queuePersistence.discard(clientActionId, reason);
+}
+
+/** Diagnóstico (tela de suporte/teste): estado real da persistência da fila. */
+export function offlineQueuePersistenceState(): {
+  hydrated: boolean;
+  items: number;
+  owner: QueueOwner | null;
+  heldForOtherOwner: number;
+  hydrateError: string | null;
+  writeError: string | null;
+} {
+  return {
+    hydrated: queuePersistence.isHydrated,
+    items: queuePersistence.size(),
+    owner: queuePersistence.getSessionOwner(),
+    heldForOtherOwner: queuePersistence.heldForOtherOwner(currentQueueOwner()).length,
+    hydrateError: queuePersistence.lastHydrateError,
+    writeError: queuePersistence.lastWriteError,
+  };
+}
 
 // ── Rastreamento (F2.5) ──────────────────────────────────────
 
@@ -191,6 +284,11 @@ export function useTrackingGate(deliveries: RouteDelivery[]): void {
         trackingRuntime.intervalSeconds = me.tracking_interval_seconds;
         trackingRuntime.driverId = me.driver_id;
         trackingRuntime.tenantId = me.tenant_id || "default";
+        // Identidade resolvida: passa a ser o dono da fila e adota os itens
+        // enfileirados antes do /driver/me (mesmo processo, mesmo motorista).
+        syncQueueSessionOwner();
+        const owner = currentQueueOwner();
+        if (owner) queuePersistence.claimUnowned(owner);
       })
       .catch(() => undefined); // offline p/ /me: mantém fail-closed
     return () => {
@@ -378,7 +476,14 @@ export function ChangePasswordScreenWired() {
     [accessToken, setMustChangePassword]
   );
 
-  return <ChangePasswordScreen username={username} onSubmit={onSubmit} onLogout={clearSession} />;
+  // Logout descarta a sessão mas NÃO a fila: ações não sincronizadas ficam
+  // guardadas para o próximo login do mesmo motorista (onSessionClosed).
+  const onLogout = useCallback(() => {
+    onSessionClosed();
+    clearSession();
+  }, [clearSession]);
+
+  return <ChangePasswordScreen username={username} onSubmit={onSubmit} onLogout={onLogout} />;
 }
 
 // ── Realtime (wired) ─────────────────────────────────────────
@@ -469,6 +574,10 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
     try {
       const me = await fetchDriverMe(fetch, connection.baseUrl, token);
       setTodayDistanceKm(me.today_distance_km ?? 0);
+      // Motorista resolvido: identidade da fila + adoção de itens órfãos.
+      syncQueueSessionOwner();
+      const owner = currentQueueOwner();
+      if (owner) queuePersistence.claimUnowned(owner);
     } catch {
       // offline: mantém o último valor conhecido na tela
     }
@@ -487,7 +596,13 @@ export function RouteTodayScreenWired({ navigation }: NativeStackScreenProps<Roo
   // Replay da fila ao ficar online (C4.3: confirmação offline → sync depois).
   const flushQueue = useCallback(async () => {
     if (useConnectionStore.getState().connection.mode === "offline") return;
-    await deliveryQueue.flush(makeTransport());
+    // Identidade ainda desconhecida (boot antes do /driver/me): nada é
+    // reproduzido — a fila fica intacta e o próximo tick reenvia.
+    const owner = currentQueueOwner();
+    if (!owner) return;
+    queuePersistence.setSessionOwner(owner);
+    queuePersistence.claimUnowned(owner);
+    await deliveryQueue.flush(makeTransport(), { owner });
     await reload();
   }, [reload]);
 
@@ -556,6 +671,9 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
   // Evita toque duplicado: só uma ação em voo/na fila por vez (o backend
   // recusaria um replay sem client_action_id com INVALID_STATE 400).
   const [pendingAction, setPendingAction] = useState<DeliveryFlowAction | null>(null);
+  // Falha de gravação durável da fila — precisa ficar visível (prompt 3.1):
+  // não se pode anunciar "salvo" com o snapshot desatualizado.
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -580,20 +698,39 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
       if (alreadyQueued || pendingAction !== null) return;
 
       setPendingAction(kind);
+      setPersistError(null);
+      const owner = currentQueueOwner();
       // Sempre enfileira: quando online, o flush dispara imediatamente;
       // quando offline, fica pending e vai no próximo flush (C4.3).
-      deliveryQueue.enqueue(kind, deliveryId, payload);
+      deliveryQueue.enqueue(kind, deliveryId, payload, owner ?? undefined);
       const optimisticStatus = (prev: DeliveryDetail) => ({ ...prev, status: nextStatusAfter(prev.status, kind) });
+      const showOptimistic = () => setDelivery((prev) => (prev ? optimisticStatus(prev) : prev));
+
       if (connection.mode !== "offline") {
+        if (!owner) {
+          // Identidade ainda desconhecida: não envia, só persiste e espera o
+          // próximo tick do flushQueue (fail-closed de replay).
+          void queuePersistence
+            .persist()
+            .then(showOptimistic)
+            .catch((e: unknown) => setPersistError(persistErrorMessage(e)))
+            .finally(() => setPendingAction(null));
+          return;
+        }
         void deliveryQueue
-          .flush(makeTransport())
-          .then(() => {
-            setDelivery((prev) => (prev ? optimisticStatus(prev) : prev));
-          })
+          .flush(makeTransport(), { owner })
+          .then(showOptimistic)
+          .catch((e: unknown) => setPersistError(persistErrorMessage(e)))
           .finally(() => setPendingAction(null));
       } else {
-        setDelivery((prev) => (prev ? optimisticStatus(prev) : prev));
-        setPendingAction(null);
+        // Offline: a UI só confirma depois da gravação durável concluir.
+        // Falha ⇒ aviso explícito; a ação permanece em memória (e o operador
+        // sabe que ela pode não sobreviver a um fechamento imediato).
+        void queuePersistence
+          .persist()
+          .then(showOptimistic)
+          .catch((e: unknown) => setPersistError(persistErrorMessage(e)))
+          .finally(() => setPendingAction(null));
       }
     },
     [deliveryId, token, connection.baseUrl, connection.mode, pendingAction]
@@ -607,6 +744,7 @@ export function DeliveryDetailScreenWired({ route }: NativeStackScreenProps<Root
     <DeliveryDetailScreen
       delivery={delivery}
       pendingAction={pendingAction}
+      notice={persistError}
       onStart={() => enqueueAction("start")}
       onArrive={() => enqueueAction("arrive")}
       onComplete={() => enqueueAction("complete", { proof_type: "MANUAL_CONFIRMATION" })}

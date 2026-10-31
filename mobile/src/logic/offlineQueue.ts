@@ -13,6 +13,26 @@
 
 export type QueueStatus = "pending" | "synced";
 
+/**
+ * Proprietário da ação: quem tem direito a reproduzi-la.
+ *
+ * NUNCA contém token, senha ou credencial — só identificadores opacos de
+ * sessão (motorista + tenant). É o que permite preservar a fila no logout
+ * sem que a fila de um motorista seja reproduzida sob a sessão de outro.
+ */
+export interface QueueOwner {
+  driverId: string;
+  tenantId?: string;
+}
+
+/** Identidades são iguais quando motorista e tenant coincidem (tenant ausente casa com qualquer). */
+export function ownerMatches(item: QueueOwner | undefined, actor: QueueOwner | undefined): boolean {
+  if (!item || !actor) return false;
+  if (item.driverId !== actor.driverId) return false;
+  if (item.tenantId && actor.tenantId && item.tenantId !== actor.tenantId) return false;
+  return true;
+}
+
 export interface QueueItem {
   client_action_id: string;
   kind: "start" | "arrive" | "complete" | "fail" | "location";
@@ -23,6 +43,10 @@ export interface QueueItem {
   nextAttemptAt: number; // epoch ms
   createdAt: number;
   lastError?: string;
+  /** Proprietário no momento do enqueue (ausente em item herdado/ilegível). */
+  owner?: QueueOwner;
+  /** Motivo do descarte explícito (rastreabilidade) — só em item removido. */
+  discardedReason?: string;
 }
 
 export interface QueueStorage {
@@ -30,6 +54,12 @@ export interface QueueStorage {
   save(item: QueueItem): void;
   /** Opcional: quando existe, itens prontos/vencidos são apagados de verdade. */
   remove?(clientActionId: string): void;
+  /**
+   * Opcional: aguarda a gravação **durável** do snapshot. Quando existe, o
+   * `flush` só retorna depois de concluir — assim o chamador nunca confirma
+   * “ação salva” antes de a escrita terminar (prompt 3.1).
+   */
+  persist?(): Promise<void>;
 }
 
 /** Fase 5: retenção local das posições (mesma janela da lib de background). */
@@ -63,7 +93,12 @@ export class OfflineQueue {
   }
 
   /** Registra ação ANTES do envio — id gerado aqui (prompt: "cada ação inclui client_action_id"). */
-  enqueue(kind: QueueItem["kind"], deliveryId: string, payload: Record<string, unknown> = {}): QueueItem {
+  enqueue(
+    kind: QueueItem["kind"],
+    deliveryId: string,
+    payload: Record<string, unknown> = {},
+    owner?: QueueOwner,
+  ): QueueItem {
     // Fase 5: posições são append-only — deduplica por `recorded_at` (replay do
     // background não empilha o mesmo ponto) e aplica a retenção local de 7 dias.
     if (kind === "location") {
@@ -81,6 +116,7 @@ export class OfflineQueue {
       attempts: 0,
       nextAttemptAt: this.clock(),
       createdAt: this.clock(),
+      owner,
     };
     this.storage.save(item);
     return item;
@@ -128,11 +164,33 @@ export class OfflineQueue {
       .sort((a, b) => a.createdAt - b.createdAt);
   }
 
-  /** Um tick do worker: tenta enviar cada ação pendente via o transport injetado. */
-  async flush(transport: (item: QueueItem) => Promise<void>): Promise<{ sent: number; failed: number }> {
+  /**
+   * Um tick do worker: tenta enviar cada ação pendente via o transport injetado.
+   *
+   * `opts.owner` é a identidade autenticada **agora**. Quando informada, só
+   * itens cujo `owner` casa são reproduzidos: os de outro motorista/tenant
+   * são deixados de lado — preservados, nunca descartados e nunca reenviados
+   * sob esta sessão (o contador desses itens fica em
+   * `heldForOtherOwner()` no storage). Sem `opts` o comportamento é o
+   * histórico (todos os pendentes), preservando compatibilidade com os testes
+   * existentes.
+   *
+   * Ao final, quando o storage oferece `persist()`, aguarda a gravação durável:
+   * o retorno {sent, failed} só sai depois de o snapshot ter sido escrito.
+   */
+  async flush(
+    transport: (item: QueueItem) => Promise<void>,
+    opts: { owner?: QueueOwner } = {},
+  ): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
+    const actor = opts.owner;
     for (const item of this.pending()) {
+      if (actor && !ownerMatches(item.owner, actor)) {
+        // Sem correspondência de proprietário: mantém pendente (visível), não
+        // envia e não apaga. Reprovação explícita de replay indevido.
+        continue;
+      }
       try {
         await transport(item);
         item.status = "synced";
@@ -145,6 +203,11 @@ export class OfflineQueue {
         failed += 1;
       }
       this.storage.save(item);
+    }
+    if (this.storage.persist) {
+      // Falha aqui é propagada: o chamador não pode afirmar que a ação está
+      // salva/descarregada quando a gravação durável não concluiu.
+      await this.storage.persist();
     }
     return { sent, failed };
   }

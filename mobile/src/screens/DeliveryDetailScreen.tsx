@@ -34,6 +34,11 @@ interface Props {
   onFail: (reason: string) => void;
   /** Ação em voo (fila/flush) — desabilita os botões para não duplicar toque. */
   pendingAction?: DeliveryFlowAction | null;
+  /**
+   * Aviso operacional (ex.: gravação durável da fila falhou). Precisa ficar
+   * visível: a tela não pode parecer que a ação está salva se não está.
+   */
+  notice?: string | null;
 }
 
 export default function DeliveryDetailScreen({
@@ -43,6 +48,7 @@ export default function DeliveryDetailScreen({
   onComplete,
   onFail,
   pendingAction = null,
+  notice = null,
 }: Props) {
   const mapsUrl = `https://waze.com/ul?q=${encodeURIComponent(delivery.address)}`;
   const callUrl = `tel:${delivery.phone.replace(/[^\d+]/g, "")}`;
@@ -53,6 +59,11 @@ export default function DeliveryDetailScreen({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      {notice ? (
+        <Card style={styles.card}>
+          <Text style={styles.notice}>{notice}</Text>
+        </Card>
+      ) : null}
       <Card style={styles.card}>
         <View style={styles.cardHead}>
           <Text style={styles.name}>{delivery.customer_name}</Text>
@@ -149,6 +160,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   card: { padding: spacing.lg },
+  /** Aviso de falha de gravação — precisa saltar aos olhos, não sumir. */
+  notice: {
+    color: colors.danger,
+    fontSize: typography.body,
+    lineHeight: 21,
+    fontWeight: "600",
+  },
   cardHead: {
     flexDirection: "row",
     alignItems: "center",
