@@ -1,6 +1,6 @@
 # Dependências de desenvolvimento/teste (CI + dev local)
 pytest>=9.1.1
-pytest-asyncio>=1.4.0
+pytest-asyncio>=1.4.1
 pytest-timeout>=2.4.0
 ruff>=0.17.0
 # CI roda `python -m mypy app` (baseline: novos arquivos nascem verificados)
