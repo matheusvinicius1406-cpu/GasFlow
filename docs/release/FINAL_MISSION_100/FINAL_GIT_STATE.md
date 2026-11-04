@@ -1,5 +1,22 @@
 # Final Git State
 
+## Atualização de 04/11/2026 — entrega do Home Server
+
+- Branch: `release/home-server-candidate` (worktree `GasFlow-integration`).
+- Commit da entrega: **`55721ed`** — 39 arquivos, 3.095 inserções e 104
+  remoções. Inclui o perfil LAN/Caddy, scripts de verificação, documentação
+  operacional, evidências, testes de regressão e as correções R-6/R-7/R-8.
+- Imagem do backend reconstruída e container recriado em 04/11 12:51Z:
+  `sha256:ce59318857a6a1e19a16635ed57fac66b069dd67f891781969c3db503664edb2`.
+  A imagem anterior (`sha256:0c7373b5…`) não continha R-8.
+- Publicação: `push` para `origin/release/home-server-candidate` e
+  atualização do PR **#79**; **sem merge na `main`**, sem force-push, sem
+  reset, sem `clean` e sem remoção de worktree/volume.
+- Worktrees `GasFlow`, `GasFlow-freebuff`, `GasFlow-opencode` e
+  `GasFlow-integration`: preservados.
+
+O texto abaixo é o histórico de 30/10 e permanece como registro.
+
 ## Atualização de 31/10/2026
 
 ### Worktrees no estado atual (todos limpos)

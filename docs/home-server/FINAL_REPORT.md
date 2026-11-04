@@ -203,8 +203,8 @@ As alterações desta missão estão na branch `release/home-server-candidate`
 falha**. Não houve merge na `main`, force-push, reset, `clean`, remoção de
 worktree ou de volume.
 
-- Commit desta entrega: `________________` (preenchido no commit de
-  fechamento; o HEAD anterior era `9eefac6`).
+- Commit desta entrega: `55721ed` (`feat(home-server): LAN HTTPS stack,
+  lab evidence and tenant/driver-auth fixes`); o HEAD anterior era `9eefac6`.
 - Worktrees `GasFlow`, `GasFlow-freebuff`, `GasFlow-opencode` e
   `GasFlow-integration`: **preservados**.
 
