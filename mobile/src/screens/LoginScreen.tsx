@@ -73,8 +73,11 @@ export default function LoginScreen({ onLogin, doLogin, initialServerUrl }: Prop
         <Card style={styles.card}>
           <Input
             label="Servidor"
-            placeholder="http://ip:8000"
-            hint="Endereço do depósito (LAN ou nuvem)"
+            placeholder="http://IP_DO_SERVIDOR"
+            hint={
+              "Home Server: http://IP_DO_SERVIDOR (porta 80, sem :8000). " +
+              "Emulador Android: http://10.0.2.2:8000. HTTPS também é aceito."
+            }
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}

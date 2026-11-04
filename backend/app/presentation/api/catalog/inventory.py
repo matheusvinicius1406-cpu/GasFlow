@@ -40,12 +40,21 @@ from app.presentation.schemas.inventory import (
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
-def _get_inventory_repo(db: Session = Depends(get_db)):
-    return SQLAlchemyInventoryRepository(db)
+def _get_inventory_repo(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    # O tenant vem da SESSÃO, nunca do default: sem isso toda movimentação
+    # caía em tenant_id='default' e o pedido falhava com "Estoque insuficiente"
+    # mesmo com estoque cadastrado no tenant certo (defeito de multi-tenant).
+    return SQLAlchemyInventoryRepository(db, ctx.tenant_id)
 
 
-def _get_product_repo(db: Session = Depends(get_db)):
-    return SQLAlchemyProductRepository(db)
+def _get_product_repo(
+    db: Session = Depends(get_db),
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    return SQLAlchemyProductRepository(db, ctx.tenant_id)
 
 
 # ── List Inventory ────────────────────────────────────────
@@ -61,8 +70,8 @@ def list_inventory(
     _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Lista todos os itens de inventário com filtros."""
-    inv_repo = SQLAlchemyInventoryRepository(db)
-    prod_repo = SQLAlchemyProductRepository(db)
+    inv_repo = SQLAlchemyInventoryRepository(db, _ctx.tenant_id)
+    prod_repo = SQLAlchemyProductRepository(db, _ctx.tenant_id)
 
     use_case = GetInventoryUseCase(inv_repo)
     inventories = use_case.execute(stock_status=stock_status, product_type=product_type)
@@ -250,7 +259,7 @@ def reconciliation_check(
     _ctx: TenantContext = Depends(get_tenant_context),
 ):
     """Verifica consistência entre inventory e ledger."""
-    repo = SQLAlchemyInventoryRepository(db)
+    repo = SQLAlchemyInventoryRepository(db, _ctx.tenant_id)
     service = ReconciliationService(repo)
     return service.check_all()
 

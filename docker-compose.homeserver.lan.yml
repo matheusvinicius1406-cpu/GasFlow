@@ -1,0 +1,101 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow — HOME SERVER acessível na LAN com HTTPS (Fase 1)
+#
+# Quarto arquivo da pilha: prod → homeserver → lab → LAN.
+#
+#   docker compose \
+#     -p gasflow-hs-lab \
+#     -f docker-compose.prod.yml \
+#     -f docker-compose.homeserver.yml \
+#     -f docker-compose.homeserver.lab.yml \
+#     -f docker-compose.homeserver.lan.yml \
+#     --env-file deploy/home-server/.env.lab up -d
+#
+# O que este overlay adiciona ao laboratório (`127.0.0.1:8088`):
+#   - serviço `caddy` como ÚNICA borda da LAN, terminando TLS com CA
+#     interna (custo R$ 0,00, nenhum certificado comercial);
+#   - a porta 443 é publicada apenas no IPv4 privado do servidor e em
+#     loopback — nunca em `0.0.0.0`, nunca no perfil Public do firewall;
+#   - `frontend`, `backend`, `postgres`, `redis` e `whatsapp` continuam
+#     SEM porta publicada para a LAN (o Caddy fala com `frontend:80`
+#     pela rede interna `internal`);
+#   - `restart: unless-stopped` no que precisa sobreviver a reboot
+#     (o laboratório puro mantém `restart: "no"`).
+#
+# Nada aqui cria rede, volume ou container fora do prefixo
+# `gasflow-hs-lab_*`, e nada toca no GasFlow Desktop (`127.0.0.1:8000`).
+# ═══════════════════════════════════════════════════════════════
+
+name: gasflow-hs-lab
+
+services:
+
+  frontend:
+    # Continua publicando só loopback (herdado do overlay .lab) para
+    # inspeção/smoke local. A LAN entra pelo Caddy.
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  whatsapp:
+    restart: unless-stopped
+
+  # ── Borda TLS da LAN ────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: gasflow-hs-lab-caddy
+    restart: unless-stopped
+    ports:
+      # $GASFLOW_LAN_IP é o IPv4 privado do servidor (ex.: 192.168.0.211).
+      # Bind explícito: nada escuta em 0.0.0.0 e a regra de firewall
+      # fica restrita à sub-rede local.
+      - "${GASFLOW_LAN_IP:?Defina GASFLOW_LAN_IP no --env-file}:${GASFLOW_HTTPS_PORT:-443}:443"
+      # Loopback para validação local (mesma porta, host diferente).
+      - "127.0.0.1:${GASFLOW_HTTPS_PORT:-443}:443"
+    environment:
+      # Lido pelo Caddyfile como nome do site (SAN do certificado).
+      GASFLOW_LAN_IP: ${GASFLOW_LAN_IP:?Defina GASFLOW_LAN_IP no --env-file}
+    volumes:
+      - ./deploy/home-server/Caddyfile:/etc/caddy/Caddyfile:ro
+      # A CA interna e o certificado vivem aqui. PERDER ESTE VOLUME =
+      # ter que reinstalar a CA raiz em todo cliente da LAN.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          # Termina TLS e faz proxy: 96 MB é folga confortável.
+          memory: 96M
+          cpus: "0.5"
+    networks:
+      - internal
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

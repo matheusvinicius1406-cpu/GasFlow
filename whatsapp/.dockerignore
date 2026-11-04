@@ -11,8 +11,10 @@ dist
 
 # Runtime data (mounted as volumes)
 data/
+baileys_auth/
 wwebjs_auth/
 .wwebjs_cache/
+uploads/
 export/
 
 # IDE

@@ -15,6 +15,7 @@ import React, { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import * as Keychain from "react-native-keychain";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import AnimatedSplash from "./src/screens/AnimatedSplash";
 import RootNavigator from "./src/navigation/RootNavigator";
@@ -23,22 +24,30 @@ import {
   restorePersistedSession,
   setConsentStorage,
   createMemoryConsentStorage,
+  createAsyncStorageConsentStorage,
+  type AsyncStorageLike,
 } from "./src/logic/session";
 import { setTokenStorage, createKeychainTokenStorage, type KeychainLike } from "./src/logic/tokenStorage";
 import { setServerUrlStorage, createKeychainServerUrlStorage, getServerUrlStorage, normalizeServerUrl } from "./src/logic/serverConfig";
 import { resolveConnection } from "./src/logic/connection";
 import { getConnectionTargets, setConnectionConfig } from "./src/logic/config";
-import { useConnectionStore } from "./src/containers/wired";
+import { useConnectionStore, hydrateOfflineQueue } from "./src/containers/wired";
 import { requestLocationPermission } from "./src/logic/permissions";
 import UpdateScreen from "./src/screens/UpdateScreen";
 import { getCurrentAppVersion } from "./src/logic/config";
 
 /**
- * Storage do consentimento no RN. O AsyncStorage e dependencia nativa — para
- * nao exigir pod/android build na F2, usamos o storage em memoria por padrao
- * e trocamos por AsyncStorage quando o pacote estiver no projeto (F2.5).
+ * Storage do consentimento no RN: AsyncStorage (persiste entre reinicios).
+ * Se o modulo nativo falhar no boot, cai no storage em memoria — o app continua
+ * operando e apenas volta a pedir o aceite ao reabrir (nunca presume aceite).
  */
-setConsentStorage(createMemoryConsentStorage());
+try {
+  setConsentStorage(
+    createAsyncStorageConsentStorage(AsyncStorage as unknown as AsyncStorageLike),
+  );
+} catch {
+  setConsentStorage(createMemoryConsentStorage());
+}
 
 /**
  * Sessao: o token vive no Keystore do Android (EncryptedSharedPreferences) via
@@ -78,6 +87,10 @@ export default function App() {
       if (storedUrl) {
         setConnectionConfig({ lanBaseUrl: storedUrl });
       }
+
+      // 3.6. Filtrar a fila offline persistida ANTES de qualquer replay: sem
+      // isso, ações enfileiradas na sessão anterior morrem com o processo.
+      await hydrateOfflineQueue(AsyncStorage);
 
       // 4. Resolver conexao ativa (LAN → relay → cloud)
       const targets = getConnectionTargets();

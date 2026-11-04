@@ -356,10 +356,12 @@ async def handle_driver_login(req: DriverLoginRequest) -> DriverLoginResponse:
         if not model:
             raise HTTPException(401, detail="Invalid credentials")
 
-        # Verify password
-        if model.password_hash:
-            if not bcrypt.checkpw(req.password.encode(), model.password_hash.encode()):
-                raise HTTPException(401, detail="Invalid credentials")
+        # Verify password. Falha fechada: entregador sem hash cadastrado não
+        # autentica. Antes, hash vazio pulava a checagem e qualquer senha
+        # entrava (bypass de autenticação).
+        stored_hash = (model.password_hash or "").strip()
+        if not stored_hash or not bcrypt.checkpw(req.password.encode(), stored_hash.encode()):
+            raise HTTPException(401, detail="Invalid credentials")
 
         # Determine tenant
         tenant_id = model.tenant_id or "default"

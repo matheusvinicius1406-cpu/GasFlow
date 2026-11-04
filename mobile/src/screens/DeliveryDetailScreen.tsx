@@ -1,10 +1,11 @@
 /**
  * DeliveryDetailScreen — dados do cliente, ações rápidas (Navegar/Ligar) e as
- * ações do fluxo start/complete/fail (todas passam pela fila offline —
+ * ações do fluxo start/arrive/complete/fail (todas passam pela fila offline —
  * src/logic/offlineQueue.ts).
  *
- * Cada ação só habilita no status em que ela é válida, e o rodapé explica que
- * sem sinal a ação é salva e sincroniza sozinha.
+ * Cada ação só habilita no status em que ela é válida — a mesma matriz de
+ * validação do backend (driver_api.can_*) via src/logic/deliveryFlow.ts —, e o
+ * rodapé explica que sem sinal a ação é salva e sincroniza sozinha.
  */
 
 import React from "react";
@@ -14,6 +15,7 @@ import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import EmptyState from "../components/ui/EmptyState";
 import StatusChip from "../components/ui/StatusChip";
+import { isActionEnabled, type DeliveryFlowAction } from "../logic/deliveryFlow";
 import { colors, radius, spacing, typography } from "../theme";
 
 export interface DeliveryDetail {
@@ -27,11 +29,27 @@ export interface DeliveryDetail {
 interface Props {
   delivery: DeliveryDetail;
   onStart: () => void;
+  onArrive: () => void;
   onComplete: () => void;
   onFail: (reason: string) => void;
+  /** Ação em voo (fila/flush) — desabilita os botões para não duplicar toque. */
+  pendingAction?: DeliveryFlowAction | null;
+  /**
+   * Aviso operacional (ex.: gravação durável da fila falhou). Precisa ficar
+   * visível: a tela não pode parecer que a ação está salva se não está.
+   */
+  notice?: string | null;
 }
 
-export default function DeliveryDetailScreen({ delivery, onStart, onComplete, onFail }: Props) {
+export default function DeliveryDetailScreen({
+  delivery,
+  onStart,
+  onArrive,
+  onComplete,
+  onFail,
+  pendingAction = null,
+  notice = null,
+}: Props) {
   const mapsUrl = `https://waze.com/ul?q=${encodeURIComponent(delivery.address)}`;
   const callUrl = `tel:${delivery.phone.replace(/[^\d+]/g, "")}`;
 
@@ -41,6 +59,11 @@ export default function DeliveryDetailScreen({ delivery, onStart, onComplete, on
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      {notice ? (
+        <Card style={styles.card}>
+          <Text style={styles.notice}>{notice}</Text>
+        </Card>
+      ) : null}
       <Card style={styles.card}>
         <View style={styles.cardHead}>
           <Text style={styles.name}>{delivery.customer_name}</Text>
@@ -88,15 +111,23 @@ export default function DeliveryDetailScreen({ delivery, onStart, onComplete, on
         <Button
           title="Iniciar entrega"
           onPress={onStart}
-          disabled={delivery.status !== "ASSIGNED"}
+          disabled={!isActionEnabled(delivery.status, "start") || pendingAction !== null}
           testID="delivery-start"
+        />
+        <View style={styles.gap} />
+        <Button
+          title="Cheguei ao destino"
+          variant="secondary"
+          onPress={onArrive}
+          disabled={!isActionEnabled(delivery.status, "arrive") || pendingAction !== null}
+          testID="delivery-arrive"
         />
         <View style={styles.gap} />
         <Button
           title="Concluir entrega"
           variant="success"
           onPress={onComplete}
-          disabled={delivery.status !== "ARRIVED"}
+          disabled={!isActionEnabled(delivery.status, "complete") || pendingAction !== null}
           testID="delivery-complete"
         />
         <View style={styles.gap} />
@@ -104,7 +135,7 @@ export default function DeliveryDetailScreen({ delivery, onStart, onComplete, on
           title="Reportar problema"
           variant="danger"
           onPress={() => onFail("OTHER")}
-          disabled={delivery.status !== "EN_ROUTE"}
+          disabled={!isActionEnabled(delivery.status, "fail") || pendingAction !== null}
           testID="delivery-fail"
         />
       </Card>
@@ -129,6 +160,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
   card: { padding: spacing.lg },
+  /** Aviso de falha de gravação — precisa saltar aos olhos, não sumir. */
+  notice: {
+    color: colors.danger,
+    fontSize: typography.body,
+    lineHeight: 21,
+    fontWeight: "600",
+  },
   cardHead: {
     flexDirection: "row",
     alignItems: "center",

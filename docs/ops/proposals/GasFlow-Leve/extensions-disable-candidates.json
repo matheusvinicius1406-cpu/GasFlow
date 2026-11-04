@@ -1,0 +1,88 @@
+{
+  "format": "proposal-only; not consumed by VS Code",
+  "profile": "GasFlow-Leve",
+  "keepEnabled": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "ms-python.vscode-python-envs",
+    "dbaeumer.vscode-eslint",
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-containers",
+    "ms-vscode-remote.remote-containers"
+  ],
+  "disableOnlyInNewProfileIfUnused": [
+    {
+      "extensions": [
+        "oracle.oracle-java",
+        "redhat.java",
+        "vscjava.vscode-java-debug",
+        "vscjava.vscode-java-dependency",
+        "vscjava.vscode-java-test",
+        "vscjava.vscode-maven",
+        "vscjava.vscode-gradle",
+        "vscjava.vscode-spring-initializr"
+      ],
+      "reason": "Java, Maven, Gradle and Spring tooling are unrelated to the Python/React GasFlow profile unless another Java project is actively worked on."
+    },
+    {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cpp-devtools",
+        "ms-vscode.cmake-tools",
+        "rust-lang.rust-analyzer",
+        "ms-kubernetes-tools.vscode-kubernetes-tools"
+      ],
+      "reason": "Native C/C++, Rust and Kubernetes tooling is not required for the stated FastAPI/React workflow; re-enable per profile when needed."
+    },
+    {
+      "extensions": [
+        "ms-mssql.mssql",
+        "ms-mssql.data-workspace-vscode",
+        "ms-mssql.sql-bindings-vscode",
+        "ms-mssql.sql-database-projects-vscode",
+        "ckolkman.vscode-postgres",
+        "cweijan.vscode-postgresql-client2",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "mongodb.mongodb-vscode"
+      ],
+      "reason": "Several database clients overlap. Keep database tooling disabled in the lightweight profile unless needed; if interactive PostgreSQL work is required, enable one PostgreSQL client only. Do not remove extensions or alter database connections."
+    },
+    {
+      "extensions": [
+        "anthropic.claude-code",
+        "google.geminicodeassist",
+        "google.gemini-cli-vscode-ide-companion",
+        "rooveterinaryinc.roo-cline",
+        "vizards.deepseek-v4-for-copilot",
+        "andrewbutson.github-copilot-llm-gateway",
+        "johnny-zhao.oai-compatible-copilot",
+        "ms-windows-ai-studio.windows-ai-studio"
+      ],
+      "reason": "These optional assistant integrations overlap. Enable only the assistant tools needed in this profile. Preserve the OpenCode CLI; it is installed separately and is not an extension in the current extension list."
+    },
+    {
+      "extensions": [
+        "eamodio.gitlens"
+      ],
+      "reason": "Git and worktree functionality are available through VS Code's built-in Git integration and the Git CLI; retain GitLens only if its additional views or MCP integration are needed."
+    },
+    {
+      "extensions": [
+        "ms-azuretools.vscode-azure-mcp-server",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-azure-github-copilot",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "ms-vscode-remote.remote-containers"
+      ],
+      "reason": "Azure and remote-container tooling may be useful for other tasks but is not needed for local Python/React work. Keep Docker/YAML extensions available and enable these only when the task requires them."
+    }
+  ],
+  "notes": [
+    "This file is a human-reviewed proposal, not a VS Code settings or profile file.",
+    "Create a separate profile by copying the current profile, then disable selected extensions only in the new profile.",
+    "No extension is uninstalled or disabled by this proposal.",
+    "OpenCode remains available through the installed opencode command in the integrated terminal."
+  ]
+}

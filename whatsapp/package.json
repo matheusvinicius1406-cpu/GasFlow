@@ -37,6 +37,7 @@
     "typescript-eslint": "^8.71.1"
   },
   "overrides": {
+    "body-parser": "^2.4.0",
     "extract-zip": "^2.0.1",
     "qs": "^6.16.0"
   }

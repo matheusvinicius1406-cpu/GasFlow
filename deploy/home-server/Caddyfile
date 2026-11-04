@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════
+# GasFlow Home Server — borda TLS da LAN (CA interna, R$ 0,00)
+#
+# Único ponto de entrada da rede local. O nginx do `frontend` continua
+# servindo a SPA e fazendo proxy de /api, /auth, /driver, /ws — nada
+# mudou dentro dele. O Caddy só termina TLS na frente.
+#
+# Nomes cobertos pelo certificado (mesma CA interna do Caddy):
+#   - gasflow.home        (hostname local; exige entrada no DNS/hosts)
+#   - $GASFLOW_LAN_IP     (endereço IPv4 privado atual do servidor)
+#
+# A CA raiz fica no volume `gasflow-hs-lab_caddy_data` (fora do Git).
+# Exporte-a e instale no Android para confiar no certificado:
+#   docs/home-server/HOME_SERVER_NETWORK.md
+#
+# `local_certs` obriga a CA interna mesmo para nomes públicos — nenhum
+# certificado sai para a internet e nada depende de ACME.
+# ═══════════════════════════════════════════════════════════════
+
+{
+	local_certs
+	# Sem HTTP→HTTPS automático: a porta 80 do host é de outros serviços
+	# desta máquina (GasFlow Desktop/e2e). Só publicamos 443.
+	auto_https disable_redirects
+	# Navegador/Android que abre `https://<ip>` NÃO envia SNI (RFC 6066
+	# proíbe IP em SNI). Sem um SNI padrão o Caddy não escolhe certificado
+	# e aborta o handshake (TLSV1_ALERT_INTERNAL_ERROR). Com isto, quem
+	# acessa pelo IP recebe o certificado de IP da CA interna.
+	default_sni {$GASFLOW_LAN_IP}
+}
+
+gasflow.home, {$GASFLOW_LAN_IP} {
+	tls internal
+
+	encode gzip
+
+	# Cabeçalhos de segurança na borda. O HSTS vale só para este host;
+	# não force includeSubDomains (a LAN tem outros serviços).
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# O frontend (nginx) é o alvo: fala HTTP só na rede interna do Compose,
+	# nunca exposto no host.
+	reverse_proxy frontend:80 {
+		header_up X-Forwarded-Proto https
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Log de acesso sem query string (evita token/PII em log de disco).
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}

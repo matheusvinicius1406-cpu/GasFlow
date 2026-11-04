@@ -10,6 +10,7 @@ bootstrap por `GASFLOW_INIT_DB_ALEMBIC=0`).
 
 import os
 
+import pytest
 from sqlalchemy import create_engine, inspect, text
 
 # A tabela de bookkeeping do próprio Alembic.
@@ -74,9 +75,54 @@ def test_run_alembic_upgrade_restores_env(tmp_path, monkeypatch):
 
 
 def test_return_false_without_alembic_ini(tmp_path):
-    """Sem alembic.ini na raiz indicada, devolve False (boot cai no create_all)."""
+    """Sem alembic.ini, o helper informa que não aplicou migration."""
     from app.infrastructure.database import init_db
 
     vazio = tmp_path / "sem_alembic"
     vazio.mkdir()
     assert init_db._run_alembic_upgrade("sqlite:///:memory:", backend_dir=vazio) is False
+
+
+def test_postgres_empty_database_fails_closed_without_alembic(monkeypatch):
+    """PostgreSQL vazio só pode ser migrado pelo backup/deploy gate."""
+    from app.infrastructure.database import init_db
+
+    class PostgresEngine:
+        url = create_engine("postgresql+psycopg2://user@localhost/db").url
+
+    monkeypatch.setattr(init_db, "engine", PostgresEngine())
+    monkeypatch.setattr(
+        init_db,
+        "_assert_postgres_schema_current",
+        lambda: (_ for _ in ()).throw(RuntimeError("schema PostgreSQL sem alembic_version; execute o gate de deploy")),
+    )
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("GASFLOW_INIT_DB_ALEMBIC", raising=False)
+    monkeypatch.setattr(
+        init_db.Base.metadata,
+        "create_all",
+        lambda **_kwargs: pytest.fail("PostgreSQL não pode cair para create_all"),
+    )
+
+    with pytest.raises(RuntimeError, match="gate de deploy"):
+        init_db._bootstrap_schema()
+
+
+def test_postgres_existing_database_does_not_run_create_all(monkeypatch):
+    """Banco PostgreSQL existente não recebe schema fora do Alembic."""
+    from app.infrastructure.database import init_db
+
+    class PostgresEngine:
+        url = create_engine("postgresql+psycopg2://user@localhost/db").url
+
+    monkeypatch.setattr(init_db, "engine", PostgresEngine())
+    monkeypatch.setattr(init_db, "_assert_postgres_schema_current", lambda: None)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("GASFLOW_INIT_DB_ALEMBIC", raising=False)
+    monkeypatch.setattr(
+        init_db.Base.metadata,
+        "create_all",
+        lambda **_kwargs: pytest.fail("PostgreSQL não pode executar create_all no boot"),
+    )
+
+    init_db._bootstrap_schema()

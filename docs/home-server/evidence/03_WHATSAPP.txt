@@ -1,0 +1,14 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+## env relevante (somente chaves de seguranca, sem valores sensiveis)
+WA_ENGINE=baileys
+WA_SEND_MODE=dry-run
+WA_BROADCAST_ENABLED=false
+ALLOW_INSECURE_AUTH=false
+## portas publicadas (esperado: nenhuma)
+nenhuma porta publicada
+## arquivos de sessao (esperado: 0 - sem pareamento)
+0
+## health (rota real: /api/health na porta interna)
+{"ok":true,"uptimeSeconds":4674}
+## /metrics sem token (esperado: 401 - SEC-02)
+401 {"error":"Token de autenticação ausente. Use: Authorization: Bearer <API_KEY>"}

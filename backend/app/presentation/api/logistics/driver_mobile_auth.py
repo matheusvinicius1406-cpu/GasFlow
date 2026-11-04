@@ -250,11 +250,15 @@ def mobile_login(body: MobileLoginRequest, request: Request, db: Session = Depen
     driver = _find_driver(db, body.username)
     if driver is None:
         raise HTTPException(401, detail="Invalid credentials")
-    if driver.password_hash:
-        import bcrypt
+    # Falha fechada: sem hash cadastrado não há como verificar a senha. Antes
+    # o `if` pulava a checagem e qualquer senha entrava (bypass).
+    stored_hash = (driver.password_hash or "").strip()
+    if not stored_hash:
+        raise HTTPException(401, detail="Invalid credentials")
+    import bcrypt
 
-        if not bcrypt.checkpw(body.password.encode(), driver.password_hash.encode()):
-            raise HTTPException(401, detail="Invalid credentials")
+    if not bcrypt.checkpw(body.password.encode(), stored_hash.encode()):
+        raise HTTPException(401, detail="Invalid credentials")
 
     driver_id = driver.codigo
     tenant_id = driver.tenant_id or "default"

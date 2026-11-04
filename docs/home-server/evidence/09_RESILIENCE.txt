@@ -1,0 +1,39 @@
+OK    baseline: login admin (HTTP 200)
+OK    baseline: /api/dashboard (HTTP 200)
+
+-- reiniciando redis (gasflow-hs-lab-redis)
+OK    redis: docker restart (exit 0)
+OK    redis: healthy em 8s
+OK    redis: /api/health (HTTP 200)
+OK    redis: sessão anterior ainda válida (/api/dashboard 200)
+
+-- reiniciando frontend (gasflow-hs-lab-frontend)
+OK    frontend: docker restart (exit 0)
+OK    frontend: healthy em 10s
+OK    frontend: /api/health (HTTP 200)
+OK    frontend: sessão anterior ainda válida (/api/dashboard 200)
+
+-- reiniciando caddy (gasflow-hs-lab-caddy)
+OK    caddy: docker restart (exit 0)
+OK    caddy: healthy em 17s
+OK    caddy: /api/health (HTTP 200)
+OK    caddy: sessão anterior ainda válida (/api/dashboard 200)
+
+-- reiniciando postgres (gasflow-hs-lab-postgres)
+OK    postgres: docker restart (exit 0)
+OK    postgres: healthy em 23s
+OK    postgres: /api/health (HTTP 200)
+NOTE  postgres: primeira requisição ao banco após o restart devolveu 500; recuperou em 2 tentativa(s) (3s)
+OK    postgres: sessão anterior ainda válida (/api/dashboard 200)
+
+-- estado final
+gasflow-hs-lab-backend=Up 2 minutes (healthy)
+gasflow-hs-lab-caddy=Up 36 seconds (healthy)
+gasflow-hs-lab-frontend=Up 52 seconds (healthy)
+gasflow-hs-lab-whatsapp=Up About an hour (healthy)
+gasflow-hs-lab-postgres=Up 13 seconds (healthy)
+gasflow-hs-lab-redis=Up About a minute (healthy)
+OK    5+ serviços do core healthy, nenhum em restart
+OK    dados preservados (clients/orders/drivers/users = 5/4/1/6)
+=========================================
+RESULTADO: RESILIÊNCIA VALIDADA

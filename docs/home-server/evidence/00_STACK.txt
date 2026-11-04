@@ -1,0 +1,16 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+## docker compose ps
+NAME                      IMAGE                     COMMAND                  SERVICE    CREATED             STATUS                       PORTS
+gasflow-hs-lab-backend    gasflow-hs-lab-backend    "sh -c 'alembic upgr…"   backend    15 minutes ago      Up 15 minutes (healthy)      8000/tcp
+gasflow-hs-lab-caddy      caddy:2-alpine            "caddy run --config …"   caddy      About an hour ago   Up 13 minutes (healthy)      127.0.0.1:443->443/tcp, 192.168.0.211:443->443/tcp
+gasflow-hs-lab-frontend   gasflow-hs-lab-frontend   "/docker-entrypoint.…"   frontend   23 hours ago        Up 13 minutes (healthy)      127.0.0.1:8088->80/tcp
+gasflow-hs-lab-postgres   postgres:16-alpine        "docker-entrypoint.s…"   postgres   23 hours ago        Up 12 minutes (healthy)      5432/tcp
+gasflow-hs-lab-redis      redis:7-alpine            "docker-entrypoint.s…"   redis      23 hours ago        Up 13 minutes (healthy)      6379/tcp
+gasflow-hs-lab-whatsapp   gasflow-hs-lab-whatsapp   "docker-entrypoint.s…"   whatsapp   23 hours ago        Up About an hour (healthy)   3000/tcp
+## imagens em uso
+gasflow-hs-lab-backend	gasflow-hs-lab-backend	Up 15 minutes (healthy)
+gasflow-hs-lab-caddy	caddy:2-alpine	Up 13 minutes (healthy)
+gasflow-hs-lab-frontend	gasflow-hs-lab-frontend	Up 13 minutes (healthy)
+gasflow-hs-lab-whatsapp	gasflow-hs-lab-whatsapp	Up About an hour (healthy)
+gasflow-hs-lab-postgres	postgres:16-alpine	Up 12 minutes (healthy)
+gasflow-hs-lab-redis	redis:7-alpine	Up 13 minutes (healthy)

@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { useSessionStore, loadPersistedConsent, setConsentStorage, createMemoryConsentStorage, CONSENT_VERSION } from "../src/logic/session.ts";
+import { useSessionStore, loadPersistedConsent, setConsentStorage, createMemoryConsentStorage, createAsyncStorageConsentStorage, CONSENT_STORAGE_KEY, CONSENT_VERSION } from "../src/logic/session.ts";
 import { OfflineQueue, type QueueItem, type QueueStorage } from "../src/logic/offlineQueue.ts";
 import { postDeliveryAction } from "../src/logic/api.ts";
 
@@ -96,9 +96,9 @@ function fetchFailingThenOk(attemptsBeforeSuccess: number): { fetchFn: typeof fe
     calls.push(String(input));
     attempt += 1;
     if (attempt <= attemptsBeforeSuccess) throw new Error("sem rede");
-    // valida que o client_action_id foi no corpo (idempotência)
-    const body = JSON.parse(String(init?.body ?? "{}")) as { client_action_id?: string };
-    assert.ok(body.client_action_id, "ação deve carregar client_action_id");
+    // O backend consulta idempotency_key em ActionRequest.
+    const body = JSON.parse(String(init?.body ?? "{}")) as { idempotency_key?: string };
+    assert.ok(body.idempotency_key, "ação deve carregar idempotency_key");
     return { ok: true, json: async () => ({}) } as Response;
   }) as unknown as typeof fetch;
   return { fetchFn, calls };
@@ -135,11 +135,11 @@ test("replay: ações NÃO duplicam no servidor (um POST por client_action_id)",
 
   const seen: string[] = [];
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body ?? "{}")) as { client_action_id?: string };
-    if (seen.includes(String(body.client_action_id))) {
+    const body = JSON.parse(String(init?.body ?? "{}")) as { idempotency_key?: string };
+    if (seen.includes(String(body.idempotency_key))) {
       throw new Error("DUPLICATA enviada ao servidor");
     }
-    seen.push(String(body.client_action_id));
+    seen.push(String(body.idempotency_key));
     return { ok: true, json: async () => ({}) } as Response;
   }) as unknown as typeof fetch;
 
@@ -149,4 +149,116 @@ test("replay: ações NÃO duplicam no servidor (um POST por client_action_id)",
   await queue.flush(transport);
 
   assert.equal(seen.length, 1, "segundo flush não reenvia item já synced");
+});
+
+// ── P1-1: consentimento persistido no AsyncStorage ───────────
+
+function fakeAsyncStorage(initial: Record<string, string> = {}) {
+  const data = new Map<string, string>(Object.entries(initial));
+  return {
+    data,
+    getItem: async (key: string) => data.get(key) ?? null,
+    setItem: async (key: string, value: string) => {
+      data.set(key, value);
+    },
+  };
+}
+
+test("consent: AsyncStorage persiste o aceite e sobrevive ao restart", async () => {
+  const backend = fakeAsyncStorage();
+  setConsentStorage(createAsyncStorageConsentStorage(backend));
+
+  resetStore();
+  useSessionStore.getState().acceptConsent(new Date("2026-10-30T09:00:00Z"));
+  await new Promise((r) => setTimeout(r, 0));
+
+  // ── app reaberto: mesmo AsyncStorage, store zerado ──
+  resetStore();
+  useSessionStore.getState().setConsentLoaded();
+  assert.equal(useSessionStore.getState().hasValidConsent(), false);
+
+  setConsentStorage(createAsyncStorageConsentStorage(backend));
+  await loadPersistedConsent();
+
+  const s = useSessionStore.getState();
+  assert.equal(s.consentVersion, CONSENT_VERSION);
+  assert.equal(s.hasValidConsent(), true);
+  assert.ok(s.consentAcceptedAt?.startsWith("2026-10-30"));
+});
+
+test("consent: payload corrompido não vira aceite (fail-closed)", async () => {
+  const backend = fakeAsyncStorage({ [CONSENT_STORAGE_KEY]: "{nao-e-json" });
+  setConsentStorage(createAsyncStorageConsentStorage(backend));
+
+  resetStore();
+  await loadPersistedConsent();
+
+  const s = useSessionStore.getState();
+  assert.equal(s.consentLoaded, true);
+  assert.equal(s.hasValidConsent(), false);
+});
+
+test("consent: falha de gravação NÃO vira aceite no próximo boot (fail-closed)", async () => {
+  const broken = {
+    getItem: async () => null,
+    setItem: async () => {
+      throw new Error("armazenamento indisponível");
+    },
+  };
+  setConsentStorage(createAsyncStorageConsentStorage(broken));
+
+  resetStore();
+  useSessionStore.getState().acceptConsent(new Date("2026-10-30T09:00:00Z"));
+  // estado em memória vale para a sessão corrente…
+  assert.equal(useSessionStore.getState().hasValidConsent(), true);
+  await new Promise((r) => setTimeout(r, 0));
+
+  // …mas nada foi gravado ⇒ no boot seguinte o gate pede de novo.
+  resetStore();
+  await loadPersistedConsent();
+  assert.equal(useSessionStore.getState().hasValidConsent(), false);
+  assert.equal(useSessionStore.getState().consentLoaded, true, "boot não fica travado");
+});
+
+test("consent: logout encerra a sessão mas preserva o aceite do aparelho", async () => {
+  const backend = fakeAsyncStorage();
+  setConsentStorage(createAsyncStorageConsentStorage(backend));
+
+  resetStore();
+  useSessionStore.getState().acceptConsent(new Date("2026-10-30T09:00:00Z"));
+  await new Promise((r) => setTimeout(r, 0));
+
+  useSessionStore.getState().clearSession();
+  assert.equal(useSessionStore.getState().accessToken, null, "token saiu");
+  assert.equal(useSessionStore.getState().hasValidConsent(), true, "aceite é do aparelho, não da sessão");
+
+  resetStore();
+  await loadPersistedConsent();
+  assert.equal(useSessionStore.getState().hasValidConsent(), true);
+});
+
+test("consent: leitura que falha não destrói o armazenamento e se recupera", async () => {
+  const flaky = {
+    fail: true,
+    data: new Map<string, string>(),
+    async getItem(key: string) {
+      if (this.fail) throw new Error("io temporário");
+      return this.data.get(key) ?? null;
+    },
+    async setItem(key: string, value: string) {
+      this.data.set(key, value);
+    },
+  };
+  setConsentStorage(createAsyncStorageConsentStorage(flaky));
+
+  resetStore();
+  await loadPersistedConsent();
+  assert.equal(useSessionStore.getState().hasValidConsent(), false, "fail-closed na falha");
+
+  flaky.fail = false; // storage volta
+  useSessionStore.getState().acceptConsent(new Date("2026-10-30T09:00:00Z"));
+  await new Promise((r) => setTimeout(r, 0));
+  resetStore();
+  await loadPersistedConsent();
+  assert.equal(useSessionStore.getState().hasValidConsent(), true, "recuperou sem recriar nada");
 });

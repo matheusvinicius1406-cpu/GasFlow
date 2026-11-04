@@ -69,6 +69,47 @@ export function createMemoryConsentStorage(): ConsentStorage {
   };
 }
 
+/** Contrato mínimo do AsyncStorage (injetado — sem import de RN aqui). */
+export interface AsyncStorageLike {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+}
+
+/** Chave do consentimento no AsyncStorage (versão no payload). */
+export const CONSENT_STORAGE_KEY = "gasflow.driver.consent.v1";
+
+/**
+ * Consentimento LGPD sobrevivendo ao fechamento do app (P1-1).
+ *
+ * Antes o boot usava `createMemoryConsentStorage()`, então todo reinício pedia
+ * o aceite de novo. JSON inválido/ilegível devolve `null` → a navegação pede o
+ * consentimento outra vez (fail-closed, nunca presume aceite).
+ */
+export function createAsyncStorageConsentStorage(backend: AsyncStorageLike): ConsentStorage {
+  if (!backend || typeof backend.getItem !== "function" || typeof backend.setItem !== "function") {
+    throw new TypeError("AsyncStorageInválido");
+  }
+  return {
+    async get() {
+      const raw = await backend.getItem(CONSENT_STORAGE_KEY);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as Partial<ConsentPersisted>;
+        if (typeof parsed?.acceptedAt !== "string" || typeof parsed.version !== "string") return null;
+        return { acceptedAt: parsed.acceptedAt, version: parsed.version };
+      } catch {
+        return null;
+      }
+    },
+    async set(value) {
+      await backend.setItem(
+        CONSENT_STORAGE_KEY,
+        JSON.stringify({ acceptedAt: value.acceptedAt, version: value.version }),
+      );
+    },
+  };
+}
+
 let consentStorage: ConsentStorage = createMemoryConsentStorage();
 
 /** Injeta o storage persistente (AsyncStorage no RN). Chamar no boot do app. */

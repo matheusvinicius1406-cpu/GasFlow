@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_background" />
-    <item android:gravity="center">
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher"
-            android:tileMode="disabled" />
-    </item>
+    <!-- Logo: item com drawable direto, NÃO <bitmap>.
+         Em API 26+ @mipmap/ic_launcher Ǹ adaptive-icon (XML de vectores),
+         que o <bitmap> nǜo infla -> Resources$NotFoundException no startup
+         ("Binary XML file line #8: <bitmap> requires a valid 'src' attribute").
+         O <item android:drawable> resolve em qualquer API (PNG nas densidades
+         clǦssicas, adaptive-icon no anydpi-v26). -->
+    <item
+        android:gravity="center"
+        android:drawable="@mipmap/ic_launcher" />
 </layer-list>

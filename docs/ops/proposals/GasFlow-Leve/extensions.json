@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "ms-python.vscode-python-envs",
+    "dbaeumer.vscode-eslint",
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-containers",
+    "ms-vscode-remote.remote-containers"
+  ]
+}

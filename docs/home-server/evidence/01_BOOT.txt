@@ -1,0 +1,9 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+## alembic current
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+a4b5c6d7e8f9 (head)
+## tabelas em public
+69
+## ocorrencias de 'schema migration leve falhou' no log (esperado: 0)
+0

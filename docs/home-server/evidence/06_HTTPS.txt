@@ -1,0 +1,13 @@
+== HTTPS/LAN — https://192.168.0.211 ==
+OK    SPA (frontend) (200)
+OK    backend /api/health (200)
+OK    backend /ready (200)
+OK    api v1 (sem strip) (200)
+OK    auth raiz (401 esperado) (401)
+OK    driver raiz (401 esperado) (401)
+OK    metrics bloqueado na borda (404)
+OK    login admin (200)
+OK    GET /api/dashboard autenticado (200)
+AVISO gasflow.home não resolve neste host (esperado sem reserva DHCP/DNS: use o IP ou /etc/hosts)
+=========================================
+Resultado: 9 ok / 0 falhas

@@ -186,8 +186,13 @@ export function driverWsUrl(baseUrl: string, token: string): string {
 // (`/auth/login`). As rotas antigas `/api/v1/driver/*` aceitavam só sessão de
 // driver no banco ou JWT de escopo `mobile`, que o app não tem: respondiam 401
 // em aceitar/iniciar/concluir/falhar.
+//
+// Cadeia de estados do backend (driver_api.py — can_* / INVALID_STATE):
+// start (ASSIGNED|DISPATCHED → EN_ROUTE) · arrive (EN_ROUTE → ARRIVED) ·
+// complete (ARRIVED → DELIVERED). O `arrive` é obrigatório: concluir sem
+// chegar responde 400.
 
-export type DeliveryAction = "accept" | "start" | "complete" | "fail";
+export type DeliveryAction = "accept" | "start" | "arrive" | "complete" | "fail";
 
 /** Envia uma ação da fila. Lança em falha — o OfflineQueue decide o backoff. */
 export async function postDeliveryAction(
@@ -203,13 +208,15 @@ export async function postDeliveryAction(
       ? `${clean}/driver/deliveries/${deliveryId}/accept`
       : action === "start"
         ? `${clean}/driver/deliveries/${deliveryId}/start`
-        : action === "complete"
-          ? `${clean}/driver/deliveries/${deliveryId}/complete`
-          : `${clean}/driver/deliveries/${deliveryId}/fail`;
+        : action === "arrive"
+          ? `${clean}/driver/deliveries/${deliveryId}/arrive`
+          : action === "complete"
+            ? `${clean}/driver/deliveries/${deliveryId}/complete`
+            : `${clean}/driver/deliveries/${deliveryId}/fail`;
   await requestJson<unknown>(fetchFn, path, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ client_action_id: clientActionId, ...payload }),
+    body: JSON.stringify({ ...payload, idempotency_key: clientActionId }),
   });
 }
 

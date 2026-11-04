@@ -118,8 +118,16 @@ def _ensure_sqlite_columns() -> None:
     Aqui comparamos o schema real (PRAGMA table_info) com o metadata e
     adicionamos as colunas faltantes via ALTER TABLE. Tipos SQLite são
     permissivos; defaults aplicam-se a linhas novas (NULL para as antigas).
+
+    **Somente SQLite**: `PRAGMA` é sintaxe exclusiva do SQLite e falha com
+    `ProgrammingError` em PostgreSQL. Em outros dialetos o schema vem do
+    Alembic (`alembic upgrade head`), então a operação vira no-op (R-1 do
+    relatório runtime LAB-01→LAB-05).
     """
     from sqlalchemy import text
+
+    if engine.url.get_backend_name() != "sqlite":
+        return  # PRAGMA é SQLite-only; Alembic é a fonte de schema nos demais dialetos
 
     type_map = {str: "TEXT", bool: "BOOLEAN", int: "INTEGER", float: "REAL"}
     with engine.connect() as conn:
@@ -631,14 +639,8 @@ def _database_is_empty() -> bool:
 def _run_alembic_upgrade(url: str, backend_dir=None) -> bool:
     """Aplica `alembic upgrade head` no banco do `url`. True se aplicou.
 
-    Chamado SÓ para banco vazio (a cadeia completa cria o schema + a tabela
-    `alembic_version`). Qualquer indisponibilidade (alembic ausente, ini não
-    encontrado) devolve False e o chamador cai no `create_all` — o boot nunca
-    quebra por causa da migração. O env.py do Alembic resolve o DATABASE_URL
-    em runtime, então ele é apontado para `url` durante a execução.
-
-    `backend_dir` (raiz com alembic.ini + migrations/) é parametrizável para
-    teste; em runtime usa a raiz do pacote backend.
+    Chamado para o bootstrap SQLite de banco vazio. A configuração e o env.py
+    apontam o Alembic para a URL recebida; exceções de migration são propagadas.
     """
     import os
     from pathlib import Path
@@ -675,13 +677,53 @@ def _run_alembic_upgrade(url: str, backend_dir=None) -> bool:
     return True
 
 
+def _assert_postgres_schema_current(backend_dir=None) -> None:
+    """Recusa servir PostgreSQL vazio ou fora do Alembic head."""
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect, text
+
+    if backend_dir is None:
+        backend_dir = Path(__file__).resolve().parents[3]
+    else:
+        backend_dir = Path(backend_dir)
+    ini = backend_dir / "alembic.ini"
+    if not ini.is_file():
+        raise RuntimeError("alembic.ini ausente; recusando iniciar PostgreSQL")
+
+    cfg = Config(str(ini))
+    cfg.set_main_option("script_location", str(backend_dir / "migrations"))
+    expected_heads = set(ScriptDirectory.from_config(cfg).get_heads())
+    with engine.connect() as conn:
+        if not inspect(conn).has_table("alembic_version"):
+            raise RuntimeError("schema PostgreSQL sem alembic_version; execute o gate de deploy")
+        applied_heads = set(conn.execute(text("SELECT version_num FROM alembic_version")).scalars())
+    if not expected_heads or applied_heads != expected_heads:
+        raise RuntimeError("schema PostgreSQL fora do Alembic head; execute o gate de deploy")
+
+
 def _bootstrap_schema() -> None:
     """Cria o schema de um banco novo pela fonte de verdade (Alembic).
 
-    Banco vazio + ambiente não-test → `alembic upgrade head`.
-    Qualquer outro caso (legado já populado, testes, falha do alembic) usa
-    `create_all`, com `_ensure_sqlite_columns()` como rede de compat.
+    PostgreSQL fora de testes nunca cai para `create_all`: bancos vazios exigem
+    Alembic; bancos existentes são atualizados pelo gate explícito de deploy.
+    SQLite mantém o bootstrap legado do Desktop.
     """
+    import os
+
+    backend = engine.url.get_backend_name()
+
+    if backend != "sqlite":
+        if _alembic_boot_enabled():
+            _assert_postgres_schema_current()
+            return
+        if os.getenv("ENVIRONMENT", "development").strip().lower() != "test":
+            raise RuntimeError("Alembic está desabilitado para PostgreSQL")
+        Base.metadata.create_all(bind=engine)
+        return
+
     if _alembic_boot_enabled() and _database_is_empty():
         if _run_alembic_upgrade(str(engine.url)):
             return
@@ -689,7 +731,27 @@ def _bootstrap_schema() -> None:
 
 
 def init_db():
+    """Boot do schema + cadeia de migrações leves, selecionando o dialeto real.
+
+     1. `_bootstrap_schema()`: PostgreSQL exige schema no Alembic head; SQLite
+         mantém o bootstrap compatível com Desktop/testes.
+    2. Cadeia de migrações leves: **exclusiva do SQLite** (Desktop/prod legado
+       criado por `create_all`). Ela usa `PRAGMA` (`_ensure_sqlite_columns`),
+       `AUTOINCREMENT` (`_seed_rbac_if_needed`) e a reorg one-shot do app
+       (`_reorg_cleanup`) — nada disso é portável nem desejável em
+       PostgreSQL, onde o Alembic já é a única fonte de schema e semente.
+
+    Antes desta seleção por dialeto, o `PRAGMA` derrubava a cadeia inteira com
+    um `ERROR` "schema migration leve falhou" a cada boot em PostgreSQL
+    (R-1, relatório runtime LAB-01→LAB-05). Comportamento em SQLite: idêntico.
+    """
+    import logging
+
     _bootstrap_schema()
+    backend = engine.url.get_backend_name()
+    if backend != "sqlite":
+        logging.getLogger("gasflow.init_db").debug("init_db.light_migrations.skipped", extra={"backend": backend})
+        return
     try:
         _backup_before_migration()
         _ensure_sqlite_columns()
@@ -699,6 +761,4 @@ def init_db():
         _reorg_cleanup()
         _seed_rbac_if_needed()
     except Exception:  # pragma: no cover — nunca derrubar o boot por migration
-        import logging
-
         logging.getLogger("gasflow.init_db").exception("schema migration leve falhou")
