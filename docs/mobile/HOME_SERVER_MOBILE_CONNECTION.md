@@ -147,3 +147,23 @@ automaticamente em CAs instaladas pelo usuário: por isso o
 | IP por DHCP (`192.168.0.211`) | IP pode mudar após reboot do roteador | reserva de DHCP recomendada |
 | `gasflow.home` sem DNS | nome não resolve | usar IP ou criar host override |
 | Wi-Fi no perfil Público do Windows | firewall pode bloquear | regra 443 restrita à sub-rede (ver `HOME_SERVER_NETWORK.md` §5) |
+
+## 7. Re-verificação de 04/11/2026 (execução atual)
+
+Tudo abaixo foi medido de novo nesta execução, sem alterar a pilha:
+
+| Verificação | Comando real | Resultado |
+|---|---|---|
+| Serviços | `docker compose ... ps` | **6/6 healthy** |
+| HTTPS pela LAN | `verify_lan_https.py --base https://192.168.0.211` | **9 ok / 0 falhas**, CA validada |
+| Cadeia TLS | `openssl s_client -CAfile .../gasflow-home-ca.crt` | `Verify return code: 0 (ok)` |
+| SAN | handshake com SNI | IP `192.168.0.211` e `DNS:gasflow.home` |
+| Login | `POST /auth/login` (admin) | `200`; `/api/dashboard` `200` |
+| Resiliência | `verify_resilience.py` | redis/frontend/caddy/postgres voltam; sessão e `5/4/1/6` preservados |
+| Backup/restore | `verify_backup_restore.sh` | 69/299/113, `alembic a4b5c6d7e8f9`, **0 divergências** |
+| Isolamento | WhatsApp | `WA_SEND_MODE=dry-run`, `WA_BROADCAST_ENABLED=false` |
+
+A URL de conexão do app permanece `https://192.168.0.211` e o endpoint de
+login do entregador é `POST /auth/login` com `platform: "mobile"`.
+O caminho legado `/auth/mobile/login` continua **inutilizável** para entregador
+novo (R-3, decisão pendente) e não deve ser usado pelo app.
