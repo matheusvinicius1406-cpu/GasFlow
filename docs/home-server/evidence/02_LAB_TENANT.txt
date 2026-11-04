@@ -1,0 +1,18 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+# tenant: gasflow_home_server_lab
+auth_memberships   4
+auth_tenants       1
+clients            3
+orders             4
+order_items        4
+products           6
+inventory          4
+delivery_drivers   1
+## usuarios do tenant (username/role, sem hash)
+    username    |   role
+----------------+----------
+ admin          | ADMIN
+ lab_admin      | ADMIN
+ lab_entregador | DRIVER
+ lab_operador   | OPERATOR
+(4 rows)

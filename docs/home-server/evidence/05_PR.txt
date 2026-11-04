@@ -1,0 +1,12 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+{"baseRefName":"main","headRefName":"release/home-server-candidate","isDraft":false,"mergeStateStatus":"UNSTABLE","mergeable":"MERGEABLE","number":79,"state":"OPEN","title":"feat(release): consolidate FINAL MISSION 100 fixes for main","updatedAt":"2026-10-31T19:33:51Z","url":"https://github.com/matheusvinicius1406-cpu/GasFlow/pull/79"}
+## checks
+Trivy (scan de vulnerabilidades)	fail	4m5s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124638032573
+Agent (typecheck + build + tests)	pass	11s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636241997
+Backend (ruff + vulture + pytest)	pass	7m43s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242249
+Desktop (typecheck + build + tests)	pass	27s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242154
+Driver app (typecheck + tests)	pass	20s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242156
+Frontend (typecheck + build + tests)	pass	2m10s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242212
+Migrations (PostgreSQL, banco zerado)	pass	44s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242078
+WhatsApp service (typecheck + build + tests)	pass	1m11s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815072/job/124636242136
+playwright	pass	2m5s	https://github.com/matheusvinicius1406-cpu/GasFlow/actions/runs/41234815065/job/124636241592

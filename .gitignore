@@ -96,3 +96,7 @@ _legado_raiz/*.zip
 # OPS-01B: env real do laboratório Home Server (o template .env.lab.example
 # é versionado; o .env.lab com valores locais não).
 deploy/home-server/.env.lab
+# Home Server: qualquer env local do servidor (valores reais) e a CA privada
+# exportada para instalar no Android ficam fora do Git.
+deploy/home-server/.env.homeserver
+deploy/home-server/certs/

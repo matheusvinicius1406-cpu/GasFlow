@@ -30,6 +30,11 @@ class SQLAlchemyOrderItemRepository(TenantMixin, OrderItemRepository):
 
     def _to_model(self, entity: OrderItem) -> OrderItemModel:
         return OrderItemModel(
+            # Sem tenant explícito a coluna cai no default "default": o item
+            # fica invisível para o tenant real (leitura é filtrada) e, como
+            # o código do pedido reinicia por tenant, itens de tenants
+            # diferentes passam a colidir em `default`.
+            tenant_id=self.tenant_id,
             order_codigo=entity.order_codigo,
             product_codigo=entity.product_codigo,
             product_nome=entity.product_nome,

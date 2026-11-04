@@ -1,0 +1,12 @@
+image=gasflow-hs-lab-backend:latest
+image_id=sha256:ce59318857a6a1e19a16635ed57fac66b069dd67f891781969c3db503664edb2
+image_created=2026-11-04T12:49:38Z
+container_id=0a39033258a560ef84c3f151729cdc432232b084c27a45d75557445a3d7fe9c4
+container_created=2026-11-04T12:51:29Z
+git_head=9eefac6df2bc4189a2404195db5b638330bb4a3e
+git_branch=release/home-server-candidate
+build_context=./backend (Dockerfile), árvore de trabalho com correções ainda não commitadas
+r1_verified=init_db.py:129/188 (guard), :751 (dialeto), light_migrations.skipped presente
+r6_r7_verified=tenant_id explícito em order_item_repository._to_model e inventory_repository (insert + UPDATE atômico com tenant)
+r8_verified=stored_hash presente em driver_api.py (2) e driver_mobile_auth.py (3) — falha fechada sem hash
+runtime_check=imagem anterior (sha256:0c7373b5…) não continha R-8; substituída e container recriado em 12:51Z

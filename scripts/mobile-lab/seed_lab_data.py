@@ -27,10 +27,11 @@ import json
 import os
 import sqlite3
 import sys
+import time
 import urllib.error
 import urllib.request
 
-LAB_DIR = os.path.join(
+LAB_DIR = os.environ.get("GASFLOW_LAB_DIR") or os.path.join(
     os.environ.get("LOCALAPPDATA", "."), "Temp", "opencode", "gasflow-lab"
 )
 SECRETS = os.path.join(LAB_DIR, "secrets.env")
@@ -40,6 +41,9 @@ DB_FILE = os.path.join(LAB_DIR, "gasflow_lab.db")
 
 TENANT_ID = "gasflow_lab"
 TENANT_NAME = "GasFlow Laboratorio"
+# Documento sintetico do entregador de lab: e a chave de idempotencia do
+# cadastro (delivery_drivers.username nao e preenchido pelo use case).
+DOCUMENT = "MOTORISTA-LAB-001"
 
 # Coordenadas EXPLICITAMENTE de teste (park/plaza sintetico, nada de endereco real).
 TEST_COORDS = [
@@ -88,6 +92,7 @@ def req(
     token: str | None = None,
     base: str = "",
     tolerate: tuple = (409,),
+    _attempt: int = 0,
 ) -> dict | list | None:
     url = f"{base}{path}"
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -101,6 +106,15 @@ def req(
             return json.loads(body) if body.strip() else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")
+        # Rate limit global (5 logins/5 min por IP, 60-120 req/min por rota):
+        # espera a janela deslizante liberar e tenta de novo em vez de abortar.
+        if exc.code == 429 and _attempt < 5:
+            print(
+                f"[seed] 429 em {method} {path}: aguardando 60s "
+                f"(janela do rate limit) e re-tentando ({_attempt + 1}/5)"
+            )
+            time.sleep(60)
+            return req(method, path, payload, token, base, tolerate, _attempt + 1)
         if exc.code in tolerate or any(
             t in detail.lower()
             for t in ("already exists", "duplicate", "j\\u00e1 existe")
@@ -179,12 +193,8 @@ def ensure_tenant(base: str, admin_token: str) -> None:
 
 
 def ensure_tenant_admin(base: str, admin_token: str, password: str) -> str:
-    try:
-        lg = login("admin_lab", password, base)
-        print("[seed] tenant admin 'admin_lab' ja ativo")
-        return token_of(lg)
-    except SystemExit:
-        pass
+    # Cria PRIMEIRO e so entao loga: o limitador do backend da 5 logins por
+    # 5 min por IP, entao cada "login de teste" que falha custa orcamento real.
     res = req(
         "POST",
         "/auth/users",
@@ -200,7 +210,10 @@ def ensure_tenant_admin(base: str, admin_token: str, password: str) -> str:
         base=base,
         tolerate=(400, 409),
     )
-    print(f"[seed] tenant admin criado: {res}")
+    if res.get("__tolerated__"):
+        print("[seed] tenant admin 'admin_lab' ja existia")
+    else:
+        print(f"[seed] tenant admin criado: {res}")
     return token_of(login("admin_lab", password, base))
 
 
@@ -425,76 +438,81 @@ def ensure_state(
 
 def ensure_driver(
     base: str, lab_admin_token: str, username: str, password: str
-) -> tuple[str, dict]:
-    """Retorna (codigo_do_motorista, credencial_final)."""
-    # 1) ja existe e a senha de lab funciona?
-    try:
-        lg = login(username, password, base, platform="mobile")
-        me_ok = True
-    except SystemExit:
-        me_ok = False
-    if me_ok:
+) -> tuple[str, dict, str]:
+    """Retorna (codigo_do_motorista, credencial_final, token_da_sessao).
+
+    O token e devolvido para que o chamador nao precise de outro POST
+    /auth/login: o limitador do backend da 5 logins por 5 min por IP e cada
+    login extra queima orcamento de todos os scripts da sequencia.
+    """
+    # 1) existe? lista com token de admin - nao gasta orcamento de login.
+    # A chave NAO e so o username: CreateDriverWithCredentialUseCase grava o
+    # username apenas em auth_users; delivery_drivers.username fica NULL.
+    # O document (MOTORISTA-LAB-001) e o unico campo estavel na entidade.
+    creds = {"username": username, "password": password}
+    existing: dict[str, str] = {}
+    for d in as_list(
+        req("GET", "/delivery/drivers", token=lab_admin_token, base=base),
+        ("drivers",),
+    ):
+        if not isinstance(d, dict):
+            continue
+        codigo = str(d.get("codigo") or "")
+        if d.get("username"):
+            existing[str(d["username"])] = codigo
+        if d.get("document"):
+            existing[str(d["document"])] = codigo
+
+    if username in existing or DOCUMENT in existing:
+        codigo = existing.get(username) or existing.get(DOCUMENT) or ""
+        try:
+            lg = login(username, password, base, platform="mobile")
+        except SystemExit:
+            raise SystemExit(
+                "[seed] entregador existe mas a senha de lab nao funciona. "
+                "Recrie o laboratorio (apague o banco de lab) ou troque a senha manualmente."
+            ) from None
         print(f"[seed] entregador '{username}' ja ativo com credencial de lab")
         info = req("GET", "/driver/me", token=token_of(lg), base=base, tolerate=())
-        codigo = str(info.get("codigo") or info.get("driver_id") or info.get("id"))
-        return codigo, {"username": username, "password": password}
+        codigo = str(
+            info.get("codigo") or info.get("driver_id") or info.get("id") or codigo
+        )
+        return codigo, creds, token_of(lg)
 
-    # 2) precisa ser criado (primeira execucao)
-    existing = {
-        str(d.get("username")): str(d.get("codigo"))
-        for d in as_list(
-            req("GET", "/delivery/drivers", token=lab_admin_token, base=base),
-            ("drivers",),
-        )
-        if isinstance(d, dict)
-    }
-    temp_pw = None
-    if username in existing:
-        codigo = existing[username]
-        print(
-            f"[seed] entregador ja cadastrado sem senha de lab conhecida: {username} ({codigo})"
-        )
-    else:
-        res = req(
-            "POST",
-            "/admin/drivers",
-            {
-                "name": "Entregador Teste",
-                "phone": "91900000099",
-                "document": "MOTORISTA-LAB-001",
-                "username": username,
-            },
-            token=lab_admin_token,
-            base=base,
-            tolerate=(409,),
-        )
-        if res.get("__tolerated__"):
-            raise SystemExit(
-                f"[seed] driver existente com outro dono: {res['detail'][:200]}"
-            )
-        codigo = str(res.get("driver_id") or res.get("driver", {}).get("codigo"))
-        temp_pw = res.get("temporary_password")
-        print(f"[seed] entregador criado: codigo={codigo} usuario={username}")
-
-    if temp_pw:
-        lg = login(username, temp_pw, base, platform="mobile")
-        req(
-            "POST",
-            "/auth/change-password",
-            {"current_password": temp_pw, "new_password": password},
-            token=token_of(lg),
-            base=base,
-            tolerate=(),
-        )
-        print("[seed] senha temporaria trocada pela senha de laboratorio")
-        lg = login(username, password, base, platform="mobile")
-        me_ok = True
-    if not me_ok:
+    # 2) nao existe: cria e troca a senha temporaria (2 logins, so na 1a execucao)
+    res = req(
+        "POST",
+        "/admin/drivers",
+        {
+            "name": "Entregador Teste",
+            "phone": "91900000099",
+            "document": DOCUMENT,
+            "username": username,
+        },
+        token=lab_admin_token,
+        base=base,
+        tolerate=(409,),
+    )
+    if res.get("__tolerated__"):
         raise SystemExit(
-            "[seed] entregador existe mas a senha de lab nao funciona. "
-            "Recrie o laboratorio (apague o banco de lab) ou troque a senha manualmente."
+            f"[seed] driver existente com outro dono: {res['detail'][:200]}"
         )
-    return codigo, {"username": username, "password": password}
+    codigo = str(res.get("driver_id") or res.get("driver", {}).get("codigo"))
+    temp_pw = res.get("temporary_password")
+    print(f"[seed] entregador criado: codigo={codigo} usuario={username}")
+
+    lg = login(username, temp_pw, base, platform="mobile")
+    req(
+        "POST",
+        "/auth/change-password",
+        {"current_password": temp_pw, "new_password": password},
+        token=token_of(lg),
+        base=base,
+        tolerate=(),
+    )
+    print("[seed] senha temporaria trocada pela senha de laboratorio")
+    lg = login(username, password, base, platform="mobile")
+    return codigo, creds, token_of(lg)
 
 
 def patch_test_coordinates(store: dict) -> None:
@@ -511,19 +529,29 @@ def patch_test_coordinates(store: dict) -> None:
     try:
         con.execute("PRAGMA journal_mode=WAL")
         driver = store.get("driver", {}).get("codigo")
+        updated = 0
         for i, ref in enumerate([p[0] for p in PLAN]):
             did = store.get("deliveries", {}).get(ref)
             if not did:
                 continue
             lat, lng = TEST_COORDS[i]
-            con.execute(
+            cur = con.execute(
                 "UPDATE delivery_records SET address_lat=?, address_lng=?, "
-                "COALESCE(driver_id, ?) WHERE id=?",
+                "driver_id = COALESCE(driver_id, ?) WHERE delivery_id=?",
                 (lat, lng, driver, did),
             )
+            updated += cur.rowcount
             con.commit()
+        if updated == 0:
+            # Falhar ruidosamente e melhor que "sucesso" silencioso: a ultima
+            # vez o WHERE usava a PK integer com o UUID - 0 linhas, tudo falso.
+            raise SystemExit(
+                "[seed] FALHA: nenhuma delivery_records atualizada "
+                "(chave do WHERE nao bate com delivery_id)"
+            )
         print(
-            "[seed] coordenadas GPS de TESTE gravadas (address_lat/lng) e entregas PENDING associadas ao motorista"
+            f"[seed] coordenadas GPS de TESTE gravadas em {updated} entregas "
+            "(address_lat/lng) e PENDING associadas ao motorista"
         )
     finally:
         con.close()
@@ -560,7 +588,7 @@ def main() -> int:
         client_codes.append(ensure_client(base, lab_tok, nome, tel, rua, numero))
 
     # 5. entregador (credencial util)
-    driver_codigo, creds = ensure_driver(
+    driver_codigo, creds, drv_token = ensure_driver(
         base, lab_tok, secrets["LAB_DRIVER_USERNAME"], secrets["LAB_DRIVER_PASSWORD"]
     )
     store["driver"] = {"codigo": driver_codigo, "username": creds["username"]}
@@ -570,7 +598,7 @@ def main() -> int:
         fh.write(f"Tenant   : {TENANT_ID} ({TENANT_NAME})\n")
         fh.write(f"Usuario  : {creds['username']}\n")
         fh.write(f"Senha    : {creds['password']}\n")
-        fh.write("Documento/Motorista: MOTORISTA-LAB-001\n")
+        fh.write(f"Documento/Motorista: {DOCUMENT}\n")
     os.chmod(CRED_FILE, 0o600) if os.name != "nt" else None
     print(f"[seed] credencial de lab gravada em {CRED_FILE}")
 
@@ -600,13 +628,12 @@ def main() -> int:
     save_json(IDS_FILE, store)
     patch_test_coordinates(store)
 
-    # verificacao final pelo olho do entregador
-    drv_login = login(creds["username"], creds["password"], base, platform="mobile")
+    # verificacao final pelo olho do entregador (reusa o token - nao faz login novo)
     mine = as_list(
         req(
             "GET",
             "/driver/deliveries",
-            token=token_of(drv_login),
+            token=drv_token,
             base=base,
             tolerate=(),
         ),

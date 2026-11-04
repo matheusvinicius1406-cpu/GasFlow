@@ -23,10 +23,11 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
-LAB_DIR = os.path.join(
+LAB_DIR = os.environ.get("GASFLOW_LAB_DIR") or os.path.join(
     os.environ.get("LOCALAPPDATA", "."), "Temp", "opencode", "gasflow-lab"
 )
 SECRETS = os.path.join(LAB_DIR, "secrets.env")
@@ -50,7 +51,12 @@ def check(ok: bool, label: str, detail: str = "") -> bool:
 
 
 def call(
-    method: str, path: str, payload=None, token: str | None = None, base: str = ""
+    method: str,
+    path: str,
+    payload=None,
+    token: str | None = None,
+    base: str = "",
+    _attempt: int = 0,
 ) -> tuple[int, dict | list]:
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     r = urllib.request.Request(f"{base}{path}", data=data, method=method)
@@ -63,6 +69,13 @@ def call(
             return resp.status, (json.loads(body) if body.strip() else {})
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", "replace")
+        # rate limit: espera a janela deslizante (5 logins/5 min por IP) liberar
+        if exc.code == 429 and _attempt < 5:
+            print(
+                f"[verify] 429 em {method} {path}: aguardando 60s e re-tentando ({_attempt + 1}/5)"
+            )
+            time.sleep(60)
+            return call(method, path, payload, token, base, _attempt + 1)
         try:
             return exc.code, json.loads(raw)
         except Exception:

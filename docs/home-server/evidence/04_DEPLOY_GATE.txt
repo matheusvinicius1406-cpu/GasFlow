@@ -1,0 +1,6 @@
+# capturado em 2026-11-04T13:07:19Z (UTC)
+# o gate precisa recusar: sem --execute, dentro do repo, sem backup off-host
+sem --execute                     exit=0 (esperado 0, dry-run)
+backup-dir dentro do repo         exit=2 (esperado 2)
+execute sem --confirm-off-host    exit=2 (esperado 2)
+backup-dir inexistente            exit=2 (esperado 2)

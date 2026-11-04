@@ -68,6 +68,9 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             product_codigo=product_codigo,
             quantity=initial_quantity,
             minimum_quantity=0,
+            # Sem o tenant explícito a coluna cai no default "default" e a
+            # linha vira invisível (e inalcançável) para o tenant real.
+            tenant_id=self.tenant_id,
         )
         self.db.add(model)
         self.db.flush()
@@ -169,7 +172,12 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         )
         if not inv_model:
-            inv_model = InventoryModel(product_codigo=product_codigo, quantity=0, minimum_quantity=0)
+            inv_model = InventoryModel(
+                product_codigo=product_codigo,
+                quantity=0,
+                minimum_quantity=0,
+                tenant_id=self.tenant_id,
+            )
             self.db.add(inv_model)
             self.db.flush()
 
@@ -240,15 +248,18 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
                     f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}"
                 )
 
-        # Atomic UPDATE: only succeeds if quantity >= requested
+        # Atomic UPDATE: only succeeds if quantity >= requested.
+        # O filtro de tenant é obrigatório aqui: sem ele o débito cruzaria
+        # tenants (a linha errada de outro tenant seria a atualizada).
         result = self.db.execute(
             text(
                 "UPDATE inventory SET quantity = quantity - :qty, "
                 "quantity_full = quantity_full - :qty, "
                 "updated_at = :now "
-                "WHERE product_codigo = :code AND quantity >= :qty"
+                "WHERE product_codigo = :code AND quantity >= :qty "
+                "AND tenant_id = :tenant"
             ),
-            {"qty": quantity, "now": now, "code": product_codigo},
+            {"qty": quantity, "now": now, "code": product_codigo, "tenant": self.tenant_id},
         )
 
         if cast(CursorResult[Any], result).rowcount == 0:
@@ -337,16 +348,18 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
                     f"Movimento já registrado para {reference_type} #{reference_id} no produto {product_codigo}"
                 )
 
-        # Atomic UPDATE: only succeeds if quantity >= requested
+        # Atomic UPDATE: only succeeds if quantity >= requested.
+        # Filtro de tenant obrigatório (mesma razão do deduct_stock_atomic).
         result = self.db.execute(
             text(
                 "UPDATE inventory SET quantity = quantity - :qty, "
                 "quantity_full = quantity_full - :qty, "
                 "quantity_empty = quantity_empty + :qty, "
                 "updated_at = :now "
-                "WHERE product_codigo = :code AND quantity >= :qty"
+                "WHERE product_codigo = :code AND quantity >= :qty "
+                "AND tenant_id = :tenant"
             ),
-            {"qty": quantity, "now": now, "code": product_codigo},
+            {"qty": quantity, "now": now, "code": product_codigo, "tenant": self.tenant_id},
         )
 
         if cast(CursorResult[Any], result).rowcount == 0:
@@ -541,7 +554,12 @@ class SQLAlchemyInventoryRepository(TenantMixin, InventoryRepository):
             self._filter_by_tenant(InventoryModel).filter(InventoryModel.product_codigo == product_codigo).first()
         )
         if not inv_model:
-            inv_model = InventoryModel(product_codigo=product_codigo, quantity=0, minimum_quantity=0)
+            inv_model = InventoryModel(
+                product_codigo=product_codigo,
+                quantity=0,
+                minimum_quantity=0,
+                tenant_id=self.tenant_id,
+            )
             self.db.add(inv_model)
             self.db.flush()
 

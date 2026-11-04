@@ -3,6 +3,25 @@
 **Data:** 30/10/2026 · **Worktree:** `GasFlow-integration` ·
 **Branch/HEAD:** `release/home-server-candidate` / `e989f70d029385fd974d3d7e5cb0426cbce670a5`
 
+## 0.1 Verificação de 04/11/2026 (Home Server)
+
+| Escopo | Comando | Resultado |
+|---|---|---|
+| Backend direcionado | 6 arquivos (auth, tenant, driver, gate, perfil) | **70 passed**, 0 failed |
+| Gate + perfil + prod stack | `pytest test_ops01d… test_ops01b… test_prod_stack…` | **54 passed** |
+| Auth/tenant/driver | `pytest test_driver_login… test_order_item… test_driver_mobile…` | **16 passed** |
+| Lint backend | `ruff check` nos arquivos alterados | **All checks passed** |
+| Mobile | `npm test` | **101 passed**, 0 failed |
+| Mobile typecheck | `tsc --noEmit` | **exit 0** |
+| HTTPS LAN | `verify_lan_https.py` | **9 ok / 0 falhas** |
+| Backup + restore | `verify_backup_restore.sh` | 69/299/113, 0 divergências |
+| Resiliência | `verify_resilience.py` | todos os serviços voltaram |
+
+Evidências em `docs/home-server/evidence/`; detalhes em
+`docs/home-server/FINAL_REPORT.md`.
+
+O texto abaixo é o histórico de 30/10 e permanece como registro.
+
 Ambiente dos execuções: Windows, Python 3.14.6, Node 24.17.0, sem Docker daemon,
 sem `psql`/`pg_dump`, sem aparelho Android conectado.
 
